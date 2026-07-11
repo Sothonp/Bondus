@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -24,72 +25,170 @@ const FIELD_META = {
   social_science: { label: "Social Science", km: "វិទ្យាសាស្ត្រសង្គម", icon: Landmark, color: "var(--gold)" },
 };
 
-/* Plausible starting mastery per subject (0–100). Drives weak/strong + prediction. */
-const DEFAULT_MASTERY = {
-  Mathematics: 78, Physics: 72, Chemistry: 58, Biology: 88, "Khmer Literature": 70,
-  History: 66, English: 82, French: 49, Geography: 64, Morality: 81, "Earth Science": 60,
-};
+const EXAM_YEARS = [2026, 2027, 2028];
+const STUDY_MINUTES = [30, 45, 60, 90, 120];
+const MISTAKE_TYPES = [
+  "Concept misunderstanding", "Wrong formula", "Calculation error",
+  "Careless mistake", "Time management", "Misread question",
+];
 
-/* One representative "next lesson" topic per subject. */
-const TOPICS = {
-  Mathematics: "Calculus — derivatives & limits", Physics: "Newtonian mechanics",
-  Chemistry: "Organic reaction mechanisms", Biology: "Genetics & inheritance",
-  "Khmer Literature": "Classical poetry analysis", History: "The Angkor period",
-  English: "Reading comprehension strategies", French: "Past tenses (passé composé)",
-  Geography: "Physical geography & climate", Morality: "Civic responsibility",
-  "Earth Science": "Plate tectonics",
-};
+const subjectId = (s) => s.toLowerCase().replace(/\s+/g, "_");
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-/* Build a complete student profile from the registration form. Pure + deterministic. */
-function buildProfile(reg) {
-  const subjectNames = FIELD_SUBJECTS[reg.field];
+/* ════════════════════════ Mastery engine ════════════════════════
+   Turns raw answer history into a 0-100 topic score:
+   score = 70% recent accuracy + 20% difficulty performance + 10% consistency (answer streak).
+   Recent attempts (last 5) matter most, so mastery moves as the student actually improves. */
+const DIFF_WEIGHT = { Easy: 50, Medium: 75, Hard: 100 };
 
-  const subjects = subjectNames.map((s, i) => {
-    const m = DEFAULT_MASTERY[s] ?? 65;
-    const trend = [(i % 3) - 1, 1, 2, -1, 3, 1, 2, 1][i % 8]; // small +/- movement
-    return { s, m, t: trend, tag: m < 60 ? "weak" : m >= 85 ? "strong" : "" };
+function computeTopicScore(history) {
+  if (!history.length) return null;
+  const recent = history.slice(-5);
+  const recentAccuracy = (recent.filter((h) => h.correct).length / recent.length) * 100;
+  const difficultyScore = recent.reduce((sum, h) => sum + (h.correct ? DIFF_WEIGHT[h.difficulty] : DIFF_WEIGHT[h.difficulty] * 0.2), 0) / recent.length;
+  let streak = 0;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const dir = recent[i].correct ? 1 : -1;
+    if (streak === 0 || Math.sign(streak) === dir) streak += dir; else break;
+  }
+  const consistencyScore = clamp(50 + streak * 17, 0, 100);
+  return Math.round(recentAccuracy * 0.70 + difficultyScore * 0.20 + consistencyScore * 0.10);
+}
+
+function masteryLevel(score) {
+  if (score == null) return "Not assessed";
+  if (score < 40) return "Beginner";
+  if (score < 60) return "Developing";
+  if (score < 75) return "Intermediate";
+  if (score < 90) return "Proficient";
+  return "Exam Ready";
+}
+const LEVEL_COLOR = {
+  "Not assessed": "var(--muted)", Beginner: "var(--ember)", Developing: "var(--gold)",
+  Intermediate: "var(--primary)", Proficient: "var(--jade)", "Exam Ready": "var(--jade)",
+};
+const levelToDifficulty = (level) => (level === "Intermediate" ? "Medium" : level === "Proficient" || level === "Exam Ready" ? "Hard" : "Easy");
+
+/* Record one answered question into the topic-mastery store. Immutable update — every new
+   answer (diagnostic or practice) calls this and the resulting score feeds straight back into
+   the UI, since deriveInsights() below recomputes from this store on every render. */
+function recordAttempt(topicMastery, subject, topic, attempt) {
+  const subj = topicMastery[subject] || {};
+  const prev = subj[topic] || { history: [] };
+  const history = [...prev.history, attempt].slice(-20);
+  return { ...topicMastery, [subject]: { ...subj, [topic]: { history, score: computeTopicScore(history), lastPracticedAt: attempt.ts } } };
+}
+
+const estimateGradeRange = (avg) => {
+  if (avg == null) return "—";
+  if (avg >= 85) return "A";
+  if (avg >= 75) return "A–B";
+  if (avg >= 60) return "B–C";
+  if (avg >= 40) return "C–D";
+  return "D–E";
+};
+
+/* Build the static part of a student profile — registration answers + gamification state.
+   Subject mastery, weak/strong tags, predictions and recommendations are never baked in here;
+   they're derived live from real attempt history by deriveInsights() below. */
+function buildProfile(reg) {
+  return { ...reg, level: 1, xp: 40, xpToNext: 500, streak: 1, longestStreak: 1 };
+}
+
+/* Turns topic-mastery history into everything the UI shows: subject scores, weak/strong tags,
+   a grade-range estimate, exam readiness, a recommended lesson, and AI recommendations. This is
+   the "reassess" half of the assess → identify weakness → recommend → practice → reassess loop —
+   call it fresh (useMemo) whenever topicMastery changes and the whole app updates with it. */
+function deriveInsights(p, topicMastery) {
+  const subjectNames = FIELD_SUBJECTS[p.field];
+  const prior = (s) => (p.subjectsToImprove?.includes(subjectId(s)) ? 45 : null);
+
+  const subjects = subjectNames.map((s) => {
+    const topicNames = SUBJECT_TOPICS[s] || [];
+    const topics = topicNames.map((t) => {
+      const rec = topicMastery[s]?.[t];
+      return { t, score: rec?.score ?? null, attempts: rec?.history?.length ?? 0 };
+    });
+    const assessedTopics = topics.filter((x) => x.score != null);
+    const m = assessedTopics.length
+      ? Math.round(assessedTopics.reduce((a, b) => a + b.score, 0) / assessedTopics.length)
+      : prior(s);
+
+    // Trend: accuracy in the newer half of this subject's attempts vs. the older half.
+    const allAttempts = topicNames.flatMap((t) => topicMastery[s]?.[t]?.history || []).sort((a, b) => a.ts - b.ts);
+    let trend = 0;
+    if (allAttempts.length >= 2) {
+      const mid = Math.floor(allAttempts.length / 2);
+      const acc = (arr) => (arr.filter((h) => h.correct).length / arr.length) * 100;
+      trend = clamp(Math.round((acc(allAttempts.slice(mid)) - acc(allAttempts.slice(0, mid))) / 10), -3, 3);
+    }
+
+    return { s, m, level: masteryLevel(m), tag: m == null ? "" : m < 60 ? "weak" : m >= 85 ? "strong" : "", t: trend, topics, assessed: assessedTopics.length > 0 };
   });
 
+  const known = subjects.filter((x) => x.m != null);
   const weak = subjects.filter((x) => x.tag === "weak").sort((a, b) => a.m - b.m);
   const strong = subjects.filter((x) => x.tag === "strong").sort((a, b) => b.m - a.m);
-  const avg = Math.round(subjects.reduce((a, b) => a + b.m, 0) / subjects.length);
+  const avg = known.length ? Math.round(known.reduce((a, b) => a + b.m, 0) / known.length) : null;
 
-  // Grade prediction: map average mastery → distribution over A–E.
-  const a = clamp(Math.round((avg - 45) * 1.9), 4, 90);
-  const b = clamp(Math.round((100 - a) * 0.55), 4, 45);
-  const c = clamp(Math.round((100 - a - b) * 0.6), 1, 30);
-  const d = clamp(Math.round((100 - a - b - c) * 0.6), 0, 20);
-  const e = clamp(100 - a - b - c - d, 0, 100);
-  const prediction = { A: a, B: b, C: c, D: d, E: e };
+  // Priority / strongest topic across every subject — only among topics actually attempted.
+  const allTopics = subjects.flatMap((sub) => sub.topics.filter((x) => x.score != null).map((x) => ({ subject: sub.s, ...x })));
+  const priorityTopic = allTopics.length ? [...allTopics].sort((a, b) => a.score - b.score)[0] : null;
+  const strongestTopic = allTopics.length ? [...allTopics].sort((a, b) => b.score - a.score)[0] : null;
 
-  // Daily study plan: two weakest subjects + a strong-subject revision + a habit.
+  // Grade prediction: map average mastery → a distribution over A–E (feeds the existing chart).
+  const A = clamp(Math.round(((avg ?? 60) - 45) * 1.9), 4, 90);
+  const B = clamp(Math.round((100 - A) * 0.55), 4, 45);
+  const C = clamp(Math.round((100 - A - B) * 0.6), 1, 30);
+  const D = clamp(Math.round((100 - A - B - C) * 0.6), 0, 20);
+  const E = clamp(100 - A - B - C - D, 0, 100);
+  const gradeRange = estimateGradeRange(avg);
+
+  // Exam readiness composite: mastery + syllabus coverage + consistency + a completion-speed proxy.
+  const totalTopics = subjectNames.reduce((n, s) => n + (SUBJECT_TOPICS[s]?.length || 0), 0);
+  const coverage = totalTopics ? Math.round((allTopics.length / totalTopics) * 100) : 0;
+  const allAttemptsEver = subjectNames.flatMap((s) => (SUBJECT_TOPICS[s] || []).flatMap((t) => topicMastery[s]?.[t]?.history || []));
+  const avgTime = allAttemptsEver.length ? allAttemptsEver.reduce((a, h) => a + (h.timeSec || 45), 0) / allAttemptsEver.length : null;
+  const speed = avgTime == null ? 60 : clamp(Math.round(100 - ((avgTime - 30) / 60) * 100), 10, 100);
+  const consistency = clamp(30 + p.streak * 10, 0, 100);
+  const readiness = { overall: Math.round((avg ?? 0) * 0.5 + coverage * 0.2 + consistency * 0.15 + speed * 0.15), mastery: avg ?? 0, coverage, consistency, speed };
+
+  // Most common mistake type, for a targeted (not generic) recommendation.
+  const mistakeCounts = {};
+  allAttemptsEver.forEach((h) => { if (!h.correct && h.mistakeType) mistakeCounts[h.mistakeType] = (mistakeCounts[h.mistakeType] || 0) + 1; });
+  const topMistake = Object.entries(mistakeCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  // Recommended lesson: the lowest-scoring attempted topic, or the weakest subject as a fallback.
+  const recommendedLesson = priorityTopic
+    ? { subject: priorityTopic.subject, topic: priorityTopic.t }
+    : weak[0]
+      ? { subject: weak[0].s, topic: (SUBJECT_TOPICS[weak[0].s] || [])[0] || weak[0].s }
+      : { subject: subjects[0].s, topic: (SUBJECT_TOPICS[subjects[0].s] || [])[0] || subjects[0].s };
+
+  // Daily plan: the two lowest-scoring topics + a strong-subject revision + a daily habit.
   const plan = [];
-  weak.slice(0, 2).forEach((w, i) =>
-    plan.push({ id: i + 1, s: w.s, task: `${TOPICS[w.s]} — review & practice`, min: 35, why: "Weakest subject", done: false }));
+  [...allTopics].sort((a, b) => a.score - b.score).slice(0, 2).forEach((pt, i) =>
+    plan.push({ id: i + 1, s: pt.subject, task: `${pt.t} — review & practice`, min: 35, why: "Priority topic", done: false }));
   if (strong[0]) plan.push({ id: 90, s: strong[0].s, task: `${strong[0].s} flash quiz`, min: 15, why: "Spaced revision", done: true });
   plan.push({ id: 91, s: "English", task: "Reading passage + 15 vocab", min: 20, why: "Daily habit", done: false });
 
-  const recommendedLesson = weak[0]
-    ? { subject: weak[0].s, topic: TOPICS[weak[0].s] }
-    : { subject: subjects[0].s, topic: TOPICS[subjects[0].s] };
-
   const recs = [];
-  if (weak[0]) recs.push({ icon: Lightbulb, c: "var(--ember)", t: `${weak[0].s} is dragging your prediction down`,
-    d: `Accuracy in ${weak[0].s} is ${weak[0].m}%. Clearing a few lessons could lift your Grade ${reg.target} odds noticeably.` });
-  recs.push({ icon: Brain, c: "var(--primary)", t: "You focus best in the morning",
+  if (priorityTopic) recs.push({ icon: Lightbulb, c: "var(--ember)", t: `${priorityTopic.t} is dragging you down`,
+    d: `You're at ${priorityTopic.score}% in ${priorityTopic.subject} · ${priorityTopic.t}. Clearing a few lessons here moves your estimate the most.` });
+  if (topMistake) recs.push({ icon: AlertTriangle, c: "var(--gold)", t: `Your most common mistake: ${topMistake}`,
+    d: topMistake === "Calculation error" || topMistake === "Careless mistake"
+      ? "You understand the concepts — try shorter, timed numerical drills instead of another full lesson."
+      : "Revisit the underlying concept before doing more practice questions." });
+  else recs.push({ icon: Brain, c: "var(--primary)", t: "You focus best in the morning",
     d: "Your accuracy is higher before 10am — schedule hard topics early." });
-  if (strong[0]) recs.push({ icon: TrendingUp, c: "var(--jade)", t: `${strong[0].s} is exam-ready`,
-    d: `You've held ${strong[0].m}% — switch to light revision and reinvest the time.` });
+  if (strongestTopic) recs.push({ icon: TrendingUp, c: "var(--jade)", t: `${strongestTopic.t} is exam-ready`,
+    d: `You've held ${strongestTopic.score}% in ${strongestTopic.subject} — switch to light revision and reinvest the time.` });
 
-  return {
-    ...reg, avg, subjects, weak, strong, prediction, plan, recommendedLesson, recs,
-    level: 1, xp: 40, xpToNext: 500, streak: 1, longestStreak: 1,
-  };
+  return { subjects, weak, strong, avg, prediction: { A, B, C, D, E }, gradeRange, readiness, priorityTopic, strongestTopic, plan, recommendedLesson, recs };
 }
 
-/* Continuously-analyzed AI signals shown on the dashboard. */
+/* Continuously-analyzed AI signals shown on the Progress tab. */
 function analyticsSignals(p, live = {}) {
   const lessons = live.completedLessons ?? 0;
   return [
@@ -100,7 +199,7 @@ function analyticsSignals(p, live = {}) {
     { icon: BookMarked, label: "Completed lessons", value: `${lessons}`, note: lessons ? "Nice work" : "Let's begin" },
     { icon: ClipboardCheck, label: "Quiz scores", value: live.quizScore != null ? `${live.quizScore}%` : "—", note: live.quizScore != null ? "Avg accuracy" : "No quizzes yet" },
     { icon: FileText, label: "Mock exams", value: "0", note: "Try one soon" },
-    { icon: ActivityIcon, label: "Subject performance", value: `${p.avg}%`, note: "Avg mastery" },
+    { icon: ActivityIcon, label: "Subject performance", value: p.avg != null ? `${p.avg}%` : "—", note: "Avg mastery" },
     { icon: AlertTriangle, label: "Mistake patterns", value: live.mistakes != null ? `${live.mistakes}` : "—", note: live.mistakes ? "Review these" : "Tracking" },
     { icon: Repeat, label: "Weak concepts", value: `${p.weak.length}`, note: "Flagged to revise" },
     { icon: Star, label: "Strong concepts", value: `${p.strong.length}`, note: "Keep them sharp" },
@@ -257,9 +356,17 @@ function Register({ onComplete, dark, setDark }) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     name: "", email: "", age: "", grade: "12", field: "", target: "A",
+    targetExamYear: EXAM_YEARS[1], dailyMinutes: 60, targetUniversity: "",
+    subjectsToImprove: [],
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
+
+  // Unlimited multi-select.
+  const toggleImprove = (id) => setForm((f) => ({
+    ...f, subjectsToImprove: f.subjectsToImprove.includes(id) ? f.subjectsToImprove.filter((x) => x !== id) : [...f.subjectsToImprove, id],
+  }));
+  const clearSubjects = () => setForm((f) => ({ ...f, subjectsToImprove: [] }));
 
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
@@ -320,7 +427,7 @@ function Register({ onComplete, dark, setDark }) {
                   Choose your track <ChevronRight size={16} />
                 </button>
               </>
-            ) : (
+            ) : step === 1 ? (
               <>
                 <button onClick={() => setStep(0)} className="eai-focus flex items-center gap-1 text-sm eai-muted mb-3">
                   <ChevronLeft size={16} /> Back
@@ -356,12 +463,114 @@ function Register({ onComplete, dark, setDark }) {
                   })}
                 </div>
 
-                <button onClick={() => onComplete(buildProfile({ ...form, age: Number(form.age) || null }))}
-                  disabled={!canFinish}
+                <button onClick={() => setStep(2)} disabled={!canFinish}
                   className="eai-btn eai-focus w-full mt-6 py-3 text-sm text-white flex items-center justify-center gap-2"
-                  style={{ background: "var(--jade)", opacity: canFinish ? 1 : 0.5 }}>
-                  <Sparkles size={16} /> Create my dashboard
+                  style={{ background: "var(--primary)", opacity: canFinish ? 1 : 0.5 }}>
+                  Continue <ChevronRight size={16} />
                 </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setStep(1)} className="eai-focus flex items-center gap-1 text-sm eai-muted mb-3">
+                  <ChevronLeft size={16} /> Back
+                </button>
+                <h1 className="eai-display text-2xl font-extrabold">A bit more, so we can personalize</h1>
+                <p className="eai-muted text-sm mt-1">This gives your AI coach an initial estimate — the diagnostic test right after will check it for real.</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                  <Field label="Target exam year">
+                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}>
+                      {EXAM_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Daily study time">
+                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.dailyMinutes} onChange={(e) => set("dailyMinutes", Number(e.target.value))}>
+                      {STUDY_MINUTES.map((m) => <option key={m} value={m}>{m} minutes</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Target university (optional)">
+                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.targetUniversity} onChange={(e) => set("targetUniversity", e.target.value)}>
+                      <option value="">Not sure yet</option>
+                      {UNIS.map((u) => <option key={u.abbr} value={u.abbr}>{u.abbr} — {u.n}</option>)}
+                    </select>
+                  </Field>
+                </div>
+
+                <div className="mt-5">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <span className="text-sm font-semibold">Which subjects would you like to improve?</span>
+                      <p className="text-xs eai-muted mt-0.5">Select the subjects you'd like Bondus to focus on. You can choose as many as you need.</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={() => onComplete({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
+                        className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full eai-soft" style={{ color: "var(--ink)" }}>Skip for now</button>
+                      <button onClick={clearSubjects} className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full" style={{ color: "var(--muted)" }}>Clear selection</button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {FIELD_SUBJECTS[form.field].map((s) => {
+                      const id = subjectId(s);
+                      const on = form.subjectsToImprove.includes(id);
+                      return (
+                        <motion.button key={id} layout="position" whileTap={{ scale: 0.95 }} onClick={() => toggleImprove(id)}
+                          animate={{ scale: on ? [1, 1.06, 1] : 1 }} transition={{ duration: 0.22 }}
+                          className="eai-focus text-xs font-semibold pl-2.5 pr-3 py-1.5 rounded-full border flex items-center gap-1.5"
+                          style={{ background: on ? "var(--gold-soft)" : "var(--card)", color: on ? "var(--gold)" : "var(--ink)", borderColor: on ? "var(--gold)" : "var(--line)" }}>
+                          <AnimatePresence initial={false}>
+                            {on && (
+                              <motion.span initial={{ scale: 0, opacity: 0, width: 0 }} animate={{ scale: 1, opacity: 1, width: 14 }} exit={{ scale: 0, opacity: 0, width: 0 }}
+                                transition={{ duration: 0.15 }} style={{ display: "flex", overflow: "hidden" }}>
+                                <CheckCircle2 size={14} />
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                          {s}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 leading-relaxed" style={{ fontSize: 11, color: "var(--muted)", opacity: 0.85 }}>
+                    These selections help us understand what you'd like to focus on. Your personalized study plan will be created after a short diagnostic assessment.
+                  </p>
+                </div>
+
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
+                  className="mt-5 p-5 rounded-2xl" style={{ background: "var(--primary-soft)", border: "1px solid var(--primary)" }}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={17} style={{ color: "var(--primary)" }} />
+                    <span className="eai-display font-bold text-sm" style={{ color: "var(--primary)" }}>Personalized Diagnostic Assessment</span>
+                  </div>
+                  <p className="text-sm mt-2 leading-relaxed">Instead of guessing your strengths and weaknesses, Bondus will analyze your current level and build a study plan just for you.</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
+                    {["Takes about 15 minutes", "Adapts to your study track", "Not graded"].map((f) => (
+                      <span key={f} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "var(--primary)" }}>
+                        <CheckCircle2 size={13} /> {f}
+                      </span>
+                    ))}
+                  </div>
+                </motion.div>
+
+                <motion.button whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.01 }}
+                  onClick={() => onComplete({ ...form, age: Number(form.age) || null })}
+                  className="eai-btn eai-focus w-full mt-4 py-3.5 text-sm text-white flex items-center justify-center gap-2"
+                  style={{ background: "var(--primary)" }}>
+                  <Sparkles size={16} /> Start My Diagnostic Assessment <ChevronRight size={16} />
+                </motion.button>
+
+                <div className="mt-4 text-center">
+                  <p className="text-xs font-semibold eai-muted">After the assessment, you'll receive:</p>
+                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+                    {[
+                      { e: "📊", t: "Your current level by subject" },
+                      { e: "🎯", t: "A personalized study roadmap" },
+                      { e: "📚", t: "Recommended BAC II past papers" },
+                      { e: "🤖", t: "AI-powered daily practice plan" },
+                    ].map((b) => (
+                      <span key={b.t} className="text-xs eai-muted flex items-center gap-1">{b.e} {b.t}</span>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -382,72 +591,28 @@ function Field({ label, required, children }) {
 }
 
 /* ════════════════════════ Dashboard ════════════════════════ */
-function Dashboard({ p, go, plan, onTogglePlan, practice = {}, bonusXp = 0 }) {
+function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0 }) {
   const xp = p.xp + bonusXp;
   const done = plan.filter((t) => t.done).length;
-  const planPct = Math.round((done / plan.length) * 100);
-
-  // ── Live data collected from the Practice section ───────────────
-  const entries = Object.values(practice);
-  const isToday = (ts) => new Date(ts).toDateString() === new Date().toDateString();
-  const attempted = entries.filter((e) => e.result);
-  const completed = entries.filter((e) => e.status === "completed");
-  const todayCompleted = completed.filter((e) => isToday(e.at));
-  const todayAttempts = attempted.filter((e) => isToday(e.at));
-  const correctCount = attempted.filter((e) => e.result === "correct").length;
-  const accuracy = attempted.length ? Math.round((correctCount / attempted.length) * 100) : null;
-  const mistakes = attempted.length - correctCount;
-  const recent = [...completed].sort((a, b) => b.at - a.at).slice(0, 4);
-  const live = { completedLessons: completed.length, quizScore: accuracy, mistakes };
-
-  // ── Leaderboard: mock classmates + the current user, ranked live by XP ───
-  const leaderboard = useMemo(() => {
-    const entries = [...LEADERBOARD_SEED, { name: p.name, xp, isYou: true }];
-    return entries.sort((a, b) => b.xp - a.xp).map((e, i) => ({ ...e, rank: i + 1 }));
-  }, [p.name, xp]);
-  const you = leaderboard.find((e) => e.isYou);
+  const planPct = plan.length ? Math.round((done / plan.length) * 100) : 0;
 
   return (
     <div className="space-y-5 eai-rise">
       {/* Hero */}
       <div className="eai-card overflow-hidden relative">
-        <Angkor className="absolute" style={{ right: -10, bottom: -6, width: 360, height: 120, fill: "var(--gold)", opacity: 0.07 }} />
-        <div className="p-6 sm:p-7 relative">
+        <div className="p-6 sm:p-8 relative">
           <p className="eai-km text-sm" style={{ color: "var(--gold)" }}>សួស្តី, {p.name.split(" ")[0]}! 👋</p>
           <h2 className="eai-display text-2xl sm:text-3xl font-extrabold mt-1">Welcome, {p.name.split(" ")[0]}.</h2>
-          <p className="eai-muted mt-1 text-sm max-w-md">
-            {p.grade === "university" ? "University" : `Grade ${p.grade}`} · {FIELD_META[p.field].label} track · targeting Grade {p.target}.
-            Your journey starts today — let's build that streak.
-          </p>
+          <p className="eai-muted mt-2 text-sm max-w-md">One small step today keeps the streak alive — here's what's next for you.</p>
           <div className="flex flex-wrap items-center gap-3 mt-5">
-            <button className="eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2" style={{ background: "var(--primary)" }} onClick={() => go("coach")}>
-              <Sparkles size={16} /> Ask your AI coach
+            <button className="eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2" style={{ background: "var(--primary)" }} onClick={() => go("practice")}>
+              <Target size={16} /> Start today's plan
             </button>
-            <button className="eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft" onClick={() => go("browse")} style={{ color: "var(--ink)" }}>
-              <BookOpen size={16} /> Browse exams
+            <button className="eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft" onClick={() => go("coach")} style={{ color: "var(--ink)" }}>
+              <Sparkles size={16} /> Ask your AI coach
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Today's progress — collected from Practice */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { l: "Done today", v: `${todayCompleted.length}`, sub: "exercises", c: "var(--jade)", icon: CheckCircle2 },
-          { l: "Attempted today", v: `${todayAttempts.length}`, sub: "questions", c: "var(--primary)", icon: Target },
-          { l: "Accuracy", v: accuracy != null ? `${accuracy}%` : "—", sub: "all time", c: "var(--gold)", icon: ClipboardCheck },
-          { l: "XP today", v: `+${todayCompleted.length * 30}`, sub: "from practice", c: "var(--ember)", icon: Zap },
-        ].map((s) => (
-          <div key={s.l} className="eai-card p-4 flex items-center gap-3">
-            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 38, height: 38, background: "var(--bg-soft)" }}>
-              <s.icon size={18} style={{ color: s.c }} />
-            </div>
-            <div className="min-w-0">
-              <p className="eai-display text-xl font-extrabold leading-none">{s.v}</p>
-              <p className="text-xs eai-muted mt-0.5 truncate">{s.l}</p>
-            </div>
-          </div>
-        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -473,7 +638,7 @@ function Dashboard({ p, go, plan, onTogglePlan, practice = {}, bonusXp = 0 }) {
         </div>
 
         {/* Streak + XP + Level */}
-        <div className="eai-card p-6 flex flex-col gap-5">
+        <div className="eai-card p-6 flex flex-col gap-5 justify-center">
           <div className="flex items-center gap-4">
             <div className="grid place-items-center rounded-2xl" style={{ width: 60, height: 60, background: "var(--ember-soft)" }}>
               <Flame size={30} style={{ color: "var(--ember)" }} />
@@ -493,207 +658,38 @@ function Dashboard({ p, go, plan, onTogglePlan, practice = {}, bonusXp = 0 }) {
               <p className="text-xs eai-muted mt-0.5">{p.xpToNext - xp} XP to Level {p.level + 1}</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            {["🔥", "📘", "⭐", "🏆"].map((e, i) => (
-              <div key={i} className="flex-1 grid place-items-center rounded-xl text-lg eai-soft" style={{ height: 40, opacity: i === 0 ? 1 : 0.4 }}>{e}</div>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Leaderboard */}
-      <div className="eai-card p-6">
-        <CardHead title="Leaderboard" kh="តារាងអ្នកនាំមុខ"
-          action={<span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: "var(--gold-soft)", color: "var(--gold)" }}><Trophy size={12} /> This week</span>} />
-        <div className="space-y-1.5">
-          {leaderboard.slice(0, 8).map((e) => (
-            <div key={e.name} className="flex items-center gap-3 p-2.5 rounded-2xl" style={{ background: e.isYou ? "var(--primary-soft)" : "transparent" }}>
-              <div className="grid place-items-center rounded-full flex-shrink-0 eai-display font-bold text-xs" style={{
-                width: 28, height: 28,
-                background: e.rank === 1 ? "var(--gold-soft)" : e.rank === 3 ? "var(--ember-soft)" : "var(--bg-soft)",
-                color: e.rank === 1 ? "var(--gold)" : e.rank === 3 ? "var(--ember)" : "var(--muted)",
-              }}>
-                {e.rank === 1 ? <Crown size={14} /> : e.rank}
-              </div>
-              <p className="text-sm font-semibold truncate flex-1 min-w-0" style={{ color: e.isYou ? "var(--primary)" : "var(--ink)" }}>
-                {e.name}{e.isYou && <span className="text-xs eai-muted font-normal"> · you</span>}
-              </p>
-              <span className="text-xs font-bold eai-display flex items-center gap-1 flex-shrink-0" style={{ color: "var(--gold)" }}>
-                <Zap size={12} /> {e.xp.toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
-        {you.rank > 8 && (
-          <p className="text-xs eai-muted mt-3 text-center">You're ranked #{you.rank} of {leaderboard.length} · {you.xp.toLocaleString()} XP</p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Grade prediction */}
-        <div className="eai-card p-6 relative overflow-hidden">
-          <CardHead title="Grade prediction" kh="ការទស្សន៍ទាយនិទ្ទេស" />
-          <div className="flex flex-col items-center -mb-2">
-            <Gauge value={p.prediction[p.target]} />
-            <div style={{ marginTop: -68, textAlign: "center" }}>
-              <p className="eai-display text-4xl font-extrabold" style={{ color: "var(--jade)" }}>{p.prediction[p.target]}%</p>
-              <p className="text-xs eai-muted">probability of Grade {p.target}</p>
-            </div>
-          </div>
-          <div className="space-y-1.5 mt-6">
-            {["A", "B", "C", "D", "E"].map((g) => (
-              <div key={g} className="flex items-center gap-2">
-                <span className="text-xs font-bold w-4 eai-display">{g}</span>
-                <div className="flex-1 h-2 rounded-full eai-soft overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${Math.max(p.prediction[g], 1.5)}%`, background: g === p.target ? "var(--jade)" : "var(--muted)" }} />
-                </div>
-                <span className="text-xs eai-muted w-8 text-right">{p.prediction[g]}%</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs eai-muted mt-4 leading-relaxed">
-            Based on a {p.avg}% average mastery. {p.weak[0] && <>Lifting <span style={{ color: "var(--ember)", fontWeight: 600 }}>{p.weak[0].s}</span> will move this the most.</>}
-          </p>
-        </div>
-
-        {/* Weekly hours (current progress) */}
-        <div className="eai-card p-6 lg:col-span-2">
-          <CardHead title="Current progress — study hours" kh="ម៉ោងសិក្សា"
-            action={<Pill icon={Clock} color="var(--primary)" soft="var(--primary-soft)" value="4.2h" label="this week" />} />
-          <div style={{ height: 170 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={WEEK_SEED} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
-                <XAxis dataKey="d" tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 12, fontSize: 12 }} formatter={(v) => [`${v}h`, "Studied"]} />
-                <Area type="monotone" dataKey="h" stroke="var(--primary)" strokeWidth={2.5} fill="url(#g)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Learning Analytics */}
-      <div className="eai-card p-6">
-        <CardHead title="AI Learning Analytics" kh="ការវិភាគដោយ AI"
-          action={<span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={12} /> Live</span>} />
-        <p className="text-xs eai-muted -mt-2 mb-4">The coach continuously analyzes these signals to personalize your plan:</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {analyticsSignals(p, live).map((sig, i) => (
-            <div key={i} className="eai-tile p-3.5 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
-              <div className="flex items-center justify-between">
-                <div className="grid place-items-center rounded-xl" style={{ width: 32, height: 32, background: "var(--bg-soft)" }}>
-                  <sig.icon size={16} style={{ color: "var(--primary)" }} />
-                </div>
-                <span className="eai-display font-bold text-sm">{sig.value}</span>
-              </div>
-              <p className="text-xs font-semibold mt-2.5">{sig.label}</p>
-              <p className="text-xs eai-muted">{sig.note}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Subject mastery + weak/strong */}
-        <div className="eai-card p-6 lg:col-span-2">
-          <CardHead title="Subject mastery" kh="ការយល់ដឹងតាមមុខវិជ្ជា" />
-          <div className="space-y-3">
-            {p.subjects.map((s) => (
-              <div key={s.s} className="flex items-center gap-3">
-                <span className="text-sm font-semibold w-32 truncate">{s.s}</span>
-                <div className="flex-1 h-2.5 rounded-full eai-soft overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${s.m}%`, background: s.tag === "weak" ? "var(--ember)" : s.tag === "strong" ? "var(--jade)" : "var(--primary)" }} />
-                </div>
-                <span className="text-xs font-bold w-9 text-right eai-display">{s.m}%</span>
-                <span className="text-xs flex items-center gap-0.5 w-10" style={{ color: s.t >= 0 ? "var(--jade)" : "var(--ember)" }}>
-                  {s.t >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(s.t)}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 mt-5">
-            {p.strong.map((s) => <span key={s.s} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>💪 {s.s}</span>)}
-            {p.weak.map((s) => <span key={s.s} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>⚠ {s.s}</span>)}
-          </div>
-        </div>
-
-        {/* AI recommendations */}
-        <div className="eai-card p-6">
-          <CardHead title="AI recommendations" kh="អនុសាសន៍ពី AI" />
-          <div className="space-y-3">
-            {p.recs.map((r, i) => (
-              <div key={i} className="flex gap-3 p-3 rounded-2xl eai-soft">
-                <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 34, height: 34, background: "var(--card)" }}>
-                  <r.icon size={17} style={{ color: r.c }} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold leading-snug">{r.t}</p>
-                  <p className="text-xs eai-muted mt-0.5 leading-relaxed">{r.d}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Recommended next lesson */}
-        <div className="eai-card p-6 flex flex-col" style={{ background: "var(--primary)", color: "#fff", border: "none" }}>
+      {/* Recommended next lesson */}
+      <div className="eai-card p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5" style={{ background: "var(--primary)", color: "#fff", border: "none" }}>
+        <div>
           <div className="flex items-center gap-2 text-sm font-semibold opacity-90"><Star size={16} /> Recommended next lesson</div>
-          <h3 className="eai-display text-xl font-bold mt-3">{p.recommendedLesson.subject}: {p.recommendedLesson.topic}</h3>
+          <h3 className="eai-display text-xl font-bold mt-2">{p.recommendedLesson.subject}: {p.recommendedLesson.topic}</h3>
           <p className="text-sm opacity-90 mt-1.5">12 min lesson · targets your weakest topic · +80 XP</p>
-          <button className="eai-btn eai-focus bg-white px-4 py-2.5 text-sm flex items-center justify-center gap-2" style={{ color: "var(--primary)", marginTop: 20 }}>
-            Start lesson <ChevronRight size={16} />
+        </div>
+        <button className="eai-btn eai-focus bg-white px-5 py-2.5 text-sm flex items-center justify-center gap-2 flex-shrink-0" style={{ color: "var(--primary)" }} onClick={() => go("practice")}>
+          Start lesson <ChevronRight size={16} />
+        </button>
+      </div>
+
+      {/* Explore more */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { icon: Target, label: "Practice", desc: "Sharpen your weak subjects", tab: "practice", c: "var(--jade)" },
+          { icon: GraduationCap, label: "Universities", desc: "Browse majors & entrance prep", tab: "universities", c: "var(--primary)" },
+          { icon: BarChart3, label: "Progress", desc: "Your full stats & analytics", tab: "progress", c: "var(--gold)" },
+        ].map((c) => (
+          <button key={c.label} onClick={() => go(c.tab)} className="eai-card eai-tile eai-focus p-5 text-left flex items-center gap-3.5">
+            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}>
+              <c.icon size={19} style={{ color: c.c }} />
+            </div>
+            <div className="min-w-0">
+              <p className="eai-display font-bold text-sm">{c.label}</p>
+              <p className="text-xs eai-muted mt-0.5">{c.desc}</p>
+            </div>
           </button>
-        </div>
-
-        {/* Weekly + Monthly goals */}
-        <div className="eai-card p-6">
-          <CardHead title="Goals" kh="គោលដៅ" />
-          <div className="space-y-4">
-            {[{ l: "Weekly", v: "0.5 / 8h", p: 6, c: "var(--gold)" }, { l: "Monthly", v: "1 / 24 lessons", p: 4, c: "var(--jade)" }].map((g) => (
-              <div key={g.l}>
-                <div className="flex justify-between text-sm mb-1.5"><span className="font-semibold">{g.l} goal</span><span className="eai-muted text-xs">{g.v}</span></div>
-                <div className="h-2 rounded-full eai-soft overflow-hidden"><div className="h-full rounded-full" style={{ width: `${g.p}%`, background: g.c }} /></div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent activity */}
-        <div className="eai-card p-6">
-          <CardHead title="Recent activity" kh="សកម្មភាពថ្មីៗ" />
-          <div className="space-y-3">
-            {(recent.length
-              ? recent.map((e) => ({
-                  t: `Completed ${e.subject}: ${e.topic}`,
-                  meta: `${e.result === "correct" ? "Correct" : "Reviewed"} · +30 XP`,
-                  c: e.result === "correct" ? "var(--jade)" : "var(--gold)",
-                  icon: CheckCircle2,
-                }))
-              : [
-                  { t: "Created your account", meta: "Welcome aboard · +40 XP", c: "var(--jade)", icon: GraduationCap },
-                  { t: `Joined the ${FIELD_META[p.field].label} track`, meta: "Subjects personalized", c: "var(--primary)", icon: FileText },
-                  { t: "AI built your first study plan", meta: "Based on your weak subjects", c: "var(--gold)", icon: Sparkles },
-                ]
-            ).map((a, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 32, height: 32, background: "var(--bg-soft)" }}>
-                  <a.icon size={16} style={{ color: a.c }} />
-                </div>
-                <div className="min-w-0"><p className="text-sm font-medium truncate">{a.t}</p><p className="text-xs eai-muted">{a.meta}</p></div>
-              </div>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -719,22 +715,24 @@ function Browse({ p }) {
         ))}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {FIELD_SUBJECTS[p.field].map((s, i) => {
-          const diff = ["Hard", "Medium", "Medium", "Hard", "Easy", "Medium", "Easy", "Hard"][i % 8];
+        {[...p.subjects].sort((a, b) => (a.tag === "weak" ? -1 : b.tag === "weak" ? 1 : 0)).map((sub) => {
+          const diff = levelToDifficulty(sub.level);
           const dc = diff === "Hard" ? "var(--ember)" : diff === "Medium" ? "var(--gold)" : "var(--jade)";
           return (
-            <div key={s} className="eai-card eai-tile p-5">
+            <div key={sub.s} className="eai-card eai-tile p-5">
               <div className="flex items-start justify-between">
                 <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
                   <BookOpen size={19} style={{ color: "var(--primary)" }} />
                 </div>
-                <Bookmark size={16} className="eai-muted" />
+                {sub.tag === "weak"
+                  ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>Recommended for you</span>
+                  : <Bookmark size={16} className="eai-muted" />}
               </div>
-              <h3 className="eai-display font-bold mt-3">{s}</h3>
+              <h3 className="eai-display font-bold mt-3">{sub.s}</h3>
               <p className="text-xs eai-muted mt-0.5">BAC II {year} · 180 min · 100 marks</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diff}</span>
-                <span className="text-xs eai-muted">Answer sheet ✓</span>
+                <span className="text-xs eai-muted">{sub.m != null ? `Matches your ${sub.level.toLowerCase()} level` : "Answer sheet ✓"}</span>
               </div>
               <div className="flex gap-2 mt-4">
                 <button className="eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white" style={{ background: "var(--primary)" }}><Eye size={14} /> View</button>
@@ -836,6 +834,12 @@ const EXERCISE_BANK = Object.fromEntries(Object.entries(RAW_EXERCISES).map(([sub
 const getExercises = (s) => EXERCISE_BANK[s] || [];
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
 
+/* Topic taxonomy per subject, derived from the exercise bank — this is what the diagnostic
+   test, adaptive practice, and per-topic mastery tracking all key off. */
+const SUBJECT_TOPICS = Object.fromEntries(
+  Object.entries(EXERCISE_BANK).map(([subject, list]) => [subject, [...new Set(list.map((e) => e.topic))]])
+);
+
 const STATUS = {
   pending: { label: "Pending", color: "var(--muted)", soft: "var(--bg-soft)", icon: Circle },
   in_progress: { label: "In progress", color: "var(--gold)", soft: "var(--gold-soft)", icon: Clock },
@@ -902,11 +906,46 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack }
   const list = getExercises(subject);
   const [idx, setIdx] = useState(null);
 
+  // ── Adaptive difficulty (session-only): 3 correct in a row steps up, 2 wrong in a row steps
+  // down, and missing the same topic twice nudges the student to review it. ──
+  const subjectLevel = p.subjects.find((s) => s.s === subject)?.level;
+  const [tier, setTier] = useState(() => levelToDifficulty(subjectLevel));
+  const [streak, setStreak] = useState(0);
+  const [topicMisses, setTopicMisses] = useState({});
+  const [banner, setBanner] = useState(null);
+  useEffect(() => { if (!banner) return; const t = setTimeout(() => setBanner(null), 5000); return () => clearTimeout(t); }, [banner]);
+
+  const pickNext = (fromIdx) => {
+    const candidates = list.map((ex, i) => ({ ex, i })).filter(({ i }) => i !== fromIdx);
+    const sameTier = candidates.filter(({ ex }) => ex.difficulty === tier);
+    const pool = sameTier.length ? sameTier : candidates;
+    return pool.length ? pool[0].i : null;
+  };
+
+  const handleResult = (ex, correct) => {
+    const nextStreak = correct ? Math.max(1, streak + 1) : Math.min(-1, streak - 1);
+    if (nextStreak >= 3 && tier !== "Hard") {
+      const t = tier === "Easy" ? "Medium" : "Hard";
+      setTier(t); setStreak(0);
+      setBanner({ text: `Nice streak — stepping up to ${t} questions.`, tone: "jade" });
+    } else if (nextStreak <= -2 && tier !== "Easy") {
+      const t = tier === "Hard" ? "Medium" : "Easy";
+      setTier(t); setStreak(0);
+      setBanner({ text: `Let's ease back to ${t} questions.`, tone: "gold" });
+    } else {
+      setStreak(nextStreak);
+    }
+    const missCount = correct ? 0 : (topicMisses[ex.topic] || 0) + 1;
+    setTopicMisses((m) => ({ ...m, [ex.topic]: missCount }));
+    if (!correct && missCount >= 2) setBanner({ text: `You've missed ${ex.topic} twice in a row — review the explanation carefully before trying again.`, tone: "ember" });
+  };
+
   if (idx != null && list[idx]) {
     return (
-      <ExercisePlayer ex={list[idx]} entry={practice[list[idx].id]} subject={subject} index={idx} total={list.length}
-        onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setIdx(null)}
-        onNext={idx < list.length - 1 ? () => setIdx(idx + 1) : null} />
+      <ExercisePlayer ex={list[idx]} entry={practice[list[idx].id]} subject={subject} index={idx} total={list.length} tier={tier} banner={banner}
+        onAnswer={(ex, result, meta) => { onAnswer(ex, result, meta); handleResult(ex, result === "correct"); }}
+        onSetStatus={onSetStatus} onBack={() => setIdx(null)}
+        onNext={list.length > 1 ? () => setIdx(pickNext(idx)) : null} />
     );
   }
 
@@ -953,18 +992,24 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack }
   );
 }
 
-function ExercisePlayer({ ex, entry, subject, index, total, onAnswer, onSetStatus, onBack, onNext }) {
+function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnswer, onSetStatus, onBack, onNext }) {
   const [choice, setChoice] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [phase, setPhase] = useState("answering"); // answering | mistake | result
   const isMcq = Array.isArray(ex.options);
+  const submitted = phase !== "answering";
   const correct = submitted && gradeAnswer(ex, choice);
+  const startRef = useRef(Date.now());
+  const pendingTimeRef = useRef(0);
 
   const submit = () => {
     if (choice == null || String(choice).trim() === "") return;
-    setSubmitted(true);
-    onAnswer(ex, gradeAnswer(ex, choice) ? "correct" : "incorrect");
+    const isCorrect = gradeAnswer(ex, choice);
+    const timeSec = Math.round((Date.now() - startRef.current) / 100) / 10;
+    if (isCorrect) { onAnswer(ex, "correct", { timeSec }); setPhase("result"); }
+    else { pendingTimeRef.current = timeSec; setPhase("mistake"); }
   };
-  const retry = () => { setSubmitted(false); setChoice(null); };
+  const chooseMistake = (mistakeType) => { onAnswer(ex, "incorrect", { timeSec: pendingTimeRef.current, mistakeType }); setPhase("result"); };
+  const retry = () => { setPhase("answering"); setChoice(null); startRef.current = Date.now(); };
   const next = () => { retry(); onNext?.(); };
 
   return (
@@ -974,11 +1019,18 @@ function ExercisePlayer({ ex, entry, subject, index, total, onAnswer, onSetStatu
         <span className="text-xs eai-muted">Exercise {index + 1} of {total}</span>
       </div>
 
+      {banner && (
+        <div className="eai-rise flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold" style={{ background: `var(--${banner.tone}-soft)`, color: `var(--${banner.tone})` }}>
+          <Sparkles size={15} /> {banner.text}
+        </div>
+      )}
+
       <div className="eai-card p-6">
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{ex.topic}</span>
             <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
+            {tier && <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>🎯 Adaptive: {tier}</span>}
           </div>
           <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} />
         </div>
@@ -1011,12 +1063,26 @@ function ExercisePlayer({ ex, entry, subject, index, total, onAnswer, onSetStatu
             disabled={submitted} onChange={(e) => setChoice(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
         )}
 
-        {!submitted ? (
+        {phase === "answering" && (
           <button onClick={submit} disabled={choice == null || String(choice).trim() === ""}
             className="eai-btn eai-focus w-full mt-5 py-3 text-sm text-white" style={{ background: "var(--primary)", opacity: choice == null || String(choice).trim() === "" ? 0.5 : 1 }}>
             Check answer
           </button>
-        ) : (
+        )}
+
+        {phase === "mistake" && (
+          <div className="mt-5 eai-rise">
+            <p className="text-sm font-semibold mb-2.5">Why do you think you missed this? (optional)</p>
+            <div className="flex flex-wrap gap-2">
+              {MISTAKE_TYPES.map((mt) => (
+                <button key={mt} onClick={() => chooseMistake(mt)} className="eai-btn eai-focus text-xs font-semibold px-3 py-2 rounded-full eai-soft" style={{ color: "var(--ink)" }}>{mt}</button>
+              ))}
+              <button onClick={() => chooseMistake(null)} className="eai-btn eai-focus text-xs font-semibold px-3 py-2 rounded-full" style={{ color: "var(--muted)" }}>Skip</button>
+            </div>
+          </div>
+        )}
+
+        {phase === "result" && (
           <div className="mt-5 space-y-3 eai-rise">
             {/* Result banner */}
             <div className="flex items-center gap-2.5 p-3 rounded-2xl" style={{ background: correct ? "var(--jade-soft)" : "var(--ember-soft)" }}>
@@ -1061,6 +1127,135 @@ function ExercisePlayer({ ex, entry, subject, index, total, onAnswer, onSetStatu
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════ Diagnostic test ════════════════════════
+   A short, fast-fire assessment run right after registration and before the dashboard exists.
+   No feedback mid-test — like a real diagnostic, you only see results at the end. It seeds the
+   very first real topic-mastery scores; everything the dashboard shows flows from this. */
+function buildDiagnosticQueue(field) {
+  return FIELD_SUBJECTS[field].flatMap((s) => getExercises(s));
+}
+
+function Diagnostic({ reg, dark, onComplete }) {
+  const queue = useMemo(() => buildDiagnosticQueue(reg.field), [reg.field]);
+  const [i, setI] = useState(0);
+  const [topicMastery, setTopicMastery] = useState({});
+  const [choice, setChoice] = useState(null);
+  const startRef = useRef(Date.now());
+
+  useEffect(() => { startRef.current = Date.now(); }, [i]);
+
+  if (i >= queue.length) {
+    return <DiagnosticResults reg={reg} dark={dark} topicMastery={topicMastery} onComplete={() => onComplete(topicMastery)} />;
+  }
+
+  const ex = queue[i];
+  const pct = Math.round((i / queue.length) * 100);
+
+  const answer = (confidence) => {
+    const correct = gradeAnswer(ex, choice);
+    const timeSec = (Date.now() - startRef.current) / 1000;
+    setTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, { correct, difficulty: ex.difficulty, timeSec, confidence, mistakeType: null, ts: Date.now() }));
+    setChoice(null);
+    setI((n) => n + 1);
+  };
+
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
+        <div className="w-full eai-rise" style={{ maxWidth: 640 }}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold eai-muted flex items-center gap-1.5"><ClipboardCheck size={15} /> Diagnostic test</p>
+            <p className="text-xs eai-muted">Question {i + 1} of {queue.length}</p>
+          </div>
+          <div className="h-1.5 rounded-full eai-soft mb-6 overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--primary)", transition: "width .3s" }} />
+          </div>
+
+          <div className="eai-card p-6 sm:p-8">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{ex.subject}</span>
+              <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{ex.topic}</span>
+              <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
+            </div>
+            <h2 className="eai-display text-lg font-bold mb-5">{ex.prompt}</h2>
+
+            {choice == null ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {ex.options.map((opt) => (
+                  <button key={opt} onClick={() => setChoice(opt)}
+                    className="eai-focus text-left px-4 py-3 rounded-2xl text-sm font-medium"
+                    style={{ background: "var(--card)", border: "1.5px solid var(--line)", color: "var(--ink)" }}>
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="eai-rise">
+                <div className="px-4 py-3 rounded-2xl text-sm font-semibold mb-4" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{choice}</div>
+                <p className="text-xs font-semibold eai-muted mb-2.5">How sure were you?</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button onClick={() => answer("confident")} className="eai-btn eai-focus py-3 text-sm font-semibold text-white" style={{ background: "var(--jade)" }}>😎 Confident</button>
+                  <button onClick={() => answer("guess")} className="eai-btn eai-focus py-3 text-sm font-semibold" style={{ background: "var(--bg-soft)", color: "var(--ink)" }}>🤔 I guessed</button>
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="text-center text-xs eai-muted mt-4">No feedback during the test — you'll see your results at the end.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiagnosticResults({ reg, dark, topicMastery, onComplete }) {
+  const rows = FIELD_SUBJECTS[reg.field].map((s) => {
+    const topics = SUBJECT_TOPICS[s] || [];
+    const scores = topics.map((t) => topicMastery[s]?.[t]?.score).filter((x) => x != null);
+    const m = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+    return { s, m, level: masteryLevel(m) };
+  });
+  const known = rows.filter((r) => r.m != null);
+  const overall = known.length ? Math.round(known.reduce((a, b) => a + b.m, 0) / known.length) : null;
+  const overallLevel = masteryLevel(overall);
+
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
+        <div className="w-full eai-rise" style={{ maxWidth: 640 }}>
+          <div className="text-center mb-6">
+            <div className="inline-grid place-items-center rounded-2xl mb-3" style={{ width: 56, height: 56, background: "var(--jade-soft)" }}>
+              <CheckCircle2 size={28} style={{ color: "var(--jade)" }} />
+            </div>
+            <h1 className="eai-display text-2xl font-extrabold">Diagnostic complete!</h1>
+            <p className="eai-muted text-sm mt-1">Here's your real starting point — overall level is <b style={{ color: LEVEL_COLOR[overallLevel] }}>{overallLevel}</b>.</p>
+          </div>
+
+          <div className="eai-card p-6">
+            <div className="space-y-3">
+              {rows.map((r) => (
+                <div key={r.s} className="flex items-center gap-3">
+                  <span className="text-sm font-semibold w-32 truncate">{r.s}</span>
+                  <div className="flex-1 h-2.5 rounded-full eai-soft overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${r.m ?? 0}%`, background: LEVEL_COLOR[r.level] }} />
+                  </div>
+                  <span className="text-xs font-bold w-9 text-right eai-display">{r.m != null ? `${r.m}%` : "—"}</span>
+                  <span className="text-xs font-semibold w-24 text-right" style={{ color: LEVEL_COLOR[r.level] }}>{r.level}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={onComplete} className="eai-btn eai-focus w-full mt-5 py-3 text-sm text-white flex items-center justify-center gap-2" style={{ background: "var(--primary)" }}>
+            <Sparkles size={16} /> Go to my dashboard <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1529,45 +1724,261 @@ function Languages() {
   );
 }
 
-function Progress({ p }) {
+function Progress({ p, practice = {}, bonusXp = 0 }) {
+  const xp = p.xp + bonusXp;
+  const [openSubject, setOpenSubject] = useState(null);
+
+  // ── Live data collected from the Practice section ───────────────
+  const entries = Object.values(practice);
+  const isToday = (ts) => new Date(ts).toDateString() === new Date().toDateString();
+  const attempted = entries.filter((e) => e.result);
+  const completed = entries.filter((e) => e.status === "completed");
+  const todayCompleted = completed.filter((e) => isToday(e.at));
+  const todayAttempts = attempted.filter((e) => isToday(e.at));
+  const correctCount = attempted.filter((e) => e.result === "correct").length;
+  const accuracy = attempted.length ? Math.round((correctCount / attempted.length) * 100) : null;
+  const mistakes = attempted.length - correctCount;
+  const recent = [...completed].sort((a, b) => b.at - a.at).slice(0, 4);
+  const live = { completedLessons: completed.length, quizScore: accuracy, mistakes };
+
+  // ── Leaderboard: mock classmates + the current user, ranked live by XP ───
+  const leaderboard = useMemo(() => {
+    const entries2 = [...LEADERBOARD_SEED, { name: p.name, xp, isYou: true }];
+    return entries2.sort((a, b) => b.xp - a.xp).map((e, i) => ({ ...e, rank: i + 1 }));
+  }, [p.name, xp]);
+  const you = leaderboard.find((e) => e.isYou);
+
   return (
     <div className="space-y-5 eai-rise">
       <div>
         <h2 className="eai-display text-2xl font-extrabold">Progress</h2>
-        <p className="eai-muted text-sm mt-1">Your learning trends over time.</p>
+        <p className="eai-muted text-sm mt-1">Your full stats, analytics, and where you stand.</p>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+      {/* Today's progress — collected from Practice */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { l: "Study hours", v: "4.2h", s: "First week", c: "var(--primary)", icon: Clock },
-          { l: "Lessons done", v: "1", s: "Keep going", c: "var(--jade)", icon: CheckCircle2 },
-          { l: "Avg mastery", v: `${p.avg}%`, s: "Across subjects", c: "var(--gold)", icon: Award },
-          { l: "Current level", v: `${p.level}`, s: "Beginner tier", c: "var(--ember)", icon: Zap },
-        ].map((k) => (
-          <div key={k.l} className="eai-card p-5">
-            <k.icon size={18} style={{ color: k.c }} />
-            <p className="eai-display text-2xl font-extrabold mt-3">{k.v}</p>
-            <p className="text-xs eai-muted mt-0.5">{k.l}</p>
-            <p className="text-xs font-semibold mt-1" style={{ color: k.c }}>{k.s}</p>
+          { l: "Done today", v: `${todayCompleted.length}`, sub: "exercises", c: "var(--jade)", icon: CheckCircle2 },
+          { l: "Attempted today", v: `${todayAttempts.length}`, sub: "questions", c: "var(--primary)", icon: Target },
+          { l: "Accuracy", v: accuracy != null ? `${accuracy}%` : "—", sub: "all time", c: "var(--gold)", icon: ClipboardCheck },
+          { l: "XP today", v: `+${todayCompleted.length * 30}`, sub: "from practice", c: "var(--ember)", icon: Zap },
+        ].map((s) => (
+          <div key={s.l} className="eai-card p-4 flex items-center gap-3">
+            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 38, height: 38, background: "var(--bg-soft)" }}>
+              <s.icon size={18} style={{ color: s.c }} />
+            </div>
+            <div className="min-w-0">
+              <p className="eai-display text-xl font-extrabold leading-none">{s.v}</p>
+              <p className="text-xs eai-muted mt-0.5 truncate">{s.l}</p>
+            </div>
           </div>
         ))}
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Exam readiness — a composite estimate, presented as a range rather than a guarantee */}
+        <div className="eai-card p-6 relative overflow-hidden">
+          <CardHead title="Exam readiness" kh="ភាពត្រៀមខ្លួនប្រឡង" />
+          <div className="flex flex-col items-center -mb-2">
+            <Gauge value={p.readiness.overall} />
+            <div style={{ marginTop: -68, textAlign: "center" }}>
+              <p className="eai-display text-4xl font-extrabold" style={{ color: "var(--jade)" }}>{p.readiness.overall}%</p>
+              <p className="text-xs eai-muted">estimated range: {p.gradeRange}</p>
+            </div>
+          </div>
+          <div className="space-y-2 mt-6">
+            {[
+              { l: "Knowledge mastery", v: p.readiness.mastery },
+              { l: "Syllabus coverage", v: p.readiness.coverage },
+              { l: "Study consistency", v: p.readiness.consistency },
+              { l: "Completion speed", v: p.readiness.speed },
+            ].map((r) => (
+              <div key={r.l} className="flex items-center gap-2">
+                <span className="text-xs eai-muted flex-1">{r.l}</span>
+                <div className="w-16 h-1.5 rounded-full eai-soft overflow-hidden"><div className="h-full rounded-full" style={{ width: `${r.v}%`, background: "var(--primary)" }} /></div>
+                <span className="text-xs font-bold w-8 text-right eai-display">{r.v}%</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs eai-muted mt-4 leading-relaxed">
+            Estimate, not a guarantee. {p.priorityTopic && <>Lifting <span style={{ color: "var(--ember)", fontWeight: 600 }}>{p.priorityTopic.t}</span> will move this the most.</>}
+          </p>
+        </div>
+
+        {/* Weekly hours */}
+        <div className="eai-card p-6 lg:col-span-2">
+          <CardHead title="Weekly study hours" kh="ម៉ោងសិក្សា"
+            action={<Pill icon={Clock} color="var(--primary)" soft="var(--primary-soft)" value="4.2h" label="this week" />} />
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={WEEK_SEED} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--jade)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--jade)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="d" tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 12, fontSize: 12 }} formatter={(v) => [`${v}h`, "Studied"]} />
+                <Area type="monotone" dataKey="h" stroke="var(--jade)" strokeWidth={2.5} fill="url(#g2)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Leaderboard */}
       <div className="eai-card p-6">
-        <CardHead title="Weekly study hours" />
-        <div style={{ height: 220 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={WEEK_SEED} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
-              <defs>
-                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--jade)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--jade)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
-              <XAxis dataKey="d" tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 12, fontSize: 12 }} formatter={(v) => [`${v}h`, "Studied"]} />
-              <Area type="monotone" dataKey="h" stroke="var(--jade)" strokeWidth={2.5} fill="url(#g2)" />
-            </AreaChart>
-          </ResponsiveContainer>
+        <CardHead title="Leaderboard" kh="តារាងអ្នកនាំមុខ"
+          action={<span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: "var(--gold-soft)", color: "var(--gold)" }}><Trophy size={12} /> This week</span>} />
+        <div className="space-y-1.5">
+          {leaderboard.slice(0, 8).map((e) => (
+            <div key={e.name} className="flex items-center gap-3 p-2.5 rounded-2xl" style={{ background: e.isYou ? "var(--primary-soft)" : "transparent" }}>
+              <div className="grid place-items-center rounded-full flex-shrink-0 eai-display font-bold text-xs" style={{
+                width: 28, height: 28,
+                background: e.rank === 1 ? "var(--gold-soft)" : e.rank === 3 ? "var(--ember-soft)" : "var(--bg-soft)",
+                color: e.rank === 1 ? "var(--gold)" : e.rank === 3 ? "var(--ember)" : "var(--muted)",
+              }}>
+                {e.rank === 1 ? <Crown size={14} /> : e.rank}
+              </div>
+              <p className="text-sm font-semibold truncate flex-1 min-w-0" style={{ color: e.isYou ? "var(--primary)" : "var(--ink)" }}>
+                {e.name}{e.isYou && <span className="text-xs eai-muted font-normal"> · you</span>}
+              </p>
+              <span className="text-xs font-bold eai-display flex items-center gap-1 flex-shrink-0" style={{ color: "var(--gold)" }}>
+                <Zap size={12} /> {e.xp.toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+        {you.rank > 8 && (
+          <p className="text-xs eai-muted mt-3 text-center">You're ranked #{you.rank} of {leaderboard.length} · {you.xp.toLocaleString()} XP</p>
+        )}
+      </div>
+
+      {/* AI Learning Analytics */}
+      <div className="eai-card p-6">
+        <CardHead title="AI Learning Analytics" kh="ការវិភាគដោយ AI"
+          action={<span className="text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={12} /> Live</span>} />
+        <p className="text-xs eai-muted -mt-2 mb-4">The coach continuously analyzes these signals to personalize your plan:</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {analyticsSignals(p, live).map((sig, i) => (
+            <div key={i} className="eai-tile p-3.5 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
+              <div className="flex items-center justify-between">
+                <div className="grid place-items-center rounded-xl" style={{ width: 32, height: 32, background: "var(--bg-soft)" }}>
+                  <sig.icon size={16} style={{ color: "var(--primary)" }} />
+                </div>
+                <span className="eai-display font-bold text-sm">{sig.value}</span>
+              </div>
+              <p className="text-xs font-semibold mt-2.5">{sig.label}</p>
+              <p className="text-xs eai-muted">{sig.note}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Subject mastery + weak/strong — tap a subject to see its topic-by-topic breakdown */}
+        <div className="eai-card p-6 lg:col-span-2">
+          <CardHead title="Subject mastery" kh="ការយល់ដឹងតាមមុខវិជ្ជា" />
+          <div className="space-y-1">
+            {p.subjects.map((s) => {
+              const isOpen = openSubject === s.s;
+              return (
+                <div key={s.s}>
+                  <button onClick={() => setOpenSubject(isOpen ? null : s.s)} className="eai-focus w-full flex items-center gap-3 py-1.5">
+                    <span className="text-sm font-semibold w-32 truncate text-left">{s.s}</span>
+                    <div className="flex-1 h-2.5 rounded-full eai-soft overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${s.m ?? 0}%`, background: s.tag === "weak" ? "var(--ember)" : s.tag === "strong" ? "var(--jade)" : "var(--primary)" }} />
+                    </div>
+                    <span className="text-xs font-bold w-9 text-right eai-display">{s.m != null ? `${s.m}%` : "—"}</span>
+                    <span className="text-xs flex items-center gap-0.5 w-10" style={{ color: s.t >= 0 ? "var(--jade)" : "var(--ember)" }}>
+                      {s.t >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(s.t)}
+                    </span>
+                    <ChevronRight size={14} className="eai-muted flex-shrink-0" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s ease" }} />
+                  </button>
+                  {isOpen && (
+                    <div className="pl-4 pb-2.5 pt-0.5 space-y-1.5">
+                      {s.topics.map((t) => (
+                        <div key={t.t} className="flex items-center gap-3">
+                          <span className="text-xs eai-muted w-28 truncate">{t.t}</span>
+                          <div className="flex-1 h-1.5 rounded-full eai-soft overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${t.score ?? 0}%`, background: LEVEL_COLOR[masteryLevel(t.score)] }} />
+                          </div>
+                          <span className="text-xs w-9 text-right eai-muted">{t.score != null ? `${t.score}%` : "—"}</span>
+                          <span className="text-xs w-20 text-right eai-muted">{masteryLevel(t.score)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {p.strong.map((s) => <span key={s.s} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>💪 {s.s}</span>)}
+            {p.weak.map((s) => <span key={s.s} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>⚠ {s.s}</span>)}
+          </div>
+        </div>
+
+        {/* AI recommendations */}
+        <div className="eai-card p-6">
+          <CardHead title="AI recommendations" kh="អនុសាសន៍ពី AI" />
+          <div className="space-y-3">
+            {p.recs.map((r, i) => (
+              <div key={i} className="flex gap-3 p-3 rounded-2xl eai-soft">
+                <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 34, height: 34, background: "var(--card)" }}>
+                  <r.icon size={17} style={{ color: r.c }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold leading-snug">{r.t}</p>
+                  <p className="text-xs eai-muted mt-0.5 leading-relaxed">{r.d}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Weekly + Monthly goals */}
+        <div className="eai-card p-6">
+          <CardHead title="Goals" kh="គោលដៅ" />
+          <div className="space-y-4">
+            {[{ l: "Weekly", v: "0.5 / 8h", p: 6, c: "var(--gold)" }, { l: "Monthly", v: "1 / 24 lessons", p: 4, c: "var(--jade)" }].map((g) => (
+              <div key={g.l}>
+                <div className="flex justify-between text-sm mb-1.5"><span className="font-semibold">{g.l} goal</span><span className="eai-muted text-xs">{g.v}</span></div>
+                <div className="h-2 rounded-full eai-soft overflow-hidden"><div className="h-full rounded-full" style={{ width: `${g.p}%`, background: g.c }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent activity */}
+        <div className="eai-card p-6">
+          <CardHead title="Recent activity" kh="សកម្មភាពថ្មីៗ" />
+          <div className="space-y-3">
+            {(recent.length
+              ? recent.map((e) => ({
+                  t: `Completed ${e.subject}: ${e.topic}`,
+                  meta: `${e.result === "correct" ? "Correct" : "Reviewed"} · +30 XP`,
+                  c: e.result === "correct" ? "var(--jade)" : "var(--gold)",
+                  icon: CheckCircle2,
+                }))
+              : [
+                  { t: "Created your account", meta: "Welcome aboard · +40 XP", c: "var(--jade)", icon: GraduationCap },
+                  { t: `Joined the ${FIELD_META[p.field].label} track`, meta: "Subjects personalized", c: "var(--primary)", icon: FileText },
+                  { t: "AI built your first study plan", meta: "Based on your weak subjects", c: "var(--gold)", icon: Sparkles },
+                ]
+            ).map((a, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 32, height: 32, background: "var(--bg-soft)" }}>
+                  <a.icon size={16} style={{ color: a.c }} />
+                </div>
+                <div className="min-w-0"><p className="text-sm font-medium truncate">{a.t}</p><p className="text-xs eai-muted">{a.meta}</p></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -1587,21 +1998,23 @@ function coachReply(text, p) {
     const tag = mentioned.tag === "weak" ? "your weakest area — high impact"
       : mentioned.tag === "strong" ? "already a strength, so keep it sharp with light revision"
       : "tracking steadily";
-    return `${mentioned.s} is at ${mentioned.m}% (${tag}). I'd start with "${TOPICS[mentioned.s]}" — do a short lesson, then 8–10 practice questions and review every mistake. Want me to turn that into a 3-day mini-plan?`;
+    const focusTopic = [...mentioned.topics].sort((a, b) => (a.score ?? 999) - (b.score ?? 999))[0]?.t || mentioned.s;
+    const pct = mentioned.m != null ? `${mentioned.m}%` : "not yet assessed";
+    return `${mentioned.s} is at ${pct} (${tag}). I'd start with "${focusTopic}" — do a short lesson, then 8–10 practice questions and review every mistake. Want me to turn that into a 3-day mini-plan?`;
   }
 
   // 2) Keyword intents
   if (/(grade|odds|predict|chance|target)/.test(t))
-    return `You're at ${p.prediction[p.target]}% for Grade ${p.target}, on a ${p.avg}% average mastery. The fastest lever is ${weakest || "your weakest subject"} — lifting it 10–15 points moves the prediction the most. Pair that with keeping your streak alive (consistency is weighted heavily) and you'll climb quickly.`;
+    return `You're estimated in the ${p.gradeRange} range right now, on a ${p.avg ?? 0}% average mastery. The fastest lever is ${weakest || "your weakest subject"} — lifting it 10–15 points moves the estimate the most. Pair that with keeping your streak alive (consistency is weighted heavily) and you'll climb quickly.`;
 
   if (/(today|study|plan|what.*do|start)/.test(t))
-    return `Here's a high-impact ${"~90 min"} plan for today:\n1) ${weakest || "Your weak subject"} — ${weakest ? TOPICS[weakest] : "core review"} (35m)\n2) A timed practice set for exam stamina (40m)\n3) A quick ${strongest || "strong-subject"} revision so you don't lose mastery (15m).`;
+    return `Here's a high-impact ${"~90 min"} plan for today:\n1) ${weakest || "Your weak subject"} — ${p.priorityTopic?.t || "core review"} (35m)\n2) A timed practice set for exam stamina (40m)\n3) A quick ${strongest || "strong-subject"} revision so you don't lose mastery (15m).`;
 
   if (/(ielts|toefl|hsk|delf|english|language|band|speaking|writing)/.test(t))
     return `For language exams, start with a diagnostic so we know your real level per skill (listening, reading, writing, speaking). Writing usually has the most room to grow — I can give you a prompt and score it skill-by-skill. Which exam are you aiming for?`;
 
   if (/(motivat|stuck|hard|tired|give up|stress|worried|nervous)/.test(t))
-    return `That feeling is normal, and you're further along than you think — ${p.avg}% average with ${p.strong.length} strong subject${p.strong.length === 1 ? "" : "s"} already. Let's shrink the goal: just 20 focused minutes on ${weakest || "one topic"} today. Small, consistent wins are exactly what move your grade prediction. You've got this. 🇰🇭`;
+    return `That feeling is normal, and you're further along than you think — ${p.avg ?? 0}% average with ${p.strong.length} strong subject${p.strong.length === 1 ? "" : "s"} already. Let's shrink the goal: just 20 focused minutes on ${weakest || "one topic"} today. Small, consistent wins are exactly what move your exam-readiness estimate. You've got this. 🇰🇭`;
 
   if (/(hello|hi|hey|សួស្តី|chom reap)/.test(t))
     return `Hi ${p.name.split(" ")[0]}! Ready to study? You can ask me to explain a topic, build a plan, or quiz you. I'd suggest we start with ${weakest || "your weakest subject"} — that's where you'll gain the most.`;
@@ -1692,21 +2105,68 @@ const NAV = [
   { id: "progress", label: "Progress", icon: BarChart3 },
 ];
 
+const STORAGE_KEY = "bondus_state_v1";
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 export default function App() {
-  const [profile, setProfile] = useState(null);
+  const saved = useRef(loadSaved()).current;
+  const [profile, setProfile] = useState(saved?.profile ?? null);
+  const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the diagnostic test
+  const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [tab, setTab] = useState("dashboard");
   const [dark, setDark] = useState(false);
   const [open, setOpen] = useState(false);
-  const [practice, setPractice] = useState({}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
-  const [plan, setPlan] = useState([]);
-  const [bonusXp, setBonusXp] = useState(0);
+  const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
+  const [plan, setPlan] = useState(saved?.plan ?? []);
+  const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
   const go = (t) => { setTab(t); setOpen(false); };
 
-  // Registration builds the profile and seeds the daily plan (lifted here so it survives tab navigation).
-  const handleRegister = (newProfile) => {
-    setProfile(newProfile);
-    setPlan(newProfile.plan);
+  // Persist everything so progress survives a page refresh — this prototype has no backend yet.
+  useEffect(() => {
+    if (!profile) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, practice, plan, bonusXp }));
+  }, [profile, topicMastery, practice, plan, bonusXp]);
+
+  const resetAll = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setProfile(null); setPendingReg(null); setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard");
   };
+
+  // Registration collects answers, then the diagnostic test measures real mastery before the
+  // profile (and its seeded daily plan) is actually built — self-reports alone aren't trusted.
+  const handleRegister = (reg) => setPendingReg(reg);
+  const handleDiagnosticComplete = (diagnosticMastery) => {
+    const built = buildProfile(pendingReg);
+    const insights = deriveInsights(built, diagnosticMastery);
+    setTopicMastery(diagnosticMastery);
+    setProfile(built);
+    setPlan(insights.plan);
+    setPendingReg(null);
+  };
+
+  // Live insights recompute from topicMastery on every change — this is what makes weak/strong
+  // subjects, the recommended lesson, and exam readiness actually update as the student practices.
+  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery) : null), [profile, topicMastery]);
+  const p = useMemo(() => (profile ? { ...profile, ...insights } : null), [profile, insights]);
+
+  // Level up whenever XP crosses the next threshold (can chain multiple levels from one big award).
+  useEffect(() => {
+    if (!profile) return;
+    const totalXp = profile.xp + bonusXp;
+    if (totalXp >= profile.xpToNext) {
+      setProfile((cur) => {
+        let level = cur.level, xpToNext = cur.xpToNext;
+        while (cur.xp + bonusXp >= xpToNext) { level += 1; xpToNext = Math.round(xpToNext * 1.35); }
+        return { ...cur, level, xpToNext };
+      });
+    }
+  }, [profile, bonusXp]);
 
   const togglePlanTask = (id) => {
     const target = plan.find((x) => x.id === id);
@@ -1716,12 +2176,16 @@ export default function App() {
     setBonusXp((x) => Math.max(0, x + (nowDone ? 20 : -20)));
   };
 
-  // Record an answered exercise (auto-completes on correct, awards XP exactly once per exercise, ever).
-  const handleAnswer = (ex, result) => {
+  // Record an answered exercise: bookkeeping for XP (unchanged) + feeding the topic-mastery engine
+  // (new) so the subject's score, weak/strong tag, and every derived recommendation update live.
+  const handleAnswer = (ex, result, meta = {}) => {
     const already = practice[ex.id]?.xpAwarded;
     const xpAwarded = already || result === "correct";
     setPractice((prev) => ({ ...prev, [ex.id]: { status: result === "correct" ? "completed" : "in_progress", result, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
     if (result === "correct" && !already) setBonusXp((x) => x + 30);
+    setTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
+      correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
+    }));
   };
   // Manually set a status (Pending / In progress / Completed). XP is only ever awarded once per exercise.
   const handleSetStatus = (ex, status) => {
@@ -1731,14 +2195,15 @@ export default function App() {
     if (status === "completed" && !already) setBonusXp((x) => x + 30);
   };
 
+  if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} />;
   if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} />;
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const view = {
-    dashboard: <Dashboard p={profile} go={go} plan={plan} onTogglePlan={togglePlanTask} practice={practice} bonusXp={bonusXp} />,
-    browse: <Browse p={profile} />,
-    practice: <Practice p={profile} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} />,
-    universities: <Universities />, languages: <Languages />, coach: <Coach p={profile} />, progress: <Progress p={profile} />,
+    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} />,
+    browse: <Browse p={p} />,
+    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} />,
+    universities: <Universities />, languages: <Languages />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
   }[tab];
 
   return (
@@ -1765,12 +2230,13 @@ export default function App() {
               );
             })}
           </nav>
-          <div className="p-3">
+          <div className="p-3 space-y-2">
             <div className="eai-soft rounded-2xl p-4 text-center">
               <Flame size={20} style={{ color: "var(--ember)", margin: "0 auto" }} />
               <p className="text-xs font-semibold mt-2">{profile.streak}-day streak</p>
               <p className="text-xs eai-muted">Study today to keep it!</p>
             </div>
+            <button onClick={resetAll} className="eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline">Log out</button>
           </div>
         </aside>
 
