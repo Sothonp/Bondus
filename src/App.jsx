@@ -535,42 +535,11 @@ function Register({ onComplete, dark, setDark }) {
                   </p>
                 </div>
 
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
-                  className="mt-5 p-5 rounded-2xl" style={{ background: "var(--primary-soft)", border: "1px solid var(--primary)" }}>
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={17} style={{ color: "var(--primary)" }} />
-                    <span className="eai-display font-bold text-sm" style={{ color: "var(--primary)" }}>Personalized Diagnostic Assessment</span>
-                  </div>
-                  <p className="text-sm mt-2 leading-relaxed">Instead of guessing your strengths and weaknesses, Bondus will analyze your current level and build a study plan just for you.</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
-                    {["Takes about 15 minutes", "Adapts to your study track", "Not graded"].map((f) => (
-                      <span key={f} className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "var(--primary)" }}>
-                        <CheckCircle2 size={13} /> {f}
-                      </span>
-                    ))}
-                  </div>
-                </motion.div>
-
-                <motion.button whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.01 }}
-                  onClick={() => onComplete({ ...form, age: Number(form.age) || null })}
-                  className="eai-btn eai-focus w-full mt-4 py-3.5 text-sm text-white flex items-center justify-center gap-2"
-                  style={{ background: "var(--primary)" }}>
-                  <Sparkles size={16} /> Start My Diagnostic Assessment <ChevronRight size={16} />
-                </motion.button>
-
-                <div className="mt-4 text-center">
-                  <p className="text-xs font-semibold eai-muted">After the assessment, you'll receive:</p>
-                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
-                    {[
-                      { e: "📊", t: "Your current level by subject" },
-                      { e: "🎯", t: "A personalized study roadmap" },
-                      { e: "📚", t: "Recommended BAC II past papers" },
-                      { e: "🤖", t: "AI-powered daily practice plan" },
-                    ].map((b) => (
-                      <span key={b.t} className="text-xs eai-muted flex items-center gap-1">{b.e} {b.t}</span>
-                    ))}
-                  </div>
-                </div>
+                <button onClick={() => onComplete({ ...form, age: Number(form.age) || null })}
+                  className="eai-btn eai-focus w-full mt-6 py-3 text-sm text-white flex items-center justify-center gap-2"
+                  style={{ background: "var(--jade)" }}>
+                  Continue <ChevronRight size={16} />
+                </button>
               </>
             )}
           </div>
@@ -591,13 +560,48 @@ function Field({ label, required, children }) {
 }
 
 /* ════════════════════════ Dashboard ════════════════════════ */
-function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0 }) {
+const PERSONALIZATION_PERKS = [
+  "Personalized study roadmap", "AI recommendations", "Subject mastery analysis",
+  "Adaptive practice questions", "BAC II paper recommendations", "Progress tracking",
+];
+
+function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, onDismissBanner }) {
   const xp = p.xp + bonusXp;
   const done = plan.filter((t) => t.done).length;
   const planPct = plan.length ? Math.round((done / plan.length) * 100) : 0;
 
   return (
     <div className="space-y-5 eai-rise">
+      {/* Unlock-personalization banner — only for profiles that explicitly skipped the diagnostic
+          (older saved profiles predate this flag and default to personalized, not undefined). */}
+      {p.isPersonalized === false && !p.bannerDismissed && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
+          className="eai-card p-5 relative" style={{ background: "var(--gold-soft)", border: "1px solid var(--gold)" }}>
+          <button onClick={onDismissBanner} aria-label="Dismiss" className="eai-focus absolute top-4 right-4 eai-muted">
+            <XCircle size={18} />
+          </button>
+          <div className="flex items-start gap-3 pr-8">
+            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--card)" }}>
+              <Target size={19} style={{ color: "var(--gold)" }} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="eai-display font-bold text-sm">🎯 Unlock Your Personalized Study Plan</p>
+              <p className="text-xs eai-muted mt-1">Complete your 20-question diagnostic assessment to receive:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                {PERSONALIZATION_PERKS.map((f) => (
+                  <span key={f} className="text-xs eai-muted flex items-center gap-1.5">
+                    <CheckCircle2 size={12} style={{ color: "var(--gold)" }} /> {f}
+                  </span>
+                ))}
+              </div>
+              <button onClick={onStartAssessment} className="eai-btn eai-focus mt-3.5 px-4 py-2 text-xs text-white" style={{ background: "var(--primary)" }}>
+                Start Assessment
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Hero */}
       <div className="eai-card overflow-hidden relative">
         <div className="p-6 sm:p-8 relative">
@@ -1127,6 +1131,44 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════ Assessment choice ════════════════════════
+   Shown right after registration, before the (optional) diagnostic test. Students can start the
+   real assessment or explore the app unpersonalized — see Dashboard's banner for the return path. */
+function AssessmentChoice({ reg, dark, onStart, onSkip }) {
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
+        <div className="w-full eai-rise" style={{ maxWidth: 560 }}>
+          <div className="text-center mb-6">
+            <p className="eai-km text-sm" style={{ color: "var(--gold)" }}>សួស្តី, {reg.name.split(" ")[0]}! 👋</p>
+            <h1 className="eai-display text-2xl font-extrabold mt-1">Choose how you'd like to get started</h1>
+          </div>
+
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="eai-card p-6 sm:p-7">
+            <p className="text-sm leading-relaxed">The diagnostic assessment helps Bondus understand your current knowledge and creates a personalized learning experience.</p>
+            <p className="text-sm eai-muted mt-2 leading-relaxed">It takes about 15–20 minutes and only needs to be completed once.</p>
+
+            <motion.button whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.01 }} onClick={onStart}
+              className="eai-btn eai-focus w-full mt-6 py-3.5 text-sm text-white flex items-center justify-center gap-2"
+              style={{ background: "var(--primary)" }}>
+              <Sparkles size={16} /> Start Personalized Assessment
+            </motion.button>
+            <p className="text-xs text-center mt-2 font-semibold" style={{ color: "var(--primary)" }}>Recommended for the best learning experience.</p>
+
+            <button onClick={onSkip} className="eai-btn eai-focus w-full mt-4 py-3 text-sm eai-soft" style={{ color: "var(--ink)" }}>
+              Explore First
+            </button>
+            <p className="text-xs eai-muted text-center mt-2 leading-relaxed">
+              Explore Bondus without personalization.<br />You can take the assessment anytime later from your Profile or Dashboard.
+            </p>
+          </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -2117,7 +2159,9 @@ function loadSaved() {
 export default function App() {
   const saved = useRef(loadSaved()).current;
   const [profile, setProfile] = useState(saved?.profile ?? null);
-  const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the diagnostic test
+  const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
+  const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
+  const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [tab, setTab] = useState("dashboard");
   const [dark, setDark] = useState(false);
@@ -2135,20 +2179,42 @@ export default function App() {
 
   const resetAll = () => {
     localStorage.removeItem(STORAGE_KEY);
-    setProfile(null); setPendingReg(null); setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard");
+    setProfile(null); setPendingReg(null); setShowDiagnostic(false); setRetaking(false);
+    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard");
   };
 
-  // Registration collects answers, then the diagnostic test measures real mastery before the
-  // profile (and its seeded daily plan) is actually built — self-reports alone aren't trusted.
+  // Registration collects answers, then the student chooses to take the diagnostic now or explore
+  // first — self-reports alone aren't trusted, but personalization is never required to start.
   const handleRegister = (reg) => setPendingReg(reg);
   const handleDiagnosticComplete = (diagnosticMastery) => {
     const built = buildProfile(pendingReg);
     const insights = deriveInsights(built, diagnosticMastery);
     setTopicMastery(diagnosticMastery);
-    setProfile(built);
+    setProfile({ ...built, hasCompletedDiagnostic: true, isPersonalized: true, bannerDismissed: false });
+    setPlan(insights.plan);
+    setPendingReg(null);
+    setShowDiagnostic(false);
+  };
+  // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
+  const handleSkipDiagnostic = () => {
+    const built = buildProfile(pendingReg);
+    const insights = deriveInsights(built, {});
+    setTopicMastery({});
+    setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
     setPlan(insights.plan);
     setPendingReg(null);
   };
+  // Completing the diagnostic later, from the Dashboard banner — updates the existing profile
+  // in place instead of building a fresh one.
+  const handleLaterDiagnosticComplete = (diagnosticMastery) => {
+    const updated = { ...profile, hasCompletedDiagnostic: true, isPersonalized: true, bannerDismissed: true };
+    const insights = deriveInsights(updated, diagnosticMastery);
+    setTopicMastery(diagnosticMastery);
+    setProfile(updated);
+    setPlan(insights.plan);
+    setRetaking(false);
+  };
+  const dismissBanner = () => setProfile((cur) => ({ ...cur, bannerDismissed: true }));
 
   // Live insights recompute from topicMastery on every change — this is what makes weak/strong
   // subjects, the recommended lesson, and exam readiness actually update as the student practices.
@@ -2195,12 +2261,14 @@ export default function App() {
     if (status === "completed" && !already) setBonusXp((x) => x + 30);
   };
 
+  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} />;
   if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} />;
+  if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} />;
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const view = {
-    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} />,
+    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} />,
     browse: <Browse p={p} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} />,
     universities: <Universities />, languages: <Languages />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
