@@ -1373,19 +1373,34 @@ const UNI_DETAIL = {
       { topic: "Economics fundamentals", subject: "General", freq: "Sometimes" },
     ],
   },
-  CamTech: {
-    exam: "STEM & English Entrance",
+  CADT: {
+    exam: "Digital Technology Entrance",
     sets: [
       { title: "Mathematics Diagnostic", subject: "Mathematics", q: 35, diff: "Medium" },
-      { title: "Physics Concepts Set", subject: "Physics", q: 30, diff: "Medium" },
-      { title: "English & Logic Combined", subject: "English", q: 45, diff: "Medium" },
+      { title: "Computing & Logic Set", subject: "Reasoning", q: 30, diff: "Medium" },
+      { title: "English & Comprehension Combined", subject: "English", q: 45, diff: "Medium" },
     ],
     common: [
       { topic: "Functions & graphs", subject: "Mathematics", freq: "Frequently" },
-      { topic: "Mechanics & energy", subject: "Physics", freq: "Frequently" },
+      { topic: "Algorithmic & logical thinking", subject: "Reasoning", freq: "Frequently" },
       { topic: "Reading comprehension", subject: "English", freq: "Often" },
-      { topic: "Probability basics", subject: "Mathematics", freq: "Often" },
-      { topic: "Logical sequences", subject: "Reasoning", freq: "Sometimes" },
+      { topic: "Probability & statistics basics", subject: "Mathematics", freq: "Often" },
+      { topic: "Number sequences & patterns", subject: "Reasoning", freq: "Sometimes" },
+    ],
+  },
+  UHS: {
+    exam: "Health Sciences Entrance",
+    sets: [
+      { title: "Biology Diagnostic", subject: "Biology", q: 40, diff: "Hard" },
+      { title: "Chemistry Concepts Set", subject: "Chemistry", q: 35, diff: "Hard" },
+      { title: "Mathematics & Physics Combined", subject: "Mathematics", q: 30, diff: "Medium" },
+    ],
+    common: [
+      { topic: "Human anatomy & physiology", subject: "Biology", freq: "Frequently" },
+      { topic: "Organic chemistry basics", subject: "Chemistry", freq: "Frequently" },
+      { topic: "Cell biology & genetics", subject: "Biology", freq: "Often" },
+      { topic: "Chemical reactions & equations", subject: "Chemistry", freq: "Often" },
+      { topic: "Applied mathematics for sciences", subject: "Mathematics", freq: "Sometimes" },
     ],
   },
 };
@@ -1436,6 +1451,22 @@ function Majors({ abbr, color }) {
   );
 }
 
+function UniLogo({ uni, size = 64 }) {
+  const [failed, setFailed] = useState(false);
+  if (!uni.logo || failed) {
+    return (
+      <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: size, height: size, background: "var(--bg-soft)" }}>
+        <GraduationCap size={Math.round(size * 0.45)} style={{ color: uni.c }} />
+      </div>
+    );
+  }
+  return (
+    <div className="grid place-items-center rounded-xl flex-shrink-0 p-2 overflow-hidden" style={{ width: size, height: size, background: "var(--bg-soft)" }}>
+      <img src={uni.logo} alt={`${uni.abbr} logo`} className="max-w-full max-h-full w-auto h-auto min-w-0 min-h-0 object-contain" onError={() => setFailed(true)} />
+    </div>
+  );
+}
+
 function UniversityDetail({ uni, onBack }) {
   const d = UNI_DETAIL[uni.abbr] || { exam: "Entrance Exam", sets: [], common: [] };
   return (
@@ -1446,7 +1477,7 @@ function UniversityDetail({ uni, onBack }) {
 
       {/* Header */}
       <div className="eai-card p-6 flex items-center gap-4">
-        <Ring value={uni.ready} size={72} color={uni.c} stroke={8}><span className="eai-display font-bold">{uni.ready}%</span></Ring>
+        <UniLogo uni={uni} size={72} />
         <div className="min-w-0">
           <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: uni.c }} /><span className="eai-display text-xl font-extrabold">{uni.abbr}</span></div>
           <p className="text-sm mt-0.5">{uni.n}</p>
@@ -1525,7 +1556,7 @@ function Universities() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {UNIS.map((u) => (
           <button key={u.abbr} onClick={() => setSelected(u)} className="eai-card eai-tile eai-focus p-5 flex items-center gap-4 text-left w-full">
-            <Ring value={u.ready} size={64} color={u.c} stroke={7}><span className="eai-display font-bold text-sm">{u.ready}%</span></Ring>
+            <UniLogo uni={u} size={64} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2"><GraduationCap size={16} style={{ color: u.c }} /><span className="eai-display font-bold">{u.abbr}</span></div>
               <p className="text-sm truncate mt-0.5">{u.n}</p>
@@ -1834,8 +1865,8 @@ function Progress({ p, practice = {}, bonusXp = 0 }) {
 const SUBJECT_MAJOR_KEYWORDS = {
   Mathematics: ["mathematics", "data", "statistics", "engineering", "computer", "finance", "economics", "actuarial", "supply chain"],
   Physics: ["physics", "engineering", "electrical", "mechanical", "renewable", "electronics", "robotics"],
-  Chemistry: ["chemistry", "chemical", "food", "biotechnology"],
-  Biology: ["biology", "environmental", "biotechnology", "bio-engineering"],
+  Chemistry: ["chemistry", "chemical", "food", "biotechnology", "pharmacy"],
+  Biology: ["biology", "environmental", "biotechnology", "bio-engineering", "medicine", "medical", "dental", "nursing", "midwifery", "health"],
   "Khmer Literature": ["literature", "khmer", "linguistics", "communication", "journalism", "media"],
   History: ["history", "tourism", "international relations", "political"],
   English: ["english", "communication", "international", "translation", "tourism"],
@@ -1845,7 +1876,7 @@ const SUBJECT_MAJOR_KEYWORDS = {
   "Earth Science": ["geology", "environmental", "geo-resources", "petroleum"],
 };
 const MAJOR_INTEREST_KEYWORDS = {
-  engineering: ["engineering"], law: ["law"], medicine: ["biology", "health"],
+  engineering: ["engineering"], law: ["law"], medicine: ["biology", "health", "medicine", "medical", "dental", "pharmacy", "nursing"],
   business: ["business", "management", "marketing", "finance", "accounting"],
   "it": ["computer", "software", "information technology", "data", "cyber"],
   computer: ["computer", "software", "information technology", "data", "cyber"],

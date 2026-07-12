@@ -3,12 +3,13 @@
    serverless function, so both stay grounded in the same real data. */
 
 export const UNIS = [
-  { n: "Royal University of Phnom Penh", abbr: "RUPP", ready: 42, c: "var(--primary)" },
-  { n: "Institute of Technology of Cambodia", abbr: "ITC", ready: 35, c: "var(--ember)" },
-  { n: "American University of Phnom Penh", abbr: "AUPP", ready: 38, c: "var(--gold)" },
-  { n: "National University of Management", abbr: "NUM", ready: 44, c: "var(--jade)" },
-  { n: "Royal University of Law and Economics", abbr: "RULE", ready: 30, c: "var(--muted)" },
-  { n: "CamTech University", abbr: "CamTech", ready: 33, c: "var(--primary)" },
+  { n: "Royal University of Phnom Penh", abbr: "RUPP", ready: 42, c: "var(--primary)", logo: "/logos/rupp.png" },
+  { n: "Institute of Technology of Cambodia", abbr: "ITC", ready: 35, c: "var(--ember)", logo: "/logos/itc.png" },
+  { n: "American University of Phnom Penh", abbr: "AUPP", ready: 38, c: "var(--gold)", logo: "/logos/aupp.png" },
+  { n: "National University of Management", abbr: "NUM", ready: 44, c: "var(--jade)", logo: "/logos/num.png" },
+  { n: "Royal University of Law and Economics", abbr: "RULE", ready: 30, c: "var(--muted)", logo: "/logos/rule.png" },
+  { n: "Cambodia Academy of Digital Technology", abbr: "CADT", ready: 33, c: "var(--primary)", logo: "/logos/cadt.png" },
+  { n: "University of Health Sciences", abbr: "UHS", ready: 25, c: "var(--ember)", logo: "/logos/uhs.png" },
 ];
 
 export const UNI_MAJORS = {
@@ -186,19 +187,32 @@ export const UNI_MAJORS = {
       { n: "Information Economics", d: "Delivered by RULE's dedicated Faculty of Information Economics, this program pairs economic theory with information technology and data/statistical analysis, combining quantitative IT skills with economics in a way RULE's other economics tracks don't." },
     ]},
   ],
-  CamTech: [
-    { faculty: "Faculty of Engineering and Computer Science", majors: [
-      { n: "AI and Data Science", d: "CamTech's 156-credit program (106 coursework, 48 internship, 2 industrial placement report) trains students in machine learning, deep learning, NLP, computer vision and big data analytics through 9 internships (3 per term) plus a year-long industry placement, toward roles like data engineer, ML engineer and AI specialist across healthcare, finance and marketing." },
-      { n: "Software Engineering", d: "This 156-credit program covers system architecture, algorithms, databases, UI/UX, web and mobile development, DevOps, cloud computing and blockchain, building toward a capstone year-long industry placement — graduates go on to full-stack developer, QA specialist, system architect and CTO roles." },
-      { n: "Cyber Security", d: "CamTech's 156-credit cybersecurity major covers malware analysis, cryptography, cloud security, ethical hacking and penetration testing alongside digital law and privacy, with 9 internships built into coursework plus a year-long industry placement, toward roles like cybersecurity engineer and penetration tester." },
-      { n: "Robotics and Automation Engineering", d: "This 156-credit program blends mechatronics, embedded systems and PLC programming, computer vision, and industrial automation with hands-on CAD, 3D printing and CNC machining, with internship projects across all three years before a year-long industry placement." },
+  CADT: [
+    { faculty: "Institute of Digital Technology", majors: [
+      { n: "Computer Science", d: "Delivered through CADT's Institute of Digital Technology, this 4-year bachelor's program was one of the first dedicated Computer Science degrees in Cambodia and splits into Software Engineering and Data Science specializations. All applicants sit CADT's own entrance exam, and the program feeds CADT's mission to build technical talent for Cambodia's digital government, economy and society." },
+      { n: "Telecoms & Networking", d: "A 4-year bachelor's program — one of CADT's original three degrees alongside Computer Science and Digital Business — training students in telecom infrastructure and network systems, with a choice between a Telecoms & Networking specialization and a Cyber Security specialization covering network defense and digital-security practice." },
+      { n: "Digital Business (E-Commerce)", d: "A 3.5-year bachelor's program specialized in e-Commerce, covering digital marketing, online business operations and e-commerce platform management for Cambodia's expanding digital marketplace — part of CADT's founding lineup of bachelor's degrees, the first of their kind in the country." },
     ]},
-    { faculty: "Faculty of Architecture and Design", majors: [
-      { n: "Architecture", d: "CamTech's B.Arch totals 156 credits (126 coursework, 18 \"Virtubiz,\" 12 industrial placement/graduation project) built around nine progressive Design Studios, teaching Revit, AutoCAD, SketchUp, Enscape, Lumion, Rhino, BIM and QGIS for sustainable, energy-efficient design." },
-      { n: "Interior Design", d: "This 156-credit program runs students through nine progressively complex design studios plus coursework in sustainable materials, construction and Khmer architectural heritage, using Revit, AutoCAD, SketchUp with Enscape/Lumion, Rhino and AR/VR for spatial visualization." },
+  ],
+  UHS: [
+    { faculty: "Faculty of Medicine", majors: [
+      { n: "Medicine (Doctor of Medicine)", d: "UHS traces to Cambodia's 1946 Royal School for Medical Officers and its Faculty of Medicine runs an 8-year integrated track — a 6-year Bachelor of Medical Sciences followed by a 2-year clinical internship — leading to a Doctor of Medicine (MD). Graduates can continue into 3-4 year MD-D.E.S. specialty tracks in fields like internal medicine, cardiology, surgery, pediatrics and psychiatry." },
     ]},
-    { faculty: "Faculty of Business Intelligence", majors: [
-      { n: "Business Intelligence", d: "Officially the Risk Management and Business Intelligence major, this 156-credit program covers data mining, predictive analytics, data warehousing, enterprise risk management, and fraud detection alongside core business courses like financial accounting and strategic planning." },
+    { faculty: "Faculty of Pharmacy", majors: [
+      { n: "Pharmacy", d: "A 5-year Bachelor of Pharmacy (BPharm) program covering pharmaceutical sciences, drug formulation and clinical pharmacy practice, with further Doctor of Pharmacy (PharmD, 3+ years) and MSc/PhD research tracks available to graduates pursuing pharmaceutical research or advanced clinical pharmacy careers." },
+    ]},
+    { faculty: "Faculty of Dentistry", majors: [
+      { n: "Dentistry", d: "A 5-year Bachelor of Dental Sciences (BDentSc) program that can extend into a 7-year Doctor of Dental Surgery (DDS) track, covering oral health, restorative dentistry and dental surgery, with a Master of Dental Sciences in Orthodontics (4 years) open to DDS holders." },
+    ]},
+    { faculty: "Technical School for Medical Care", majors: [
+      { n: "Nursing", d: "A 4-year Bachelor of Science in Nursing (BSN), with 3-year diploma and bridging-program pathways for diploma holders, training students in clinical nursing care, patient management and health-system practice for hospital and community health roles." },
+      { n: "Midwifery", d: "A 4-year Bachelor in Midwifery (BMidW), with 3-year diploma and bridging pathways, covering maternal and reproductive health, prenatal care and delivery practice for roles in hospitals and community maternal-health services." },
+      { n: "Medical Laboratory Technology", d: "A diploma-to-bachelor track training students in diagnostic laboratory science — clinical chemistry, hematology, microbiology and pathology testing — for medical laboratory technician roles in hospitals and clinics." },
+      { n: "Physiotherapy", d: "A diploma-to-bachelor track covering physical rehabilitation, musculoskeletal therapy and patient mobility care, preparing graduates for physiotherapist roles in hospitals and rehabilitation centers." },
+      { n: "Medical Imaging (Radiation Technology)", d: "A diploma-to-bachelor track training students in diagnostic imaging — X-ray, ultrasound and radiologic technology — for medical imaging technician roles in hospitals and diagnostic centers." },
+    ]},
+    { faculty: "Department of Public Health", majors: [
+      { n: "Public Health", d: "Launched in the 2013-2014 academic year and delivered with Cambodia's National Institute of Public Health, this Bachelor of Public Health (BPH) covers epidemiology, health systems and community health, with master's-level pathways for graduates pursuing public-health policy or research careers." },
     ]},
   ],
 };
