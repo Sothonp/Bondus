@@ -10,7 +10,7 @@ import {
   Award, ArrowUpRight, ArrowDownRight, Lightbulb, Star, BarChart3,
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
   ClipboardCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
-  ChevronLeft, XCircle, RotateCcw, Trophy, Crown,
+  ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
 } from "lucide-react";
 import { UNIS, UNI_MAJORS } from "./data/universities.js";
 
@@ -22,8 +22,8 @@ const FIELD_SUBJECTS = {
 };
 
 const FIELD_META = {
-  science: { label: "Science", km: "វិទ្យាសាស្ត្រ", icon: Atom, color: "var(--primary)" },
-  social_science: { label: "Social Science", km: "វិទ្យាសាស្ត្រសង្គម", icon: Landmark, color: "var(--gold)" },
+  science: { label: "Science", km: "វិទ្យាសាស្ត្រ", icon: Atom, color: "var(--primary)", blurb: "Math, physics, chemistry and biology-focused track." },
+  social_science: { label: "Social Science", km: "វិទ្យាសាស្ត្រសង្គម", icon: Landmark, color: "var(--gold)", blurb: "Literature, history, geography and civics-focused track." },
 };
 
 const EXAM_YEARS = [2026, 2027, 2028];
@@ -242,7 +242,7 @@ const STYLES = `
 .eai-km{ font-family:'Noto Sans Khmer', system-ui, sans-serif; }
 
 .theme-light{
-  --bg:#FAF6EF; --bg-soft:#F1EADB; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
+  --bg:#FFFFFF; --bg-soft:#F1EADB; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
   --line:#ECE3D3; --primary:#403FB0; --primary-soft:#ECECFB; --gold:#E29A30; --gold-soft:#FBEFD7;
   --ember:#D9543F; --ember-soft:#FAE2DB; --jade:#159A82; --jade-soft:#DBF1EC;
   --shadow:0 1px 2px rgba(26,27,58,.04), 0 10px 30px rgba(26,27,58,.07);
@@ -275,6 +275,172 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-pick{ transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease; cursor:pointer; }
 .eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
 @media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
+
+/* ── Welcome hero card ── */
+.eai-hero-card{ position:relative; overflow:hidden; border-radius:22px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); display:flex; }
+.eai-hero-content{ position:relative; z-index:3; padding:32px; flex:1 1 auto; min-width:0; }
+@media (max-width:640px){ .eai-hero-content{ padding:24px; } }
+.eai-hero-illustration{ position:relative; flex:0 0 42%; display:none; overflow:hidden; }
+@media (min-width:768px){ .eai-hero-illustration{ display:block; } }
+.eai-hero-image{ position:absolute; top:-15%; left:0; width:110%; height:130%; object-fit:cover; object-position:left center; z-index:1; opacity:.9; }
+.theme-dark .eai-hero-image{ filter:invert(1) brightness(1.6); opacity:.75; }
+.eai-hero-divider{ position:absolute; inset:0; z-index:2; pointer-events:none; background:var(--primary);
+  clip-path:polygon(10% 0%, 17% 0%, -9% 100%, -16% 100%); }
+.eai-hero-greeting{ font-size:14px; color:var(--gold); }
+.eai-hero-title{ font-family:'Sora', system-ui, sans-serif; font-size:28px; font-weight:800; color:var(--ink); margin-top:4px; letter-spacing:-.01em; }
+@media (max-width:640px){ .eai-hero-title{ font-size:24px; } }
+.eai-hero-message{ font-size:14px; color:var(--muted); margin-top:8px; max-width:420px; line-height:1.55; }
+.eai-hero-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:20px; }
+
+/* ── Recommended lesson banner ── */
+.eai-lesson-card{
+  position:relative; overflow:hidden; border-radius:22px; padding:24px; min-height:125px; color:#fff;
+  background:linear-gradient(110deg, #4338B8 0%, #4C43C7 45%, #5C4FD9 100%);
+  box-shadow:0 14px 35px rgba(63,55,180,.18);
+  border:1px solid rgba(255,255,255,.14);
+}
+.theme-dark .eai-lesson-card{
+  background:linear-gradient(110deg, #3730A3 0%, #4438B5 45%, #5145C8 100%);
+  box-shadow:0 10px 26px rgba(0,0,0,.35);
+  border-color:rgba(160,150,255,.18);
+}
+.eai-lesson-card::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(ellipse 60% 90% at 100% 30%, rgba(154,141,245,.25), transparent 70%);
+}
+.eai-lesson-decor{
+  position:absolute; top:0; right:0; width:55%; height:100%; object-fit:cover; object-position:right center;
+  opacity:.32; mix-blend-mode:screen; pointer-events:none;
+}
+.eai-lesson-overlay{
+  position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(to right, #4A40BF 0%, rgba(74,64,191,.96) 35%, rgba(74,64,191,.35) 75%, rgba(74,64,191,.1) 100%);
+}
+.theme-dark .eai-lesson-overlay{
+  background:linear-gradient(to right, #3730A3 0%, rgba(55,48,163,.96) 35%, rgba(55,48,163,.35) 75%, rgba(55,48,163,.1) 100%);
+}
+.eai-lesson-label{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; color:rgba(237,235,255,.92); }
+.eai-lesson-title{ font-family:'Sora', system-ui, sans-serif; font-size:22px; font-weight:700; color:#fff; margin-top:8px; letter-spacing:-.01em; }
+.eai-lesson-desc{ font-size:14px; color:rgba(255,255,255,.8); margin-top:6px; }
+.eai-lesson-btn{
+  background:#FFFFFF; color:#4942C6; height:48px; padding:0 22px; border-radius:14px; font-weight:600; font-size:14px;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; cursor:pointer; flex-shrink:0;
+  box-shadow:0 4px 14px rgba(31,25,90,.18);
+  transition:background-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.eai-lesson-btn:hover{ background:#F4F2FF; transform:translateY(-1px); box-shadow:0 6px 18px rgba(31,25,90,.22); }
+.eai-lesson-btn:hover .eai-lesson-arrow{ transform:translateX(2px); }
+.eai-lesson-btn:active{ transform:translateY(0) scale(.98); filter:brightness(.97); }
+.eai-lesson-arrow{ transition:transform .2s ease; }
+@media (max-width:640px){
+  .eai-lesson-card{ padding:20px; }
+  .eai-lesson-title{ font-size:19px; }
+  .eai-lesson-decor{ width:42%; height:46%; opacity:.16; }
+}
+@media (prefers-reduced-motion: reduce){
+  .eai-lesson-btn, .eai-lesson-arrow{ transition:none; }
+  .eai-lesson-btn:hover{ transform:none; }
+}
+
+/* ── Onboarding flow: shared layout, progress, cards, inputs, buttons ── */
+.eai-onboarding.theme-light{
+  --bg:#F8F8FC; --card:#FFFFFF; --surface-2:#FFFFFF; --bg-soft:#F5F4FA;
+  --ink:#181A3B; --muted:#727694; --label:#696D8B; --muted-2:#999CB2; --line:#E5E4EE;
+  --input-border:#E2E1EB; --input-border-hover:#C9C6E5; --focus-border:#5148D5;
+  --primary:#4C44C7; --primary-hover:#4139B8; --primary-soft:#EFEEFC; --primary-ring:rgba(81,72,213,.12);
+  --gold:#EE9A21; --gold-soft:#FFF0D4; --ember:#E76F61;
+  --progress-track:#ECEBF5; --progress-fill:#5148D5;
+  --shadow:0 18px 50px rgba(31,31,70,.08);
+}
+.eai-onboarding.theme-dark{
+  --bg:#090B1D; --card:#17192F; --surface-2:#1D203B; --bg-soft:#202238;
+  --ink:#F5F3FC; --muted:#A7AAC2; --label:#B8BACD; --muted-2:#8589A4; --line:#2A2D49;
+  --input-border:#30334F; --input-border-hover:#424665; --focus-border:#8A82F4;
+  --primary:#8179F2; --primary-hover:#918AF7; --primary-soft:#28294D; --primary-ring:rgba(138,130,244,.10);
+  --gold:#EFA421; --gold-soft:#302716; --ember:#F17A70;
+  --progress-track:#292C47; --progress-fill:#8179F2;
+  --shadow:0 18px 50px rgba(0,0,0,.22);
+}
+.eai-onboarding{ position:relative; transition:background-color .25s ease, color .25s ease; }
+.eai-onboarding::before{ content:""; position:fixed; inset:0; pointer-events:none; z-index:0; }
+.eai-onboarding.theme-light::before{ background-image:radial-gradient(circle at 50% 25%, rgba(86,78,210,.07), transparent 42%); }
+.eai-onboarding.theme-dark::before{ background-image:radial-gradient(circle at 50% 25%, rgba(115,105,235,.12), transparent 45%); }
+.eai-onboarding > *{ position:relative; z-index:1; }
+
+.eai-ob-toggle{ position:fixed; top:20px; right:20px; width:44px; height:44px; border-radius:14px; border:1px solid var(--line);
+  background:var(--bg-soft); color:var(--ink); display:grid; place-items:center; z-index:20; transition:background-color .15s ease, transform .12s ease; }
+.eai-ob-toggle:hover{ background:var(--card); transform:translateY(-1px); }
+
+.eai-ob-card{ background:var(--card); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); padding:40px;
+  transition:background-color .25s ease, border-color .25s ease, box-shadow .25s ease; }
+@media (max-width:640px){ .eai-ob-card{ padding:22px; border-radius:20px; } }
+
+.eai-ob-progress{ margin-bottom:18px; }
+.eai-ob-progress-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.eai-ob-progress-step{ font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase; letter-spacing:.04em; }
+.eai-ob-progress-label{ font-size:12px; font-weight:600; color:var(--muted); }
+.eai-ob-progress-track{ margin-top:8px; height:6px; border-radius:999px; background:var(--progress-track); overflow:hidden; }
+.eai-ob-progress-fill{ height:100%; border-radius:999px; background:var(--progress-fill); transition:width .3s ease; }
+
+.eai-ob-back-row{ min-height:28px; display:flex; align-items:center; margin-bottom:8px; }
+.eai-ob-back{ display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:600; color:var(--muted);
+  min-height:44px; padding:0 6px; border-radius:10px; transition:color .15s ease, background-color .15s ease; }
+.eai-ob-back:hover{ color:var(--primary); background:var(--primary-soft); }
+
+.eai-ob-heading{ margin-bottom:22px; }
+.eai-ob-title{ font-family:'Sora', system-ui, sans-serif; font-weight:700; font-size:28px; letter-spacing:-.02em; line-height:1.22; color:var(--ink); }
+.eai-ob-desc{ font-size:15px; color:var(--muted); margin-top:6px; max-width:620px; line-height:1.55; }
+@media (max-width:640px){ .eai-ob-title{ font-size:24px; } }
+
+.eai-ob-label{ font-size:13px; font-weight:600; color:var(--label); display:block; }
+.eai-ob-input{ height:48px; width:100%; border-radius:14px; border:1px solid var(--input-border); background:var(--bg-soft); color:var(--ink);
+  padding:0 16px; font-size:14px; transition:background-color .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.eai-ob-input::placeholder{ color:var(--muted-2); }
+.eai-ob-input:hover{ border-color:var(--input-border-hover); }
+.eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
+.eai-ob-error{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ember); margin-top:6px; }
+
+.eai-ob-track-card{ width:100%; text-align:left; border-radius:18px; border:1px solid var(--line); background:var(--surface-2);
+  padding:20px; cursor:pointer; transition:background-color .18s ease, border-color .18s ease, transform .15s ease, box-shadow .18s ease; }
+.eai-ob-track-card:hover{ border-color:var(--primary); background:var(--bg-soft); transform:translateY(-1px); }
+.eai-ob-track-card.is-selected{ background:var(--primary-soft); border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-ring); }
+.eai-ob-tag{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--bg-soft); color:var(--muted); }
+
+.eai-ob-chip{ height:37px; padding:0 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink);
+  font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  transition:background-color .15s ease, border-color .15s ease, color .15s ease; }
+.eai-ob-chip:hover{ border-color:var(--primary); }
+.eai-ob-chip.is-selected{ background:var(--primary-soft); border-color:var(--primary); }
+.theme-light .eai-ob-chip.is-selected{ color:var(--primary); }
+.theme-dark .eai-ob-chip.is-selected{ color:var(--ink); }
+
+.eai-ob-text-action{ font-size:12px; font-weight:600; color:var(--muted); padding:5px 9px; border-radius:8px;
+  transition:color .15s ease, background-color .15s ease; }
+.eai-ob-text-action:hover{ color:var(--primary); background:var(--primary-soft); }
+
+.eai-ob-btn-primary{ height:50px; width:100%; border-radius:14px; font-weight:600; font-size:14px; color:#fff; background:var(--primary);
+  border:none; transition:background-color .2s ease, transform .12s ease; }
+.eai-ob-btn-primary:hover:not(:disabled){ background:var(--primary-hover); transform:translateY(-1px); }
+.eai-ob-btn-primary:active:not(:disabled){ transform:translateY(0); }
+.eai-ob-btn-primary:disabled{ background:var(--primary-soft); color:var(--muted-2); cursor:not-allowed; }
+.eai-ob-btn-secondary{ height:50px; width:100%; border-radius:14px; font-weight:600; font-size:14px; background:var(--bg-soft); color:var(--ink);
+  border:1px solid var(--line); transition:background-color .2s ease, border-color .2s ease, transform .12s ease; }
+.eai-ob-btn-secondary:hover{ background:var(--card); border-color:var(--primary); transform:translateY(-1px); }
+
+.eai-ob-option-card{ position:relative; border-radius:18px; padding:22px; border:1px solid var(--line); background:var(--surface-2);
+  transition:background-color .2s ease, border-color .2s ease; }
+.eai-ob-option-card.is-primary{ background:var(--primary-soft); border-color:var(--primary); }
+.eai-ob-badge{ position:absolute; top:16px; right:16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+  padding:4px 9px; border-radius:999px; background:var(--primary); color:#fff; }
+.eai-ob-benefits{ margin-top:12px; display:flex; flex-direction:column; gap:6px; }
+.eai-ob-benefits li{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+
+.eai-ob-footer{ text-align:center; font-size:13px; color:var(--muted); margin-top:18px; }
+
+@media (prefers-reduced-motion: reduce){
+  .eai-ob-progress-fill{ transition:none; }
+  .eai-ob-track-card, .eai-ob-btn-primary, .eai-ob-btn-secondary, .eai-ob-toggle{ transition:none; }
+}
 `;
 
 /* ════════════════════════ Signature motif + atoms ════════════════════════ */
@@ -344,10 +510,294 @@ function CardHead({ title, kh, action }) {
   );
 }
 
-/* ════════════════════════ Registration ════════════════════════ */
-function Register({ onComplete, dark, setDark }) {
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState({
+/* White dashboard hero card: greeting + actions on the left, a handwritten-formula illustration on
+   the right behind a bold diagonal purple divider. The illustration is purely decorative (empty alt,
+   aria-hidden) and is hidden below the `md` breakpoint so it never competes with the text on mobile. */
+function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, onAskCoach }) {
+  const firstName = (userName || "").split(" ")[0];
+  return (
+    <div className="eai-hero-card">
+      <div className="eai-hero-content">
+        <p className="eai-km eai-hero-greeting">{greeting}, {firstName}! 👋</p>
+        <h2 className="eai-hero-title">Welcome, {firstName}.</h2>
+        {message && <p className="eai-hero-message">{message}</p>}
+        <div className="eai-hero-actions">
+          <button onClick={onStartPlan} className="eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2" style={{ background: "var(--primary)" }}>
+            <Target size={16} /> Start today's plan
+          </button>
+          <button onClick={onAskCoach} className="eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft" style={{ color: "var(--ink)" }}>
+            <Sparkles size={16} /> Ask your AI coach
+          </button>
+        </div>
+      </div>
+      {imageUrl && (
+        <div className="eai-hero-illustration">
+          <img src={imageUrl} alt="" aria-hidden="true" className="eai-hero-image" />
+          <div className="eai-hero-divider" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Wide purple "recommended lesson" banner shown on the Dashboard. `imageUrl` is an optional decorative
+   background (a handwritten-formula illustration by default) — purely decorative, so it renders with
+   an empty alt and is hidden from screen readers. */
+function RecommendedLessonCard({ title, subject, duration, description, xp, imageUrl, onStart }) {
+  return (
+    <div className="eai-lesson-card">
+      {imageUrl && <img src={imageUrl} alt="" aria-hidden="true" className="eai-lesson-decor" />}
+      <div className="eai-lesson-overlay" />
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+        <div className="min-w-0">
+          <div className="eai-lesson-label"><Star size={16} /> Recommended next lesson</div>
+          <h3 className="eai-lesson-title">{subject}: {title}</h3>
+          <p className="eai-lesson-desc">{duration} lesson · {description} · +{xp} XP</p>
+        </div>
+        <button onClick={onStart} className="eai-lesson-btn eai-focus w-full sm:w-auto">
+          Start lesson <ArrowRight size={16} className="eai-lesson-arrow" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════ Onboarding: shared layout + reusable building blocks ════════════════════════
+   One shared visual system (OnboardingLayout) hosts all four onboarding screens — the three Register
+   steps plus AssessmentChoice — so the logo, theme toggle, progress indicator, back-button slot, card
+   shell and footer never jump between steps. Every field/card/chip/button below is scoped to the
+   `.eai-onboarding` class so this palette never leaks into the rest of the app. */
+const ONBOARDING_STEPS = ["Account details", "Academic track", "Learning preferences", "Getting started"];
+
+function ThemeToggle({ dark, setDark }) {
+  return (
+    <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
+      {dark ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+  );
+}
+
+function OnboardingProgress({ step }) {
+  const pct = (step / ONBOARDING_STEPS.length) * 100;
+  return (
+    <div className="eai-ob-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+      aria-label={`Step ${step} of ${ONBOARDING_STEPS.length}: ${ONBOARDING_STEPS[step - 1]}`}>
+      <div className="eai-ob-progress-top">
+        <span className="eai-ob-progress-step">Step {step} of {ONBOARDING_STEPS.length}</span>
+        <span className="eai-ob-progress-label">{ONBOARDING_STEPS[step - 1]}</span>
+      </div>
+      <div className="eai-ob-progress-track">
+        <div className="eai-ob-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function OnboardingLayout({ dark, setDark, step, title, description, onBack, children }) {
+  return (
+    <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <ThemeToggle dark={dark} setDark={setDark} />
+
+      <div className="flex items-start sm:items-center justify-center px-4 sm:px-6" style={{ minHeight: "100vh", paddingTop: 32, paddingBottom: 32 }}>
+        <div className="w-full eai-rise" style={{ maxWidth: 820 }}>
+          <div className="flex items-center justify-center gap-2.5" style={{ marginBottom: 24 }}>
+            <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 44, height: 44, background: "var(--primary)" }}>
+              <Angkor style={{ position: "absolute", bottom: -2, width: 44, height: 20, fill: "var(--gold)", opacity: 0.95 }} />
+            </div>
+            <div>
+              <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
+              <p className="eai-km text-xs eai-muted">រៀនពូកែ ប្រឡងជាប់</p>
+            </div>
+          </div>
+
+          <div className="eai-ob-card">
+            {step != null && <OnboardingProgress step={step} />}
+            <div className="eai-ob-back-row">
+              {onBack ? (
+                <button onClick={onBack} className="eai-ob-back eai-focus">
+                  <ChevronLeft size={16} /> Back
+                </button>
+              ) : (
+                <span aria-hidden="true" className="eai-ob-back" style={{ visibility: "hidden" }}>
+                  <ChevronLeft size={16} /> Back
+                </span>
+              )}
+            </div>
+
+            {(title || description) && (
+              <div className="eai-ob-heading">
+                {title && <h1 className="eai-ob-title">{title}</h1>}
+                {description && <p className="eai-ob-desc">{description}</p>}
+              </div>
+            )}
+
+            {children}
+          </div>
+          <p className="eai-ob-footer">Prototype · no data leaves your browser</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormField({ label, required, error, children }) {
+  return (
+    <label className="block">
+      <span className="eai-ob-label">{label}{required && <span style={{ color: "var(--ember)" }}> *</span>}</span>
+      <div className="mt-1.5">{children}</div>
+      {error && <p className="eai-ob-error" role="alert"><AlertTriangle size={12} /> {error}</p>}
+    </label>
+  );
+}
+
+function SelectField({ label, required, value, onChange, options, autoComplete }) {
+  return (
+    <FormField label={label} required={required}>
+      <select className="eai-ob-input eai-focus" value={value} onChange={onChange} autoComplete={autoComplete}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </FormField>
+  );
+}
+
+function PrimaryButton({ children, className = "", ...props }) {
+  return (
+    <button className={`eai-ob-btn-primary eai-focus flex items-center justify-center gap-2 ${className}`} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ children, className = "", ...props }) {
+  return (
+    <button className={`eai-ob-btn-secondary eai-focus flex items-center justify-center gap-2 ${className}`} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function TrackCard({ meta, subjects, selected, onSelect }) {
+  const Icon = meta.icon;
+  return (
+    <button type="button" role="radio" aria-checked={selected} onClick={onSelect}
+      className={`eai-ob-track-card eai-focus ${selected ? "is-selected" : ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: meta.color }}>
+            <Icon size={20} color="#fff" />
+          </div>
+          <div>
+            <p className="eai-display font-bold">{meta.label}</p>
+            <p className="eai-km text-xs eai-muted">{meta.km}</p>
+          </div>
+        </div>
+        <span aria-hidden="true" style={{ color: "var(--primary)", flexShrink: 0 }}>
+          {selected && <CheckCircle2 size={20} />}
+        </span>
+      </div>
+      <p className="text-xs eai-muted mt-3 leading-relaxed">{meta.blurb}</p>
+      <div className="flex flex-wrap gap-1.5 mt-3">
+        {subjects.map((s) => <span key={s} className="eai-ob-tag">{s}</span>)}
+      </div>
+    </button>
+  );
+}
+
+function SubjectChip({ label, selected, onToggle }) {
+  return (
+    <motion.button type="button" aria-pressed={selected} whileTap={{ scale: 0.95 }} onClick={onToggle}
+      className={`eai-ob-chip eai-focus ${selected ? "is-selected" : ""}`}>
+      <AnimatePresence initial={false}>
+        {selected && (
+          <motion.span initial={{ scale: 0, opacity: 0, width: 0 }} animate={{ scale: 1, opacity: 1, width: 14 }} exit={{ scale: 0, opacity: 0, width: 0 }}
+            transition={{ duration: 0.15 }} style={{ display: "flex", overflow: "hidden" }}>
+            <CheckCircle2 size={14} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+      {label}
+    </motion.button>
+  );
+}
+
+function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, description, badge, benefits, buttonLabel, onClick }) {
+  const primary = variant === "primary";
+  return (
+    <div className={`eai-ob-option-card ${primary ? "is-primary" : ""}`}>
+      {badge && <span className="eai-ob-badge">{badge}</span>}
+      <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: primary ? "var(--primary)" : "var(--bg-soft)" }}>
+        <Icon size={19} color={primary ? "#fff" : "var(--ink)"} />
+      </div>
+      <h3 className="eai-display font-bold mt-3 text-base">{title}</h3>
+      <p className="text-sm eai-muted mt-1.5 leading-relaxed">{description}</p>
+      {benefits && (
+        <ul className="eai-ob-benefits">
+          {benefits.map((b) => <li key={b}><CheckCircle2 size={13} style={{ color: "var(--primary)", flexShrink: 0 }} /> {b}</li>)}
+        </ul>
+      )}
+      {primary ? (
+        <PrimaryButton onClick={onClick} className="mt-5 w-full"><Sparkles size={16} /> {buttonLabel}</PrimaryButton>
+      ) : (
+        <SecondaryButton onClick={onClick} className="mt-5 w-full">{buttonLabel}</SecondaryButton>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════ Welcome / Login ════════════════════════
+   The very first screen, before any account exists in this session. This is a local-storage-only
+   prototype (no backend), so "logging in" means matching a phone number against whatever account
+   is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
+   that data in place so it can be recovered here later. */
+function Welcome({ dark, setDark, onLogin, onCreate }) {
+  return (
+    <OnboardingLayout dark={dark} setDark={setDark}
+      title="Welcome to Bondus" description="Log in to pick up where you left off, or create an account to get your personalized study plan.">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <OnboardingOptionCard variant="secondary" icon={LogIn}
+          title="Log in" description="Already have an account on this device? Continue where you left off."
+          buttonLabel="Log in" onClick={onLogin} />
+        <OnboardingOptionCard variant="primary" icon={Sparkles} badge="New here?"
+          title="Create an account" description="Set up your profile and get a personalized study plan in a few minutes."
+          buttonLabel="Create account" onClick={onCreate} />
+      </div>
+    </OnboardingLayout>
+  );
+}
+
+function Login({ dark, setDark, onBack, onLogin, onCreateInstead }) {
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState("");
+  const submit = () => {
+    if (!phone.trim()) { setError("Enter the phone number you used to sign up."); return; }
+    if (!onLogin(phone.trim())) setError("We couldn't find an account with that phone number on this device.");
+  };
+  return (
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack}
+      title="Log in" description="Enter the phone number you used when you created your account.">
+      <FormField label="Phone number" required error={error}>
+        <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
+          value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
+          onKeyDown={(e) => e.key === "Enter" && submit()} />
+      </FormField>
+
+      <PrimaryButton onClick={submit} className="w-full mt-6">Log in <ChevronRight size={16} /></PrimaryButton>
+      <p className="text-center text-xs eai-muted mt-4">
+        Don't have an account yet?{" "}
+        <button onClick={onCreateInstead} className="eai-focus font-semibold" style={{ color: "var(--primary)" }}>Create one</button>
+      </p>
+    </OnboardingLayout>
+  );
+}
+
+/* ════════════════════════ Registration ════════════════════════
+   Steps 1–3 of the onboarding flow (account details, academic track, learning preferences).
+   `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
+   goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
+function Register({ onComplete, dark, setDark, initialForm, initialStep }) {
+  const [step, setStep] = useState(initialStep ?? 0);
+  const [form, setForm] = useState(initialForm ?? {
     name: "", phone: "", age: "", grade: "12", field: "", target: "A",
     targetExamYear: EXAM_YEARS[1], dailyMinutes: 60, targetUniversity: "",
     subjectsToImprove: [],
@@ -361,194 +811,92 @@ function Register({ onComplete, dark, setDark }) {
   }));
   const clearSubjects = () => setForm((f) => ({ ...f, subjectsToImprove: [] }));
 
+  if (step === 0) {
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={1}
+        title="Create your account" description="A few details so your AI coach and study plan fit you.">
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
+          <FormField label="Full name" required>
+            <input className="eai-ob-input eai-focus" placeholder="e.g. Sophea Chan" autoComplete="name"
+              value={form.name} onChange={(e) => set("name", e.target.value)} />
+          </FormField>
+          <FormField label="Phone number" required>
+            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
+              value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+          </FormField>
+          <FormField label="Age">
+            <input type="number" min="8" max="99" inputMode="numeric" className="eai-ob-input eai-focus" placeholder="18"
+              value={form.age} onChange={(e) => set("age", e.target.value)} />
+          </FormField>
+          <SelectField label="Grade level" value={form.grade} onChange={(e) => set("grade", e.target.value)}
+            options={[{ value: "11", label: "Grade 11" }, { value: "12", label: "Grade 12 (BAC II)" }]} />
+          <SelectField label="Target grade" value={form.target} onChange={(e) => set("target", e.target.value)}
+            options={["A", "B", "C", "D", "E"].map((g) => ({ value: g, label: `Grade ${g}` }))} />
+        </div>
+
+        <PrimaryButton onClick={() => setStep(1)} disabled={!form.name.trim()} className="w-full mt-8">
+          Continue to academic track <ChevronRight size={16} />
+        </PrimaryButton>
+      </OnboardingLayout>
+    );
+  }
+
+  if (step === 1) {
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(0)}
+        title="Choose your academic track" description="This helps Bondus prioritize the subjects and exam content shown on your dashboard.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
+          {Object.entries(FIELD_META).map(([key, meta]) => (
+            <TrackCard key={key} meta={meta} subjects={FIELD_SUBJECTS[key]} selected={form.field === key} onSelect={() => set("field", key)} />
+          ))}
+        </div>
+
+        <PrimaryButton onClick={() => setStep(2)} disabled={!canFinish} className="w-full mt-8">
+          Continue <ChevronRight size={16} />
+        </PrimaryButton>
+      </OnboardingLayout>
+    );
+  }
+
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
-      <style>{STYLES}</style>
-      <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus eai-soft grid place-items-center"
-        style={{ position: "fixed", top: 16, right: 16, width: 38, height: 38, color: "var(--ink)", zIndex: 10 }}>
-        {dark ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
+    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(1)}
+      title="Personalize your study plan" description="These preferences give your AI coach a starting point. Your diagnostic assessment will verify your current level.">
+      <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
+        <SelectField label="Target exam year" value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
+          options={EXAM_YEARS.map((y) => ({ value: y, label: String(y) }))} />
+        <SelectField label="Daily study time" value={form.dailyMinutes} onChange={(e) => set("dailyMinutes", Number(e.target.value))}
+          options={STUDY_MINUTES.map((m) => ({ value: m, label: `${m} minutes` }))} />
+        <SelectField label="Target university (optional)" value={form.targetUniversity} onChange={(e) => set("targetUniversity", e.target.value)}
+          options={[{ value: "", label: "Not sure yet" }, ...UNIS.map((u) => ({ value: u.abbr, label: `${u.abbr} — ${u.n}` }))]} />
+      </div>
 
-      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
-        <div className="w-full eai-rise" style={{ maxWidth: 680 }}>
-          {/* Brand */}
-          <div className="flex items-center justify-center gap-2.5 mb-6">
-            <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 44, height: 44, background: "var(--primary)" }}>
-              <Angkor style={{ position: "absolute", bottom: -2, width: 44, height: 20, fill: "var(--gold)", opacity: 0.95 }} />
-            </div>
-            <div>
-              <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
-              <p className="eai-km text-xs eai-muted">រៀនពូកែ ប្រឡងជាប់</p>
-            </div>
+      <div className="mt-7">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <span className="text-sm font-semibold" style={{ color: "var(--ink)" }}>Which subjects would you like to improve?</span>
+            <p className="text-xs eai-muted mt-0.5">Choose as many as you need. You can update these later.</p>
           </div>
-
-          <div className="eai-card p-6 sm:p-8">
-            {step === 0 ? (
-              <>
-                <h1 className="eai-display text-2xl font-extrabold">Create your account</h1>
-                <p className="eai-muted text-sm mt-1">A few details so your AI coach and study plan fit you.</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                  <Field label="Full name" required>
-                    <input className="eai-input eai-focus w-full px-4 py-2.5 text-sm" placeholder="e.g. Sophea Chan"
-                      value={form.name} onChange={(e) => set("name", e.target.value)} />
-                  </Field>
-                  <Field label="Phone Number (required)" required>
-                    <input className="eai-input eai-focus w-full px-4 py-2.5 text-sm" placeholder="016556618"
-                      value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-                  </Field>
-                  <Field label="Age">
-                    <input type="number" min="8" max="99" className="eai-input eai-focus w-full px-4 py-2.5 text-sm" placeholder="18"
-                      value={form.age} onChange={(e) => set("age", e.target.value)} />
-                  </Field>
-                  <Field label="Grade level">
-                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.grade} onChange={(e) => set("grade", e.target.value)}>
-                      <option value="11">Grade 11</option>
-                      <option value="12">Grade 12 (BAC II)</option>
-                    </select>
-                  </Field>
-                  <Field label="Target grade">
-                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.target} onChange={(e) => set("target", e.target.value)}>
-                      {["A", "B", "C", "D", "E"].map((g) => <option key={g} value={g}>Grade {g}</option>)}
-                    </select>
-                  </Field>
-                </div>
-
-                <button onClick={() => setStep(1)} disabled={!form.name.trim()}
-                  className="eai-btn eai-focus w-full mt-6 py-3 text-sm text-white flex items-center justify-center gap-2"
-                  style={{ background: "var(--primary)", opacity: form.name.trim() ? 1 : 0.5 }}>
-                  Choose your track <ChevronRight size={16} />
-                </button>
-              </>
-            ) : step === 1 ? (
-              <>
-                <button onClick={() => setStep(0)} className="eai-focus flex items-center gap-1 text-sm eai-muted mb-3">
-                  <ChevronLeft size={16} /> Back
-                </button>
-                <h1 className="eai-display text-2xl font-extrabold">Pick your academic track</h1>
-                <p className="eai-muted text-sm mt-1">This decides which subjects we prioritize across your whole dashboard.</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                  {Object.entries(FIELD_META).map(([key, meta]) => {
-                    const on = form.field === key;
-                    const Icon = meta.icon;
-                    return (
-                      <button key={key} onClick={() => set("field", key)}
-                        className="eai-pick eai-focus text-left p-5 rounded-2xl border-2"
-                        style={{ borderColor: on ? meta.color : "var(--line)", background: on ? "var(--bg-soft)" : "var(--card)" }}>
-                        <div className="flex items-center gap-2.5">
-                          <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: meta.color }}>
-                            <Icon size={20} color="#fff" />
-                          </div>
-                          <div>
-                            <p className="eai-display font-bold">{meta.label}</p>
-                            <p className="eai-km text-xs eai-muted">{meta.km}</p>
-                          </div>
-                          {on && <CheckCircle2 size={20} style={{ color: meta.color, marginLeft: "auto" }} />}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 mt-4">
-                          {FIELD_SUBJECTS[key].map((s) => (
-                            <span key={s} className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{s}</span>
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button onClick={() => setStep(2)} disabled={!canFinish}
-                  className="eai-btn eai-focus w-full mt-6 py-3 text-sm text-white flex items-center justify-center gap-2"
-                  style={{ background: "var(--primary)", opacity: canFinish ? 1 : 0.5 }}>
-                  Continue <ChevronRight size={16} />
-                </button>
-              </>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {form.subjectsToImprove.length === 0 ? (
+              <button onClick={() => onComplete({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
+                className="eai-ob-text-action eai-focus">Skip this step</button>
             ) : (
-              <>
-                <button onClick={() => setStep(1)} className="eai-focus flex items-center gap-1 text-sm eai-muted mb-3">
-                  <ChevronLeft size={16} /> Back
-                </button>
-                <h1 className="eai-display text-2xl font-extrabold">A bit more, so we can personalize</h1>
-                <p className="eai-muted text-sm mt-1">This gives your AI coach an initial estimate — the diagnostic test right after will check it for real.</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                  <Field label="Target exam year">
-                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}>
-                      {EXAM_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Daily study time">
-                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.dailyMinutes} onChange={(e) => set("dailyMinutes", Number(e.target.value))}>
-                      {STUDY_MINUTES.map((m) => <option key={m} value={m}>{m} minutes</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Target university (optional)">
-                    <select className="eai-input eai-focus w-full px-4 py-2.5 text-sm" value={form.targetUniversity} onChange={(e) => set("targetUniversity", e.target.value)}>
-                      <option value="">Not sure yet</option>
-                      {UNIS.map((u) => <option key={u.abbr} value={u.abbr}>{u.abbr} — {u.n}</option>)}
-                    </select>
-                  </Field>
-                </div>
-
-                <div className="mt-5">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <span className="text-sm font-semibold">Which subjects would you like to improve?</span>
-                      <p className="text-xs eai-muted mt-0.5">Select the subjects you'd like Bondus to focus on. You can choose as many as you need.</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => onComplete({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
-                        className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full eai-soft" style={{ color: "var(--ink)" }}>Skip for now</button>
-                      <button onClick={clearSubjects} className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full" style={{ color: "var(--muted)" }}>Clear selection</button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {FIELD_SUBJECTS[form.field].map((s) => {
-                      const id = subjectId(s);
-                      const on = form.subjectsToImprove.includes(id);
-                      return (
-                        <motion.button key={id} layout="position" whileTap={{ scale: 0.95 }} onClick={() => toggleImprove(id)}
-                          animate={{ scale: on ? [1, 1.06, 1] : 1 }} transition={{ duration: 0.22 }}
-                          className="eai-focus text-xs font-semibold pl-2.5 pr-3 py-1.5 rounded-full border flex items-center gap-1.5"
-                          style={{ background: on ? "var(--gold-soft)" : "var(--card)", color: on ? "var(--gold)" : "var(--ink)", borderColor: on ? "var(--gold)" : "var(--line)" }}>
-                          <AnimatePresence initial={false}>
-                            {on && (
-                              <motion.span initial={{ scale: 0, opacity: 0, width: 0 }} animate={{ scale: 1, opacity: 1, width: 14 }} exit={{ scale: 0, opacity: 0, width: 0 }}
-                                transition={{ duration: 0.15 }} style={{ display: "flex", overflow: "hidden" }}>
-                                <CheckCircle2 size={14} />
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
-                          {s}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-3 leading-relaxed" style={{ fontSize: 11, color: "var(--muted)", opacity: 0.85 }}>
-                    These selections help us understand what you'd like to focus on. Your personalized study plan will be created after a short diagnostic assessment.
-                  </p>
-                </div>
-
-                <button onClick={() => onComplete({ ...form, age: Number(form.age) || null })}
-                  className="eai-btn eai-focus w-full mt-6 py-3 text-sm text-white flex items-center justify-center gap-2"
-                  style={{ background: "var(--jade)" }}>
-                  Continue <ChevronRight size={16} />
-                </button>
-              </>
+              <button onClick={clearSubjects} className="eai-ob-text-action eai-focus">Clear selection</button>
             )}
           </div>
-          <p className="text-center text-xs eai-muted mt-4">Prototype · no data leaves your browser</p>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          {FIELD_SUBJECTS[form.field].map((s) => {
+            const id = subjectId(s);
+            return <SubjectChip key={id} label={s} selected={form.subjectsToImprove.includes(id)} onToggle={() => toggleImprove(id)} />;
+          })}
         </div>
       </div>
-    </div>
-  );
-}
 
-function Field({ label, required, children }) {
-  return (
-    <label className="block">
-      <span className="text-xs font-semibold eai-muted">{label}{required && <span style={{ color: "var(--ember)" }}> *</span>}</span>
-      <div className="mt-1.5">{children}</div>
-    </label>
+      <PrimaryButton onClick={() => onComplete({ ...form, age: Number(form.age) || null })} className="w-full mt-7">
+        Continue <ChevronRight size={16} />
+      </PrimaryButton>
+    </OnboardingLayout>
   );
 }
 
@@ -596,21 +944,10 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
       )}
 
       {/* Hero */}
-      <div className="eai-card overflow-hidden relative">
-        <div className="p-6 sm:p-8 relative">
-          <p className="eai-km text-sm" style={{ color: "var(--gold)" }}>សួស្តី, {p.name.split(" ")[0]}! 👋</p>
-          <h2 className="eai-display text-2xl sm:text-3xl font-extrabold mt-1">Welcome, {p.name.split(" ")[0]}.</h2>
-          <p className="eai-muted mt-2 text-sm max-w-md">One small step today keeps the streak alive — here's what's next for you.</p>
-          <div className="flex flex-wrap items-center gap-3 mt-5">
-            <button className="eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2" style={{ background: "var(--primary)" }} onClick={() => go("practice")}>
-              <Target size={16} /> Start today's plan
-            </button>
-            <button className="eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft" onClick={() => go("coach")} style={{ color: "var(--ink)" }}>
-              <Sparkles size={16} /> Ask your AI coach
-            </button>
-          </div>
-        </div>
-      </div>
+      <WelcomeHeroCard
+        userName={p.name} greeting="សួស្តី" message="One small step today keeps the streak alive — here's what's next for you."
+        onStartPlan={() => go("practice")} onAskCoach={() => go("coach")}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Daily plan */}
@@ -659,16 +996,11 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
       </div>
 
       {/* Recommended next lesson */}
-      <div className="eai-card p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5" style={{ background: "var(--primary)", color: "#fff", border: "none" }}>
-        <div>
-          <div className="flex items-center gap-2 text-sm font-semibold opacity-90"><Star size={16} /> Recommended next lesson</div>
-          <h3 className="eai-display text-xl font-bold mt-2">{p.recommendedLesson.subject}: {p.recommendedLesson.topic}</h3>
-          <p className="text-sm opacity-90 mt-1.5">12 min lesson · targets your weakest topic · +80 XP</p>
-        </div>
-        <button className="eai-btn eai-focus bg-white px-5 py-2.5 text-sm flex items-center justify-center gap-2 flex-shrink-0" style={{ color: "var(--primary)" }} onClick={() => go("practice")}>
-          Start lesson <ChevronRight size={16} />
-        </button>
-      </div>
+      <RecommendedLessonCard
+        subject={p.recommendedLesson.subject} title={p.recommendedLesson.topic}
+        duration="12 min" description="targets your weakest topic" xp={80}
+        imageUrl="/decor/math-formulas.svg" onStart={() => go("practice")}
+      />
 
       {/* Explore more */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1132,38 +1464,23 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 /* ════════════════════════ Assessment choice ════════════════════════
    Shown right after registration, before the (optional) diagnostic test. Students can start the
    real assessment or explore the app unpersonalized — see Dashboard's banner for the return path. */
-function AssessmentChoice({ reg, dark, onStart, onSkip }) {
+function AssessmentChoice({ reg, dark, setDark, onStart, onSkip, onBack }) {
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
-      <style>{STYLES}</style>
-      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
-        <div className="w-full eai-rise" style={{ maxWidth: 560 }}>
-          <div className="text-center mb-6">
-            <p className="eai-km text-sm" style={{ color: "var(--gold)" }}>សួស្តី, {reg.name.split(" ")[0]}! 👋</p>
-            <h1 className="eai-display text-2xl font-extrabold mt-1">Choose how you'd like to get started</h1>
-          </div>
-
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="eai-card p-6 sm:p-7">
-            <p className="text-sm leading-relaxed">The diagnostic assessment helps Bondus understand your current knowledge and creates a personalized learning experience.</p>
-            <p className="text-sm eai-muted mt-2 leading-relaxed">It takes about 15–20 minutes and only needs to be completed once.</p>
-
-            <motion.button whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.01 }} onClick={onStart}
-              className="eai-btn eai-focus w-full mt-6 py-3.5 text-sm text-white flex items-center justify-center gap-2"
-              style={{ background: "var(--primary)" }}>
-              <Sparkles size={16} /> Start Personalized Assessment
-            </motion.button>
-            <p className="text-xs text-center mt-2 font-semibold" style={{ color: "var(--primary)" }}>Recommended for the best learning experience.</p>
-
-            <button onClick={onSkip} className="eai-btn eai-focus w-full mt-4 py-3 text-sm eai-soft" style={{ color: "var(--ink)" }}>
-              Explore First
-            </button>
-            <p className="text-xs eai-muted text-center mt-2 leading-relaxed">
-              Explore Bondus without personalization.<br />You can take the assessment anytime later from your Profile or Dashboard.
-            </p>
-          </motion.div>
-        </div>
+    <OnboardingLayout dark={dark} setDark={setDark} step={4} onBack={onBack}
+      title="Choose how you'd like to begin"
+      description="Take a short diagnostic assessment for a personalized study plan, or explore Bondus first and complete it later.">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <OnboardingOptionCard variant="primary" icon={Target} badge="Recommended"
+          title="Start personalized assessment"
+          description="A 15–20 minute diagnostic that helps Bondus understand your current level and create a personalized learning plan."
+          benefits={["Personalized roadmap", "Better practice recommendations", "Progress starting point"]}
+          buttonLabel="Start assessment" onClick={onStart} />
+        <OnboardingOptionCard variant="secondary" icon={Eye}
+          title="Explore Bondus first"
+          description="Enter the dashboard without personalization. You can take the assessment later from your dashboard or profile."
+          buttonLabel="Explore first" onClick={onSkip} />
       </div>
-    </div>
+    </OnboardingLayout>
   );
 }
 
@@ -2105,6 +2422,117 @@ function Coach({ p }) {
   );
 }
 
+/* ════════════════════════ Super Bondus (premium upsell) ════════════════════════
+   A pricing/upgrade page reached from the "Super Bondus" nav item. This prototype has no payment
+   backend, so "Upgrade" is honest about that instead of pretending to charge a card. */
+const SUPER_PLANS = [
+  {
+    id: "free", label: "Free", price: "$0", period: "", tagline: "Free for everyone individual", button: "Start for Free",
+    features: [
+      "BAC II past exams",
+      "Simple grading (MCQ + right/wrong only, no explanation)",
+      "4 exercises per day from any premium exam category",
+      "1-time AI language diagnostic test (CEFR A1–C2)",
+      "Full user experience (XP, streaks, leaderboards)",
+    ],
+  },
+  {
+    id: "standard", label: "Standard", price: "$1.99", period: "/ month", tagline: "Everything in Free, plus:", button: "Get Standard",
+    features: [
+      "AI grade prediction system",
+      "50 AI help tokens/month (step-by-step explanations)",
+      "Up to 15 premium exercises per day",
+      "IELTS/TOEFL reading & listening practice (auto-graded)",
+    ],
+  },
+  {
+    id: "premium", label: "Premium", price: "$3.99", period: "/ month", tagline: "Everything in Standard, plus:", button: "Get Premium", best: true,
+    features: [
+      "Unlimited AI tutor access",
+      "AI-generated adaptive mock exams",
+      "Full access to all exam packages",
+      "Advanced language grading (speaking + essays)",
+      "In-depth analytical recommendations based on performance",
+      "Targets IELTS 8.0 / PTE 79+",
+    ],
+  },
+];
+
+function SuperBondus() {
+  const [selected, setSelected] = useState("premium");
+  const [upgraded, setUpgraded] = useState(null); // plan object once a CTA is clicked
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div className="flex items-center gap-3">
+        <div className="grid place-items-center rounded-2xl flex-shrink-0" style={{ width: 48, height: 48, background: "var(--gold-soft)" }}>
+          <Crown size={24} style={{ color: "var(--gold)" }} />
+        </div>
+        <div>
+          <h2 className="eai-display text-2xl font-extrabold">Super Bondus</h2>
+          <p className="eai-muted text-sm mt-0.5">Unlock the full BAC II toolkit — unlimited AI coaching, every past paper, and deeper analytics.</p>
+        </div>
+      </div>
+
+      {upgraded ? (
+        <div className="eai-card p-6 flex items-start gap-3" style={{ borderColor: "var(--gold)" }}>
+          <CheckCircle2 size={20} style={{ color: "var(--jade)", flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <p className="font-semibold">
+              {upgraded.id === "free" ? "You're all set!" : `Thanks for trying to upgrade to ${upgraded.label}!`}
+            </p>
+            <p className="text-sm eai-muted mt-1 leading-relaxed">
+              {upgraded.id === "free"
+                ? "Free is already included with your account — no signup needed."
+                : "This is a prototype, so payments aren't actually connected yet — no card was charged. This screen shows what the Super Bondus upgrade flow will look like once billing is wired up."}
+            </p>
+            <button onClick={() => setUpgraded(null)} className="eai-focus text-sm font-semibold mt-3" style={{ color: "var(--primary)" }}>Back to plans</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
+            {SUPER_PLANS.map((plan) => {
+              const on = selected === plan.id;
+              return (
+                <div key={plan.id} onClick={() => setSelected(plan.id)}
+                  className="eai-pick eai-focus flex flex-col text-left p-5 rounded-2xl border-2 relative cursor-pointer"
+                  style={{ borderColor: on ? "var(--gold)" : "var(--line)", background: on ? "var(--gold-soft)" : "var(--card)" }}>
+                  {plan.best && (
+                    <span className="absolute -top-2.5 right-4 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--gold)", color: "#fff" }}>
+                      Most popular
+                    </span>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="eai-display font-bold">{plan.label}</span>
+                    {on && <CheckCircle2 size={18} style={{ color: "var(--gold)" }} />}
+                  </div>
+                  <p className="mt-2"><span className="eai-display text-2xl font-extrabold">{plan.price}</span> <span className="text-sm eai-muted">{plan.period}</span></p>
+                  <p className="text-xs eai-muted mt-1">{plan.tagline}</p>
+                  <ul className="mt-4 space-y-2 flex-1">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-xs eai-muted leading-relaxed">
+                        <CheckCircle2 size={13} style={{ color: "var(--gold)", flexShrink: 0, marginTop: 1.5 }} /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button onClick={(e) => { e.stopPropagation(); setUpgraded(plan); }}
+                    className="eai-btn eai-focus w-full mt-5 py-2.5 text-sm flex items-center justify-center gap-2"
+                    style={{ background: plan.best ? "var(--gold)" : "var(--card)", color: plan.best ? "#fff" : "var(--ink)", border: plan.best ? "none" : "1px solid var(--line)" }}>
+                    {plan.button} <ArrowRight size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-center text-xs eai-muted">Prototype · payments are not connected, no card will be charged</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ════════════════════════ Shell ════════════════════════ */
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -2114,6 +2542,7 @@ const NAV = [
   { id: "languages", label: "Languages", icon: Globe },
   { id: "coach", label: "AI coach", icon: Sparkles },
   { id: "progress", label: "Progress", icon: BarChart3 },
+  { id: "super", label: "Super Bondus", icon: Crown, premium: true },
 ];
 
 const STORAGE_KEY = "bondus_state_v1";
@@ -2125,10 +2554,29 @@ function loadSaved() {
   } catch { return null; }
 }
 
+function WelcomeBackToast({ name, show }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
+          className="eai-card flex items-center gap-2.5 px-4 py-2.5"
+          style={{ position: "fixed", top: 72, right: 16, zIndex: 50, boxShadow: "var(--shadow)" }}>
+          <span aria-hidden="true">👋</span>
+          <span className="text-sm font-semibold">Welcome back, {name.split(" ")[0]}!</span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function App() {
   const saved = useRef(loadSaved()).current;
+  const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
+  const [showWelcomeBack, setShowWelcomeBack] = useState(isReturningUser);
   const [profile, setProfile] = useState(saved?.profile ?? null);
+  const [entry, setEntry] = useState("welcome"); // "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
+  const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
@@ -2140,21 +2588,46 @@ export default function App() {
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
   const go = (t) => { setTab(t); setOpen(false); };
 
+  // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
+  useEffect(() => {
+    if (!showWelcomeBack) return;
+    const t = setTimeout(() => setShowWelcomeBack(false), 2600);
+    return () => clearTimeout(t);
+  }, [showWelcomeBack]);
+
   // Persist everything so progress survives a page refresh — this prototype has no backend yet.
   useEffect(() => {
     if (!profile) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, practice, plan, bonusXp }));
   }, [profile, topicMastery, practice, plan, bonusXp]);
 
-  const resetAll = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setProfile(null); setPendingReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard");
+  // Logging out clears the active session but deliberately leaves localStorage alone, so "Log in"
+  // can restore the same account later by matching the phone number used at signup.
+  const handleLogout = () => {
+    setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
+    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
+  };
+
+  // Matches a phone number against whatever's currently saved in this browser. Returns true/false
+  // so the Login screen can show "account not found" inline instead of failing silently.
+  const handleLogin = (phone) => {
+    const data = loadSaved();
+    const clean = phone.replace(/\s+/g, "");
+    if (!data?.profile || data.profile.phone?.replace(/\s+/g, "") !== clean) return false;
+    setProfile(data.profile);
+    setTopicMastery(data.topicMastery ?? {});
+    setPractice(data.practice ?? {});
+    setPlan(data.plan ?? []);
+    setBonusXp(data.bonusXp ?? 0);
+    setShowWelcomeBack(true);
+    return true;
   };
 
   // Registration collects answers, then the student chooses to take the diagnostic now or explore
   // first — self-reports alone aren't trusted, but personalization is never required to start.
-  const handleRegister = (reg) => setPendingReg(reg);
+  const handleRegister = (reg) => { setPendingReg(reg); setResumeReg(null); };
+  // "Back" from the step-4 AssessmentChoice screen — re-opens Register at step 3 with prior answers intact.
+  const handleBackToPreferences = () => { setResumeReg({ form: pendingReg, step: 2 }); setPendingReg(null); };
   const handleDiagnosticComplete = (diagnosticMastery) => {
     const built = buildProfile(pendingReg);
     const insights = deriveInsights(built, diagnosticMastery);
@@ -2230,9 +2703,11 @@ export default function App() {
     if (status === "completed" && !already) setBonusXp((x) => x + 30);
   };
 
-  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} />;
+  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} />;
+  if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
+  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} />;
+  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} />;
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -2241,11 +2716,13 @@ export default function App() {
     browse: <Browse p={p} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} />,
     universities: <Universities />, languages: <Languages />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
+    super: <SuperBondus />,
   }[tab];
 
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`}>
       <style>{STYLES}</style>
+      <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
       <div className="flex">
         {open && <div className="fixed inset-0 z-20 lg:hidden" style={{ background: "rgba(0,0,0,.4)" }} onClick={() => setOpen(false)} />}
         <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
@@ -2254,15 +2731,23 @@ export default function App() {
             <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 40, height: 40, background: "var(--primary)" }}>
               <Angkor style={{ position: "absolute", bottom: -2, width: 40, height: 18, fill: "var(--gold)", opacity: 0.9 }} />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">EduAI</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
             {NAV.map((n) => {
               const on = tab === n.id;
+              const premiumColor = "var(--gold)";
               return (
                 <button key={n.id} onClick={() => go(n.id)} className="eai-nav eai-focus w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left"
-                  style={{ background: on ? "var(--primary-soft)" : "transparent", color: on ? "var(--primary)" : "var(--ink)" }}>
-                  <n.icon size={19} /><span className="text-sm font-semibold">{n.label}</span>
+                  style={{
+                    background: on ? (n.premium ? "var(--gold-soft)" : "var(--primary-soft)") : "transparent",
+                    color: on ? (n.premium ? premiumColor : "var(--primary)") : n.premium ? premiumColor : "var(--ink)",
+                  }}>
+                  <n.icon size={19} />
+                  <span className="text-sm font-semibold flex-1">{n.label}</span>
+                  {n.premium && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--gold)", color: "#fff", letterSpacing: ".02em" }}>PRO</span>
+                  )}
                 </button>
               );
             })}
@@ -2273,7 +2758,7 @@ export default function App() {
               <p className="text-xs font-semibold mt-2">{profile.streak}-day streak</p>
               <p className="text-xs eai-muted">Study today to keep it!</p>
             </div>
-            <button onClick={resetAll} className="eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline">Log out</button>
+            <button onClick={handleLogout} className="eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline">Log out</button>
           </div>
         </aside>
 
