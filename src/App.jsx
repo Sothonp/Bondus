@@ -1025,8 +1025,37 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
 }
 
 /* ════════════════════════ Browse (field-aware) ════════════════════════ */
+/* Scanned official exam papers, keyed by "Subject-Year". Only entries present here get a working
+   View button — everything else stays a no-op until its pages are added. */
+const EXAM_PAPER_IMAGES = {
+  "Mathematics-2025": ["/exams/science-math-2025.jpg", "/exams/science-math-2025-2.jpg", "/exams/science-math-2025-3.jpg"],
+};
+
+function ExamPaperPage({ paper, onBack }) {
+  return (
+    <div className="space-y-5 eai-rise">
+      <button onClick={onBack} className="eai-focus flex items-center gap-1 text-sm eai-muted">
+        <ChevronLeft size={16} /> All exams
+      </button>
+      <div>
+        <h2 className="eai-display text-2xl font-extrabold">{paper.title}</h2>
+        <p className="eai-muted text-sm mt-1">Scroll down to see every page of the official paper.</p>
+      </div>
+      <div className="eai-card p-4 sm:p-6">
+        <div className="space-y-4">
+          {paper.images.map((src, i) => (
+            <img key={i} src={src} alt={`${paper.title} — page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", display: "block" }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Browse({ p }) {
   const [year, setYear] = useState(2023);
+  const [viewingPaper, setViewingPaper] = useState(null);
+  if (viewingPaper) return <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} />;
   return (
     <div className="space-y-5 eai-rise">
       <div>
@@ -1064,7 +1093,14 @@ function Browse({ p }) {
                 <span className="text-xs eai-muted">{sub.m != null ? `Matches your ${sub.level.toLowerCase()} level` : "Answer sheet ✓"}</span>
               </div>
               <div className="flex gap-2 mt-4">
-                <button className="eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white" style={{ background: "var(--primary)" }}><Eye size={14} /> View</button>
+                <button
+                  onClick={() => {
+                    const images = EXAM_PAPER_IMAGES[`${sub.s}-${year}`];
+                    if (images) setViewingPaper({ title: `${sub.s} · BAC II ${year}`, images });
+                  }}
+                  className="eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white" style={{ background: "var(--primary)" }}>
+                  <Eye size={14} /> View
+                </button>
                 <button className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center" style={{ color: "var(--ink)" }}><Download size={14} /></button>
               </div>
             </div>

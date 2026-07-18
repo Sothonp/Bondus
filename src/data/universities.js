@@ -216,3 +216,108 @@ export const UNI_MAJORS = {
     ]},
   ],
 };
+
+/* Placeholder scholarship data — NOT sourced from official pages. Names, coverage, requirements
+   and exam/deadline dates below are illustrative examples for prototyping the Scholarships UI.
+   Replace with each university's verified, current-year figures before treating this as real
+   guidance for students. */
+export const UNI_SCHOLARSHIPS = {
+  RUPP: [
+    {
+      name: "ASEAN Merit Scholarship",
+      coverage: "Full tuition waiver + monthly stipend",
+      requirements: ["BAC II grade A or B", "Top 10% of RUPP entrance exam applicants", "English proficiency (IELTS 5.5+ or equivalent)"],
+      examDate: "Early September (entrance exam) — illustrative date, verify with RUPP",
+    },
+    {
+      name: "Rural Student Support Grant",
+      coverage: "50% tuition reduction",
+      requirements: ["Household registered in a rural province", "BAC II grade B or above", "Recommendation letter from high school director"],
+      examDate: "Rolling application, before intake deadline — illustrative date, verify with RUPP",
+    },
+  ],
+  ITC: [
+    {
+      name: "Government Priority Scholarship (STEM)",
+      coverage: "Full tuition + dormitory housing",
+      requirements: ["BAC II grade A in Mathematics and Physics", "Pass ITC's Tronc Commun entrance exam", "Cambodian citizenship"],
+      examDate: "Late August (entrance exam) — illustrative date, verify with ITC",
+    },
+    {
+      name: "Women in Engineering Scholarship",
+      coverage: "75% tuition reduction",
+      requirements: ["Female applicant", "BAC II grade B or above in a science track", "Interview with the Faculty of Electrical Engineering"],
+      examDate: "September, alongside general admissions — illustrative date, verify with ITC",
+    },
+  ],
+  AUPP: [
+    {
+      name: "Presidential Scholarship",
+      coverage: "Up to 100% tuition, renewable yearly with GPA requirement",
+      requirements: ["BAC II grade A", "SAT/AUPP placement test in top bracket", "Personal statement + interview"],
+      examDate: "Rolling — placement test scheduled after application, typically July–August (illustrative)",
+    },
+    {
+      name: "Need-Based Financial Aid Grant",
+      coverage: "25%–60% tuition, based on demonstrated need",
+      requirements: ["Family income documentation", "BAC II grade C or above", "Completed financial aid application form"],
+      examDate: "Reviewed on a rolling basis each semester — illustrative, verify with AUPP admissions",
+    },
+  ],
+  NUM: [
+    {
+      name: "NUM Excellence Scholarship",
+      coverage: "Full tuition for Year 1, merit-renewable after",
+      requirements: ["BAC II grade A", "Top scorer on NUM's own entrance assessment", "Enrollment in Management, Accounting, Finance or Law"],
+      examDate: "Early September (entrance assessment) — illustrative date, verify with NUM",
+    },
+    {
+      name: "Provincial Access Scholarship",
+      coverage: "40% tuition reduction",
+      requirements: ["Household outside Phnom Penh", "BAC II grade B or above", "Commitment letter to complete the full program"],
+      examDate: "Rolling, before each semester intake — illustrative date, verify with NUM",
+    },
+  ],
+  RULE: [
+    {
+      name: "Francophonie Law Scholarship",
+      coverage: "Full tuition for the Trilingual (French) Law Program + study-exchange stipend",
+      requirements: ["BAC II grade B or above", "French proficiency (DELF B1 or equivalent)", "Pass RULE's Trilingual Program entrance interview"],
+      examDate: "Late August (entrance interview) — illustrative date, verify with RULE",
+    },
+    {
+      name: "Public Service Merit Award",
+      coverage: "50% tuition reduction",
+      requirements: ["BAC II grade B or above", "Essay on public administration or legal reform in Cambodia", "Interview with the Faculty of Public Administration"],
+      examDate: "September, alongside general admissions — illustrative date, verify with RULE",
+    },
+  ],
+  CADT: [
+    {
+      name: "Digital Talent Scholarship",
+      coverage: "Full tuition + laptop stipend",
+      requirements: ["BAC II grade A in Mathematics", "Pass CADT's own entrance exam in top applicants", "Basic coding assessment (no prior experience required)"],
+      examDate: "Early September (entrance exam) — illustrative date, verify with CADT",
+    },
+    {
+      name: "Women in Tech Grant",
+      coverage: "60% tuition reduction",
+      requirements: ["Female applicant", "BAC II grade B or above", "Short motivation essay on digital technology in Cambodia"],
+      examDate: "Rolling, before intake deadline — illustrative date, verify with CADT",
+    },
+  ],
+  UHS: [
+    {
+      name: "Ministry of Health Priority Scholarship",
+      coverage: "Full tuition for Medicine, Pharmacy or Dentistry programs",
+      requirements: ["BAC II grade A in Biology and Chemistry", "Top scorer on UHS entrance exam", "Commitment to public-hospital service after graduation (per program terms)"],
+      examDate: "Late August (entrance exam) — illustrative date, verify with UHS",
+    },
+    {
+      name: "Provincial Health Workforce Grant",
+      coverage: "50% tuition reduction for Nursing, Midwifery or Medical Laboratory Technology",
+      requirements: ["Household outside Phnom Penh", "BAC II grade B or above in a science track", "Commitment letter to serve in a provincial health facility post-graduation"],
+      examDate: "Rolling, before intake deadline — illustrative date, verify with UHS",
+    },
+  ],
+};
