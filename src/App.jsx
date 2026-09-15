@@ -11,6 +11,7 @@ import {
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
   ClipboardCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
   ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
+  Headphones, Mic, Volume2, PlayCircle,
 } from "lucide-react";
 import { UNIS, UNI_MAJORS } from "./data/universities.js";
 
@@ -219,6 +220,74 @@ const LANGS = [
   { n: "HSK", goal: "Level 4", now: "—", pct: 10, c: "var(--gold)" },
   { n: "DELF", goal: "B2", now: "—", pct: 18, c: "var(--jade)" },
 ];
+
+/* ════════════════════════ IELTS diagnostic ════════════════════════
+   A short, four-skill placement test (Listening, Reading, Writing, Speaking) — not a full mock
+   exam. Listening/Reading are auto-graded client-side from a fixed answer key; Writing/Speaking
+   are graded by the Gemini-backed /api/ielts-grade function (same resilience pattern as Major
+   Guidance: falls back to a local estimate if the API call fails, so the flow never dead-ends). */
+const IELTS_CONTENT = {
+  listening: {
+    script: `Welcome to the university library orientation. The library is open from eight in the morning until ten at night on weekdays, and from nine until six on weekends. First-year students can borrow up to five books for two weeks, while final-year students can borrow up to ten books for a full month. If you need a book that's already checked out, you can place a hold online and we'll email you when it's back. The quiet study rooms on the third floor must be booked in advance through the library website, and each booking is limited to two hours per day. Remember, food isn't allowed inside the building, but water in a closed bottle is fine.`,
+    questions: [
+      { q: "On weekdays, until what time is the library open?", options: ["6 PM", "8 PM", "10 PM", "Midnight"], answer: "10 PM" },
+      { q: "How many books can a first-year student borrow at once?", options: ["Two", "Five", "Eight", "Ten"], answer: "Five" },
+      { q: "Where are the quiet study rooms located?", options: ["First floor", "Second floor", "Third floor", "Basement"], answer: "Third floor" },
+      { q: "What is NOT allowed inside the library?", options: ["Closed water bottles", "Laptops", "Food", "Quiet conversation"], answer: "Food" },
+    ],
+  },
+  reading: {
+    passage: `Urban beekeeping has grown rapidly in cities around the world over the past decade. Once considered an unusual hobby, keeping honeybee hives on rooftops and in community gardens is now promoted by some city governments as a way to support local ecosystems. Bees pollinate a wide range of plants, and their presence can noticeably improve yields in nearby gardens and parks. However, researchers have also raised concerns: in cities with a very high density of hives, honeybees may compete with wild, native bee species for limited flowers, potentially harming biodiversity rather than helping it. Experts now recommend that city planners think carefully about hive density and prioritise planting more flowering plants alongside any expansion of urban beekeeping, so that food sources grow along with the bee population.`,
+    questions: [
+      { q: "What has happened to urban beekeeping in the last ten years?", options: ["It has declined", "It has grown rapidly", "It has stayed the same", "It has been banned"], answer: "It has grown rapidly" },
+      { q: "According to the passage, bees help nearby gardens by...", options: ["Removing pests", "Pollinating plants", "Fertilising soil", "Reducing noise"], answer: "Pollinating plants" },
+      { q: "What concern do researchers raise about high hive density?", options: ["Bees produce less honey", "Honeybees may compete with native bees", "Hives are expensive to maintain", "Bees become aggressive"], answer: "Honeybees may compete with native bees" },
+      { q: "What do experts recommend city planners do?", options: ["Ban beekeeping entirely", "Reduce the number of parks", "Plant more flowers alongside hive expansion", "Move hives outside cities"], answer: "Plant more flowers alongside hive expansion" },
+    ],
+  },
+  writing: {
+    prompt: "Some people think that university students should be required to attend classes in person, while others believe online study should be an equally acceptable option. Discuss both views and give your own opinion.",
+    minWords: 150,
+  },
+  speaking: {
+    cueCard: "Describe a skill you would like to learn in the future.",
+    bulletPoints: ["what the skill is", "why you want to learn it", "how you would learn it", "and explain how it might change your life"],
+    prepSeconds: 30,
+  },
+};
+
+/* Simple, transparent band conversion for the auto-graded skills — not the official IELTS scale,
+   just a reasonable placement estimate from a 4-question sample. */
+function bandFromScore(correct, total) {
+  const pct = correct / total;
+  if (pct >= 1) return 8.5;
+  if (pct >= 0.75) return 7.5;
+  if (pct >= 0.5) return 6.5;
+  if (pct >= 0.25) return 5.5;
+  return 4.5;
+}
+
+const roundToHalfBand = (n) => Math.round(n * 2) / 2;
+
+/* Writing/Speaking calls the real /api/ielts-grade serverless function (Gemini). If that call
+   fails — no API key configured yet, network hiccup, rate limit — it falls back to a local
+   word-count-based estimate so the flow still produces a result instead of erroring out. */
+async function gradeIeltsResponse(skill, prompt, response) {
+  try {
+    const res = await fetch("/api/ielts-grade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skill, prompt, response }),
+    });
+    const data = await res.json();
+    if (!res.ok || typeof data.band !== "number") throw new Error(data.error || "Request failed");
+    return { band: data.band, feedback: data.feedback || "" };
+  } catch {
+    const words = response.trim().split(/\s+/).filter(Boolean).length;
+    const band = words >= 180 ? 6.5 : words >= 100 ? 5.5 : words >= 40 ? 4.5 : 3.5;
+    return { band, feedback: "AI grading is temporarily unavailable, so this is a rough estimate based on response length. Try again later for detailed feedback." };
+  }
+}
 
 /* Mock classmates for the dashboard leaderboard. The current user is merged in and ranked live by XP. */
 const LEADERBOARD_SEED = [
@@ -1995,7 +2064,298 @@ function Universities() {
   );
 }
 
-function Languages() {
+/* ════════════════════════ IELTS Diagnostic flow ════════════════════════
+   intro → listening → reading → writing → speaking → grading → results.
+   Listening/Reading are scored instantly from the fixed answer key. Writing/Speaking are sent to
+   Gemini (gradeIeltsResponse) once, in parallel, when the student submits the speaking response. */
+function IeltsIntroCard({ icon: Icon, label, desc }) {
+  return (
+    <div className="flex items-start gap-3 p-3.5 rounded-2xl eai-soft">
+      <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 36, height: 36, background: "var(--card)" }}>
+        <Icon size={17} style={{ color: "var(--primary)" }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-bold">{label}</p>
+        <p className="text-xs eai-muted mt-0.5">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+/* Plain, self-styled button/textarea — the shared PrimaryButton/eai-ob-input classes rely on CSS
+   variables (--primary-hover, --input-border, --focus-border, --muted-2) that only exist inside
+   .eai-onboarding, and this flow's root isn't wrapped in that scope (same reason the academic
+   Diagnostic component above styles its own buttons instead of reusing OnboardingLayout). */
+function DiagButton({ children, disabled, className = "", ...props }) {
+  return (
+    <button {...props} disabled={disabled}
+      className={`eai-focus w-full flex items-center justify-center gap-2 text-sm font-semibold text-white ${className}`}
+      style={{ height: 50, borderRadius: 14, border: "none", background: disabled ? "var(--bg-soft)" : "var(--primary)", color: disabled ? "var(--muted)" : "#fff", cursor: disabled ? "not-allowed" : "pointer", transition: "filter .15s ease" }}>
+      {children}
+    </button>
+  );
+}
+
+function DiagTextarea(props) {
+  return (
+    <textarea {...props}
+      className={`eai-focus ${props.className || ""}`}
+      style={{ width: "100%", borderRadius: 14, border: "1.5px solid var(--line)", background: "var(--bg-soft)", color: "var(--ink)", ...props.style }} />
+  );
+}
+
+function IeltsMCQ({ questions, answers, onAnswer }) {
+  return (
+    <div className="space-y-4 mt-5">
+      {questions.map((q, qi) => (
+        <div key={qi}>
+          <p className="text-sm font-semibold mb-2">{qi + 1}. {q.q}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {q.options.map((opt) => (
+              <button key={opt} onClick={() => onAnswer(qi, opt)}
+                className="eai-focus text-left px-3.5 py-2.5 rounded-xl text-sm font-medium"
+                style={{
+                  background: answers[qi] === opt ? "var(--primary-soft)" : "var(--card)",
+                  border: `1.5px solid ${answers[qi] === opt ? "var(--primary)" : "var(--line)"}`,
+                  color: answers[qi] === opt ? "var(--primary)" : "var(--ink)",
+                }}>
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IeltsDiagnostic({ dark, onExit, onComplete }) {
+  const [stage, setStage] = useState("intro"); // intro | listening | reading | writing | speaking | grading | results
+  const [listeningAns, setListeningAns] = useState({});
+  const [readingAns, setReadingAns] = useState({});
+  const [writingText, setWritingText] = useState("");
+  const [speakingText, setSpeakingText] = useState("");
+  const [prepLeft, setPrepLeft] = useState(IELTS_CONTENT.speaking.prepSeconds);
+  const [prepDone, setPrepDone] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (stage !== "speaking" || prepDone) return;
+    if (prepLeft <= 0) { setPrepDone(true); return; }
+    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [stage, prepLeft, prepDone]);
+
+  const playScript = () => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(IELTS_CONTENT.listening.script);
+    u.rate = 0.95;
+    setSpeaking(true);
+    u.onend = () => setSpeaking(false);
+    window.speechSynthesis.speak(u);
+  };
+
+  const stages = ["listening", "reading", "writing", "speaking"];
+  const stageIndex = stages.indexOf(stage);
+  const progressPct = stage === "intro" ? 0 : (stage === "grading" || stage === "results") ? 100 : Math.round(((stageIndex + 1) / stages.length) * 100);
+
+  const listeningComplete = Object.keys(listeningAns).length === IELTS_CONTENT.listening.questions.length;
+  const readingComplete = Object.keys(readingAns).length === IELTS_CONTENT.reading.questions.length;
+  const writingWords = writingText.trim().split(/\s+/).filter(Boolean).length;
+  const speakingWords = speakingText.trim().split(/\s+/).filter(Boolean).length;
+
+  const submitAll = async () => {
+    setStage("grading");
+    const listeningCorrect = IELTS_CONTENT.listening.questions.filter((q, i) => listeningAns[i] === q.answer).length;
+    const readingCorrect = IELTS_CONTENT.reading.questions.filter((q, i) => readingAns[i] === q.answer).length;
+    const listeningBand = bandFromScore(listeningCorrect, IELTS_CONTENT.listening.questions.length);
+    const readingBand = bandFromScore(readingCorrect, IELTS_CONTENT.reading.questions.length);
+
+    const [writingGrade, speakingGrade] = await Promise.all([
+      gradeIeltsResponse("writing", IELTS_CONTENT.writing.prompt, writingText),
+      gradeIeltsResponse("speaking", IELTS_CONTENT.speaking.cueCard, speakingText),
+    ]);
+
+    const overall = roundToHalfBand((listeningBand + readingBand + writingGrade.band + speakingGrade.band) / 4);
+    setResult({
+      listening: listeningBand, reading: readingBand, writing: writingGrade.band, speaking: speakingGrade.band,
+      overall, feedback: { writing: writingGrade.feedback, speaking: speakingGrade.feedback }, completedAt: Date.now(),
+    });
+    setStage("results");
+  };
+
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
+        <div className="w-full eai-rise" style={{ maxWidth: 680 }}>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={onExit} className="eai-focus flex items-center gap-1 text-sm eai-muted"><ChevronLeft size={16} /> Exit diagnostic</button>
+            {stages.includes(stage) && <p className="text-xs eai-muted">Section {stageIndex + 1} of {stages.length}</p>}
+          </div>
+          {stage !== "intro" && (
+            <div className="h-1.5 rounded-full eai-soft mb-6 overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${progressPct}%`, background: "var(--primary)", transition: "width .3s" }} />
+            </div>
+          )}
+
+          <div className="eai-card p-6 sm:p-8">
+            {stage === "intro" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <ClipboardCheck size={20} style={{ color: "var(--primary)" }} />
+                  <h2 className="eai-display text-xl font-extrabold">IELTS placement diagnostic</h2>
+                </div>
+                <p className="text-sm eai-muted mt-1 mb-5">A short test across all four skills so we can estimate your current band. Takes about 15 minutes.</p>
+                <div className="space-y-2.5">
+                  <IeltsIntroCard icon={Headphones} label="Listening" desc="Play a short audio clip, then answer 4 questions." />
+                  <IeltsIntroCard icon={BookOpen} label="Reading" desc="Read a short passage, then answer 4 questions." />
+                  <IeltsIntroCard icon={FileText} label="Writing" desc="Write a short essay response to a Task 2 style prompt." />
+                  <IeltsIntroCard icon={Mic} label="Speaking" desc="Prepare briefly, then type your spoken response to a cue card." />
+                </div>
+                <DiagButton onClick={() => setStage("listening")} className="w-full mt-6">Start diagnostic <ChevronRight size={16} /></DiagButton>
+              </>
+            )}
+
+            {stage === "listening" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <Headphones size={18} style={{ color: "var(--primary)" }} />
+                  <h2 className="eai-display text-lg font-bold">Listening</h2>
+                </div>
+                <p className="text-xs eai-muted mb-4">Press play to hear the clip (you can replay it), then answer the questions below.</p>
+                <button onClick={playScript} className="eai-btn eai-focus px-4 py-2.5 text-sm text-white flex items-center gap-2" style={{ background: "var(--primary)" }}>
+                  <PlayCircle size={16} /> {speaking ? "Playing…" : "Play audio"}
+                </button>
+                <IeltsMCQ questions={IELTS_CONTENT.listening.questions} answers={listeningAns} onAnswer={(qi, opt) => setListeningAns((a) => ({ ...a, [qi]: opt }))} />
+                <DiagButton onClick={() => setStage("reading")} disabled={!listeningComplete} className="w-full mt-6">Continue to Reading <ChevronRight size={16} /></DiagButton>
+              </>
+            )}
+
+            {stage === "reading" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <BookOpen size={18} style={{ color: "var(--primary)" }} />
+                  <h2 className="eai-display text-lg font-bold">Reading</h2>
+                </div>
+                <p className="text-sm leading-relaxed p-4 rounded-2xl eai-soft mt-3" style={{ color: "var(--ink)" }}>{IELTS_CONTENT.reading.passage}</p>
+                <IeltsMCQ questions={IELTS_CONTENT.reading.questions} answers={readingAns} onAnswer={(qi, opt) => setReadingAns((a) => ({ ...a, [qi]: opt }))} />
+                <DiagButton onClick={() => setStage("writing")} disabled={!readingComplete} className="w-full mt-6">Continue to Writing <ChevronRight size={16} /></DiagButton>
+              </>
+            )}
+
+            {stage === "writing" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText size={18} style={{ color: "var(--primary)" }} />
+                  <h2 className="eai-display text-lg font-bold">Writing</h2>
+                </div>
+                <p className="text-sm mt-2 mb-3" style={{ color: "var(--ink)" }}>{IELTS_CONTENT.writing.prompt}</p>
+                <DiagTextarea
+                  value={writingText} onChange={(e) => setWritingText(e.target.value)}
+                  placeholder="Write your response here…" rows={10}
+                  className="w-full p-4 text-sm leading-relaxed"
+                  style={{ height: "auto", resize: "vertical" }}
+                />
+                <p className="text-xs eai-muted mt-2">{writingWords} words · aim for at least {IELTS_CONTENT.writing.minWords}</p>
+                <DiagButton onClick={() => setStage("speaking")} disabled={writingWords < 20} className="w-full mt-6">Continue to Speaking <ChevronRight size={16} /></DiagButton>
+              </>
+            )}
+
+            {stage === "speaking" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <Mic size={18} style={{ color: "var(--primary)" }} />
+                  <h2 className="eai-display text-lg font-bold">Speaking</h2>
+                </div>
+                <div className="p-4 rounded-2xl eai-soft mt-3">
+                  <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>{IELTS_CONTENT.speaking.cueCard}</p>
+                  <ul className="mt-2 space-y-1">
+                    {IELTS_CONTENT.speaking.bulletPoints.map((b) => (
+                      <li key={b} className="text-xs eai-muted flex items-start gap-1.5"><Circle size={5} className="mt-1.5 flex-shrink-0" style={{ fill: "var(--muted)" }} /> {b}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {!prepDone ? (
+                  <div className="text-center py-8">
+                    <p className="text-xs eai-muted mb-2">Preparation time</p>
+                    <p className="eai-display text-4xl font-extrabold" style={{ color: "var(--primary)" }}>{prepLeft}s</p>
+                    <button onClick={() => setPrepDone(true)} className="eai-focus text-xs font-semibold mt-3" style={{ color: "var(--primary)" }}>Skip preparation</button>
+                  </div>
+                ) : (
+                  <>
+                    <DiagTextarea
+                      value={speakingText} onChange={(e) => setSpeakingText(e.target.value)}
+                      placeholder="Type what you would say out loud…" rows={7}
+                      className="w-full p-4 text-sm leading-relaxed mt-4"
+                      style={{ height: "auto", resize: "vertical" }}
+                    />
+                    <p className="text-xs eai-muted mt-2">{speakingWords} words</p>
+                    <DiagButton onClick={submitAll} disabled={speakingWords < 10} className="w-full mt-6">Submit diagnostic <ChevronRight size={16} /></DiagButton>
+                  </>
+                )}
+              </>
+            )}
+
+            {stage === "grading" && (
+              <div className="text-center py-10">
+                <div className="mx-auto mb-4 grid place-items-center rounded-2xl" style={{ width: 56, height: 56, background: "var(--primary-soft)" }}>
+                  <Sparkles size={26} style={{ color: "var(--primary)" }} />
+                </div>
+                <p className="text-sm font-semibold">Grading your responses…</p>
+                <p className="text-xs eai-muted mt-1">Our AI examiner is scoring your writing and speaking.</p>
+              </div>
+            )}
+
+            {stage === "results" && result && (
+              <>
+                <div className="text-center mb-6">
+                  <p className="text-xs font-semibold eai-muted uppercase tracking-wide">Estimated overall band</p>
+                  <p className="eai-display font-extrabold" style={{ fontSize: 48, color: "var(--primary)", lineHeight: 1 }}>{result.overall.toFixed(1)}</p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+                  {IELTS_SKILL_META.map((s) => (
+                    <div key={s.key} className="rounded-2xl p-3 text-center eai-soft">
+                      <s.icon size={16} className="mx-auto mb-1.5" style={{ color: "var(--primary)" }} />
+                      <p className="eai-display font-bold text-lg leading-none">{result[s.key].toFixed(1)}</p>
+                      <p className="text-xs eai-muted mt-1">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {result.feedback.writing && (
+                  <div className="p-4 rounded-2xl eai-soft mb-3">
+                    <p className="text-xs font-bold flex items-center gap-1.5 mb-1"><FileText size={13} /> Writing feedback</p>
+                    <p className="text-xs eai-muted leading-relaxed">{result.feedback.writing}</p>
+                  </div>
+                )}
+                {result.feedback.speaking && (
+                  <div className="p-4 rounded-2xl eai-soft mb-3">
+                    <p className="text-xs font-bold flex items-center gap-1.5 mb-1"><Mic size={13} /> Speaking feedback</p>
+                    <p className="text-xs eai-muted leading-relaxed">{result.feedback.speaking}</p>
+                  </div>
+                )}
+                <DiagButton onClick={() => onComplete(result)} className="w-full mt-4">Done <ChevronRight size={16} /></DiagButton>
+              </>
+            )}
+          </div>
+          {(stage === "writing" || stage === "speaking") && <p className="text-center text-xs eai-muted mt-4">Your response is graded by AI once you submit — no feedback shown during the test.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const IELTS_SKILL_META = [
+  { key: "listening", label: "Listening", icon: Headphones },
+  { key: "reading", label: "Reading", icon: BookOpen },
+  { key: "writing", label: "Writing", icon: FileText },
+  { key: "speaking", label: "Speaking", icon: Mic },
+];
+
+function Languages({ results = {}, onTakeDiagnostic }) {
   return (
     <div className="space-y-5 eai-rise">
       <div>
@@ -2003,20 +2363,47 @@ function Languages() {
         <p className="eai-muted text-sm mt-1">Diagnostic-driven roadmaps and unlimited AI mock tests with skill-by-skill scoring.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {LANGS.map((l) => (
-          <div key={l.n} className="eai-card p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2"><Globe size={18} style={{ color: l.c }} /><span className="eai-display font-bold">{l.n}</span></div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--bg-soft)", color: l.c }}>Goal {l.goal}</span>
+        {LANGS.map((l) => {
+          const isIelts = l.n === "IELTS Academic";
+          const result = results[l.n];
+          const now = result ? `Band ${result.overall.toFixed(1)}` : l.now;
+          const pct = result ? clamp(Math.round((result.overall / 9) * 100), 4, 100) : l.pct;
+          return (
+            <div key={l.n} className="eai-card p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2"><Globe size={18} style={{ color: l.c }} /><span className="eai-display font-bold">{l.n}</span></div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--bg-soft)", color: l.c }}>Goal {l.goal}</span>
+              </div>
+              <div className="flex items-end justify-between mt-4 mb-2">
+                <span className="text-xs eai-muted">Current: <b style={{ color: "var(--ink)" }}>{now}</b></span>
+                <span className="text-xs font-bold eai-display">{pct}% there</span>
+              </div>
+              <div className="h-2.5 rounded-full eai-soft overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: l.c, transition: "width .3s" }} /></div>
+
+              {isIelts && result && (
+                <div className="grid grid-cols-4 gap-1.5 mt-4">
+                  {IELTS_SKILL_META.map((s) => (
+                    <div key={s.key} className="rounded-xl px-1.5 py-2 text-center eai-soft">
+                      <s.icon size={13} className="mx-auto mb-1" style={{ color: l.c }} />
+                      <p className="text-[13px] font-bold eai-display leading-none">{result[s.key].toFixed(1)}</p>
+                      <p className="text-[10px] eai-muted mt-0.5 leading-none">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {isIelts ? (
+                <button onClick={() => onTakeDiagnostic(l.n)} className="eai-btn eai-focus w-full mt-4 py-2 text-sm text-white flex items-center justify-center gap-1.5" style={{ background: "var(--primary)" }}>
+                  <ClipboardCheck size={15} /> {result ? "Retake diagnostic" : "Take diagnostic"}
+                </button>
+              ) : (
+                <button disabled className="eai-btn w-full mt-4 py-2 text-sm eai-soft cursor-not-allowed" style={{ color: "var(--muted)" }}>
+                  Coming soon
+                </button>
+              )}
             </div>
-            <div className="flex items-end justify-between mt-4 mb-2">
-              <span className="text-xs eai-muted">Current: <b style={{ color: "var(--ink)" }}>{l.now}</b></span>
-              <span className="text-xs font-bold eai-display">{l.pct}% there</span>
-            </div>
-            <div className="h-2.5 rounded-full eai-soft overflow-hidden"><div className="h-full rounded-full" style={{ width: `${l.pct}%`, background: l.c }} /></div>
-            <button className="eai-btn eai-focus w-full mt-4 py-2 text-sm eai-soft" style={{ color: "var(--ink)" }}>Take diagnostic</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -2692,6 +3079,8 @@ export default function App() {
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
   const [plan, setPlan] = useState(saved?.plan ?? []);
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
+  const [langResults, setLangResults] = useState(saved?.langResults ?? {}); // { [languageName]: { listening, reading, writing, speaking, overall, feedback, completedAt } }
+  const [takingLangTest, setTakingLangTest] = useState(null); // language name currently being tested, or null
   const go = (t) => { setTab(t); setOpen(false); };
 
   // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
@@ -2704,8 +3093,8 @@ export default function App() {
   // Persist everything so progress survives a page refresh — this prototype has no backend yet.
   useEffect(() => {
     if (!profile) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, practice, plan, bonusXp }));
-  }, [profile, topicMastery, practice, plan, bonusXp]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, practice, plan, bonusXp, langResults }));
+  }, [profile, topicMastery, practice, plan, bonusXp, langResults]);
 
   // Logging out clears the active session but deliberately leaves localStorage alone, so "Log in"
   // can restore the same account later by matching the phone number used at signup.
@@ -2815,13 +3204,20 @@ export default function App() {
   if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} />;
   if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} />;
+  if (takingLangTest) return (
+    <IeltsDiagnostic
+      dark={dark}
+      onExit={() => setTakingLangTest(null)}
+      onComplete={(res) => { setLangResults((r) => ({ ...r, [takingLangTest]: res })); setTakingLangTest(null); }}
+    />
+  );
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} />,
     browse: <Browse p={p} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} />,
-    universities: <Universities />, languages: <Languages />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
+    universities: <Universities />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
     super: <SuperBondus />,
   }[tab];
 
