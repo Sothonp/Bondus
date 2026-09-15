@@ -776,50 +776,60 @@ function BondusLogo() {
 
 function Welcome({ dark, setDark, onLogin, onCreate }) {
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
 
+      {/* Decorative corner accents */}
+      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+
       {/* Theme toggle */}
-      <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" style={{ position: "fixed", top: 20, right: 20, zIndex: 20 }} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
+      <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" style={{ position: "fixed", top: 20, right: 20, zIndex: 50 }} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
         {dark ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
-      {/* Mobile-optimized welcome screen */}
-      <div className="flex-1 flex flex-col items-center justify-start px-6 py-8 overflow-y-auto">
-        {/* Top spacing */}
-        <div className="h-12" />
+      {/* Responsive Welcome Content */}
+      <div style={{ position: "relative", width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
 
-        <div className="w-full max-w-sm text-center">
+        {/* Top spacing */}
+        <div style={{ height: "32px" }}></div>
+
+        {/* Content Section */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", flex: 1, justifyContent: "center" }}>
           {/* Heading */}
-          <h1 className="eai-display font-extrabold text-4xl leading-tight mb-4" style={{ color: "var(--ink)" }}>
-            Welcome to <span style={{ color: "var(--primary)" }}>BONDUS</span>
+          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: "700", color: "#1f2937", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
+            Welcome to <span style={{ color: "#3730a3" }}>BONDUS</span>
           </h1>
-          <p className="text-base eai-muted mb-10 leading-relaxed">
-            MORE TIME LEARNING, LESS TIME SEARCHING
+          <p style={{ fontSize: "clamp(14px, 4vw, 18px)", color: "#9ca3af", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+            Even the toughest exam become easy!
           </p>
 
           {/* Buttons */}
-          <div className="space-y-3 mb-12">
+          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "48px" }}>
             <button
               onClick={onCreate}
-              className="eai-btn eai-focus w-full py-3 px-4 text-base font-semibold rounded-full transition-all flex items-center justify-center gap-2"
-              style={{ border: "2px solid var(--primary)", color: "var(--primary)", background: "transparent" }}
+              className="eai-focus"
+              style={{ width: "100%", padding: "14px 16px", border: "2px solid #3730a3", color: "#3730a3", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)" }}
+              onMouseEnter={(e) => e.target.style.background = "#f3f0ff"}
+              onMouseLeave={(e) => e.target.style.background = "transparent"}
             >
-              <Circle size={18} /> Create an account
+              Create an account
             </button>
             <button
               onClick={onLogin}
-              className="eai-btn eai-focus w-full py-3 px-4 text-base font-semibold rounded-full text-white transition-all"
-              style={{ background: "var(--primary)" }}
+              className="eai-focus"
+              style={{ width: "100%", padding: "14px 16px", background: "#3730a3", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
+              onMouseEnter={(e) => e.target.style.background = "#2c238a"}
+              onMouseLeave={(e) => e.target.style.background = "#3730a3"}
             >
               Login
             </button>
           </div>
         </div>
 
-        {/* Character illustration - larger */}
-        <div className="flex justify-center w-full">
-          <div style={{ maxWidth: "280px", width: "100%" }}>
+        {/* Mascot Illustration */}
+        <div style={{ display: "flex", justifyContent: "center", paddingBottom: "32px" }}>
+          <div style={{ maxWidth: "clamp(140px, 50vw, 280px)", width: "100%" }}>
             <BondusCharacter />
           </div>
         </div>
