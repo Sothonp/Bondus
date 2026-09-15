@@ -750,19 +750,71 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    prototype (no backend), so "logging in" means matching a phone number against whatever account
    is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
    that data in place so it can be recovered here later. */
+
+function BondusCharacter() {
+  return (
+    <img
+      src="/bondus_mascout.jpg"
+      alt="BONDUS mascot - friendly owl reading a book"
+      style={{ maxWidth: "220px", width: "100%", height: "auto" }}
+      onError={(e) => {
+        e.target.style.display = "none";
+      }}
+    />
+  );
+}
+
 function Welcome({ dark, setDark, onLogin, onCreate }) {
   return (
-    <OnboardingLayout dark={dark} setDark={setDark}
-      title="Welcome to Bondus" description="Log in to pick up where you left off, or create an account to get your personalized study plan.">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <OnboardingOptionCard variant="secondary" icon={LogIn}
-          title="Log in" description="Already have an account on this device? Continue where you left off."
-          buttonLabel="Log in" onClick={onLogin} />
-        <OnboardingOptionCard variant="primary" icon={Sparkles} badge="New here?"
-          title="Create an account" description="Set up your profile and get a personalized study plan in a few minutes."
-          buttonLabel="Create account" onClick={onCreate} />
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <style>{STYLES}</style>
+
+      {/* Theme toggle */}
+      <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" style={{ position: "fixed", top: 20, right: 20, zIndex: 20 }} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
+        {dark ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+
+      {/* Mobile-optimized welcome screen */}
+      <div className="flex-1 flex flex-col items-center justify-start px-6 py-8 overflow-y-auto">
+        {/* Top spacing */}
+        <div className="h-12" />
+
+        <div className="w-full max-w-sm text-center">
+          {/* Heading */}
+          <h1 className="eai-display font-extrabold text-4xl leading-tight mb-4" style={{ color: "var(--ink)" }}>
+            Welcome to <span style={{ color: "var(--primary)" }}>BONDUS</span>
+          </h1>
+          <p className="text-base eai-muted mb-10 leading-relaxed">
+            MORE TIME LEARNING, LESS TIME SEARCHING
+          </p>
+
+          {/* Buttons */}
+          <div className="space-y-3 mb-12">
+            <button
+              onClick={onCreate}
+              className="eai-btn eai-focus w-full py-3 px-4 text-base font-semibold rounded-full transition-all flex items-center justify-center gap-2"
+              style={{ border: "2px solid var(--primary)", color: "var(--primary)", background: "transparent" }}
+            >
+              <Circle size={18} /> Create an account
+            </button>
+            <button
+              onClick={onLogin}
+              className="eai-btn eai-focus w-full py-3 px-4 text-base font-semibold rounded-full text-white transition-all"
+              style={{ background: "var(--primary)" }}
+            >
+              Login
+            </button>
+          </div>
+        </div>
+
+        {/* Character illustration - larger */}
+        <div className="flex justify-center w-full">
+          <div style={{ maxWidth: "280px", width: "100%" }}>
+            <BondusCharacter />
+          </div>
+        </div>
       </div>
-    </OnboardingLayout>
+    </div>
   );
 }
 
