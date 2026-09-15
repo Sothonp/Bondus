@@ -867,7 +867,7 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead }) {
    Steps 1–3 of the onboarding flow (account details, academic track, learning preferences).
    `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
    goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
-function Register({ onComplete, dark, setDark, initialForm, initialStep }) {
+function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack }) {
   const [step, setStep] = useState(initialStep ?? 0);
   const [form, setForm] = useState(initialForm ?? {
     name: "", phone: "", age: "", grade: "12", field: "", target: "A",
@@ -885,7 +885,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep }) {
 
   if (step === 0) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={1}
+      <OnboardingLayout dark={dark} setDark={setDark} step={1} onBack={onBack}
         title="Create your account" description="A few details so your AI coach and study plan fit you.">
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label="Full name" required>
@@ -2815,7 +2815,7 @@ export default function App() {
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} />;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
   if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} />;
+  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} />;
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
