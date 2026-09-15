@@ -828,8 +828,8 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
         </div>
 
         {/* Mascot Illustration */}
-        <div style={{ display: "flex", justifyContent: "center", paddingBottom: "32px" }}>
-          <div style={{ maxWidth: "clamp(140px, 50vw, 280px)", width: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "center", paddingBottom: "32px", flex: 1, alignItems: "center" }}>
+          <div style={{ maxWidth: "clamp(200px, 60vw, 500px)", width: "100%" }}>
             <BondusCharacter />
           </div>
         </div>
