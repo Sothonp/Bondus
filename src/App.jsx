@@ -602,8 +602,8 @@ function OnboardingLayout({ dark, setDark, step, title, description, onBack, chi
       <div className="flex items-start sm:items-center justify-center px-4 sm:px-6" style={{ minHeight: "100vh", paddingTop: 32, paddingBottom: 32 }}>
         <div className="w-full eai-rise" style={{ maxWidth: 820 }}>
           <div className="flex items-center justify-center gap-2.5" style={{ marginBottom: 24 }}>
-            <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 44, height: 44, background: "var(--primary)" }}>
-              <Angkor style={{ position: "absolute", bottom: -2, width: 44, height: 20, fill: "var(--gold)", opacity: 0.95 }} />
+            <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 44, height: 44 }}>
+              <BondusLogo />
             </div>
             <div>
               <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
@@ -750,19 +750,91 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    prototype (no backend), so "logging in" means matching a phone number against whatever account
    is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
    that data in place so it can be recovered here later. */
+
+function BondusCharacter() {
+  return (
+    <img
+      src="/logos/Bondus_mascout_nobg.png"
+      alt="BONDUS mascot - friendly owl reading a book"
+      style={{ maxWidth: "220px", width: "100%", height: "auto" }}
+      onError={(e) => {
+        e.target.style.display = "none";
+      }}
+    />
+  );
+}
+
+function BondusLogo() {
+  return (
+    <img
+      src="/logos/Bondus_mascout_nobg.png"
+      alt="BONDUS"
+      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+    />
+  );
+}
+
 function Welcome({ dark, setDark, onLogin, onCreate }) {
   return (
-    <OnboardingLayout dark={dark} setDark={setDark}
-      title="Welcome to Bondus" description="Log in to pick up where you left off, or create an account to get your personalized study plan.">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <OnboardingOptionCard variant="secondary" icon={LogIn}
-          title="Log in" description="Already have an account on this device? Continue where you left off."
-          buttonLabel="Log in" onClick={onLogin} />
-        <OnboardingOptionCard variant="primary" icon={Sparkles} badge="New here?"
-          title="Create an account" description="Set up your profile and get a personalized study plan in a few minutes."
-          buttonLabel="Create account" onClick={onCreate} />
+    <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
+      <style>{STYLES}</style>
+
+      {/* Decorative corner accents */}
+      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+
+      {/* Theme toggle */}
+      <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" style={{ position: "fixed", top: 20, right: 20, zIndex: 50 }} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
+        {dark ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+
+      {/* Responsive Welcome Content */}
+      <div style={{ position: "relative", width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
+
+        {/* Top spacing */}
+        <div style={{ height: "32px" }}></div>
+
+        {/* Content Section */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", flex: 1, justifyContent: "center" }}>
+          {/* Heading */}
+          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: "700", color: "#1f2937", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
+            Welcome to <span style={{ color: "#3730a3" }}>BONDUS</span>
+          </h1>
+          <p style={{ fontSize: "clamp(14px, 4vw, 18px)", color: "#9ca3af", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+            Even the toughest exam become easy!
+          </p>
+
+          {/* Buttons */}
+          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "48px" }}>
+            <button
+              onClick={onCreate}
+              className="eai-focus"
+              style={{ width: "100%", padding: "14px 16px", border: "2px solid #3730a3", color: "#3730a3", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)" }}
+              onMouseEnter={(e) => e.target.style.background = "#f3f0ff"}
+              onMouseLeave={(e) => e.target.style.background = "transparent"}
+            >
+              Create an account
+            </button>
+            <button
+              onClick={onLogin}
+              className="eai-focus"
+              style={{ width: "100%", padding: "14px 16px", background: "#3730a3", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
+              onMouseEnter={(e) => e.target.style.background = "#2c238a"}
+              onMouseLeave={(e) => e.target.style.background = "#3730a3"}
+            >
+              Login
+            </button>
+          </div>
+        </div>
+
+        {/* Mascot Illustration */}
+        <div style={{ display: "flex", justifyContent: "center", paddingBottom: "32px" }}>
+          <div style={{ maxWidth: "clamp(140px, 50vw, 280px)", width: "100%" }}>
+            <BondusCharacter />
+          </div>
+        </div>
       </div>
-    </OnboardingLayout>
+    </div>
   );
 }
 
@@ -2764,8 +2836,8 @@ export default function App() {
         <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
           style={{ background: "var(--card)", borderColor: "var(--line)", transition: "transform .25s ease" }}>
           <div className="p-5 flex items-center gap-2.5">
-            <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 40, height: 40, background: "var(--primary)" }}>
-              <Angkor style={{ position: "absolute", bottom: -2, width: 40, height: 18, fill: "var(--gold)", opacity: 0.9 }} />
+            <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
+              <BondusLogo />
             </div>
             <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
           </div>
