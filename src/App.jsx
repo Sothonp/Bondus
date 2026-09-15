@@ -2656,10 +2656,8 @@ const NAV = [
 const STORAGE_KEY = "bondus_state_v1";
 
 function loadSaved() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  // Always return null to start fresh - no auto-login or profile loading
+  return null;
 }
 
 function WelcomeBackToast({ name, show }) {
