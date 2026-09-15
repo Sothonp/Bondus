@@ -789,13 +789,13 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
       </button>
 
       {/* Responsive Welcome Content */}
-      <div style={{ position: "relative", width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
 
         {/* Top spacing */}
         <div style={{ height: "32px" }}></div>
 
         {/* Content Section */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", flex: 1, justifyContent: "center" }}>
           {/* Heading */}
           <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
             Welcome to <span style={{ color: "var(--primary)" }}>BONDUS</span>
@@ -828,7 +828,7 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
         </div>
 
         {/* Mascot Illustration */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: "60px", minHeight: "400px" }}>
+        <div style={{ display: "flex", justifyContent: "center", paddingBottom: "32px", flex: 1, alignItems: "center" }}>
           <div style={{ maxWidth: "clamp(200px, 60vw, 500px)", width: "100%" }}>
             <BondusCharacter />
           </div>
