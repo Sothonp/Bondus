@@ -756,7 +756,7 @@ function BondusCharacter() {
     <img
       src="/bondus_mascout.jpg"
       alt="BONDUS mascot - friendly owl reading a book"
-      style={{ maxWidth: "220px", width: "100%", height: "auto" }}
+      style={{ maxWidth: "220px", width: "100%", height: "auto", mixBlendMode: "screen" }}
       onError={(e) => {
         e.target.style.display = "none";
       }}
