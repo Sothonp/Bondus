@@ -754,7 +754,7 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
 function BondusCharacter() {
   return (
     <img
-      src="/Bondus_mascout_nobg.png"
+      src="/logos/Bondus_mascout_nobg.png"
       alt="BONDUS mascot - friendly owl reading a book"
       style={{ maxWidth: "220px", width: "100%", height: "auto" }}
       onError={(e) => {
@@ -767,7 +767,7 @@ function BondusCharacter() {
 function BondusLogo() {
   return (
     <img
-      src="/bondus_mascout.jpg"
+      src="/logos/Bondus_mascout_nobg.png"
       alt="BONDUS"
       style={{ width: "100%", height: "100%", objectFit: "contain" }}
     />
