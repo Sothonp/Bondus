@@ -776,7 +776,7 @@ function BondusLogo() {
 
 function Welcome({ dark, setDark, onLogin, onCreate }) {
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
 
       {/* Decorative corner accents */}
@@ -797,11 +797,11 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
         {/* Content Section */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", flex: 1, justifyContent: "center" }}>
           {/* Heading */}
-          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: "700", color: "#1f2937", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
-            Welcome to <span style={{ color: "#3730a3" }}>BONDUS</span>
+          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
+            Welcome to <span style={{ color: "var(--primary)" }}>BONDUS</span>
           </h1>
-          <p style={{ fontSize: "clamp(14px, 4vw, 18px)", color: "#9ca3af", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
-            Even the toughest exam become easy!
+          <p style={{ fontSize: "clamp(14px, 4vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+            Less Time Searching, More Time Learning!
           </p>
 
           {/* Buttons */}
@@ -809,8 +809,8 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
             <button
               onClick={onCreate}
               className="eai-focus"
-              style={{ width: "100%", padding: "14px 16px", border: "2px solid #3730a3", color: "#3730a3", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)" }}
-              onMouseEnter={(e) => e.target.style.background = "#f3f0ff"}
+              style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)" }}
+              onMouseEnter={(e) => e.target.style.background = "var(--primary-soft)"}
               onMouseLeave={(e) => e.target.style.background = "transparent"}
             >
               Create an account
@@ -818,9 +818,9 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
             <button
               onClick={onLogin}
               className="eai-focus"
-              style={{ width: "100%", padding: "14px 16px", background: "#3730a3", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
-              onMouseEnter={(e) => e.target.style.background = "#2c238a"}
-              onMouseLeave={(e) => e.target.style.background = "#3730a3"}
+              style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
+              onMouseEnter={(e) => e.target.style.filter = "brightness(0.9)"}
+              onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
             >
               Login
             </button>
