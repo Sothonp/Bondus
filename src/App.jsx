@@ -602,8 +602,8 @@ function OnboardingLayout({ dark, setDark, step, title, description, onBack, chi
       <div className="flex items-start sm:items-center justify-center px-4 sm:px-6" style={{ minHeight: "100vh", paddingTop: 32, paddingBottom: 32 }}>
         <div className="w-full eai-rise" style={{ maxWidth: 820 }}>
           <div className="flex items-center justify-center gap-2.5" style={{ marginBottom: 24 }}>
-            <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 44, height: 44, background: "var(--primary)" }}>
-              <Angkor style={{ position: "absolute", bottom: -2, width: 44, height: 20, fill: "var(--gold)", opacity: 0.95 }} />
+            <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 44, height: 44 }}>
+              <BondusLogo />
             </div>
             <div>
               <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
@@ -760,6 +760,16 @@ function BondusCharacter() {
       onError={(e) => {
         e.target.style.display = "none";
       }}
+    />
+  );
+}
+
+function BondusLogo() {
+  return (
+    <img
+      src="/bondus_mascout.jpg"
+      alt="BONDUS"
+      style={{ width: "100%", height: "100%", objectFit: "contain" }}
     />
   );
 }
@@ -2816,8 +2826,8 @@ export default function App() {
         <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
           style={{ background: "var(--card)", borderColor: "var(--line)", transition: "transform .25s ease" }}>
           <div className="p-5 flex items-center gap-2.5">
-            <div className="grid place-items-center rounded-xl relative overflow-hidden" style={{ width: 40, height: 40, background: "var(--primary)" }}>
-              <Angkor style={{ position: "absolute", bottom: -2, width: 40, height: 18, fill: "var(--gold)", opacity: 0.9 }} />
+            <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
+              <BondusLogo />
             </div>
             <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
           </div>
