@@ -756,7 +756,7 @@ function BondusCharacter() {
     <img
       src="/logos/Bondus_mascout_nobg.png"
       alt="BONDUS mascot - friendly owl reading a book"
-      style={{ maxWidth: "220px", width: "100%", height: "auto" }}
+      style={{ width: "100%", height: "auto", display: "block" }}
       onError={(e) => {
         e.target.style.display = "none";
       }}
@@ -789,18 +789,18 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
       </button>
 
       {/* Responsive Welcome Content */}
-      <div style={{ position: "relative", width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
+      <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
 
         {/* Top spacing */}
         <div style={{ height: "32px" }}></div>
 
-        {/* Content Section */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+        {/* Content Section — text/buttons kept at a comfortable reading width */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", width: "100%", maxWidth: "480px" }}>
           {/* Heading */}
-          <h1 style={{ fontSize: "clamp(28px, 8vw, 40px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
+          <h1 style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
             Welcome to <span style={{ color: "var(--primary)" }}>BONDUS</span>
           </h1>
-          <p style={{ fontSize: "clamp(14px, 4vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+          <p style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
             Less Time Searching, More Time Learning!
           </p>
 
@@ -809,7 +809,7 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
             <button
               onClick={onCreate}
               className="eai-focus"
-              style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)" }}
+              style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
               onMouseEnter={(e) => e.target.style.background = "var(--primary-soft)"}
               onMouseLeave={(e) => e.target.style.background = "transparent"}
             >
@@ -818,7 +818,7 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
             <button
               onClick={onLogin}
               className="eai-focus"
-              style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 3vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
+              style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
               onMouseEnter={(e) => e.target.style.filter = "brightness(0.9)"}
               onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
             >
@@ -827,9 +827,9 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
           </div>
         </div>
 
-        {/* Mascot Illustration */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: "60px", minHeight: "400px" }}>
-          <div style={{ maxWidth: "clamp(200px, 60vw, 500px)", width: "100%" }}>
+        {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flex: 1, marginTop: "24px" }}>
+          <div style={{ width: "clamp(220px, 28vw, 420px)", maxWidth: "90vw" }}>
             <BondusCharacter />
           </div>
         </div>
