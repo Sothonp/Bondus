@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { UNI_MAJORS } from "../src/data/universities.js";
+import { UNI_MAJORS } from "../Frontend/data/universities.js";
 
 // Condensed "university: major, major, ..." catalog built once at cold start — keeps every
 // request grounded in Bondus's real major data without re-sending full descriptions each time.

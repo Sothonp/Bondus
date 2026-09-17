@@ -18,7 +18,8 @@ __pycache__/
 .pytest_cache/
 
 # Generated RAG state (rebuild with scripts/ingest_corpus.py)
-storage/vector_index/
+storage/vector_index/*
+!storage/vector_index/index.npz
 storage/ocr_cache/
 *.bak
-data
+/data
