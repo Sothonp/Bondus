@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { generateText, hasAIProviderConfigured } from "./_ai.js";
 
 const SYSTEM_INSTRUCTION = `You are an experienced, certified IELTS examiner grading a single response from a short placement diagnostic (not a full mock exam).
 
@@ -13,9 +13,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: "Server is missing GEMINI_API_KEY. Add it in your Vercel project's Environment Variables." });
+  if (!hasAIProviderConfigured()) {
+    res.status(500).json({ error: "Server is missing GEMINI_API_KEY or GROQ_API_KEY. Add at least one in your Vercel project's Environment Variables." });
     return;
   }
 
@@ -33,27 +32,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  const ai = new GoogleGenAI({ apiKey });
   const userMessage = `Skill: ${skill}\n\nTask prompt:\n${prompt}\n\nStudent's response:\n${response}`;
 
   try {
-    const result = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+    const text = await generateText({
+      systemInstruction: SYSTEM_INSTRUCTION,
       contents: [{ role: "user", parts: [{ text: userMessage }] }],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        maxOutputTokens: 300,
-        temperature: 0.3,
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 0 },
-      },
+      maxOutputTokens: 300,
+      temperature: 0.3,
+      jsonMode: true,
     });
-
-    const text = result.text ?? "";
-    if (!text) {
-      res.status(502).json({ error: "The AI service returned an empty response. Please try again." });
-      return;
-    }
 
     let parsed;
     try {
@@ -71,7 +59,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ band: Math.round(band * 2) / 2, feedback: typeof parsed.feedback === "string" ? parsed.feedback : "" });
   } catch (err) {
-    console.error("Gemini API error (ielts-grade):", err);
+    console.error("AI provider error (ielts-grade):", err);
     res.status(502).json({ error: "The AI service failed to respond. Please try again in a moment." });
   }
 }

@@ -3017,7 +3017,7 @@ async function majorGuidanceReply(t, p, history, lang = "en") {
       body: JSON.stringify({
         message: t,
         history: history.map((m) => ({ role: m.role, text: m.text })),
-        context: { name: p.name, field: p.field, subjects: p.subjects, weak: p.weak, strong: p.strong, replyLanguage: lang === "km" ? "Khmer" : "English" },
+        context: { name: p.name, field: p.field, subjects: p.subjects, weak: p.weak, strong: p.strong, targetUniversity: p.targetUniversity, replyLanguage: lang === "km" ? "Khmer" : "English" },
       }),
     });
     const data = await res.json();
