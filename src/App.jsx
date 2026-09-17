@@ -1320,6 +1320,26 @@ const RAW_EXERCISES = {
       options: ["154", "44", "49", "22"], answer: "154",
       explanation: "A = πr² = (22/7) × 7² = (22/7) × 49 = 154.", explanationKm: "A = πr² = (22/7) × 7² = (22/7) × 49 = 154។",
       formula: "Area of a circle: A = πr²", formulaKm: "ផ្ទៃក្រឡារង្វង់៖ A = πr²" },
+    { topic: "Trigonometry", topicKm: "ត្រីកោណមាត្រ", difficulty: "Easy",
+      prompt: "What is sin(30°)?", promptKm: "តើ sin(30°) ស្មើនឹងប៉ុន្មាន?",
+      options: ["1/2", "√3/2", "1", "0"], answer: "1/2",
+      explanation: "sin(30°) is a standard angle value equal to 1/2.", explanationKm: "sin(30°) ជាតម្លៃមុំស្តង់ដារដែលស្មើនឹង 1/2។",
+      formula: "Standard angles: sin(30°)=1/2, sin(45°)=√2/2, sin(60°)=√3/2", formulaKm: "មុំស្តង់ដារ៖ sin(30°)=1/2, sin(45°)=√2/2, sin(60°)=√3/2" },
+    { topic: "Calculus", topicKm: "ដេរីវេ", difficulty: "Hard",
+      prompt: "Find ∫4x³ dx.", promptKm: "រកអាំងតេក្រាល ∫4x³ dx។",
+      options: ["x⁴ + C", "4x⁴ + C", "12x² + C", "x⁴/4 + C"], answer: "x⁴ + C",
+      explanation: "∫4x³ dx = 4·(x⁴/4) + C = x⁴ + C.", explanationKm: "∫4x³ dx = 4·(x⁴/4) + C = x⁴ + C។",
+      formula: "Power rule for integration: ∫xⁿ dx = xⁿ⁺¹/(n+1) + C", formulaKm: "ច្បាប់និទស្សន្តសម្រាប់អាំងតេក្រាល៖ ∫xⁿ dx = xⁿ⁺¹/(n+1) + C" },
+    { topic: "Algebra", topicKm: "ពិជគណិត", difficulty: "Hard",
+      prompt: "If log₂(x) = 5, what is x?", promptKm: "ប្រសិនបើ log₂(x) = 5 តើ x ស្មើនឹងប៉ុន្មាន?",
+      options: ["32", "10", "25", "16"], answer: "32",
+      explanation: "log₂(x) = 5 means x = 2⁵ = 32.", explanationKm: "log₂(x) = 5 មានន័យថា x = 2⁵ = 32។",
+      formula: "Definition: logₐ(x) = b ⟺ x = aᵇ", formulaKm: "និយមន័យ៖ logₐ(x) = b ⟺ x = aᵇ" },
+    { topic: "Statistics", topicKm: "ស្ថិតិ", difficulty: "Medium",
+      prompt: "Find the mean of 4, 8, 6, 10, 12.", promptKm: "រកមធ្យមភាគនៃ 4, 8, 6, 10, 12។",
+      options: ["8", "6", "10", "9"], answer: "8",
+      explanation: "Mean = (4+8+6+10+12) ÷ 5 = 40 ÷ 5 = 8.", explanationKm: "មធ្យមភាគ = (4+8+6+10+12) ÷ 5 = 40 ÷ 5 = 8។",
+      formula: "Mean = sum of values ÷ number of values", formulaKm: "មធ្យមភាគ = ផលបូកតម្លៃ ÷ ចំនួនតម្លៃ" },
   ],
   Physics: [
     { topic: "Kinematics", topicKm: "ចលនវិទ្យា", difficulty: "Easy",
@@ -1601,11 +1621,29 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
   const [banner, setBanner] = useState(null);
   useEffect(() => { if (!banner) return; const t = setTimeout(() => setBanner(null), 5000); return () => clearTimeout(t); }, [banner]);
 
+  // Recently-shown exercise ids (most recent last) — with a small bank per subject, always
+  // deterministically picking the "first" same-tier candidate made practice bounce back and
+  // forth between just two questions the moment only two matched the current tier. Preferring
+  // whatever hasn't been seen lately (and picking randomly among ties) fixes that without
+  // needing a bigger question bank.
+  const [seenIds, setSeenIds] = useState([]);
+  useEffect(() => {
+    if (idx == null || !list[idx]) return;
+    setSeenIds((prev) => {
+      const id = list[idx].id;
+      if (prev[prev.length - 1] === id) return prev;
+      return [...prev, id].slice(-Math.max(1, list.length - 1));
+    });
+  }, [idx, subject, lang]);
+
   const pickNext = (fromIdx) => {
     const candidates = list.map((ex, i) => ({ ex, i })).filter(({ i }) => i !== fromIdx);
+    if (!candidates.length) return null;
     const sameTier = candidates.filter(({ ex }) => ex.difficulty === tier);
     const pool = sameTier.length ? sameTier : candidates;
-    return pool.length ? pool[0].i : null;
+    const unseen = pool.filter(({ ex }) => !seenIds.includes(ex.id));
+    const finalPool = unseen.length ? unseen : pool;
+    return finalPool[Math.floor(Math.random() * finalPool.length)].i;
   };
 
   const handleResult = (ex, correct) => {
