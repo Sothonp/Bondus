@@ -647,14 +647,6 @@ function RecommendedLessonCard({ title, subject, duration, description, xp, imag
 const ONBOARDING_STEPS = ["Account details", "Academic track", "Learning preferences", "Getting started"];
 const ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "ជម្រើសផ្នែកសិក្សា", "ចំណង់ចំណូលចិត្តក្នុងការសិក្សា", "ចាប់ផ្តើម"];
 
-function ThemeToggle({ dark, setDark }) {
-  return (
-    <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
-      {dark ? <Sun size={18} /> : <Moon size={18} />}
-    </button>
-  );
-}
-
 /* Switches the app's UI language (English / Khmer) — visually matches ThemeToggle/.eai-ob-toggle
    but styled inline rather than via that class, since .eai-ob-toggle hardcodes position:fixed
    (fine for a lone corner button, but it fights layout when composed into a flex row alongside
@@ -691,11 +683,17 @@ function OnboardingProgress({ step, lang = "en" }) {
   );
 }
 
-function OnboardingLayout({ dark, setDark, step, title, description, onBack, children, lang = "en" }) {
+function OnboardingLayout({ dark, setDark, step, title, description, onBack, children, lang = "en", setLang }) {
   return (
     <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
-      <ThemeToggle dark={dark} setDark={setDark} />
+      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 20, display: "flex", gap: 8 }}>
+        {setLang && <LangToggle lang={lang} setLang={setLang} />}
+        <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-soft)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
+          {dark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
 
       <div className="flex items-start sm:items-center justify-center px-4 sm:px-6" style={{ minHeight: "100vh", paddingTop: 32, paddingBottom: 32 }}>
         <div className="w-full eai-rise" style={{ maxWidth: 820 }}>
@@ -884,7 +882,8 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
       {/* Theme + language toggles */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
         <LangToggle lang={lang} setLang={setLang} />
-        <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
+        <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-soft)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
@@ -939,7 +938,7 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   );
 }
 
-function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en" }) {
+function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", setLang }) {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const submit = () => {
@@ -947,7 +946,7 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en" })
     if (!onLogin(phone.trim())) setError(t(lang, "errPhoneNotFound"));
   };
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang}
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
       title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}>
       <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
         <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
@@ -968,7 +967,7 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en" })
    Steps 1–3 of the onboarding flow (account details, academic track, learning preferences).
    `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
    goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
-function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en" }) {
+function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
   const [step, setStep] = useState(initialStep ?? 0);
   const [form, setForm] = useState(initialForm ?? {
     name: "", phone: "", age: "", grade: "12", field: "", target: "A",
@@ -986,7 +985,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 
   if (step === 0) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={1} onBack={onBack} lang={lang}
+      <OnboardingLayout dark={dark} setDark={setDark} step={1} onBack={onBack} lang={lang} setLang={setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
@@ -1016,7 +1015,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 
   if (step === 1) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(0)} lang={lang}
+      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(0)} lang={lang} setLang={setLang}
         title={t(lang, "chooseTrackTitle")} description={t(lang, "chooseTrackDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
           {Object.entries(FIELD_META).map(([key, meta]) => (
@@ -1032,7 +1031,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   }
 
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(1)} lang={lang}
+    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(1)} lang={lang} setLang={setLang}
       title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}>
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
@@ -1673,9 +1672,9 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 /* ════════════════════════ Assessment choice ════════════════════════
    Shown right after registration, before the (optional) diagnostic test. Students can start the
    real assessment or explore the app unpersonalized — see Dashboard's banner for the return path. */
-function AssessmentChoice({ reg, dark, setDark, onStart, onSkip, onBack, lang = "en" }) {
+function AssessmentChoice({ reg, dark, setDark, onStart, onSkip, onBack, lang = "en", setLang }) {
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} step={4} onBack={onBack} lang={lang}
+    <OnboardingLayout dark={dark} setDark={setDark} step={4} onBack={onBack} lang={lang} setLang={setLang}
       title={t(lang, "chooseBeginTitle")}
       description={t(lang, "chooseBeginDesc")}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3507,11 +3506,11 @@ export default function App() {
     if (status === "completed" && !already) setBonusXp((x) => x + 30);
   };
 
-  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} />;
+  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} />;
+  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
+  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} />;
   if (takingLangTest) return (
     <IeltsDiagnostic
