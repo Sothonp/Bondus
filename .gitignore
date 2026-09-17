@@ -10,3 +10,14 @@ dist-ssr
 !.vscode/extensions.json
 *.log
 .vercel
+
+# Python
+.venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated RAG state (rebuild with scripts/ingest_corpus.py)
+storage/vector_index/
+*.bak
+data
