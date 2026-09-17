@@ -1,0 +1,24 @@
+# Netlify config for the Bondus frontend. The AI coach API (FastAPI) is hosted
+# separately — see "Deploy" in README.md — and reached via VITE_RAG_API_URL.
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Keep the frontend's /api/major-guidance path working on Netlify.
+[[redirects]]
+  from = "/api/major-guidance"
+  to = "/.netlify/functions/major-guidance"
+  status = 200
+
+# Single-page app: every other path serves index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

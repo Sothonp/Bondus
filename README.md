@@ -142,19 +142,33 @@ virtualenv on the Linux filesystem, e.g.
 
 Tests (offline, hashing embedder, no API keys): `uv run pytest`.
 
-## Deploy (Vercel + Render)
+## Deploy (Netlify or Vercel + Render)
 
-Vercel can't run the Python server (PyTorch and the models are over its size
-limit), so the site and the AI coach API are hosted separately:
+The Python server can't run on Netlify or Vercel (PyTorch and the models are
+over their function size limits), so the site and the AI coach API are hosted
+separately.
 
-1. **Render**: New > Blueprint, pick this repo. `render.yaml` builds the
-   `Dockerfile`. Set `GEMINI_API_KEY` (or another provider key) and
-   `CORS_ORIGINS=https://<your-app>.vercel.app`. The `standard` plan is used
-   because the models need more than 512 MB of RAM. Check
-   `https://<service>.onrender.com/health`.
-2. **Vercel**: add `VITE_RAG_API_URL=https://<service>.onrender.com` to the
-   project's Environment Variables and redeploy (it is read at build time).
-   `GEMINI_API_KEY` stays there for `/api/major-guidance`.
+**Render — the AI coach API**
+New > Blueprint and pick this repo: `render.yaml` builds the `Dockerfile`. Set
+`GEMINI_API_KEY` (or another provider key) and `CORS_ORIGINS` to the site's
+origin. The `standard` plan is used because the models need more than 512 MB of
+RAM. Check `https://<service>.onrender.com/health`.
+
+**Netlify — the site**
+`netlify.toml` sets the build (`npm run build` into `dist/`), routes
+`/api/major-guidance` to `netlify/functions/major-guidance.mjs`, and serves
+`index.html` for client-side routes. Add two environment variables:
+`GEMINI_API_KEY` for that function, and `VITE_RAG_API_URL` =
+`https://<service>.onrender.com` for the chat. Then redeploy, since Vite reads
+`VITE_*` at build time. With the CLI: `npx netlify deploy --prod`.
+
+**Vercel — the site (alternative)**
+`api/major-guidance.js` is the same function for Vercel's runtime; both call
+`majorGuidance()` in `api/major-guidance-core.js`. Set the same two variables in
+the project's Environment Variables and redeploy.
+
+Whichever host serves the site, its origin must be in `CORS_ORIGINS` on Render
+or the browser blocks the chat requests.
 
 The index in `storage/vector_index/index.npz` is committed so Render can serve
 answers without the `data/` corpus. Re-run `scripts/ingest_corpus.py` locally
