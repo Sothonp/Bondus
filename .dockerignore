@@ -1,0 +1,12 @@
+.git
+.venv
+node_modules
+dist
+data
+storage/ocr_cache
+**/__pycache__
+.pytest_cache
+.env
+.env.*
+!.env.example
+*.bak

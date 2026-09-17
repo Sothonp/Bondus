@@ -1,0 +1,22 @@
+# Render Blueprint for the AI coach API. The website stays on Vercel; set
+# VITE_RAG_API_URL there to this service's URL and redeploy.
+services:
+  - type: web
+    name: bondus-api
+    runtime: docker
+    # PyTorch + the embedding and Khmer OCR models need more than 512 MB of RAM.
+    plan: standard
+    healthCheckPath: /health
+    envVars:
+      - key: CORS_ORIGINS
+        sync: false # e.g. https://your-app.vercel.app
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: EMBEDDING_DEVICE
+        value: cpu
+      - key: LOG_LEVEL
+        value: INFO

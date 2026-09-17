@@ -142,6 +142,25 @@ virtualenv on the Linux filesystem, e.g.
 
 Tests (offline, hashing embedder, no API keys): `uv run pytest`.
 
+## Deploy (Vercel + Render)
+
+Vercel can't run the Python server (PyTorch and the models are over its size
+limit), so the site and the AI coach API are hosted separately:
+
+1. **Render**: New > Blueprint, pick this repo. `render.yaml` builds the
+   `Dockerfile`. Set `GEMINI_API_KEY` (or another provider key) and
+   `CORS_ORIGINS=https://<your-app>.vercel.app`. The `standard` plan is used
+   because the models need more than 512 MB of RAM. Check
+   `https://<service>.onrender.com/health`.
+2. **Vercel**: add `VITE_RAG_API_URL=https://<service>.onrender.com` to the
+   project's Environment Variables and redeploy (it is read at build time).
+   `GEMINI_API_KEY` stays there for `/api/major-guidance`.
+
+The index in `storage/vector_index/index.npz` is committed so Render can serve
+answers without the `data/` corpus. Re-run `scripts/ingest_corpus.py` locally
+and commit it again after changing `data/`. Files uploaded in the chat on
+Render are lost when the service restarts.
+
 ## Push to your GitHub account
 
 ```bash
