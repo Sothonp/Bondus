@@ -1039,7 +1039,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         <SelectField label={t(lang, "dailyStudyTimeLabel")} value={form.dailyMinutes} onChange={(e) => set("dailyMinutes", Number(e.target.value))}
           options={STUDY_MINUTES.map((m) => ({ value: m, label: `${m} ${t(lang, "minutesWord")}` }))} />
         <SelectField label={t(lang, "targetUniLabel")} value={form.targetUniversity} onChange={(e) => set("targetUniversity", e.target.value)}
-          options={[{ value: "", label: t(lang, "notSureYet") }, ...UNIS.map((u) => ({ value: u.abbr, label: `${u.abbr} — ${u.n}` }))]} />
+          options={[{ value: "", label: t(lang, "notSureYet") }, ...UNIS.map((u) => ({ value: u.abbr, label: `${u.abbr} — ${lang === "km" ? u.nKm : u.n}` }))]} />
       </div>
 
       <div className="mt-7">
@@ -2146,7 +2146,7 @@ function UniversityDetail({ uni, onBack, lang = "en" }) {
         <UniLogo uni={uni} size={72} />
         <div className="min-w-0">
           <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: uni.c }} /><span className="eai-display text-xl font-extrabold">{uni.abbr}</span></div>
-          <p className="text-sm mt-0.5">{uni.n}</p>
+          <p className={`text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? uni.nKm : uni.n}</p>
           <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{d.exam} · {t(lang, "readinessWord")} {uni.ready}%</p>
         </div>
       </div>
@@ -2225,7 +2225,7 @@ function Universities({ lang = "en" }) {
             <UniLogo uni={u} size={64} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2"><GraduationCap size={16} style={{ color: u.c }} /><span className="eai-display font-bold">{u.abbr}</span></div>
-              <p className="text-sm truncate mt-0.5">{u.n}</p>
+              <p className={`text-sm truncate mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? u.nKm : u.n}</p>
               <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "viewPracticeSets")}</p>
             </div>
             <ChevronRight size={18} className="eai-muted" />

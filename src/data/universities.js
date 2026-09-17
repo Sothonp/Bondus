@@ -3,13 +3,13 @@
    serverless function, so both stay grounded in the same real data. */
 
 export const UNIS = [
-  { n: "Royal University of Phnom Penh", abbr: "RUPP", ready: 42, c: "var(--primary)", logo: "/logos/rupp.png" },
-  { n: "Institute of Technology of Cambodia", abbr: "ITC", ready: 35, c: "var(--ember)", logo: "/logos/itc.png" },
-  { n: "American University of Phnom Penh", abbr: "AUPP", ready: 38, c: "var(--gold)", logo: "/logos/aupp.png" },
-  { n: "National University of Management", abbr: "NUM", ready: 44, c: "var(--jade)", logo: "/logos/num.png" },
-  { n: "Royal University of Law and Economics", abbr: "RULE", ready: 30, c: "var(--muted)", logo: "/logos/rule.png" },
-  { n: "Cambodia Academy of Digital Technology", abbr: "CADT", ready: 33, c: "var(--primary)", logo: "/logos/cadt.png" },
-  { n: "University of Health Sciences", abbr: "UHS", ready: 25, c: "var(--ember)", logo: "/logos/uhs.png" },
+  { n: "Royal University of Phnom Penh", nKm: "សាកលវិទ្យាល័យភូមិន្ទភ្នំពេញ", abbr: "RUPP", ready: 42, c: "var(--primary)", logo: "/logos/rupp.png" },
+  { n: "Institute of Technology of Cambodia", nKm: "វិទ្យាស្ថានបច្ចេកវិទ្យាកម្ពុជា", abbr: "ITC", ready: 35, c: "var(--ember)", logo: "/logos/itc.png" },
+  { n: "American University of Phnom Penh", nKm: "សាកលវិទ្យាល័យអាមេរិកាំងភ្នំពេញ", abbr: "AUPP", ready: 38, c: "var(--gold)", logo: "/logos/aupp.png" },
+  { n: "National University of Management", nKm: "សាកលវិទ្យាល័យជាតិគ្រប់គ្រង", abbr: "NUM", ready: 44, c: "var(--jade)", logo: "/logos/num.png" },
+  { n: "Royal University of Law and Economics", nKm: "សាកលវិទ្យាល័យភូមិន្ទនីតិសាស្ត្រ និងវិទ្យាសាស្ត្រសេដ្ឋកិច្ច", abbr: "RULE", ready: 30, c: "var(--muted)", logo: "/logos/rule.png" },
+  { n: "Cambodia Academy of Digital Technology", nKm: "បណ្ឌិត្យសភាបច្ចេកវិទ្យាឌីជីថលកម្ពុជា", abbr: "CADT", ready: 33, c: "var(--primary)", logo: "/logos/cadt.png" },
+  { n: "University of Health Sciences", nKm: "សាកលវិទ្យាល័យវិទ្យាសាស្ត្រសុខាភិបាល", abbr: "UHS", ready: 25, c: "var(--ember)", logo: "/logos/uhs.png" },
 ];
 
 export const UNI_MAJORS = {
