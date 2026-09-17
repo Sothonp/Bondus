@@ -33,6 +33,13 @@ const MISTAKE_TYPES = [
   "Concept misunderstanding", "Wrong formula", "Calculation error",
   "Careless mistake", "Time management", "Misread question",
 ];
+/* Display-only Khmer labels — the English string is still what's stored on the attempt record
+   (topicMastery/practice mistakeType field), so switching languages never changes past data. */
+const MISTAKE_TYPE_LABEL_KM = {
+  "Concept misunderstanding": "យល់ច្រឡំគំនិត", "Wrong formula": "ប្រើរូបមន្តខុស", "Calculation error": "គណនាខុស",
+  "Careless mistake": "ភ្លាំងភ្លាត់", "Time management": "គ្រប់គ្រងពេលវេលា", "Misread question": "អានសំណួរខុស",
+};
+const mistakeTypeLabel = (mt, lang) => (lang === "km" ? (MISTAKE_TYPE_LABEL_KM[mt] ?? mt) : mt);
 
 const subjectId = (s) => s.toLowerCase().replace(/\s+/g, "_");
 
@@ -1755,7 +1762,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
             <p className={`text-sm font-semibold mb-2.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "whyMissed")}</p>
             <div className="flex flex-wrap gap-2">
               {MISTAKE_TYPES.map((mt) => (
-                <button key={mt} onClick={() => chooseMistake(mt)} className="eai-btn eai-focus text-xs font-semibold px-3 py-2 rounded-full eai-soft" style={{ color: "var(--ink)" }}>{mt}</button>
+                <button key={mt} onClick={() => chooseMistake(mt)} className={`eai-btn eai-focus text-xs font-semibold px-3 py-2 rounded-full eai-soft ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>{mistakeTypeLabel(mt, lang)}</button>
               ))}
               <button onClick={() => chooseMistake(null)} className={`eai-btn eai-focus text-xs font-semibold px-3 py-2 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--muted)" }}>{t(lang, "skipWord")}</button>
             </div>
