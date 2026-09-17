@@ -794,16 +794,16 @@ function TrackCard({ meta, subjects, selected, onSelect, lang = "en" }) {
       </div>
       <p className={`text-xs eai-muted mt-3 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? meta.blurbKm : meta.blurb}</p>
       <div className="flex flex-wrap gap-1.5 mt-3">
-        {subjects.map((s) => <span key={s} className="eai-ob-tag">{s}</span>)}
+        {subjects.map((s) => <span key={s} className={`eai-ob-tag ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s, lang)}</span>)}
       </div>
     </button>
   );
 }
 
-function SubjectChip({ label, selected, onToggle }) {
+function SubjectChip({ label, selected, onToggle, lang = "en" }) {
   return (
     <motion.button type="button" aria-pressed={selected} whileTap={{ scale: 0.95 }} onClick={onToggle}
-      className={`eai-ob-chip eai-focus ${selected ? "is-selected" : ""}`}>
+      className={`eai-ob-chip eai-focus ${selected ? "is-selected" : ""} ${lang === "km" ? "eai-km" : ""}`}>
       <AnimatePresence initial={false}>
         {selected && (
           <motion.span initial={{ scale: 0, opacity: 0, width: 0 }} animate={{ scale: 1, opacity: 1, width: 14 }} exit={{ scale: 0, opacity: 0, width: 0 }}
@@ -1060,7 +1060,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         <div className="flex flex-wrap gap-2 mt-3">
           {FIELD_SUBJECTS[form.field].map((s) => {
             const id = subjectId(s);
-            return <SubjectChip key={id} label={s} selected={form.subjectsToImprove.includes(id)} onToggle={() => toggleImprove(id)} />;
+            return <SubjectChip key={id} label={subjectLabel(s, lang)} selected={form.subjectsToImprove.includes(id)} onToggle={() => toggleImprove(id)} lang={lang} />;
           })}
         </div>
       </div>
@@ -1135,7 +1135,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
                 {t.done ? <CheckCircle2 size={22} style={{ color: "var(--jade)", flexShrink: 0 }} /> : <Circle size={22} className="eai-muted" style={{ flexShrink: 0 }} />}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate" style={{ textDecoration: t.done ? "line-through" : "none", opacity: t.done ? 0.5 : 1 }}>{t.task}</p>
-                  <p className="text-xs eai-muted">{t.s} · {t.why}</p>
+                  <p className="text-xs eai-muted">{subjectLabel(t.s, lang)} · {t.why}</p>
                 </div>
                 <span className="text-xs font-bold eai-muted flex items-center gap-1 flex-shrink-0"><Clock size={13} /> {t.min}m</span>
               </button>
@@ -1169,7 +1169,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
 
       {/* Recommended next lesson */}
       <RecommendedLessonCard
-        subject={p.recommendedLesson.subject} title={topicLabel(p.recommendedLesson.topic, lang)}
+        subject={subjectLabel(p.recommendedLesson.subject, lang)} title={topicLabel(p.recommendedLesson.topic, lang)}
         duration={lang === "km" ? "១២ នាទី" : "12 min"} description={t(lang, "targetsWeakest")} xp={80}
         imageUrl="/decor/math-formulas.svg" onStart={() => go("practice")} lang={lang}
       />
@@ -1259,7 +1259,7 @@ function Browse({ p, lang = "en" }) {
                   ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "recommendedForYou")}</span>
                   : <Bookmark size={16} className="eai-muted" />}
               </div>
-              <h3 className="eai-display font-bold mt-3">{sub.s}</h3>
+              <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sub.s, lang)}</h3>
               <p className="text-xs eai-muted mt-0.5">BAC II {year} · 180 {t(lang, "minAbbrev")} · 100 {t(lang, "marksWord")}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
@@ -1466,6 +1466,16 @@ const TOPIC_LABEL_KM = {};
 Object.values(RAW_EXERCISES).flat().forEach((r) => { if (r.topicKm) TOPIC_LABEL_KM[r.topic] = r.topicKm; });
 const topicLabel = (topic, lang) => (lang === "km" ? (TOPIC_LABEL_KM[topic] ?? topic) : topic);
 
+/* Same pattern as topicLabel(), one level up: the canonical (English) subject name is the key
+   used everywhere a subject is tracked or matched (FIELD_SUBJECTS, topicMastery, deriveInsights'
+   weak/strong lists, the exercise bank) — only subjectLabel() changes what's shown on screen. */
+const SUBJECT_LABEL_KM = {
+  Mathematics: "គណិតវិទ្យា", Physics: "រូបវិទ្យា", Chemistry: "គីមីវិទ្យា", Biology: "ជីវវិទ្យា",
+  "Khmer Literature": "អក្សរសាស្ត្រខ្មែរ", History: "ប្រវត្តិវិទ្យា", English: "ភាសាអង់គ្លេស", French: "ភាសាបារាំង",
+  Geography: "ភូមិវិទ្យា", Morality: "សីលធម៌ពលរដ្ឋវិទ្យា", "Earth Science": "ផែនដីវិទ្យា",
+};
+const subjectLabel = (subject, lang) => (lang === "km" ? (SUBJECT_LABEL_KM[subject] ?? subject) : subject);
+
 const EXERCISE_BANK_RAW = RAW_EXERCISES;
 function getExercises(subject, lang = "en") {
   const list = EXERCISE_BANK_RAW[subject] || [];
@@ -1534,7 +1544,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
                 </div>
                 {isWeak && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
               </div>
-              <h3 className="eai-display font-bold mt-3">{s}</h3>
+              <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s, lang)}</h3>
               <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesAutoGraded")}</p>
               <div className="h-1.5 rounded-full eai-soft mt-3 overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--jade)" }} />
@@ -1605,7 +1615,7 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
       <div className="eai-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="eai-display text-2xl font-extrabold">{subject}</h2>
+            <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
             <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
           </div>
           <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
@@ -1662,7 +1672,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
   return (
     <div className="space-y-5 eai-rise">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="eai-focus flex items-center gap-1 text-sm eai-muted"><ChevronLeft size={16} /> {subject}</button>
+        <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {subjectLabel(subject, lang)}</button>
         <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "exerciseXofY").replace("{i}", index + 1).replace("{n}", total)}</span>
       </div>
 
@@ -1847,7 +1857,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
 
           <div className="eai-card p-6 sm:p-8">
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{ex.subject}</span>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{subjectLabel(ex.subject, lang)}</span>
               <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
               <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
             </div>
@@ -2711,7 +2721,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
               return (
                 <div key={s.s}>
                   <button onClick={() => setOpenSubject(isOpen ? null : s.s)} className="eai-focus w-full flex items-center gap-3 py-1.5">
-                    <span className="text-sm font-semibold w-32 truncate text-left">{s.s}</span>
+                    <span className={`text-sm font-semibold w-32 truncate text-left ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s.s, lang)}</span>
                     <div className="flex-1 h-2.5 rounded-full eai-soft overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${s.m ?? 0}%`, background: s.tag === "weak" ? "var(--ember)" : s.tag === "strong" ? "var(--jade)" : "var(--primary)" }} />
                     </div>
@@ -2740,8 +2750,8 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
             })}
           </div>
           <div className="flex flex-wrap gap-2 mt-4">
-            {p.strong.map((s) => <span key={s.s} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>💪 {s.s}</span>)}
-            {p.weak.map((s) => <span key={s.s} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>⚠ {s.s}</span>)}
+            {p.strong.map((s) => <span key={s.s} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>💪 {subjectLabel(s.s, lang)}</span>)}
+            {p.weak.map((s) => <span key={s.s} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>⚠ {subjectLabel(s.s, lang)}</span>)}
           </div>
         </div>
 
@@ -2955,10 +2965,10 @@ const COACH_MODES = {
     label: "Study Help", icon: BookOpen,
     subtitle: "Demo coach · knows your subjects, weak spots & goals",
     greeting: (p, lang) => lang === "km"
-      ? `សួស្តី ${p.name.split(" ")[0]} 👋 ខ្ញុំជាគ្រូបង្វឹកសិក្សារបស់អ្នក។ ${p.weak[0] ? `ខ្ញុំឃើញថា ${p.weak[0].s} ជាឱកាសធំបំផុតរបស់អ្នកឥឡូវនេះ។ ` : ""}តើអ្នកចង់សិក្សាអ្វី?`
+      ? `សួស្តី ${p.name.split(" ")[0]} 👋 ខ្ញុំជាគ្រូបង្វឹកសិក្សារបស់អ្នក។ ${p.weak[0] ? `ខ្ញុំឃើញថា ${subjectLabel(p.weak[0].s, lang)} ជាឱកាសធំបំផុតរបស់អ្នកឥឡូវនេះ។ ` : ""}តើអ្នកចង់សិក្សាអ្វី?`
       : `Hi ${p.name.split(" ")[0]} 👋 I'm your study coach. ${p.weak[0] ? `I see ${p.weak[0].s} is your biggest opportunity right now.` : ""} What would you like to work on?`,
     suggestions: (p, lang) => lang === "km"
-      ? ["តើធ្វើដូចម្តេចដើម្បីបង្កើនឱកាសពិន្ទុ?", "តើថ្ងៃនេះខ្ញុំគួរសិក្សាអ្វី?", p.weak[0] ? `ជួយខ្ញុំជាមួយ ${p.weak[0].s}` : "បង្កើតផែនការសិក្សាឲ្យខ្ញុំ"]
+      ? ["តើធ្វើដូចម្តេចដើម្បីបង្កើនឱកាសពិន្ទុ?", "តើថ្ងៃនេះខ្ញុំគួរសិក្សាអ្វី?", p.weak[0] ? `ជួយខ្ញុំជាមួយ ${subjectLabel(p.weak[0].s, lang)}` : "បង្កើតផែនការសិក្សាឲ្យខ្ញុំ"]
       : ["How do I improve my grade odds?", "What should I study today?", p.weak[0] ? `Help me with ${p.weak[0].s}` : "Make me a study plan"],
     placeholder: "Ask anything about your studies…",
     reply: (t, p) => coachReply(t, p),
@@ -2970,7 +2980,7 @@ const COACH_MODES = {
       ? `សួស្តី ${p.name.split(" ")[0]}! មិនប្រាកដថាគួរជ្រើសរើសជំនាញអ្វី? ប្រាប់ខ្ញុំពីមុខវិជ្ជាដែលអ្នកចូលចិត្ត ឬសួរថា "តើជំនាញអ្វីសមស្របនឹងចំណុចខ្លាំងរបស់ខ្ញុំ?" ខ្ញុំនឹងស្វែងរកជម្រើសពិតប្រាកដពីសាកលវិទ្យាល័យកម្ពុជា។`
       : `Hi ${p.name.split(" ")[0]}! Not sure which major to pick? Tell me a subject you enjoy, or ask "what major fits my strengths?" and I'll pull real options from Cambodian universities.`,
     suggestions: (p, lang) => lang === "km"
-      ? ["តើជំនាញអ្វីសមស្របនឹងចំណុចខ្លាំងរបស់ខ្ញុំ?", "ប្រាប់ខ្ញុំពីជំនាញវិស្វកម្ម", p.strong[0] ? `ជំនាញទាក់ទងនឹង ${p.strong[0].s}` : "តើជំនាញអ្វីខ្លះត្រូវការគណិតវិទ្យា?"]
+      ? ["តើជំនាញអ្វីសមស្របនឹងចំណុចខ្លាំងរបស់ខ្ញុំ?", "ប្រាប់ខ្ញុំពីជំនាញវិស្វកម្ម", p.strong[0] ? `ជំនាញទាក់ទងនឹង ${subjectLabel(p.strong[0].s, lang)}` : "តើជំនាញអ្វីខ្លះត្រូវការគណិតវិទ្យា?"]
       : ["What major fits my strengths?", "Tell me about engineering majors", p.strong[0] ? `Majors related to ${p.strong[0].s}` : "Which majors need Mathematics?"],
     placeholder: "Ask about majors, universities, or careers…",
     reply: majorGuidanceReply,
