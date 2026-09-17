@@ -171,9 +171,20 @@ Whichever host serves the site, its origin must be in `CORS_ORIGINS` on Render
 or the browser blocks the chat requests.
 
 The index in `storage/vector_index/index.npz` is committed so Render can serve
-answers without the `data/` corpus. Re-run `scripts/ingest_corpus.py` locally
-and commit it again after changing `data/`. Files uploaded in the chat on
-Render are lost when the service restarts.
+answers without the `data/` corpus. After changing `data/`, rebuild and commit
+it again:
+
+```bash
+EMBEDDING_BACKEND=hashing uv run python scripts/ingest_corpus.py --reset
+```
+
+`render.yaml` sets `EMBEDDING_BACKEND=hashing` so the server needs no model and
+fits Render's free 512 MB instance, and reads photos with Gemini instead of the
+local Kiri model. The index must be built with the same backend as the server
+uses, hence the variable above. For better Khmer retrieval, drop those
+variables, use `plan: standard` (2 GB), and re-index without
+`EMBEDDING_BACKEND`. Files uploaded in the chat on Render are lost when the
+service restarts, and free instances sleep after 15 minutes idle.
 
 ## Push to your GitHub account
 
