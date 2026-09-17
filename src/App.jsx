@@ -582,7 +582,7 @@ function CardHead({ title, kh, action }) {
 /* White dashboard hero card: greeting + actions on the left, a handwritten-formula illustration on
    the right behind a bold diagonal purple divider. The illustration is purely decorative (empty alt,
    aria-hidden) and is hidden below the `md` breakpoint so it never competes with the text on mobile. */
-function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, onAskCoach }) {
+function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, onAskCoach, lang = "en" }) {
   const firstName = (userName || "").split(" ")[0];
   return (
     <div className="eai-hero-card">
@@ -591,11 +591,11 @@ function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, o
         <h2 className="eai-hero-title">Welcome, {firstName}.</h2>
         {message && <p className="eai-hero-message">{message}</p>}
         <div className="eai-hero-actions">
-          <button onClick={onStartPlan} className="eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2" style={{ background: "var(--primary)" }}>
-            <Target size={16} /> Start today's plan
+          <button onClick={onStartPlan} className={`eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+            <Target size={16} /> {t(lang, "dashStartPlan")}
           </button>
-          <button onClick={onAskCoach} className="eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft" style={{ color: "var(--ink)" }}>
-            <Sparkles size={16} /> Ask your AI coach
+          <button onClick={onAskCoach} className={`eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>
+            <Sparkles size={16} /> {t(lang, "dashAskCoach")}
           </button>
         </div>
       </div>
@@ -642,6 +642,25 @@ function ThemeToggle({ dark, setDark }) {
   return (
     <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
       {dark ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+  );
+}
+
+/* Switches the app's UI language (English / Khmer) — visually matches ThemeToggle/.eai-ob-toggle
+   but styled inline rather than via that class, since .eai-ob-toggle hardcodes position:fixed
+   (fine for a lone corner button, but it fights layout when composed into a flex row alongside
+   other controls — the same reason the header's dark-mode button also skips that class). */
+function LangToggle({ lang, setLang, style }) {
+  return (
+    <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
+      style={{
+        height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--line)",
+        background: "var(--bg-soft)", color: "var(--ink)", display: "grid", placeItems: "center",
+        fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color .15s ease, transform .12s ease",
+        ...style,
+      }}
+      aria-label={lang === "en" ? "ប្តូរទៅភាសាខ្មែរ" : "Switch to English"}>
+      {lang === "en" ? "ខ្មែរ" : "EN"}
     </button>
   );
 }
@@ -843,7 +862,7 @@ function BondusLogo() {
   );
 }
 
-function Welcome({ dark, setDark, onLogin, onCreate }) {
+function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
@@ -852,10 +871,13 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
       <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
       <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
 
-      {/* Theme toggle */}
-      <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" style={{ position: "fixed", top: 20, right: 20, zIndex: 50 }} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
-        {dark ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
+      {/* Theme + language toggles */}
+      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
+        <LangToggle lang={lang} setLang={setLang} />
+        <button onClick={() => setDark((d) => !d)} className="eai-ob-toggle eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>
+          {dark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
 
       {/* Responsive Welcome Content */}
       <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
@@ -866,32 +888,32 @@ function Welcome({ dark, setDark, onLogin, onCreate }) {
         {/* Content Section — text/buttons kept at a comfortable reading width */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", width: "100%", maxWidth: "480px" }}>
           {/* Heading */}
-          <h1 style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: "'Sora', system-ui, sans-serif" }}>
-            Welcome to <span style={{ color: "var(--primary)" }}>BONDUS</span>
+          <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
+            {t(lang, "welcomeHeading")} <span style={{ color: "var(--primary)" }}>{t(lang, "welcomeBrand")}</span>
           </h1>
-          <p style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
-            Less Time Searching, More Time Learning!
+          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+            {t(lang, "welcomeSubtitle")}
           </p>
 
           {/* Buttons */}
           <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "48px" }}>
             <button
               onClick={onCreate}
-              className="eai-focus"
+              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
               onMouseEnter={(e) => e.target.style.background = "var(--primary-soft)"}
               onMouseLeave={(e) => e.target.style.background = "transparent"}
             >
-              Create an account
+              {t(lang, "createAccount")}
             </button>
             <button
               onClick={onLogin}
-              className="eai-focus"
+              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
               onMouseEnter={(e) => e.target.style.filter = "brightness(0.9)"}
               onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
             >
-              Login
+              {t(lang, "login")}
             </button>
           </div>
         </div>
@@ -1047,7 +1069,7 @@ const PERSONALIZATION_PERKS = [
   "Adaptive practice questions", "BAC II paper recommendations", "Progress tracking",
 ];
 
-function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, onDismissBanner }) {
+function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, onDismissBanner, lang = "en" }) {
   const xp = p.xp + bonusXp;
   const done = plan.filter((t) => t.done).length;
   const planPct = plan.length ? Math.round((done / plan.length) * 100) : 0;
@@ -1087,14 +1109,14 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
       {/* Hero */}
       <WelcomeHeroCard
         userName={p.name} greeting="សួស្តី" message="One small step today keeps the streak alive — here's what's next for you."
-        onStartPlan={() => go("practice")} onAskCoach={() => go("coach")}
+        onStartPlan={() => go("practice")} onAskCoach={() => go("coach")} lang={lang}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Daily plan */}
         <div className="eai-card p-6 lg:col-span-2">
-          <CardHead title="Today's study plan" kh="ផែនការសិក្សាថ្ងៃនេះ"
-            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{plan.length} done</span>} />
+          <CardHead title={t(lang, "dashTodayPlan")} kh={lang === "km" ? null : "ផែនការសិក្សាថ្ងៃនេះ"}
+            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{plan.length} {t(lang, "dashDone")}</span>} />
           <div className="h-1.5 rounded-full eai-soft mb-4 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${planPct}%`, background: "var(--jade)", transition: "width .3s" }} />
           </div>
@@ -2355,12 +2377,12 @@ const IELTS_SKILL_META = [
   { key: "speaking", label: "Speaking", icon: Mic },
 ];
 
-function Languages({ results = {}, onTakeDiagnostic }) {
+function Languages({ results = {}, onTakeDiagnostic, lang = "en" }) {
   return (
     <div className="space-y-5 eai-rise">
       <div>
-        <h2 className="eai-display text-2xl font-extrabold">International language hub</h2>
-        <p className="eai-muted text-sm mt-1">Diagnostic-driven roadmaps and unlimited AI mock tests with skill-by-skill scoring.</p>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "langHubTitle")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "langHubSubtitle")}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {LANGS.map((l) => {
@@ -2393,12 +2415,12 @@ function Languages({ results = {}, onTakeDiagnostic }) {
               )}
 
               {isIelts ? (
-                <button onClick={() => onTakeDiagnostic(l.n)} className="eai-btn eai-focus w-full mt-4 py-2 text-sm text-white flex items-center justify-center gap-1.5" style={{ background: "var(--primary)" }}>
-                  <ClipboardCheck size={15} /> {result ? "Retake diagnostic" : "Take diagnostic"}
+                <button onClick={() => onTakeDiagnostic(l.n)} className={`eai-btn eai-focus w-full mt-4 py-2 text-sm text-white flex items-center justify-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                  <ClipboardCheck size={15} /> {result ? t(lang, "retakeDiagnostic") : t(lang, "takeDiagnostic")}
                 </button>
               ) : (
-                <button disabled className="eai-btn w-full mt-4 py-2 text-sm eai-soft cursor-not-allowed" style={{ color: "var(--muted)" }}>
-                  Coming soon
+                <button disabled className={`eai-btn w-full mt-4 py-2 text-sm eai-soft cursor-not-allowed ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--muted)" }}>
+                  {t(lang, "comingSoon")}
                 </button>
               )}
             </div>
@@ -3030,15 +3052,52 @@ function SuperBondus() {
 
 /* ════════════════════════ Shell ════════════════════════ */
 const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "browse", label: "Browse exams", icon: BookOpen },
-  { id: "practice", label: "Practice", icon: Target },
-  { id: "universities", label: "Universities", icon: GraduationCap },
-  { id: "languages", label: "Languages", icon: Globe },
-  { id: "coach", label: "AI coach", icon: Sparkles },
-  { id: "progress", label: "Progress", icon: BarChart3 },
-  { id: "super", label: "Super Bondus", icon: Crown, premium: true },
+  { id: "dashboard", label: "Dashboard", labelKm: "ផ្ទាំងគ្រប់គ្រង", icon: LayoutDashboard },
+  { id: "browse", label: "Browse exams", labelKm: "រកមើលកម្រងសំណួរ", icon: BookOpen },
+  { id: "practice", label: "Practice", labelKm: "លំហាត់អនុវត្ត", icon: Target },
+  { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
+  { id: "languages", label: "Languages", labelKm: "ភាសាបរទេស", icon: Globe },
+  { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
+  { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
+  { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
 ];
+
+/* ════════════════════════ UI localization (English / Khmer) ════════════════════════
+   A small, hand-picked dictionary for the highest-traffic screens (nav, welcome, dashboard,
+   language hub) rather than a full line-by-line translation of the whole app — t(lang, key)
+   falls back to the English string if a key is ever missing, so a partial dictionary never
+   breaks rendering. */
+const STRINGS = {
+  en: {
+    welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
+    welcomeSubtitle: "Less Time Searching, More Time Learning!",
+    createAccount: "Create an account", login: "Login",
+    logOut: "Log out", streakKeepIt: "Study today to keep it!",
+    dashGreetingPrefix: "Welcome,",
+    dashStartPlan: "Start today's plan", dashAskCoach: "Ask your AI coach",
+    dashTodayPlan: "Today's study plan", dashDone: "done",
+    dashStreak: "day streak · keep it alive",
+    dashExplore: "Explore more",
+    langHubTitle: "International language hub",
+    langHubSubtitle: "Diagnostic-driven roadmaps and unlimited AI mock tests with skill-by-skill scoring.",
+    takeDiagnostic: "Take diagnostic", retakeDiagnostic: "Retake diagnostic", comingSoon: "Coming soon",
+  },
+  km: {
+    welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
+    welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
+    createAccount: "បង្កើតគណនី", login: "ចូលគណនី",
+    logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
+    dashGreetingPrefix: "សូមស្វាគមន៍,",
+    dashStartPlan: "ចាប់ផ្តើមផែនការថ្ងៃនេះ", dashAskCoach: "សួរគ្រូបង្វឹក AI",
+    dashTodayPlan: "ផែនការសិក្សាថ្ងៃនេះ", dashDone: "បានធ្វើរួច",
+    dashStreak: "ថ្ងៃជាប់គ្នា · បន្តរក្សា",
+    dashExplore: "ស្វែងយល់បន្ថែម",
+    langHubTitle: "មជ្ឈមណ្ឌលភាសាអន្តរជាតិ",
+    langHubSubtitle: "ផែនទីបង្ហាញផ្លូវផ្អែកលើការធ្វើតេស្តវាយតម្លៃ និងតេស្តសាកល្បង AI មិនកំណត់ ជាមួយពិន្ទុសម្រាប់ជំនាញនីមួយៗ។",
+    takeDiagnostic: "ធ្វើតេស្តវាយតម្លៃ", retakeDiagnostic: "ធ្វើតេស្តវាយតម្លៃម្តងទៀត", comingSoon: "មកដល់ឆាប់ៗនេះ",
+  },
+};
+const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
 
 const STORAGE_KEY = "bondus_state_v1";
 
@@ -3075,6 +3134,7 @@ export default function App() {
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [tab, setTab] = useState("dashboard");
   const [dark, setDark] = useState(true);
+  const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
   const [plan, setPlan] = useState(saved?.plan ?? []);
@@ -3200,7 +3260,7 @@ export default function App() {
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} />;
-  if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
+  if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
   if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} />;
   if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} />;
@@ -3214,10 +3274,10 @@ export default function App() {
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const view = {
-    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} />,
+    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} lang={lang} />,
     browse: <Browse p={p} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} />,
-    universities: <Universities />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
+    universities: <Universities />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} />,
     super: <SuperBondus />,
   }[tab];
 
@@ -3246,7 +3306,7 @@ export default function App() {
                     color: on ? (n.premium ? premiumColor : "var(--primary)") : n.premium ? premiumColor : "var(--ink)",
                   }}>
                   <n.icon size={19} />
-                  <span className="text-sm font-semibold flex-1">{n.label}</span>
+                  <span className={`text-sm font-semibold flex-1 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? n.labelKm : n.label}</span>
                   {n.premium && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--gold)", color: "#fff", letterSpacing: ".02em" }}>PRO</span>
                   )}
@@ -3258,9 +3318,9 @@ export default function App() {
             <div className="eai-soft rounded-2xl p-4 text-center">
               <Flame size={20} style={{ color: "var(--ember)", margin: "0 auto" }} />
               <p className="text-xs font-semibold mt-2">{profile.streak}-day streak</p>
-              <p className="text-xs eai-muted">Study today to keep it!</p>
+              <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
             </div>
-            <button onClick={handleLogout} className="eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline">Log out</button>
+            <button onClick={handleLogout} className={`eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "logOut")}</button>
           </div>
         </aside>
 
@@ -3274,6 +3334,7 @@ export default function App() {
                 <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" />
               </div>
               <div className="flex items-center gap-2 ml-auto">
+                <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus eai-soft grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
