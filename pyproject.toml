@@ -1,0 +1,54 @@
+[project]
+name = "reanmath"
+version = "0.3.0"
+description = "Local RAG tutor (FastAPI) for the Khmer Grade 12 math curriculum, with LaTeX-safe ingestion."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "numpy>=1.26",
+    # Embeddings
+    "sentence-transformers>=3.0,<6",
+    "torch>=2.3",
+    "torchvision>=0.18",  # needed by kiri-ocr; listed so it comes from the CPU index too
+    # Extraction, Khmer segmentation and OCR
+    "pypdf>=5.0",
+    "pypdfium2>=4.30",
+    "pillow>=10.0",
+    "khmer-nltk>=1.6",
+    "kiri-ocr>=0.2.15",
+    # Answer generation (whichever key is configured is used)
+    "anthropic>=0.122",
+    "google-genai>=1.0",
+    "groq>=0.11",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+# CPU-only PyTorch wheels: avoids pulling several GB of CUDA libraries.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests", "testing.py"]
+python_files = ["test_*.py", "testing.py"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning:starlette.*"]
