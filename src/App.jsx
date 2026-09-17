@@ -2010,7 +2010,7 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
 /* Per-university entrance exam content: official practice sets + commonly-seen exercises. */
 const UNI_DETAIL = {
   RUPP: {
-    exam: "Entrance & Scholarship Exam",
+    exam: "Entrance & Scholarship Exam", examKm: "ការប្រឡងចូល និងអាហារូបករណ៍",
     sets: [
       { title: "Entrance Mock — Full Paper", subject: "Mixed", q: 80, diff: "Hard" },
       { title: "Scholarship Aptitude Test", subject: "Reasoning", q: 40, diff: "Medium" },
@@ -2025,7 +2025,7 @@ const UNI_DETAIL = {
     ],
   },
   ITC: {
-    exam: "Engineering Entrance Exam",
+    exam: "Engineering Entrance Exam", examKm: "ការប្រឡងចូលផ្នែកវិស្វកម្ម",
     sets: [
       { title: "Mathematics Entrance Paper", subject: "Mathematics", q: 40, diff: "Hard" },
       { title: "Physics Problem Set", subject: "Physics", q: 35, diff: "Hard" },
@@ -2040,7 +2040,7 @@ const UNI_DETAIL = {
     ],
   },
   AUPP: {
-    exam: "Admissions & English Placement",
+    exam: "Admissions & English Placement", examKm: "ការចូលរៀន និងតេស្តកម្រិតភាសាអង់គ្លេស",
     sets: [
       { title: "English Placement Test", subject: "English", q: 60, diff: "Medium" },
       { title: "Critical Reading & Writing", subject: "English", q: 45, diff: "Medium" },
@@ -2055,7 +2055,7 @@ const UNI_DETAIL = {
     ],
   },
   NUM: {
-    exam: "Business & Management Entrance",
+    exam: "Business & Management Entrance", examKm: "ការប្រឡងចូលពាណិជ្ជកម្ម និងគ្រប់គ្រង",
     sets: [
       { title: "Math for Business Paper", subject: "Mathematics", q: 40, diff: "Medium" },
       { title: "English for Business", subject: "English", q: 50, diff: "Medium" },
@@ -2070,7 +2070,7 @@ const UNI_DETAIL = {
     ],
   },
   RULE: {
-    exam: "Law & Economics Entrance",
+    exam: "Law & Economics Entrance", examKm: "ការប្រឡងចូលនីតិសាស្ត្រ និងសេដ្ឋកិច្ច",
     sets: [
       { title: "Khmer Essay & Comprehension", subject: "Khmer Literature", q: 30, diff: "Medium" },
       { title: "General Knowledge & Civics", subject: "General", q: 50, diff: "Medium" },
@@ -2085,7 +2085,7 @@ const UNI_DETAIL = {
     ],
   },
   CADT: {
-    exam: "Digital Technology Entrance",
+    exam: "Digital Technology Entrance", examKm: "ការប្រឡងចូលបច្ចេកវិទ្យាឌីជីថល",
     sets: [
       { title: "Mathematics Diagnostic", subject: "Mathematics", q: 35, diff: "Medium" },
       { title: "Computing & Logic Set", subject: "Reasoning", q: 30, diff: "Medium" },
@@ -2100,7 +2100,7 @@ const UNI_DETAIL = {
     ],
   },
   UHS: {
-    exam: "Health Sciences Entrance",
+    exam: "Health Sciences Entrance", examKm: "ការប្រឡងចូលវិទ្យាសាស្ត្រសុខាភិបាល",
     sets: [
       { title: "Biology Diagnostic", subject: "Biology", q: 40, diff: "Hard" },
       { title: "Chemistry Concepts Set", subject: "Chemistry", q: 35, diff: "Hard" },
@@ -2119,7 +2119,7 @@ const UNI_DETAIL = {
 const diffColor = (d) => (d === "Hard" ? "var(--ember)" : d === "Medium" ? "var(--gold)" : "var(--jade)");
 const freqColor = (f) => (f === "Frequently" ? "var(--ember)" : f === "Often" ? "var(--gold)" : "var(--muted)");
 
-function Majors({ abbr, color }) {
+function Majors({ abbr, color, lang = "en" }) {
   const faculties = UNI_MAJORS[abbr];
   const [open, setOpen] = useState(0);
   if (!faculties) return null;
@@ -2128,8 +2128,8 @@ function Majors({ abbr, color }) {
     <div>
       <div className="flex items-center gap-2 mb-3">
         <BookOpen size={17} style={{ color: "var(--jade)" }} />
-        <h3 className="eai-display font-bold">Majors offered</h3>
-        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>{total} majors</span>
+        <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "majorsOffered")}</h3>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>{total} {t(lang, "majorsWord")}</span>
       </div>
       <div className="space-y-3">
         {faculties.map((f, i) => {
@@ -2139,7 +2139,7 @@ function Majors({ abbr, color }) {
               <button onClick={() => setOpen(isOpen ? -1 : i)} className="eai-focus w-full flex items-center justify-between gap-3 p-4 text-left">
                 <div className="flex items-center gap-2 min-w-0">
                   <GraduationCap size={16} style={{ color, flexShrink: 0 }} />
-                  <span className="eai-display font-bold text-sm truncate">{f.faculty}</span>
+                  <span className={`eai-display font-bold text-sm truncate ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (f.facultyKm || f.faculty) : f.faculty}</span>
                   <span className="text-xs eai-muted flex-shrink-0">({f.majors.length})</span>
                 </div>
                 <ChevronRight size={16} className="eai-muted flex-shrink-0" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s ease" }} />
@@ -2148,8 +2148,8 @@ function Majors({ abbr, color }) {
                 <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: "var(--line)" }}>
                   {f.majors.map((m) => (
                     <div key={m.n} className="pt-3">
-                      <p className="text-sm font-semibold">{m.n}</p>
-                      <p className="text-xs eai-muted mt-0.5 leading-relaxed">{m.d}</p>
+                      <p className={`text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (m.nKm || m.n) : m.n}</p>
+                      <p className={`text-xs eai-muted mt-0.5 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (m.dKm || m.d) : m.d}</p>
                     </div>
                   ))}
                 </div>
@@ -2179,7 +2179,7 @@ function UniLogo({ uni, size = 64 }) {
 }
 
 function UniversityDetail({ uni, onBack, lang = "en" }) {
-  const d = UNI_DETAIL[uni.abbr] || { exam: "Entrance Exam", sets: [], common: [] };
+  const d = UNI_DETAIL[uni.abbr] || { exam: "Entrance Exam", examKm: "ការប្រឡងចូល", sets: [], common: [] };
   return (
     <div className="space-y-5 eai-rise">
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
@@ -2192,12 +2192,12 @@ function UniversityDetail({ uni, onBack, lang = "en" }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: uni.c }} /><span className="eai-display text-xl font-extrabold">{uni.abbr}</span></div>
           <p className={`text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? uni.nKm : uni.n}</p>
-          <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{d.exam} · {t(lang, "readinessWord")} {uni.ready}%</p>
+          <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? d.examKm : d.exam} · {t(lang, "readinessWord")} {uni.ready}%</p>
         </div>
       </div>
 
       {/* Majors offered */}
-      <Majors abbr={uni.abbr} color={uni.c} />
+      <Majors abbr={uni.abbr} color={uni.c} lang={lang} />
 
       {/* Published practice sets */}
       <div>
@@ -3346,6 +3346,7 @@ const STRINGS = {
     viewPracticeSets: "View practice sets & common exercises", allUniversities: "All universities",
     readinessWord: "readiness", publishedSets: "Published practice sets", officialWord: "Official", startSet: "Start set",
     commonExercises: "Common exercises in this exam", frequencyNote: "Frequency reflects how often each topic has appeared in recent past papers.",
+    majorsOffered: "Majors offered", majorsWord: "majors",
     // Progress
     progressDesc: "Your full stats, analytics, and where you stand.",
     doneToday: "Done today", attemptedToday: "Attempted today", accuracyWord: "Accuracy", xpToday: "XP today",
@@ -3463,6 +3464,7 @@ const STRINGS = {
     viewPracticeSets: "មើលសំណុំលំហាត់ និងលំហាត់ទូទៅ", allUniversities: "សាកលវិទ្យាល័យទាំងអស់",
     readinessWord: "កម្រិតត្រៀមខ្លួន", publishedSets: "សំណុំលំហាត់ដែលបានចេញផ្សាយ", officialWord: "ផ្លូវការ", startSet: "ចាប់ផ្តើមសំណុំលំហាត់",
     commonExercises: "លំហាត់ទូទៅក្នុងការប្រឡងនេះ", frequencyNote: "ភាពញឹកញាប់បង្ហាញពីរបៀបដែលប្រធានបទនីមួយៗបានលេចឡើងក្នុងក្រដាសប្រឡងថ្មីៗ។",
+    majorsOffered: "ជំនាញដែលមាន", majorsWord: "ជំនាញ",
     // Progress
     progressDesc: "ស្ថិតិ ការវិភាគពេញលេញរបស់អ្នក និងទីតាំងរបស់អ្នកឈរ។",
     doneToday: "បានធ្វើថ្ងៃនេះ", attemptedToday: "បានសាកល្បងថ្ងៃនេះ", accuracyWord: "ភាពត្រឹមត្រូវ", xpToday: "XP ថ្ងៃនេះ",
