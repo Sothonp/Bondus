@@ -19,5 +19,6 @@ __pycache__/
 
 # Generated RAG state (rebuild with scripts/ingest_corpus.py)
 storage/vector_index/
+storage/ocr_cache/
 *.bak
 data
