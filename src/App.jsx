@@ -2954,7 +2954,9 @@ function Coach({ p, lang = "en" }) {
    backend, so "Upgrade" is honest about that instead of pretending to charge a card. */
 const SUPER_PLANS = [
   {
-    id: "free", label: "Free", price: "$0", period: "", tagline: "Free for everyone individual", button: "Start for Free",
+    id: "free", label: "Free", labelKm: "ឥតគិតថ្លៃ", price: "$0", period: "",
+    tagline: "Free for everyone individual", taglineKm: "ឥតគិតថ្លៃសម្រាប់អ្នកគ្រប់គ្នា",
+    button: "Start for Free", buttonKm: "ចាប់ផ្តើមឥតគិតថ្លៃ",
     features: [
       "BAC II past exams",
       "Simple grading (MCQ + right/wrong only, no explanation)",
@@ -2962,18 +2964,35 @@ const SUPER_PLANS = [
       "1-time AI language diagnostic test (CEFR A1–C2)",
       "Full user experience (XP, streaks, leaderboards)",
     ],
+    featuresKm: [
+      "ក្រដាសប្រឡង BAC II ចាស់ៗ",
+      "ការដាក់ពិន្ទុសាមញ្ញ (ជម្រើសពហុ + ត្រូវ/ខុស តែប៉ុណ្ណោះ គ្មានការពន្យល់)",
+      "៤ លំហាត់ក្នុងមួយថ្ងៃ ពីប្រភេទប្រឡងណាមួយ",
+      "តេស្តវាយតម្លៃភាសាដោយ AI ១ដង (CEFR A1–C2)",
+      "បទពិសោធន៍អ្នកប្រើពេញលេញ (XP, និន្នាការជាប់, តារាងអ្នកនាំមុខ)",
+    ],
   },
   {
-    id: "standard", label: "Standard", price: "$1.99", period: "/ month", tagline: "Everything in Free, plus:", button: "Get Standard",
+    id: "standard", label: "Standard", labelKm: "ស្តង់ដារ", price: "$1.99", period: "/ month", periodKm: "/ ខែ",
+    tagline: "Everything in Free, plus:", taglineKm: "អ្វីៗគ្រប់យ៉ាងក្នុងគម្រោងឥតគិតថ្លៃ បូក៖",
+    button: "Get Standard", buttonKm: "ទទួលបានស្តង់ដារ",
     features: [
       "AI grade prediction system",
       "50 AI help tokens/month (step-by-step explanations)",
       "Up to 15 premium exercises per day",
       "IELTS/TOEFL reading & listening practice (auto-graded)",
     ],
+    featuresKm: [
+      "ប្រព័ន្ធព្យាករណ៍និទ្ទេសដោយ AI",
+      "៥០ ថូខឹនជំនួយ AI/ខែ (ការពន្យល់ជាជំហានៗ)",
+      "រហូតដល់ ១៥ លំហាត់ក្នុងមួយថ្ងៃ",
+      "លំហាត់អាន & ស្តាប់ IELTS/TOEFL (ដាក់ពិន្ទុស្វ័យប្រវត្តិ)",
+    ],
   },
   {
-    id: "premium", label: "Premium", price: "$3.99", period: "/ month", tagline: "Everything in Standard, plus:", button: "Get Premium", best: true,
+    id: "premium", label: "Premium", labelKm: "ព្រីមៀម", price: "$3.99", period: "/ month", periodKm: "/ ខែ",
+    tagline: "Everything in Standard, plus:", taglineKm: "អ្វីៗគ្រប់យ៉ាងក្នុងគម្រោងស្តង់ដារ បូក៖",
+    button: "Get Premium", buttonKm: "ទទួលបានព្រីមៀម", best: true,
     features: [
       "Unlimited AI tutor access",
       "AI-generated adaptive mock exams",
@@ -2981,6 +3000,14 @@ const SUPER_PLANS = [
       "Advanced language grading (speaking + essays)",
       "In-depth analytical recommendations based on performance",
       "Targets IELTS 8.0 / PTE 79+",
+    ],
+    featuresKm: [
+      "ចូលប្រើគ្រូបង្វឹក AI គ្មានកំណត់",
+      "តេស្តសាកល្បងសម្របតាមកម្រិត បង្កើតដោយ AI",
+      "ចូលប្រើពេញលេញគ្រប់កញ្ចប់ប្រឡង",
+      "ការដាក់ពិន្ទុភាសាកម្រិតខ្ពស់ (ការនិយាយ + សេចក្តីសរសេរ)",
+      "អនុសាសន៍វិភាគស៊ីជម្រៅផ្អែកលើលទ្ធផល",
+      "ផ្តោតលើ IELTS 8.0 / PTE 79+",
     ],
   },
 ];
@@ -3006,7 +3033,7 @@ function SuperBondus({ lang = "en" }) {
           <CheckCircle2 size={20} style={{ color: "var(--jade)", flexShrink: 0, marginTop: 2 }} />
           <div>
             <p className={`font-semibold ${lang === "km" ? "eai-km" : ""}`}>
-              {upgraded.id === "free" ? t(lang, "allSet") : `${t(lang, "thanksUpgrade")} ${upgraded.label}!`}
+              {upgraded.id === "free" ? t(lang, "allSet") : `${t(lang, "thanksUpgrade")} ${lang === "km" ? upgraded.labelKm : upgraded.label}!`}
             </p>
             <p className={`text-sm eai-muted mt-1 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
               {upgraded.id === "free" ? t(lang, "freeIncluded") : t(lang, "prototypeNoPayment")}
@@ -3029,14 +3056,14 @@ function SuperBondus({ lang = "en" }) {
                     </span>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="eai-display font-bold">{plan.label}</span>
+                    <span className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? plan.labelKm : plan.label}</span>
                     {on && <CheckCircle2 size={18} style={{ color: "var(--gold)" }} />}
                   </div>
-                  <p className="mt-2"><span className="eai-display text-2xl font-extrabold">{plan.price}</span> <span className="text-sm eai-muted">{plan.period}</span></p>
-                  <p className="text-xs eai-muted mt-1">{plan.tagline}</p>
+                  <p className="mt-2"><span className="eai-display text-2xl font-extrabold">{plan.price}</span> <span className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.periodKm ?? plan.period) : plan.period}</span></p>
+                  <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? plan.taglineKm : plan.tagline}</p>
                   <ul className="mt-4 space-y-2 flex-1">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-xs eai-muted leading-relaxed">
+                    {(lang === "km" ? plan.featuresKm : plan.features).map((f) => (
+                      <li key={f} className={`flex items-start gap-2 text-xs eai-muted leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
                         <CheckCircle2 size={13} style={{ color: "var(--gold)", flexShrink: 0, marginTop: 1.5 }} /> {f}
                       </li>
                     ))}
@@ -3044,7 +3071,7 @@ function SuperBondus({ lang = "en" }) {
                   <button onClick={(e) => { e.stopPropagation(); setUpgraded(plan); }}
                     className={`eai-btn eai-focus w-full mt-5 py-2.5 text-sm flex items-center justify-center gap-2 ${lang === "km" ? "eai-km" : ""}`}
                     style={{ background: plan.best ? "var(--gold)" : "var(--card)", color: plan.best ? "#fff" : "var(--ink)", border: plan.best ? "none" : "1px solid var(--line)" }}>
-                    {plan.button} <ArrowRight size={14} />
+                    {lang === "km" ? plan.buttonKm : plan.button} <ArrowRight size={14} />
                   </button>
                 </div>
               );
