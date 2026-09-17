@@ -1169,7 +1169,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
 
       {/* Recommended next lesson */}
       <RecommendedLessonCard
-        subject={p.recommendedLesson.subject} title={p.recommendedLesson.topic}
+        subject={p.recommendedLesson.subject} title={topicLabel(p.recommendedLesson.topic, lang)}
         duration={lang === "km" ? "១២ នាទី" : "12 min"} description={t(lang, "targetsWeakest")} xp={80}
         imageUrl="/decor/math-formulas.svg" onStart={() => go("practice")} lang={lang}
       />
@@ -1286,96 +1286,203 @@ function Browse({ p, lang = "en" }) {
 
 /* ════════════════════════ Practice — interactive exercises ════════════════════════ */
 /* Exercise bank. Each subject maps to: [topic, difficulty, prompt, options, answer, explanation, formula]. */
+/* Each exercise carries an optional *Km field alongside its English counterpart. `topic` stays
+   the single canonical (always-English) key used everywhere mastery is tracked/matched
+   (topicMastery, SUBJECT_TOPICS, weak/strong lookups) — only topicKm is used for display, via
+   topicLabel() below, so switching languages never fragments a student's progress data.
+   English/French exercises deliberately keep their options/answer in the target language being
+   tested (translating "goes/go/going/gone" into Khmer would defeat the point of an English
+   grammar question) — only the surrounding instruction and explanation are localized. */
 const RAW_EXERCISES = {
   Mathematics: [
-    ["Calculus", "Medium", "Find d/dx (3x² + 2x).", ["6x + 2", "3x + 2", "6x", "x²"], "6x + 2",
-      "Differentiate term by term: d/dx(3x²) = 6x and d/dx(2x) = 2, so the result is 6x + 2.", "Power rule: d/dx[xⁿ] = n·xⁿ⁻¹"],
-    ["Algebra", "Medium", "Solve x² − 5x + 6 = 0.", ["x = 2, 3", "x = 1, 6", "x = −2, −3", "x = 2, −3"], "x = 2, 3",
-      "Factor into (x − 2)(x − 3) = 0, so x = 2 or x = 3.", "Quadratic: x = (−b ± √(b²−4ac)) / 2a, or factor the trinomial"],
-    ["Geometry", "Easy", "Area of a circle with radius 7 (use π = 22/7)?", ["154", "44", "49", "22"], "154",
-      "A = πr² = (22/7) × 7² = (22/7) × 49 = 154.", "Area of a circle: A = πr²"],
+    { topic: "Calculus", topicKm: "ដេរីវេ", difficulty: "Medium",
+      prompt: "Find d/dx (3x² + 2x).", promptKm: "រកដេរីវេ d/dx (3x² + 2x)។",
+      options: ["6x + 2", "3x + 2", "6x", "x²"], answer: "6x + 2",
+      explanation: "Differentiate term by term: d/dx(3x²) = 6x and d/dx(2x) = 2, so the result is 6x + 2.",
+      explanationKm: "ដេរីវេនីមួយៗតាមលក្ខខណ្ឌ៖ d/dx(3x²) = 6x និង d/dx(2x) = 2 ដូច្នេះលទ្ធផលគឺ 6x + 2។",
+      formula: "Power rule: d/dx[xⁿ] = n·xⁿ⁻¹", formulaKm: "ច្បាប់និទស្សន្ត៖ d/dx[xⁿ] = n·xⁿ⁻¹" },
+    { topic: "Algebra", topicKm: "ពិជគណិត", difficulty: "Medium",
+      prompt: "Solve x² − 5x + 6 = 0.", promptKm: "ដោះស្រាយ x² − 5x + 6 = 0។",
+      options: ["x = 2, 3", "x = 1, 6", "x = −2, −3", "x = 2, −3"], answer: "x = 2, 3",
+      explanation: "Factor into (x − 2)(x − 3) = 0, so x = 2 or x = 3.",
+      explanationKm: "បំបែកជា (x − 2)(x − 3) = 0 ដូច្នេះ x = 2 ឬ x = 3។",
+      formula: "Quadratic: x = (−b ± √(b²−4ac)) / 2a, or factor the trinomial",
+      formulaKm: "សមីការការេ៖ x = (−b ± √(b²−4ac)) / 2a ឬបំបែកសមីការបីលក្ខខណ្ឌ" },
+    { topic: "Geometry", topicKm: "ធរណីមាត្រ", difficulty: "Easy",
+      prompt: "Area of a circle with radius 7 (use π = 22/7)?", promptKm: "ផ្ទៃក្រឡានៃរង្វង់ដែលមានកាំ ៧ (ប្រើ π = 22/7)?",
+      options: ["154", "44", "49", "22"], answer: "154",
+      explanation: "A = πr² = (22/7) × 7² = (22/7) × 49 = 154.", explanationKm: "A = πr² = (22/7) × 7² = (22/7) × 49 = 154។",
+      formula: "Area of a circle: A = πr²", formulaKm: "ផ្ទៃក្រឡារង្វង់៖ A = πr²" },
   ],
   Physics: [
-    ["Kinematics", "Easy", "A car starts from rest and accelerates at 2 m/s² for 5 s. Final velocity?", ["10 m/s", "7 m/s", "2.5 m/s", "25 m/s"], "10 m/s",
-      "Starting from rest u = 0, so v = 0 + (2)(5) = 10 m/s.", "v = u + at"],
-    ["Dynamics", "Easy", "Force needed to accelerate a 10 kg mass at 3 m/s²?", ["30 N", "13 N", "3.3 N", "300 N"], "30 N",
-      "Force is mass times acceleration: F = 10 × 3 = 30 N.", "Newton's 2nd law: F = ma"],
-    ["Energy", "Medium", "Kinetic energy of a 2 kg object moving at 4 m/s?", ["16 J", "8 J", "32 J", "4 J"], "16 J",
-      "KE = ½ × 2 × 4² = ½ × 2 × 16 = 16 J.", "Kinetic energy: KE = ½mv²"],
+    { topic: "Kinematics", topicKm: "ចលនវិទ្យា", difficulty: "Easy",
+      prompt: "A car starts from rest and accelerates at 2 m/s² for 5 s. Final velocity?",
+      promptKm: "ឡានមួយចាប់ផ្តើមពីស្ថានភាពឈប់ ហើយបង្កើនល្បឿនក្នុងអត្រា 2 m/s² រយៈពេល 5 វិនាទី។ តើល្បឿនចុងក្រោយប៉ុន្មាន?",
+      options: ["10 m/s", "7 m/s", "2.5 m/s", "25 m/s"], answer: "10 m/s",
+      explanation: "Starting from rest u = 0, so v = 0 + (2)(5) = 10 m/s.", explanationKm: "ចាប់ផ្តើមពីស្ថានភាពឈប់ u = 0 ដូច្នេះ v = 0 + (2)(5) = 10 m/s។",
+      formula: "v = u + at", formulaKm: "v = u + at" },
+    { topic: "Dynamics", topicKm: "ថាមវិទ្យា", difficulty: "Easy",
+      prompt: "Force needed to accelerate a 10 kg mass at 3 m/s²?", promptKm: "តើត្រូវការកម្លាំងប៉ុន្មាន ដើម្បីបង្កើនល្បឿនម៉ាស់ 10 kg ក្នុងអត្រា 3 m/s²?",
+      options: ["30 N", "13 N", "3.3 N", "300 N"], answer: "30 N",
+      explanation: "Force is mass times acceleration: F = 10 × 3 = 30 N.", explanationKm: "កម្លាំង = ម៉ាស់ × សំទុះ៖ F = 10 × 3 = 30 N។",
+      formula: "Newton's 2nd law: F = ma", formulaKm: "ច្បាប់ទី២របស់ញូតុន៖ F = ma" },
+    { topic: "Energy", topicKm: "ថាមពល", difficulty: "Medium",
+      prompt: "Kinetic energy of a 2 kg object moving at 4 m/s?", promptKm: "តើថាមពលស៊ីនេទិចនៃវត្ថុមួយមានម៉ាស់ 2 kg ដែលកំពុងផ្លាស់ទីក្នុងល្បឿន 4 m/s មានប៉ុន្មាន?",
+      options: ["16 J", "8 J", "32 J", "4 J"], answer: "16 J",
+      explanation: "KE = ½ × 2 × 4² = ½ × 2 × 16 = 16 J.", explanationKm: "KE = ½ × 2 × 4² = ½ × 2 × 16 = 16 J។",
+      formula: "Kinetic energy: KE = ½mv²", formulaKm: "ថាមពលស៊ីនេទិច៖ KE = ½mv²" },
   ],
   Chemistry: [
-    ["Moles", "Medium", "How many moles are in 36 g of water (H₂O, M = 18 g/mol)?", ["2", "1", "0.5", "36"], "2",
-      "Moles = mass ÷ molar mass = 36 ÷ 18 = 2 mol.", "n = mass ÷ molar mass"],
-    ["Acids & bases", "Medium", "What is the pH of 0.01 M HCl?", ["2", "1", "12", "0.01"], "2",
-      "HCl fully dissociates, so [H⁺] = 0.01 = 10⁻². pH = −log(10⁻²) = 2.", "pH = −log[H⁺]"],
-    ["Balancing", "Easy", "In 2H₂ + O₂ → 2H₂O, what is the coefficient of H₂?", ["2", "1", "3", "4"], "2",
-      "Balance hydrogen and oxygen on both sides: 2H₂ + O₂ → 2H₂O.", "Conserve atoms of each element on both sides"],
+    { topic: "Moles", topicKm: "មូល", difficulty: "Medium",
+      prompt: "How many moles are in 36 g of water (H₂O, M = 18 g/mol)?", promptKm: "តើទឹក 36 ក្រាម (H₂O, M = 18 g/mol) មានប៉ុន្មានមូល?",
+      options: ["2", "1", "0.5", "36"], answer: "2",
+      explanation: "Moles = mass ÷ molar mass = 36 ÷ 18 = 2 mol.", explanationKm: "ចំនួនមូល = ម៉ាស់ ÷ ម៉ាស់ម៉ូល = 36 ÷ 18 = 2 mol។",
+      formula: "n = mass ÷ molar mass", formulaKm: "n = ម៉ាស់ ÷ ម៉ាស់ម៉ូល" },
+    { topic: "Acids & bases", topicKm: "អាស៊ីត និងបាស", difficulty: "Medium",
+      prompt: "What is the pH of 0.01 M HCl?", promptKm: "តើ pH នៃ HCl កំហាប់ 0.01 M ស្មើនឹងប៉ុន្មាន?",
+      options: ["2", "1", "12", "0.01"], answer: "2",
+      explanation: "HCl fully dissociates, so [H⁺] = 0.01 = 10⁻². pH = −log(10⁻²) = 2.", explanationKm: "HCl បំបែកទាំងស្រុង ដូច្នេះ [H⁺] = 0.01 = 10⁻²។ pH = −log(10⁻²) = 2។",
+      formula: "pH = −log[H⁺]", formulaKm: "pH = −log[H⁺]" },
+    { topic: "Balancing", topicKm: "តុល្យភាពសមីការ", difficulty: "Easy",
+      prompt: "In 2H₂ + O₂ → 2H₂O, what is the coefficient of H₂?", promptKm: "ក្នុងសមីការ 2H₂ + O₂ → 2H₂O តើមេគុណនៃ H₂ ស្មើនឹងប៉ុន្មាន?",
+      options: ["2", "1", "3", "4"], answer: "2",
+      explanation: "Balance hydrogen and oxygen on both sides: 2H₂ + O₂ → 2H₂O.", explanationKm: "តុល្យភាពអាតូមអ៊ីដ្រូសែន និងអុកសីហ្សែនទាំងសងខាង៖ 2H₂ + O₂ → 2H₂O។",
+      formula: "Conserve atoms of each element on both sides", formulaKm: "រក្សាចំនួនអាតូមនីមួយៗឲ្យស្មើគ្នាទាំងសងខាង" },
   ],
   Biology: [
-    ["Cell biology", "Easy", "Which organelle is the 'powerhouse of the cell'?", ["Mitochondria", "Nucleus", "Ribosome", "Golgi body"], "Mitochondria",
-      "Mitochondria generate most of the cell's ATP through respiration.", "Key concept: respiration produces ATP in the mitochondria"],
-    ["Genetics", "Medium", "Crossing Aa × Aa gives what dominant : recessive ratio?", ["3 : 1", "1 : 1", "9 : 3 : 3 : 1", "1 : 2 : 1"], "3 : 1",
-      "The Punnett square gives genotypes 1 AA : 2 Aa : 1 aa, so phenotypes are 3 dominant : 1 recessive.", "Use a Punnett square for a monohybrid cross"],
-    ["Photosynthesis", "Easy", "Which gas is released during photosynthesis?", ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"], "Oxygen",
-      "Plants take in CO₂ and release O₂: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂.", "Equation: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂"],
+    { topic: "Cell biology", topicKm: "ជីវវិទ្យាកោសិកា", difficulty: "Easy",
+      prompt: "Which organelle is the 'powerhouse of the cell'?", promptKm: "តើសរីរាង្គណាមួយត្រូវបានហៅថា 'រោងចក្រថាមពលនៃកោសិកា'?",
+      options: ["Mitochondria", "Nucleus", "Ribosome", "Golgi body"], answer: "Mitochondria",
+      explanation: "Mitochondria generate most of the cell's ATP through respiration.", explanationKm: "មីតូខនឌ្រី(Mitochondria) បង្កើត ATP ភាគច្រើនរបស់កោសិកាតាមរយៈការដកដង្ហើមកោសិកា។",
+      formula: "Key concept: respiration produces ATP in the mitochondria", formulaKm: "គោលគំនិតសំខាន់៖ ការដកដង្ហើមកោសិកាបង្កើត ATP នៅក្នុងមីតូខនឌ្រី" },
+    { topic: "Genetics", topicKm: "សន្ដតិវិទ្យា", difficulty: "Medium",
+      prompt: "Crossing Aa × Aa gives what dominant : recessive ratio?", promptKm: "ការបំពាល់ Aa × Aa ផ្តល់សមាមាត្រលក្ខណៈលេចធ្លោ : លក្ខណៈកប់កំបាំង ជាប៉ុន្មាន?",
+      options: ["3 : 1", "1 : 1", "9 : 3 : 3 : 1", "1 : 2 : 1"], answer: "3 : 1",
+      explanation: "The Punnett square gives genotypes 1 AA : 2 Aa : 1 aa, so phenotypes are 3 dominant : 1 recessive.",
+      explanationKm: "តារាង Punnett ផ្តល់ហ្សែនកូន 1 AA : 2 Aa : 1 aa ដូច្នេះលក្ខណៈខាងក្រៅគឺ 3 លេចធ្លោ : 1 កប់កំបាំង។",
+      formula: "Use a Punnett square for a monohybrid cross", formulaKm: "ប្រើតារាង Punnett សម្រាប់ការបំពាល់ឯកកូនកាត់" },
+    { topic: "Photosynthesis", topicKm: "ការសំយោគពន្លឺ", difficulty: "Easy",
+      prompt: "Which gas is released during photosynthesis?", promptKm: "តើឧស្ម័នអ្វីត្រូវបានបញ្ចេញកំឡុងពេលសំយោគពន្លឺ?",
+      options: ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"], answer: "Oxygen",
+      explanation: "Plants take in CO₂ and release O₂: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂.", explanationKm: "រុក្ខជាតិស្រូបយក CO₂ ហើយបញ្ចេញ O₂៖ 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂។",
+      formula: "Equation: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂", formulaKm: "សមីការ៖ 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂" },
   ],
   English: [
-    ["Grammar", "Easy", "Choose the correct verb: 'She ___ to school every day.'", ["goes", "go", "going", "gone"], "goes",
-      "Third-person singular in the present simple takes an -s ending: she goes.", "Rule: he/she/it + verb + -s in present simple"],
-    ["Vocabulary", "Easy", "Which word is a synonym of 'rapid'?", ["quick", "slow", "large", "late"], "quick",
-      "'Rapid' means happening fast, so 'quick' is the closest synonym.", "Tip: match the core meaning, not just the topic"],
-    ["Parts of speech", "Medium", "Identify the noun: 'Happiness is the key.'", ["Happiness", "is", "the", "key"], "Happiness",
-      "'Happiness' names a thing (an abstract idea), so it is the noun and subject.", "Tip: a noun names a person, place, thing, or idea"],
+    { topic: "Grammar", topicKm: "វេយ្យាករណ៍", difficulty: "Easy",
+      prompt: "Choose the correct verb: 'She ___ to school every day.'", promptKm: "ជ្រើសរើសកិរិយាស័ព្ទត្រឹមត្រូវ៖ 'She ___ to school every day.'",
+      options: ["goes", "go", "going", "gone"], answer: "goes",
+      explanation: "Third-person singular in the present simple takes an -s ending: she goes.",
+      explanationKm: "សព្វនាមឯកវចនៈបុរសទី៣ក្នុងបច្ចុប្បន្នកាលធម្មតា ត្រូវបន្ថែម -s៖ she goes។",
+      formula: "Rule: he/she/it + verb + -s in present simple", formulaKm: "ក្បួន៖ he/she/it + កិរិយាស័ព្ទ + -s ក្នុងបច្ចុប្បន្នកាលធម្មតា" },
+    { topic: "Vocabulary", topicKm: "វាក្យសព្ទ", difficulty: "Easy",
+      prompt: "Which word is a synonym of 'rapid'?", promptKm: "តើពាក្យណាមួយមានន័យដូចនឹង 'rapid'?",
+      options: ["quick", "slow", "large", "late"], answer: "quick",
+      explanation: "'Rapid' means happening fast, so 'quick' is the closest synonym.", explanationKm: "'Rapid' មានន័យថាកើតឡើងលឿន ដូច្នេះ 'quick' ជាពាក្យប្រហាក់ប្រហែលបំផុត។",
+      formula: "Tip: match the core meaning, not just the topic", formulaKm: "គន្លឹះ៖ ផ្គូផ្គងអត្ថន័យស្នូល មិនមែនគ្រាន់តែប្រធានបទ" },
+    { topic: "Parts of speech", topicKm: "ភាគនៃការនិយាយ", difficulty: "Medium",
+      prompt: "Identify the noun: 'Happiness is the key.'", promptKm: "កំណត់នាមក្នុងឃ្លា៖ 'Happiness is the key.'",
+      options: ["Happiness", "is", "the", "key"], answer: "Happiness",
+      explanation: "'Happiness' names a thing (an abstract idea), so it is the noun and subject.", explanationKm: "'Happiness' ជាឈ្មោះនៃគំនិតអរូបី ដូច្នេះវាជានាម និងជាប្រធានបទ។",
+      formula: "Tip: a noun names a person, place, thing, or idea", formulaKm: "គន្លឹះ៖ នាមគឺជាឈ្មោះមនុស្ស ទីកន្លែង វត្ថុ ឬគំនិត" },
   ],
   French: [
-    ["Verbs", "Easy", "Complete: 'Je ___ étudiant.'", ["suis", "es", "est", "être"], "suis",
-      "With 'je' the verb être is conjugated as 'suis': Je suis étudiant.", "être: je suis, tu es, il/elle est"],
-    ["Plurals", "Easy", "What is the plural of 'le livre'?", ["les livres", "la livres", "les livre", "le livres"], "les livres",
-      "The plural article is 'les' and the noun adds -s: les livres.", "Rule: le/la → les, and add -s to the noun"],
+    { topic: "Verbs", topicKm: "កិរិយាស័ព្ទ", difficulty: "Easy",
+      prompt: "Complete: 'Je ___ étudiant.'", promptKm: "បំពេញ៖ 'Je ___ étudiant.'",
+      options: ["suis", "es", "est", "être"], answer: "suis",
+      explanation: "With 'je' the verb être is conjugated as 'suis': Je suis étudiant.", explanationKm: "ជាមួយ 'je' កិរិយាស័ព្ទ être ត្រូវបំបែកជា 'suis'៖ Je suis étudiant។",
+      formula: "être: je suis, tu es, il/elle est", formulaKm: "être: je suis, tu es, il/elle est" },
+    { topic: "Plurals", topicKm: "ពហុវចនៈ", difficulty: "Easy",
+      prompt: "What is the plural of 'le livre'?", promptKm: "តើពហុវចនៈនៃ 'le livre' ជាអ្វី?",
+      options: ["les livres", "la livres", "les livre", "le livres"], answer: "les livres",
+      explanation: "The plural article is 'les' and the noun adds -s: les livres.", explanationKm: "អាទិសព្ទពហុវចនៈគឺ 'les' ហើយនាមបន្ថែម -s៖ les livres។",
+      formula: "Rule: le/la → les, and add -s to the noun", formulaKm: "ក្បួន៖ le/la → les ហើយបន្ថែម -s ទៅនាម" },
   ],
   "Khmer Literature": [
-    ["Classics", "Easy", "The Reamker is the Khmer version of which epic?", ["Ramayana", "Mahabharata", "Odyssey", "Iliad"], "Ramayana",
-      "The Reamker is Cambodia's adaptation of the Indian epic the Ramayana.", "Key concept: Reamker = Khmer Ramayana"],
-    ["Classics", "Medium", "'Tum Teav' is best described as a classic Khmer ___.", ["tragic love story", "comedy", "religious chant", "history book"], "tragic love story",
-      "Tum Teav is a famous Cambodian tragic romance, often compared to Romeo and Juliet.", "Tip: identify genre from theme and ending"],
+    { topic: "Classics", topicKm: "អក្សរសាស្ត្របុរាណ", difficulty: "Easy",
+      prompt: "The Reamker is the Khmer version of which epic?", promptKm: "រឿងរាមកេរ្តិ៍ជាការកែសម្រួលជាភាសាខ្មែរនៃវីរភាព (epic) មួយណា?",
+      options: ["Ramayana", "Mahabharata", "Odyssey", "Iliad"], answer: "Ramayana",
+      explanation: "The Reamker is Cambodia's adaptation of the Indian epic the Ramayana.", explanationKm: "រឿងរាមកេរ្តិ៍គឺជាការសម្របសម្រួលរបស់កម្ពុជា ចេញពីវីរភាពឥណ្ឌាឈ្មោះរាម៉ាយ៉ាណៈ (Ramayana)។",
+      formula: "Key concept: Reamker = Khmer Ramayana", formulaKm: "គោលគំនិតសំខាន់៖ រាមកេរ្តិ៍ = រាម៉ាយ៉ាណៈជាភាសាខ្មែរ" },
+    { topic: "Classics", topicKm: "អក្សរសាស្ត្របុរាណ", difficulty: "Medium",
+      prompt: "'Tum Teav' is best described as a classic Khmer ___.", promptKm: "'តុំទាវ' ពិពណ៌នាបានត្រឹមត្រូវបំផុតថាជា ___ ខ្មែរបុរាណមួយ។",
+      options: ["tragic love story", "comedy", "religious chant", "history book"], answer: "tragic love story",
+      explanation: "Tum Teav is a famous Cambodian tragic romance, often compared to Romeo and Juliet.", explanationKm: "តុំទាវជារឿងស្នេហាសោកនាដកម្មល្បីរបស់កម្ពុជា ដែលច្រើនប្រៀបធៀបទៅនឹងរឿង Romeo and Juliet។",
+      formula: "Tip: identify genre from theme and ending", formulaKm: "គន្លឹះ៖ កំណត់ប្រភេទរឿងតាមប្រធានបទ និងទីបញ្ចប់" },
   ],
   History: [
-    ["Angkor era", "Medium", "Angkor Wat was built during the reign of which king?", ["Suryavarman II", "Jayavarman VII", "Norodom", "Ang Duong"], "Suryavarman II",
-      "Angkor Wat was constructed in the early 12th century under King Suryavarman II.", "Key fact: Angkor Wat ≈ early 1100s, Suryavarman II"],
-    ["Khmer Empire", "Easy", "What was the capital of the Khmer Empire at its height?", ["Angkor", "Phnom Penh", "Oudong", "Longvek"], "Angkor",
-      "Angkor was the empire's capital during its golden age.", "Key fact: Angkor was the imperial capital"],
+    { topic: "Angkor era", topicKm: "សម័យអង្គរ", difficulty: "Medium",
+      prompt: "Angkor Wat was built during the reign of which king?", promptKm: "ប្រាសាទអង្គរវត្តត្រូវបានសាងសង់ក្នុងរជ្ជកាលព្រះមហាក្សត្រណា?",
+      options: ["Suryavarman II", "Jayavarman VII", "Norodom", "Ang Duong"], answer: "Suryavarman II",
+      explanation: "Angkor Wat was constructed in the early 12th century under King Suryavarman II.", explanationKm: "អង្គរវត្តត្រូវបានសាងសង់នៅដើមសតវត្សទី១២ ក្រោមរជ្ជកាលព្រះបាទសូរ្យវរ្ម័នទី២។",
+      formula: "Key fact: Angkor Wat ≈ early 1100s, Suryavarman II", formulaKm: "ចំណុចសំខាន់៖ អង្គរវត្ត ≈ ដើមទសវត្សរ៍ ១១០០ សូរ្យវរ្ម័នទី២" },
+    { topic: "Khmer Empire", topicKm: "អាណាចក្រខ្មែរ", difficulty: "Easy",
+      prompt: "What was the capital of the Khmer Empire at its height?", promptKm: "តើរាជធានីរបស់អាណាចក្រខ្មែរនៅសម័យរុងរឿងបំផុតគឺទីណា?",
+      options: ["Angkor", "Phnom Penh", "Oudong", "Longvek"], answer: "Angkor",
+      explanation: "Angkor was the empire's capital during its golden age.", explanationKm: "អង្គរជារាជធានីនៃអាណាចក្រក្នុងសម័យមាសរបស់ខ្លួន។",
+      formula: "Key fact: Angkor was the imperial capital", formulaKm: "ចំណុចសំខាន់៖ អង្គរជារាជធានីនៃអាណាចក្រ" },
   ],
   Geography: [
-    ["Rivers", "Easy", "What is the longest river in Cambodia?", ["Mekong", "Tonle Sap", "Bassac", "Sen"], "Mekong",
-      "The Mekong is the longest river flowing through Cambodia.", "Key fact: the Mekong dominates Cambodia's river system"],
-    ["Landforms", "Easy", "The Tonle Sap is a ___.", ["lake", "mountain", "desert", "ocean"], "lake",
-      "The Tonle Sap is the largest freshwater lake in Southeast Asia.", "Key fact: Tonle Sap = freshwater lake"],
+    { topic: "Rivers", topicKm: "ទន្លេ", difficulty: "Easy",
+      prompt: "What is the longest river in Cambodia?", promptKm: "តើទន្លេណាវែងជាងគេនៅកម្ពុជា?",
+      options: ["Mekong", "Tonle Sap", "Bassac", "Sen"], answer: "Mekong",
+      explanation: "The Mekong is the longest river flowing through Cambodia.", explanationKm: "ទន្លេមេគង្គជាទន្លេវែងជាងគេដែលហូរកាត់កម្ពុជា។",
+      formula: "Key fact: the Mekong dominates Cambodia's river system", formulaKm: "ចំណុចសំខាន់៖ ទន្លេមេគង្គគ្របដណ្តប់ប្រព័ន្ធទន្លេកម្ពុជា" },
+    { topic: "Landforms", topicKm: "ភូមិសណ្ឋាន", difficulty: "Easy",
+      prompt: "The Tonle Sap is a ___.", promptKm: "បឹងទន្លេសាបជា ___ មួយ។",
+      options: ["lake", "mountain", "desert", "ocean"], answer: "lake",
+      explanation: "The Tonle Sap is the largest freshwater lake in Southeast Asia.", explanationKm: "បឹងទន្លេសាបជាបឹងទឹកសាបធំជាងគេនៅអាស៊ីអាគ្នេយ៍។",
+      formula: "Key fact: Tonle Sap = freshwater lake", formulaKm: "ចំណុចសំខាន់៖ ទន្លេសាប = បឹងទឹកសាប" },
   ],
   Morality: [
-    ["Civics", "Easy", "Which of these is a civic duty of a good citizen?", ["Respecting the law", "Littering", "Avoiding taxes", "Ignoring elections"], "Respecting the law",
-      "Respecting and obeying the law is a core civic responsibility.", "Key concept: rights come with responsibilities"],
-    ["Civics", "Easy", "What is the voting age in Cambodia?", ["18", "16", "21", "25"], "18",
-      "Cambodian citizens may vote from the age of 18.", "Key fact: voting age in Cambodia is 18"],
+    { topic: "Civics", topicKm: "សីលធម៌ពលរដ្ឋ", difficulty: "Easy",
+      prompt: "Which of these is a civic duty of a good citizen?", promptKm: "តើមួយណាខាងក្រោមជាកាតព្វកិច្ចរបស់ប្រជាពលរដ្ឋល្អ?",
+      options: ["Respecting the law", "Littering", "Avoiding taxes", "Ignoring elections"], answer: "Respecting the law",
+      explanation: "Respecting and obeying the law is a core civic responsibility.", explanationKm: "ការគោរព និងអនុវត្តច្បាប់ជាការទទួលខុសត្រូវសំខាន់របស់ពលរដ្ឋ។",
+      formula: "Key concept: rights come with responsibilities", formulaKm: "គោលគំនិតសំខាន់៖ សិទ្ធិមកជាមួយការទទួលខុសត្រូវ" },
+    { topic: "Civics", topicKm: "សីលធម៌ពលរដ្ឋ", difficulty: "Easy",
+      prompt: "What is the voting age in Cambodia?", promptKm: "តើអាយុសម្រាប់បោះឆ្នោតនៅកម្ពុជាចាប់ពីអាយុប៉ុន្មាន?",
+      options: ["18", "16", "21", "25"], answer: "18",
+      explanation: "Cambodian citizens may vote from the age of 18.", explanationKm: "ប្រជាពលរដ្ឋកម្ពុជាអាចបោះឆ្នោតបានចាប់ពីអាយុ ១៨ឆ្នាំ។",
+      formula: "Key fact: voting age in Cambodia is 18", formulaKm: "ចំណុចសំខាន់៖ អាយុបោះឆ្នោតនៅកម្ពុជាគឺ ១៨ឆ្នាំ" },
   ],
   "Earth Science": [
-    ["Structure of Earth", "Easy", "What is Earth's outermost solid layer called?", ["Crust", "Mantle", "Outer core", "Magma"], "Crust",
-      "The crust is the thin, solid outermost layer of the Earth.", "Key concept: crust → mantle → outer core → inner core"],
-    ["Geology", "Medium", "Earthquakes are mainly caused by ___.", ["tectonic plate movement", "heavy rain", "strong wind", "ocean tides"], "tectonic plate movement",
-      "Most earthquakes happen when tectonic plates shift along faults.", "Key concept: plate tectonics drive earthquakes"],
+    { topic: "Structure of Earth", topicKm: "រចនាសម្ព័ន្ធផែនដី", difficulty: "Easy",
+      prompt: "What is Earth's outermost solid layer called?", promptKm: "តើស្រទាប់រឹងខាងក្រៅបំផុតរបស់ផែនដីមានឈ្មោះថាអ្វី?",
+      options: ["Crust", "Mantle", "Outer core", "Magma"], answer: "Crust",
+      explanation: "The crust is the thin, solid outermost layer of the Earth.", explanationKm: "សែលផែនដីជាស្រទាប់រឹងស្តើងនៅខាងក្រៅបំផុតរបស់ផែនដី។",
+      formula: "Key concept: crust → mantle → outer core → inner core", formulaKm: "គោលគំនិតសំខាន់៖ សែល → ស្រទាប់កណ្តាល →ស្នូលខាងក្រៅ → ស្នូលខាងក្នុង" },
+    { topic: "Geology", topicKm: "ភូគព្ភវិទ្យា", difficulty: "Medium",
+      prompt: "Earthquakes are mainly caused by ___.", promptKm: "រញ្ជួយដីកើតឡើងភាគច្រើនដោយសារ ___។",
+      options: ["tectonic plate movement", "heavy rain", "strong wind", "ocean tides"], answer: "tectonic plate movement",
+      explanation: "Most earthquakes happen when tectonic plates shift along faults.", explanationKm: "រញ្ជួយដីភាគច្រើនកើតឡើងនៅពេលបន្ទះតិចតូនិចផ្លាស់ទីតាមបណ្តោយស្នាមប្រេះ។",
+      formula: "Key concept: plate tectonics drive earthquakes", formulaKm: "គោលគំនិតសំខាន់៖ តិចតូនិចបន្ទះជាមូលហេតុនៃរញ្ជួយដី" },
   ],
 };
 
-const EXERCISE_BANK = Object.fromEntries(Object.entries(RAW_EXERCISES).map(([subject, arr]) => [
-  subject,
-  arr.map((r, i) => ({ id: `${subject}-${i + 1}`, subject, topic: r[0], difficulty: r[1], prompt: r[2], options: r[3], answer: r[4], explanation: r[5], formula: r[6] })),
-]));
-const getExercises = (s) => EXERCISE_BANK[s] || [];
+/* Canonical (English) topic key → Khmer display label, built once from the data above. Internal
+   tracking (topicMastery, SUBJECT_TOPICS, weak/strong subject lookups) always keys on the English
+   topic string; only rendered UI text goes through topicLabel(). */
+const TOPIC_LABEL_KM = {};
+Object.values(RAW_EXERCISES).flat().forEach((r) => { if (r.topicKm) TOPIC_LABEL_KM[r.topic] = r.topicKm; });
+const topicLabel = (topic, lang) => (lang === "km" ? (TOPIC_LABEL_KM[topic] ?? topic) : topic);
+
+const EXERCISE_BANK_RAW = RAW_EXERCISES;
+function getExercises(subject, lang = "en") {
+  const list = EXERCISE_BANK_RAW[subject] || [];
+  return list.map((r, i) => ({
+    id: `${subject}-${i + 1}`, subject, topic: r.topic, difficulty: r.difficulty,
+    prompt: lang === "km" ? (r.promptKm || r.prompt) : r.prompt,
+    options: r.options, answer: r.answer,
+    explanation: lang === "km" ? (r.explanationKm || r.explanation) : r.explanation,
+    formula: lang === "km" ? (r.formulaKm || r.formula) : r.formula,
+  }));
+}
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
 
-/* Topic taxonomy per subject, derived from the exercise bank — this is what the diagnostic
-   test, adaptive practice, and per-topic mastery tracking all key off. */
+/* Topic taxonomy per subject, derived from the exercise bank (canonical English topics) — this is
+   what the diagnostic test, adaptive practice, and per-topic mastery tracking all key off. */
 const SUBJECT_TOPICS = Object.fromEntries(
-  Object.entries(EXERCISE_BANK).map(([subject, list]) => [subject, [...new Set(list.map((e) => e.topic))]])
+  Object.entries(RAW_EXERCISES).map(([subject, list]) => [subject, [...new Set(list.map((e) => e.topic))]])
 );
 
 const STATUS = {
@@ -1415,7 +1522,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {FIELD_SUBJECTS[p.field].map((s) => {
-          const list = getExercises(s);
+          const list = getExercises(s, lang);
           const doneN = list.filter((ex) => practice[ex.id]?.status === "completed").length;
           const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
           const isWeak = p.weak.some((w) => w.s === s);
@@ -1442,7 +1549,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
 }
 
 function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, lang = "en" }) {
-  const list = getExercises(subject);
+  const list = getExercises(subject, lang);
   const [idx, setIdx] = useState(null);
 
   // ── Adaptive difficulty (session-only): 3 correct in a row steps up, 2 wrong in a row steps
@@ -1463,20 +1570,21 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
 
   const handleResult = (ex, correct) => {
     const nextStreak = correct ? Math.max(1, streak + 1) : Math.min(-1, streak - 1);
+    const topicShown = topicLabel(ex.topic, lang);
     if (nextStreak >= 3 && tier !== "Hard") {
-      const t = tier === "Easy" ? "Medium" : "Hard";
-      setTier(t); setStreak(0);
-      setBanner({ text: `Nice streak — stepping up to ${t} questions.`, tone: "jade" });
+      const newTier = tier === "Easy" ? "Medium" : "Hard";
+      setTier(newTier); setStreak(0);
+      setBanner({ text: lang === "km" ? `និន្នាការល្អ — កំពុងឡើងទៅសំណួរកម្រិត ${newTier}។` : `Nice streak — stepping up to ${newTier} questions.`, tone: "jade" });
     } else if (nextStreak <= -2 && tier !== "Easy") {
-      const t = tier === "Hard" ? "Medium" : "Easy";
-      setTier(t); setStreak(0);
-      setBanner({ text: `Let's ease back to ${t} questions.`, tone: "gold" });
+      const newTier = tier === "Hard" ? "Medium" : "Easy";
+      setTier(newTier); setStreak(0);
+      setBanner({ text: lang === "km" ? `តោះបន្ធូរទៅសំណួរកម្រិត ${newTier}វិញ។` : `Let's ease back to ${newTier} questions.`, tone: "gold" });
     } else {
       setStreak(nextStreak);
     }
     const missCount = correct ? 0 : (topicMisses[ex.topic] || 0) + 1;
     setTopicMisses((m) => ({ ...m, [ex.topic]: missCount }));
-    if (!correct && missCount >= 2) setBanner({ text: `You've missed ${ex.topic} twice in a row — review the explanation carefully before trying again.`, tone: "ember" });
+    if (!correct && missCount >= 2) setBanner({ text: lang === "km" ? `អ្នកខកខាន ${topicShown} ពីរដងជាប់គ្នា — សូមពិនិត្យការពន្យល់ដោយប្រុងប្រយ័ត្នមុននឹងសាកល្បងម្តងទៀត។` : `You've missed ${topicShown} twice in a row — review the explanation carefully before trying again.`, tone: "ember" });
   };
 
   if (idx != null && list[idx]) {
@@ -1514,7 +1622,7 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
               <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
                 <p className="text-sm font-semibold truncate">{ex.prompt}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{ex.topic}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
                   <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
                   <span className={`text-xs font-semibold flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ color: st.color }}><st.icon size={12} /> {lang === "km" ? t(lang, `status_${entry?.status || "pending"}`) : st.label}</span>
                 </div>
@@ -1567,7 +1675,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
       <div className="eai-card p-6">
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{ex.topic}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
             <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
             {tier && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>🎯 {t(lang, "adaptiveWord")}: {tier}</span>}
           </div>
@@ -1696,12 +1804,12 @@ function AssessmentChoice({ reg, dark, setDark, onStart, onSkip, onBack, lang = 
    A short, fast-fire assessment run right after registration and before the dashboard exists.
    No feedback mid-test — like a real diagnostic, you only see results at the end. It seeds the
    very first real topic-mastery scores; everything the dashboard shows flows from this. */
-function buildDiagnosticQueue(field) {
-  return FIELD_SUBJECTS[field].flatMap((s) => getExercises(s));
+function buildDiagnosticQueue(field, lang = "en") {
+  return FIELD_SUBJECTS[field].flatMap((s) => getExercises(s, lang));
 }
 
 function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
-  const queue = useMemo(() => buildDiagnosticQueue(reg.field), [reg.field]);
+  const queue = useMemo(() => buildDiagnosticQueue(reg.field, lang), [reg.field, lang]);
   const [i, setI] = useState(0);
   const [topicMastery, setTopicMastery] = useState({});
   const [choice, setChoice] = useState(null);
@@ -1740,7 +1848,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
           <div className="eai-card p-6 sm:p-8">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{ex.subject}</span>
-              <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{ex.topic}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
               <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
             </div>
             <h2 className="eai-display text-lg font-bold mb-5">{ex.prompt}</h2>
@@ -2517,7 +2625,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
             ))}
           </div>
           <p className={`text-xs eai-muted mt-4 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
-            {t(lang, "estimateNotGuarantee")} {p.priorityTopic && <>{t(lang, "liftingWillMove1")} <span style={{ color: "var(--ember)", fontWeight: 600 }}>{p.priorityTopic.t}</span> {t(lang, "liftingWillMove2")}</>}
+            {t(lang, "estimateNotGuarantee")} {p.priorityTopic && <>{t(lang, "liftingWillMove1")} <span style={{ color: "var(--ember)", fontWeight: 600 }}>{topicLabel(p.priorityTopic.t, lang)}</span> {t(lang, "liftingWillMove2")}</>}
           </p>
         </div>
 
@@ -2617,7 +2725,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
                     <div className="pl-4 pb-2.5 pt-0.5 space-y-1.5">
                       {s.topics.map((t) => (
                         <div key={t.t} className="flex items-center gap-3">
-                          <span className="text-xs eai-muted w-28 truncate">{t.t}</span>
+                          <span className={`text-xs eai-muted w-28 truncate ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(t.t, lang)}</span>
                           <div className="flex-1 h-1.5 rounded-full eai-soft overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${t.score ?? 0}%`, background: LEVEL_COLOR[masteryLevel(t.score)] }} />
                           </div>
