@@ -21,7 +21,7 @@ Guidelines:
 - Stay focused on academic and career guidance for this student — politely redirect if asked about unrelated topics.`;
 
 function buildStudentContext(context = {}) {
-  const { name, field, subjects = [], weak = [], strong = [] } = context;
+  const { name, field, subjects = [], weak = [], strong = [], replyLanguage } = context;
   const lines = [];
   if (name) lines.push(`Name: ${name}`);
   if (field) lines.push(`Track: ${field === "science" ? "Science" : "Social Science"}`);
@@ -31,6 +31,7 @@ function buildStudentContext(context = {}) {
   }
   if (weak.length) lines.push(`Weakest subjects: ${weak.map((w) => w.s || w).join(", ")}`);
   if (strong.length) lines.push(`Strongest subjects: ${strong.map((s) => s.s || s).join(", ")}`);
+  if (replyLanguage && replyLanguage !== "English") lines.push(`\nIMPORTANT: Reply entirely in ${replyLanguage} (the student switched the app's UI to ${replyLanguage}), keeping any university/major names in their original English/Latin spelling.`);
   return lines.length ? `\nStudent profile:\n${lines.join("\n")}` : "";
 }
 
