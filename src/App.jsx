@@ -71,6 +71,14 @@ const LEVEL_COLOR = {
   Intermediate: "var(--primary)", Proficient: "var(--jade)", "Exam Ready": "var(--jade)",
 };
 const levelToDifficulty = (level) => (level === "Intermediate" ? "Medium" : level === "Proficient" || level === "Exam Ready" ? "Hard" : "Easy");
+// Display-only Khmer labels for the canonical (English) mastery-level keys used above for
+// color/difficulty lookups — those keys stay English internally so LEVEL_COLOR/levelToDifficulty
+// never need to know about lang; only the rendered text changes.
+const LEVEL_LABEL_KM = {
+  "Not assessed": "មិនទាន់វាយតម្លៃ", Beginner: "ចាប់ផ្តើម", Developing: "កំពុងរីកចម្រើន",
+  Intermediate: "មធ្យម", Proficient: "ស្ទាត់ជំនាញ", "Exam Ready": "ត្រៀមរួចប្រឡង",
+};
+const levelLabel = (level, lang) => (lang === "km" ? (LEVEL_LABEL_KM[level] ?? level) : level);
 
 /* Record one answered question into the topic-mastery store. Immutable update — every new
    answer (diagnostic or practice) calls this and the resulting score feeds straight back into
@@ -1256,7 +1264,7 @@ function Browse({ p, lang = "en" }) {
               <p className="text-xs eai-muted mt-0.5">BAC II {year} · 180 {t(lang, "minAbbrev")} · 100 {t(lang, "marksWord")}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
-                <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
+                <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
               </div>
               <div className="flex gap-2 mt-4">
                 <button
@@ -1787,7 +1795,7 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
               <CheckCircle2 size={28} style={{ color: "var(--jade)" }} />
             </div>
             <h1 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "diagnosticComplete")}</h1>
-            <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "startingPointIs")} <b style={{ color: LEVEL_COLOR[overallLevel] }}>{overallLevel}</b>.</p>
+            <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "startingPointIs")} <b style={{ color: LEVEL_COLOR[overallLevel] }}>{levelLabel(overallLevel, lang)}</b>.</p>
           </div>
 
           <div className="eai-card p-6">
@@ -1799,7 +1807,7 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
                     <div className="h-full rounded-full" style={{ width: `${r.m ?? 0}%`, background: LEVEL_COLOR[r.level] }} />
                   </div>
                   <span className="text-xs font-bold w-9 text-right eai-display">{r.m != null ? `${r.m}%` : "—"}</span>
-                  <span className="text-xs font-semibold w-24 text-right" style={{ color: LEVEL_COLOR[r.level] }}>{r.level}</span>
+                  <span className={`text-xs font-semibold w-24 text-right ${lang === "km" ? "eai-km" : ""}`} style={{ color: LEVEL_COLOR[r.level] }}>{levelLabel(r.level, lang)}</span>
                 </div>
               ))}
             </div>
@@ -2615,7 +2623,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
                             <div className="h-full rounded-full" style={{ width: `${t.score ?? 0}%`, background: LEVEL_COLOR[masteryLevel(t.score)] }} />
                           </div>
                           <span className="text-xs w-9 text-right eai-muted">{t.score != null ? `${t.score}%` : "—"}</span>
-                          <span className="text-xs w-20 text-right eai-muted">{masteryLevel(t.score)}</span>
+                          <span className={`text-xs w-20 text-right eai-muted ${lang === "km" ? "eai-km" : ""}`}>{levelLabel(masteryLevel(t.score), lang)}</span>
                         </div>
                       ))}
                     </div>
