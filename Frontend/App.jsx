@@ -17,7 +17,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { UNIS, UNI_MAJORS } from "./data/universities.js";
+import { UNIS, UNI_MAJORS } from "../src/data/universities.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
 /* Field-specific subject priorities. Change these lists to extend the curriculum. */
