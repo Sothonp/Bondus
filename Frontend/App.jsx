@@ -370,6 +370,71 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
 @media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
 
+/* AI Coach chat (Claude / ChatGPT style) */
+/* Fills what is left under the app header (64px) and main's padding (2x24px).
+   dvh keeps the composer clear of a mobile browser's retracting URL bar, and the
+   floor is low enough that a short window scrolls the messages, not the composer. */
+.eai-coach-view{ height:calc(100vh - 112px); height:calc(100dvh - 112px); min-height:360px; }
+.eai-chat-col{ max-width:768px; margin:0 auto; padding:20px 16px 12px; display:flex; flex-direction:column; gap:22px; }
+.eai-user-bubble{ background:var(--bg-soft); color:var(--ink); border-radius:20px; padding:10px 16px; max-width:85%; white-space:pre-wrap; line-height:1.55; font-size:15px; overflow-wrap:anywhere; }
+.eai-chat-img{ width:168px; height:168px; object-fit:cover; border-radius:14px; border:1px solid var(--line); display:block; cursor:zoom-in; }
+.eai-avatar{ width:30px; height:30px; border-radius:99px; background:var(--primary); display:grid; place-items:center; flex:none; margin-top:1px; }
+.eai-msg-actions{ display:flex; align-items:flex-start; gap:6px; margin-top:6px; flex-wrap:wrap; }
+.eai-msg-actions details{ margin-top:5px; }
+.eai-icon-btn{ width:36px; height:36px; border-radius:99px; display:grid; place-items:center; color:var(--muted); background:transparent; border:none; cursor:pointer; transition:background .15s ease, color .15s ease; }
+.eai-icon-btn:hover{ background:var(--bg-soft); color:var(--ink); }
+.eai-icon-btn.sm{ width:28px; height:28px; border-radius:8px; }
+.eai-composer-wrap{ max-width:768px; margin:0 auto; width:100%; padding:6px 16px 4px; }
+.eai-composer{ background:var(--card); border:1px solid var(--line); border-radius:26px; box-shadow:var(--shadow); transition:border-color .15s ease; }
+.eai-composer:focus-within{ border-color:var(--primary); }
+.eai-composer.drag{ border-color:var(--primary); border-style:dashed; }
+.eai-composer-input{ display:block; width:100%; resize:none; border:none; outline:none; background:transparent; color:var(--ink); font:inherit; font-size:15px; line-height:1.5; padding:14px 18px 6px; max-height:200px; overflow-y:auto; }
+.eai-composer-input::placeholder{ color:var(--muted); }
+.eai-send{ width:36px; height:36px; border-radius:99px; display:grid; place-items:center; background:var(--ink); color:var(--card); border:none; cursor:pointer; transition:opacity .15s ease; }
+.eai-send:disabled{ opacity:.25; cursor:default; }
+.eai-attach{ position:relative; width:64px; height:64px; border-radius:12px; overflow:hidden; border:1px solid var(--line); flex:none; }
+.eai-attach img{ width:100%; height:100%; object-fit:cover; display:block; }
+.eai-attach > button{ position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:99px; background:rgba(0,0,0,.7); color:#fff; display:grid; place-items:center; border:none; cursor:pointer; }
+.eai-attach-busy{ position:absolute; inset:0; background:rgba(255,255,255,.6); display:grid; place-items:center; color:#333; }
+.eai-menu{ position:absolute; bottom:44px; left:0; width:280px; background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:6px; z-index:20; }
+.eai-menu button{ width:100%; display:flex; gap:10px; align-items:flex-start; text-align:left; padding:9px 10px; border-radius:10px; background:none; border:none; color:var(--ink); cursor:pointer; font-size:14px; }
+.eai-menu button:hover:not(:disabled){ background:var(--bg-soft); }
+.eai-menu button:disabled{ opacity:.5; cursor:default; }
+.eai-menu svg{ flex:none; margin-top:2px; }
+.eai-suggest{ text-align:left; padding:12px 14px; border-radius:16px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:14px; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+.eai-suggest:hover{ background:var(--bg-soft); border-color:var(--primary); }
+.eai-reading{ max-width:85%; font-size:13px; color:var(--muted); }
+.eai-reading summary{ cursor:pointer; display:inline-flex; gap:6px; align-items:center; list-style:none; border-radius:8px; padding:2px 4px; }
+.eai-reading summary::-webkit-details-marker{ display:none; }
+.eai-reading[open] summary svg:last-child{ transform:rotate(180deg); }
+.eai-reading > div{ margin-top:6px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--card); text-align:left; }
+.eai-status{ display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:14px; min-height:30px; }
+.eai-shimmer{ background:linear-gradient(90deg, var(--muted) 35%, var(--ink) 50%, var(--muted) 65%); background-size:250% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:shimmer 1.8s linear infinite; }
+@keyframes shimmer{ from{ background-position:100% 0; } to{ background-position:-150% 0; } }
+.eai-spin{ animation:spin 1s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.eai-drop{ position:absolute; inset:0; z-index:30; display:grid; place-items:center; padding:24px; text-align:center; color:var(--primary); background:color-mix(in srgb, var(--bg) 85%, transparent); border:2px dashed var(--primary); border-radius:22px; pointer-events:none; }
+.eai-lightbox{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.85); display:grid; place-items:center; padding:24px; cursor:zoom-out; }
+.eai-lightbox img{ max-width:100%; max-height:100%; border-radius:12px; }
+.eai-footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:6px; }
+@media (prefers-reduced-motion: reduce){ .eai-spin,.eai-shimmer{ animation:none; } .eai-shimmer{ color:var(--muted); background:none; } }
+/* AI Coach answers: Markdown + KaTeX */
+.eai-md > * + *{ margin-top:.6em; }
+.eai-md ol{ list-style:decimal; padding-left:1.4em; } .eai-md ul{ list-style:disc; padding-left:1.4em; }
+.eai-md li + li{ margin-top:.25em; }
+.eai-md h1,.eai-md h2,.eai-md h3,.eai-md h4{ font-weight:700; }
+.eai-md strong{ font-weight:700; }
+.eai-md a{ color:var(--primary); text-decoration:underline; }
+.eai-md code{ font-size:.9em; background:var(--card); border-radius:6px; padding:.1em .35em; }
+.eai-md pre{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; overflow-x:auto; }
+.eai-md pre code{ background:none; padding:0; }
+.eai-md table{ border-collapse:collapse; } .eai-md th,.eai-md td{ border:1px solid var(--line); padding:4px 8px; }
+.eai-md blockquote{ border-left:3px solid var(--line); padding-left:10px; color:var(--muted); }
+.eai-md .katex-display{ overflow-x:auto; overflow-y:hidden; padding:2px 0; margin:.4em 0; }
+.eai-md .katex{ font-size:1.05em; }
+.eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
+@media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
+
 /* ── Welcome hero card ── */
 .eai-hero-card{ position:relative; overflow:hidden; border-radius:22px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); display:flex; }
 .eai-hero-content{ position:relative; z-index:3; padding:32px; flex:1 1 auto; min-width:0; }
@@ -3791,7 +3856,7 @@ function Coach({ p }) {
   const firstName = p.name.split(" ")[0];
 
   return (
-    <div className="eai-rise flex flex-col relative" style={{ height: "calc(100vh - 130px)", minHeight: 520 }} {...dragHandlers}>
+    <div className="eai-rise eai-coach-view flex flex-col relative" {...dragHandlers}>
       <div className="flex items-center justify-between gap-3 flex-wrap pb-2">
         <div className="flex items-center gap-2.5">
           <h2 className="eai-display text-lg font-extrabold">AI Coach</h2>
