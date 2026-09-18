@@ -1232,6 +1232,13 @@ function ExamPaperPage({ paper, onBack }) {
   );
 }
 
+/* Official BAC II full-mark scale per subject (science track). Subjects not listed here (e.g.
+   French, Geography, Morality, Earth Science) fall back to the generic 100-mark default. */
+const SUBJECT_FULL_MARKS = {
+  Mathematics: 125, Physics: 75, Chemistry: 75, Biology: 75,
+  History: 50, English: 50, "Khmer Literature": 75,
+};
+
 function Browse({ p, lang = "en" }) {
   const [year, setYear] = useState(2023);
   const [viewingPaper, setViewingPaper] = useState(null);
@@ -1268,7 +1275,7 @@ function Browse({ p, lang = "en" }) {
                   : <Bookmark size={16} className="eai-muted" />}
               </div>
               <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sub.s, lang)}</h3>
-              <p className="text-xs eai-muted mt-0.5">BAC II {year} · 180 {t(lang, "minAbbrev")} · 100 {t(lang, "marksWord")}</p>
+              <p className="text-xs eai-muted mt-0.5">BAC II {year} · 180 {t(lang, "minAbbrev")} · {SUBJECT_FULL_MARKS[sub.s] ?? 100} {t(lang, "marksWord")}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
