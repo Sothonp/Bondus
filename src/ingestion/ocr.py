@@ -260,9 +260,18 @@ class CachedPageOCR:
             if cached is not None:
                 return cached, False
         text, truncated = self._transcribe_uncached(payload, hint)
-        if not truncated:
+        if not truncated and self._cacheable(payload):
             self._write_cache(candidates[0], text)
         return text, truncated
+
+    def _cacheable(self, payload: PageImage) -> bool:
+        """Whether the reading just produced is worth keeping.
+
+        A complete transcript is cacheable; a subclass that can produce a
+        *degraded* reading (see ``HybridPageOCR``) says no, so a later run
+        transcribes the page properly instead of reusing the degraded one.
+        """
+        return True
 
     def transcribe(self, payload: PageImage) -> str:
         return self.transcribe_page(payload)[0]
