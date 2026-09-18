@@ -229,14 +229,16 @@ const WEEK_SEED = [
   { d: "Thu", h: 0.8 }, { d: "Fri", h: 0.5 }, { d: "Sat", h: 1.1 }, { d: "Sun", h: 0.5 },
 ];
 const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
-/* IELTS has no static "goal" here — it's asked fresh at the start of each diagnostic (see
-   IeltsDiagnostic's "goal" stage) and stored per-result, since it's the student's own target,
-   not something we should assume. The other three are still inert "Coming soon" placeholders. */
+/* pct starts at 0 for all four — none of this is real progress until a student actually takes a
+   diagnostic, so showing anything higher would be the same fabricated-baseline problem as the
+   old hardcoded "Goal Band 7.0" (a brand-new account has done nothing yet). IELTS has no static
+   "goal" here either — it's asked fresh at the start of each diagnostic (see IeltsDiagnostic's
+   "goal" stage) and stored per-result. The other three are still inert "Coming soon" placeholders. */
 const LANGS = [
-  { n: "IELTS Academic", now: "—", pct: 20, c: "var(--ember)" },
-  { n: "TOEFL iBT", goal: "Score 90", now: "—", pct: 15, c: "var(--primary)" },
-  { n: "HSK", goal: "Level 4", now: "—", pct: 10, c: "var(--gold)" },
-  { n: "DELF", goal: "B2", now: "—", pct: 18, c: "var(--jade)" },
+  { n: "IELTS Academic", now: "—", pct: 0, c: "var(--ember)" },
+  { n: "TOEFL iBT", goal: "Score 90", now: "—", pct: 0, c: "var(--primary)" },
+  { n: "HSK", goal: "Level 4", now: "—", pct: 0, c: "var(--gold)" },
+  { n: "DELF", goal: "B2", now: "—", pct: 0, c: "var(--jade)" },
 ];
 
 /* ════════════════════════ IELTS diagnostic ════════════════════════
