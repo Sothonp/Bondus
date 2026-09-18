@@ -2925,6 +2925,11 @@ function ImageReadings({ readings }) {
               </p>
             )}
             {!r.vision_text && !r.khmer_text && <p className="eai-muted">Couldn't read this photo. Try a sharper, well-lit picture.</p>}
+            {r.warnings?.length > 0 && (
+              <ul className="eai-muted text-[11px] mt-2 space-y-0.5">
+                {r.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            )}
             <p className="eai-muted text-[11px] mt-2">{[r.vision_engine, r.khmer_engine].filter(Boolean).join(" + ") || "no engine answered"}</p>
           </div>
         ))}

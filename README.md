@@ -128,9 +128,10 @@ words) and a vision model (Groq `qwen/qwen3.8-27b`, then Gemini as a
 backup, good at formulas). Both readings go to the answering model, which
 combines them, so merging needs no extra API call. Readings are cached by image,
 looping readings are trimmed, and the student can open "Text read from photo"
-to check what was read. If Groq is short on its per-minute token budget, the
-prompt drops old chat turns and then the lowest-ranked passages before
-handing the question to the next model.
+to check what was read, including why an engine came back empty (a timeout or
+a rate limit) when a photo could not be read. If Groq is short on its
+per-minute token budget, the prompt drops old chat turns and then the
+lowest-ranked passages before handing the question to the next model.
 
 **Scanned PDFs.** Most PDFs in `data/` are scans. Their pages are OCR'd once
 (Gemini by default, or `OCR_ENGINE=kiri` for the free local Khmer-only engine)
