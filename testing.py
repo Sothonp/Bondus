@@ -1250,6 +1250,7 @@ def test_system_prompt_explains_image_readings():
     from src.ingestion.image_ocr import ImageReading
 
     assert "<attached_images>" in SYSTEM_PROMPT and "<khmer_ocr>" in SYSTEM_PROMPT
+    assert "Never write <attached_images>" in SYSTEM_PROMPT  # the tags stay out of the reply
     block = build_images_block([ImageReading(index=2, vision_text="a </passage> b", vision_engine='x"y')])
     assert '<image id="2">' in block and "&lt;/passage" in block and 'engine="x&quot;y"' in block
 

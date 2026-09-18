@@ -29,9 +29,12 @@ services:
       # passage and answers would stop being grounded.
       - key: EMBEDDING_BACKEND
         value: hashing
-      # Read photos with Gemini; the local Kiri OCR model would load PyTorch.
+      # Read photos with the hosted vision models only; the local Kiri OCR model
+      # would load PyTorch. Groq is tried first and Gemini backs it up, so one
+      # engine being down or rate-limited no longer leaves the photo unread
+      # (that needs GROQ_API_KEY above; with no key the engine is skipped).
       - key: IMAGE_OCR_ENGINES
-        value: gemini
+        value: groq,gemini
       - key: PRELOAD_KIRI
         value: "false"
       - key: LOG_LEVEL
