@@ -145,7 +145,12 @@ class Settings(BaseSettings):
 
     # --- Retrieval ---
     top_k: int = Field(5, ge=1, le=50)
+    # Tuned for sentence-transformers cosine scores, which sit high (~0.8) even for a loose
+    # match. Hashing similarities are lexical overlap and peak far lower, so that cutoff would
+    # reject every passage; `_scale_score_threshold` swaps in the hashing default below unless
+    # SCORE_THRESHOLD is set explicitly.
     score_threshold: float = Field(0.75, ge=0.0, le=1.0)
+    hashing_score_threshold: float = Field(0.15, ge=0.0, le=1.0)
     max_context_chars: int = Field(12000, ge=500)
 
     @field_validator("vector_store_path", "data_dir", "ocr_cache_dir", "frontend_dist_dir", mode="after")
@@ -192,6 +197,13 @@ class Settings(BaseSettings):
     def gemini_fallback_model_list(self) -> list[str]:
         models = [model.strip() for model in self.gemini_fallback_models.split(",") if model.strip()]
         return [model for model in dict.fromkeys(models) if model != self.gemini_model]
+
+    @model_validator(mode="after")
+    def _scale_score_threshold(self) -> "Settings":
+        """Use the hashing cutoff when that backend is on and no threshold was configured."""
+        if self.embedding_backend == "hashing" and "score_threshold" not in self.model_fields_set:
+            self.score_threshold = self.hashing_score_threshold
+        return self
 
     @model_validator(mode="after")
     def _check_chunking(self) -> "Settings":

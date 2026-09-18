@@ -739,6 +739,20 @@ class TestOCR:
         assert [section.page for section in document.sections] == [2]
         assert any("1 page(s) with an unreadable Khmer text layer" in w for w in document.warnings)
 
+    def test_score_threshold_follows_embedding_backend(self, monkeypatch):
+        """The e5 cutoff rejects every hashing match, so hashing gets its own default."""
+        from src.config import Settings
+
+        for name in ("SCORE_THRESHOLD", "HASHING_SCORE_THRESHOLD", "EMBEDDING_BACKEND"):
+            monkeypatch.delenv(name, raising=False)
+
+        assert Settings(_env_file=None).score_threshold == 0.75
+        hashing = Settings(_env_file=None, embedding_backend="hashing")
+        assert hashing.score_threshold == hashing.hashing_score_threshold == 0.15
+        # An explicit setting still wins, whichever backend is in use.
+        explicit = Settings(_env_file=None, embedding_backend="hashing", score_threshold=0.6)
+        assert explicit.score_threshold == 0.6
+
     def test_build_ocr_respects_settings(self, tmp_path, monkeypatch):
         import src.ingestion.ocr as ocr_module
         from src.config import Settings

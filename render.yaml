@@ -20,10 +20,13 @@ services:
       - key: GROQ_API_KEY
         sync: false
       # Lexical hashing search: no model download, no PyTorch at runtime, so the
-      # server stays inside 512 MB.
-      # TODO: the committed index is still the e5 one, and the server refuses a
-      # mismatched index — rebuild and commit it before deploying with this:
-      # EMBEDDING_BACKEND=hashing uv run python scripts/ingest_corpus.py --reset
+      # server stays inside 512 MB. The committed index is built for this backend
+      # (the server refuses a mismatched one); after re-ingesting with the e5
+      # model, convert it back with:
+      # EMBEDDING_BACKEND=hashing uv run python scripts/reembed_index.py
+      # SCORE_THRESHOLD is deliberately left unset: hashing similarities are
+      # lexical and peak near 0.4, so the e5 cutoff of 0.75 would drop every
+      # passage and answers would stop being grounded.
       - key: EMBEDDING_BACKEND
         value: hashing
       # Read photos with Gemini; the local Kiri OCR model would load PyTorch.
