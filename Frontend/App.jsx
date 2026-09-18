@@ -419,10 +419,19 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:6px; }
 @media (prefers-reduced-motion: reduce){ .eai-spin,.eai-shimmer{ animation:none; } .eai-shimmer{ color:var(--muted); background:none; } }
 /* AI Coach answers: Markdown + KaTeX */
-.eai-md > * + *{ margin-top:.6em; }
+/* Khmer stacks diacritics above and below the line, so answers need more leading
+   than Latin text before the rows of a derivation stop touching each other. */
+.eai-md{ line-height:1.8; }
+.eai-md > * + *{ margin-top:.7em; }
 .eai-md ol{ list-style:decimal; padding-left:1.4em; } .eai-md ul{ list-style:disc; padding-left:1.4em; }
-.eai-md li + li{ margin-top:.25em; }
+.eai-md li + li{ margin-top:.35em; }
+.eai-md li > ul,.eai-md li > ol{ margin-top:.35em; padding-left:1.1em; }
+.eai-md li::marker{ color:var(--muted); }
 .eai-md h1,.eai-md h2,.eai-md h3,.eai-md h4{ font-weight:700; }
+/* One heading per part of an exercise: a rule and real space above it so eight
+   answers read as eight blocks instead of one wall of Khmer and LaTeX. */
+.eai-md h2,.eai-md h3,.eai-md h4{ font-size:1em; margin-top:1.3em; padding-top:.75em; border-top:1px solid var(--line); }
+.eai-md > :first-child{ margin-top:0; padding-top:0; border-top:none; }
 .eai-md strong{ font-weight:700; }
 .eai-md a{ color:var(--primary); text-decoration:underline; }
 .eai-md code{ font-size:.9em; background:var(--card); border-radius:6px; padding:.1em .35em; }
@@ -430,7 +439,12 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-md pre code{ background:none; padding:0; }
 .eai-md table{ border-collapse:collapse; } .eai-md th,.eai-md td{ border:1px solid var(--line); padding:4px 8px; }
 .eai-md blockquote{ border-left:3px solid var(--line); padding-left:10px; color:var(--muted); }
-.eai-md .katex-display{ overflow-x:auto; overflow-y:hidden; padding:2px 0; margin:.4em 0; }
+/* A displayed step can be wider than the column and taller than its line box.
+   Scroll it sideways rather than squeezing it, and clip with a margin so tall
+   parts (\lim limits, nested \frac, a \left[ that spans two rows) keep their
+   ascenders instead of being sliced off. overflow-y:clip is ignored by older
+   browsers, which fall back to the hidden above it. */
+.eai-md .katex-display{ overflow-x:auto; overflow-y:hidden; overflow-y:clip; overflow-clip-margin:.5em; padding:.4em .1em; margin:.7em 0; }
 .eai-md .katex{ font-size:1.05em; }
 .eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
 @media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
@@ -3240,6 +3254,20 @@ const toRagHistory = (history) => history
    Attached photos are read by the server first; onImages receives what it read. */
 const TRUNCATED_STOPS = new Set(["length", "max_tokens", "MAX_TOKENS"]);
 
+/* A full BAC II exercise runs to six or eight parts, and one model response often
+   stops in the middle of part 4. Rather than handing the student half a proof and
+   asking them to type "continue", pick the answer up where it stopped and keep
+   streaming into the same message. Three rounds is enough for the longest past
+   paper; past that the note below is honest about the limit. */
+const CONTINUE_ROUNDS = 3;
+const CONTINUE_CONTEXT_CHARS = 12000;
+const CONTINUE_QUERY_CHARS = 800;
+const KHMER_CHAR = /[\u1780-\u17ff]/;
+const CONTINUE_PROMPT = {
+  km: "បន្តចម្លើយពីកន្លែងដែលអ្នកឈប់។ កុំចាប់ផ្ដើមឡើងវិញ កុំនិយាយឡើងវិញ ហើយកុំសរុបអ្វីដែលបានសរសេររួច។",
+  en: "Continue the answer from exactly where you stopped. Do not restart, repeat or summarise what you already wrote.",
+};
+
 /* Free hosting tiers stop the API when it is idle, so the first request after a quiet spell waits
    for it to boot — or is refused while it boots. Say so rather than looking stuck, and retry once
    before falling back to the offline reply. Streaming a query is read-only, so a retry is safe. */
@@ -3272,37 +3300,32 @@ async function ragStreamRequest(body, { signal, status }) {
 
 async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
   let text = "";
-  let stopReason = null;
   let sources = [];
-  let finished = false;
   let frame = 0;
   const flush = () => { frame = 0; onUpdate({ text, rag: true, streaming: true, sources, notice: null }); };
   const status = (notice) => { if (!text) onUpdate({ text, rag: true, streaming: true, sources, notice }); };
   const lost = "The connection to the AI coach server was lost.";
-  try {
-    status(images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching);
-    const res = await ragStreamRequest(
-      JSON.stringify({
-        prompt: t,
-        history: toRagHistory(history),
-        images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
-      }),
-      { signal, status },
-    );
+
+  /* One streamed request, appending what it produces to `text`; returns its stop reason. */
+  const streamOnce = async (body) => {
+    const base = text.length; // a model switch rewinds this request's own output, not the answer so far
+    let finished = false;
+    let stopReason = null;
+    const res = await ragStreamRequest(JSON.stringify(body), { signal, status });
     try {
       for await (const event of readNdjson(res)) {
         if (event.type === "status") status(STAGE_LABELS[event.stage]);
         else if (event.type === "images") onImages?.(event.images);
-        else if (event.type === "meta") sources = event.sources || [];
+        else if (event.type === "meta") sources = event.sources?.length ? event.sources : sources;
         else if (event.type === "delta") {
           text += event.text;
           if (!frame) frame = requestAnimationFrame(flush);
         } else if (event.type === "reset") {
           // The server is restarting the answer with another model.
-          text = "";
+          text = text.slice(0, base);
           cancelAnimationFrame(frame);
           frame = 0;
-          onUpdate({ text, rag: true, streaming: true, sources, notice: "Switching to another model…" });
+          onUpdate({ text, rag: true, streaming: true, sources, notice: text ? null : "Switching to another model…" });
         } else if (event.type === "error") throw new RagError(event.detail, event.status);
         else if (event.type === "done") { finished = true; stopReason = event.stop_reason; }
       }
@@ -3310,7 +3333,33 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
       throw err instanceof RagError || signal?.aborted ? err : new RagError(lost, 0);
     }
     if (!finished) throw new RagError(lost, 0);
-    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(The answer reached its length limit. Ask me to continue.)*";
+    return stopReason;
+  };
+
+  try {
+    status(images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching);
+    let stopReason = await streamOnce({
+      prompt: t,
+      history: toRagHistory(history),
+      images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
+    });
+    // The photos are already read, so a continuation sends the answer so far instead.
+    for (let round = 0; TRUNCATED_STOPS.has(stopReason) && round < CONTINUE_ROUNDS && !signal?.aborted; round++) {
+      // The question rides along so retrieval finds the same passages again; on its
+      // own the continuation phrase matches nothing and the server would announce
+      // mid-answer that the curriculum does not cover this.
+      const lang = KHMER_CHAR.test(text) ? "km" : "en";
+      stopReason = await streamOnce({
+        prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
+        history: [
+          ...toRagHistory(history),
+          { role: "user", content: (t || "(photo)").slice(0, 20000) },
+          { role: "assistant", content: text.slice(-CONTINUE_CONTEXT_CHARS) },
+        ],
+        images: [],
+      });
+    }
+    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
     return { text: text || "…", rag: true, sources };
   } catch (err) {
     if (signal?.aborted) {
