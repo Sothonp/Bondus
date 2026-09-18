@@ -3413,10 +3413,24 @@ const fenceDisplayMath = (text) =>
 const CODE_FENCE = /(^```[\s\S]*?^```)/gm;
 const outsideCode = (text, fix) => text.split(CODE_FENCE).map((part, i) => (i % 2 ? part : fix(part))).join("");
 
+/* An odd number of display fences leaves the last one open, and remark-math then reads
+   everything after it — headings, prose, the remaining steps, a GeoGebra block — as a single
+   formula, which KaTeX prints as raw red source (throwOnError is off). It survives to the end
+   of a finished answer, where hideUnclosed no longer applies: a model that runs out of room
+   mid-block, or writes one $$ too many, loses the whole tail of its answer that way. Drop the
+   unmatched fence so the tail renders as ordinary Markdown. */
+const LINE_FENCE = /^[ \t]*\$\$[ \t]*$/gm;
+const dropDanglingFence = (text) => {
+  LINE_FENCE.lastIndex = 0;
+  let match, count = 0, at = -1, len = 0;
+  while ((match = LINE_FENCE.exec(text))) { count++; at = match.index; len = match[0].length; }
+  return count % 2 === 0 ? text : text.slice(0, at) + text.slice(at + len);
+};
+
 /* The prompt asks for $...$ / $$...$$, but models sometimes emit \( \) or \[ \]. */
-const normalizeMath = (text) => outsideCode(text, (part) => fenceDisplayMath(part
+const normalizeMath = (text) => outsideCode(text, (part) => dropDanglingFence(fenceDisplayMath(part
   .replace(/\\\[([\s\S]+?)\\\]/g, (_, body) => `\n$$\n${body.trim()}\n$$\n`)
-  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`)));
+  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`))));
 
 /* While an answer is still arriving, hide a trailing unclosed $$ block or code fence so half a
    formula or graph never flashes on screen. */

@@ -77,6 +77,10 @@ OUTPUT_RULES = """
    - The closing $$ must sit alone on its own line too. After an environment,
      write "\\end{array}", then a newline, then "$$" — never "\\end{array}$$" on
      one line, which breaks the whole answer's rendering.
+   - Never leave a display block open, and never write a stray $$: every $$ that
+     opens a block has a matching $$ on a line of its own. An unclosed block
+     swallows the rest of the answer, so if a block is open, close it before you
+     move on or stop.
    - Use real LaTeX commands (\\frac, \\sqrt, \\lim_{x \\to a}, \\int_a^b,
      \\vec{u}, \\overrightarrow{AB}, \\mathbb{R}, \\ln, \\cdot), never Unicode
      look-alikes such as √, ∫, ≤, → or ², and never plain-text fractions such as 1/2
