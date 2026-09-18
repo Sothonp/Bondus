@@ -15,8 +15,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 
-# Download the embedding model at build time so cold starts don't fetch it.
-RUN uv run --frozen --no-dev python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
+# No model is downloaded here: EMBEDDING_BACKEND=hashing needs none. When using
+# sentence-transformers instead, pre-fetch it so cold starts don't:
+#   RUN uv run --frozen --no-dev python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
 EXPOSE 8000
 # Render sets PORT; default to 8000 elsewhere.

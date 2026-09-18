@@ -2500,6 +2500,8 @@ class RagError extends Error {
 }
 
 const UNREACHABLE = "The AI coach server is not reachable.";
+const UNCONFIGURED =
+  "This site was built without an AI coach server address (set VITE_RAG_API_URL and redeploy).";
 
 /* Resolves to the Response when it is OK, otherwise throws a RagError with FastAPI's detail. */
 async function ragRequest(path, init) {
@@ -2507,9 +2509,15 @@ async function ragRequest(path, init) {
   try {
     res = await fetch(`${RAG_API}${path}`, init);
   } catch {
-    throw new RagError(UNREACHABLE, 0);
+    throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
   }
-  if (res.ok) return res;
+  if (res.ok) {
+    // A static host's single-page fallback answers /api/* with index.html (200 text/html)
+    // instead of the API, which is what an unset VITE_RAG_API_URL looks like in production.
+    if ((res.headers.get("content-type") || "").includes("text/html"))
+      throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
+    return res;
+  }
   const detail = (await res.json().catch(() => null))?.detail;
   // A dev-proxy failure (server down) is a 5xx without a FastAPI error body.
   if (!detail && res.status >= 500) throw new RagError(UNREACHABLE, 0);
@@ -2555,6 +2563,36 @@ const toRagHistory = (history) => history
    Attached photos are read by the server first; onImages receives what it read. */
 const TRUNCATED_STOPS = new Set(["length", "max_tokens", "MAX_TOKENS"]);
 
+/* Free hosting tiers stop the API when it is idle, so the first request after a quiet spell waits
+   for it to boot — or is refused while it boots. Say so rather than looking stuck, and retry once
+   before falling back to the offline reply. Streaming a query is read-only, so a retry is safe. */
+const COLD_START_MS = 5000;
+const COLD_START_RETRY_MS = 4000;
+const WAKING = "Waking the AI coach server (this can take a minute after it has been idle)…";
+
+async function ragStreamRequest(body, { signal, status }) {
+  const send = () => ragRequest("/api/query/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    signal,
+  });
+  // Only a hosted API sleeps; in dev the proxy reaches a server that is either up or not.
+  if (!RAG_API) return send();
+  const waking = setTimeout(() => status(WAKING), COLD_START_MS);
+  try {
+    return await send();
+  } catch (err) {
+    // Only a boot can be waited out: a configuration mistake or a real error cannot.
+    if (err.status !== 0 || err.message !== UNREACHABLE || signal?.aborted) throw err;
+    status(WAKING);
+    await sleep(COLD_START_RETRY_MS);
+    return await send();
+  } finally {
+    clearTimeout(waking);
+  }
+}
+
 async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
   let text = "";
   let stopReason = null;
@@ -2566,16 +2604,14 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
   const lost = "The connection to the AI coach server was lost.";
   try {
     status(images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching);
-    const res = await ragRequest("/api/query/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await ragStreamRequest(
+      JSON.stringify({
         prompt: t,
         history: toRagHistory(history),
         images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
       }),
-      signal,
-    });
+      { signal, status },
+    );
     try {
       for await (const event of readNdjson(res)) {
         if (event.type === "status") status(STAGE_LABELS[event.stage]);
@@ -2606,7 +2642,8 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
         : { text: "Stopped.", error: true };
     }
     if (err.status === 0 && !text) {
-      if (images.length) return { text: "I can't reach the AI coach server, so I can't read your photo right now. Please try again in a moment.", error: true };
+      // A photo can only be read by the server, so there is no offline answer to fall back to.
+      if (images.length) return { text: `I can't read your photo right now: ${err.message}`, error: true };
       return { text: `${coachReply(t, p)}\n\n(Offline demo reply: start the AI coach server for curriculum-grounded answers.)` };
     }
     if (text) return { text: `${text}\n\n*(The answer was cut off: ${err.message})*`, rag: true, sources, error: true };

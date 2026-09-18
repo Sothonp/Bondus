@@ -1,22 +1,38 @@
-# Render Blueprint for the AI coach API. The website stays on Vercel; set
-# VITE_RAG_API_URL there to this service's URL and redeploy.
+# Render Blueprint for the AI coach API. The website is hosted on Netlify (or
+# Vercel); set VITE_RAG_API_URL there to this service's URL and redeploy, and
+# set CORS_ORIGINS below to the site's origin.
 services:
   - type: web
     name: bondus-api
     runtime: docker
-    # PyTorch + the embedding and Khmer OCR models need more than 512 MB of RAM.
-    plan: standard
+    # Fits the free instance: hashing embeddings load no model (see envVars).
+    # For the e5 embedding model instead, use `plan: standard` (2 GB) and drop
+    # EMBEDDING_BACKEND / IMAGE_OCR_ENGINES / PRELOAD_KIRI below.
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: CORS_ORIGINS
-        sync: false # e.g. https://your-app.vercel.app
+        sync: false # e.g. https://bondusedu.netlify.app
       - key: GEMINI_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: EMBEDDING_DEVICE
-        value: cpu
+      # Lexical hashing search: no model download, no PyTorch at runtime, so the
+      # server stays inside 512 MB. The committed index is built for this backend
+      # (the server refuses a mismatched one); after re-ingesting with the e5
+      # model, convert it back with:
+      # EMBEDDING_BACKEND=hashing uv run python scripts/reembed_index.py
+      # SCORE_THRESHOLD is deliberately left unset: hashing similarities are
+      # lexical and peak near 0.4, so the e5 cutoff of 0.75 would drop every
+      # passage and answers would stop being grounded.
+      - key: EMBEDDING_BACKEND
+        value: hashing
+      # Read photos with Gemini; the local Kiri OCR model would load PyTorch.
+      - key: IMAGE_OCR_ENGINES
+        value: gemini
+      - key: PRELOAD_KIRI
+        value: "false"
       - key: LOG_LEVEL
         value: INFO

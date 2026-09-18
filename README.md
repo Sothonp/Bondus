@@ -151,8 +151,10 @@ separately.
 **Render — the AI coach API**
 New > Blueprint and pick this repo: `render.yaml` builds the `Dockerfile`. Set
 `GEMINI_API_KEY` (or another provider key) and `CORS_ORIGINS` to the site's
-origin. The `standard` plan is used because the models need more than 512 MB of
-RAM. Check `https://<service>.onrender.com/health`.
+origin. The blueprint uses the `free` plan, which the hashing backend fits (see
+below); the embedding model would need `standard`. Check
+`https://<service>.onrender.com/health` — it reports the backend, the chunk
+count and the retrieval threshold actually in use.
 
 **Netlify — the site**
 `netlify.toml` sets the build (`npm run build` into `dist/`), routes
@@ -171,9 +173,31 @@ Whichever host serves the site, its origin must be in `CORS_ORIGINS` on Render
 or the browser blocks the chat requests.
 
 The index in `storage/vector_index/index.npz` is committed so Render can serve
-answers without the `data/` corpus. Re-run `scripts/ingest_corpus.py` locally
-and commit it again after changing `data/`. Files uploaded in the chat on
-Render are lost when the service restarts.
+answers without the `data/` corpus. After changing `data/`, rebuild and commit
+it again:
+
+```bash
+EMBEDDING_BACKEND=hashing uv run python scripts/ingest_corpus.py --reset
+```
+
+If the index already exists and only the backend changed, convert it instead —
+this re-embeds the stored chunks, so it needs neither `data/` nor another OCR
+pass:
+
+```bash
+EMBEDDING_BACKEND=hashing uv run python scripts/reembed_index.py
+```
+
+`render.yaml` sets `EMBEDDING_BACKEND=hashing` so the server needs no model and
+fits Render's free 512 MB instance, and reads photos with Gemini instead of the
+local Kiri model. The index must be built with the same backend as the server
+uses — the server refuses a mismatched index — hence the variable above. Leave
+`SCORE_THRESHOLD` unset with this backend: hashing similarities are lexical and
+peak near 0.4, so the embedding model's 0.75 cutoff would drop every passage and
+answers would quietly stop being grounded. For better Khmer retrieval, drop
+those variables, use `plan: standard` (2 GB), and re-index without
+`EMBEDDING_BACKEND`. Files uploaded in the chat on Render are lost when the
+service restarts, and free instances sleep after 15 minutes idle.
 
 ## Push to your GitHub account
 
