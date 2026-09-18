@@ -3327,7 +3327,19 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
           frame = 0;
           onUpdate({ text, rag: true, streaming: true, sources, notice: text ? null : "Switching to another model…" });
         } else if (event.type === "error") throw new RagError(event.detail, event.status);
-        else if (event.type === "done") { finished = true; stopReason = event.stop_reason; }
+        else if (event.type === "done") {
+          finished = true;
+          stopReason = event.stop_reason;
+          /* The server repaired this request's Markdown/LaTeX. Some fixes (closing an
+             unclosed $$, lifting Khmer out of a formula) need the whole answer and so
+             cannot arrive as deltas; swap the repaired text in, keeping earlier rounds. */
+          if (typeof event.answer === "string") {
+            text = text.slice(0, base) + event.answer;
+            cancelAnimationFrame(frame);
+            frame = 0;
+            flush();
+          }
+        }
       }
     } catch (err) {
       throw err instanceof RagError || signal?.aborted ? err : new RagError(lost, 0);
