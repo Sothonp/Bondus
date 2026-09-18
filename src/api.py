@@ -68,7 +68,7 @@ from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
 logger = logging.getLogger("reanmath")
 
-Provider = Literal["anthropic", "gemini", "groq", "none"]
+Provider = Literal["anthropic", "gemini", "groq", "sea-lion", "none"]
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +599,128 @@ class GroqGenerator:
         yield GeneratedAnswer(text=text, stop_reason=finish_reason, model=model)
 
 
+class SeaLionGenerator:
+    """SEA-LION (AI Singapore), an open model family built for Southeast Asian
+    languages, through its OpenAI-compatible API.
+
+    The request and response shapes are the ones ``GroqGenerator`` already
+    speaks, so the message building, budget shrinking and stream handling are
+    inherited; only the client and the error mapping differ.
+    """
+
+    provider: Provider = "sea-lion"
+
+    _messages = staticmethod(GroqGenerator._messages)
+    _request = GroqGenerator._request
+    _completion_budget = GroqGenerator._completion_budget
+    estimate_tokens = staticmethod(GroqGenerator.estimate_tokens)
+    _check = GroqGenerator._check
+    _retry_after = staticmethod(GroqGenerator._retry_after)
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        base_url: str,
+        max_tokens: int,
+        timeout: float,
+        temperature: float,
+        tokens_per_minute: int = 0,
+        max_retry_wait: float = 0.0,
+        min_completion_tokens: int = 256,
+    ) -> None:
+        import openai
+
+        self._openai = openai
+        # Retries are handled in _create, which knows when to give up and fall back.
+        self._client = openai.AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0
+        )
+        self.base_url = base_url
+        self.max_retry_wait = max_retry_wait
+        self.min_completion_tokens = min(min_completion_tokens, max_tokens)
+        self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.tokens_per_minute = tokens_per_minute
+
+    def _error(self, exc: Exception) -> LLMError:
+        openai = self._openai
+        if isinstance(exc, openai.AuthenticationError):
+            return LLMError(502, "SEA-LION rejected the API key (check SEA_LION_API_KEY)")
+        if isinstance(exc, openai.PermissionDeniedError):
+            return LLMError(502, f"SEA-LION permission denied: {exc.message}")
+        if isinstance(exc, openai.NotFoundError):
+            return LLMError(
+                502,
+                f"Unknown SEA-LION model '{self.model}': {exc.message} "
+                f"(set SEA_LION_MODEL to a model the API lists)",
+            )
+        if isinstance(exc, openai.BadRequestError):
+            return LLMError(502, f"SEA-LION rejected the request: {exc.message}")
+        if isinstance(exc, openai.RateLimitError):
+            return LLMError(429, "SEA-LION rate limit reached; retry shortly")
+        if isinstance(exc, openai.InternalServerError):
+            return LLMError(503, f"SEA-LION is temporarily unavailable ({exc.status_code})")
+        if isinstance(exc, openai.APIStatusError):
+            return LLMError(502, f"SEA-LION API error ({exc.status_code}): {exc.message}")
+        if isinstance(exc, openai.APITimeoutError):
+            return LLMError(504, "SEA-LION request timed out")
+        if isinstance(exc, openai.APIConnectionError):
+            return LLMError(503, f"Could not reach the SEA-LION API at {self.base_url}")
+        return LLMError(502, f"SEA-LION API error: {exc}")
+
+    async def _create(self, request: dict, **extra):
+        """One request, retried once if the API asks for a short enough wait."""
+        for attempt in (1, 2):
+            try:
+                return await self._client.chat.completions.create(**request, **extra)
+            except self._openai.RateLimitError as exc:
+                wait = self._retry_after(exc)
+                if attempt == 2 or wait is None or wait > self.max_retry_wait:
+                    detail = f"SEA-LION rate limit reached; retry in {wait:.0f} s" if wait else None
+                    error = self._error(exc)
+                    raise (LLMError(429, detail) if detail else error) from exc
+                logger.info("SEA-LION rate limited; retrying in %.1f s", wait)
+                await asyncio.sleep(wait)
+            except self._openai.APIError as exc:
+                raise self._error(exc) from exc
+
+    async def generate(self, *, system, history, user_message, chunks, language, message_builder=None) -> GeneratedAnswer:
+        response = await self._create(self._request(system, history, user_message, chunks, message_builder))
+        choice = response.choices[0] if response.choices else None
+        finish_reason = choice.finish_reason if choice else None
+        text = ((choice.message.content if choice else None) or "").strip()
+        self._check(text, finish_reason)
+        return GeneratedAnswer(text=text, stop_reason=finish_reason, model=response.model or self.model)
+
+    async def stream(self, *, system, history, user_message, chunks, language, message_builder=None) -> AsyncIterator[StreamItem]:
+        parts: list[str] = []
+        finish_reason = None
+        model = self.model
+        stream = await self._create(
+            self._request(system, history, user_message, chunks, message_builder), stream=True
+        )
+        try:
+            async for chunk in stream:
+                model = chunk.model or model
+                choice = chunk.choices[0] if chunk.choices else None
+                if choice is None:
+                    continue
+                finish_reason = choice.finish_reason or finish_reason
+                if choice.delta.content:
+                    parts.append(choice.delta.content)
+                    yield choice.delta.content
+        except self._openai.APIError as exc:
+            raise self._error(exc) from exc
+        finally:
+            await stream.close()
+        text = "".join(parts)
+        self._check(text.strip(), finish_reason)
+        yield GeneratedAnswer(text=text, stop_reason=finish_reason, model=model)
+
+
 class ExtractiveGenerator:
     """No LLM: answer with the retrieved passages themselves."""
 
@@ -732,6 +854,20 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
                 min_completion_tokens=settings.groq_min_completion_tokens,
             )
         ]
+    if provider == "sea-lion" and settings.sea_lion_api_key is not None:
+        if not settings.sea_lion_model:
+            logger.error("SEA_LION_API_KEY is set but SEA_LION_MODEL is empty; skipping SEA-LION")
+            return []
+        return [
+            SeaLionGenerator(
+                settings.sea_lion_api_key.get_secret_value(),
+                settings.sea_lion_model,
+                base_url=settings.sea_lion_base_url,
+                max_tokens=settings.llm_max_tokens,
+                timeout=settings.llm_timeout_seconds,
+                temperature=settings.sea_lion_temperature,
+            )
+        ]
     return []
 
 
@@ -741,10 +877,13 @@ def build_generator(settings: Settings) -> AnswerGenerator:
         return ExtractiveGenerator()
     candidates = _provider_generators(settings, provider)
     if not candidates:
-        raise RuntimeError(f"LLM_PROVIDER={provider} requires {provider.upper()}_API_KEY")
+        prefix = provider.upper().replace("-", "_")
+        # SEA-LION has no default model, so a key alone is not enough to use it.
+        needs = f"{prefix}_API_KEY and {prefix}_MODEL" if provider == "sea-lion" else f"{prefix}_API_KEY"
+        raise RuntimeError(f"LLM_PROVIDER={provider} requires {needs}")
     if not settings.llm_fallback:
         return candidates[0]
-    for other in ("anthropic", "gemini", "groq"):
+    for other in ("anthropic", "gemini", "groq", "sea-lion"):
         if other != provider:
             candidates += _provider_generators(settings, other)
     return FallbackGenerator(candidates)

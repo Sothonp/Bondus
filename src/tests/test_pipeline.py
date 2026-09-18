@@ -979,3 +979,96 @@ class TestKiriOCR:
             extract_document(b"img", "photo.jpeg", ocr=None)
         with pytest.raises(UnsupportedFileTypeError):
             extract_document(b"img", "photo.gif", ocr=None)
+
+
+class TestHybridOCR:
+    """Kiri reads the Khmer, the vision model reads the mathematics."""
+
+    @staticmethod
+    def _hybrid(tmp_path, kiri_results, vision_outcomes, **kwargs):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+
+        khmer, engines = _kiri(tmp_path, kiri_results)
+        client = FakeGeminiClient(vision_outcomes)
+        vision = _ocr(client, tmp_path, max_retries=0)
+        hybrid = HybridPageOCR(
+            khmer=khmer, vision=[vision], cache_dir=tmp_path / "hybrid", **kwargs
+        )
+        return hybrid, client, engines
+
+    def test_khmer_reading_is_given_to_the_vision_model(self, tmp_path):
+        hybrid, client, _ = self._hybrid(
+            tmp_path, [_region("លីមីត នៃ អនុគមន៍", 10)], [OCR_PAGE]
+        )
+        document = extract_document(make_pdf([""]), "lesson.pdf", ocr=hybrid)
+
+        assert document.ocr_pages == 1
+        # The vision transcript is what gets indexed: it has the formula.
+        assert "\\lim_{x \\to 0}" in document.sections[0].text
+        # ...and the vision model was told how Kiri spelled the Khmer.
+        prompt = client.calls[0]["contents"][1]
+        assert "<khmer_reading>" in prompt
+        assert "លីមីត នៃ អនុគមន៍" in prompt
+
+    def test_page_falls_back_to_the_khmer_reading_when_vision_fails(self, tmp_path):
+        hybrid, _, _ = self._hybrid(
+            tmp_path, [_region("ដេរីវេ នៃ អនុគមន៍", 10)], [_api_error(400)]
+        )
+        document = extract_document(make_pdf([""]), "lesson.pdf", ocr=hybrid)
+
+        assert "ដេរីវេ នៃ អនុគមន៍" in document.sections[0].text
+        assert document.warnings == [], "a usable page is not a warning"
+
+    def test_require_vision_fails_the_page_instead_of_indexing_it_without_maths(self, tmp_path):
+        hybrid, _, _ = self._hybrid(
+            tmp_path,
+            [_region("ដេរីវេ នៃ អនុគមន៍", 10)],
+            [_api_error(400)],
+            require_vision=True,
+        )
+        document = extract_document(make_pdf([""]), "lesson.pdf", ocr=hybrid)
+
+        assert document.sections == []
+        assert any("HYBRID_REQUIRE_VISION" in warning for warning in document.warnings)
+
+    def test_a_page_with_no_khmer_is_still_read_by_the_vision_model(self, tmp_path):
+        hybrid, client, _ = self._hybrid(tmp_path, [], [OCR_PAGE])
+        document = extract_document(make_pdf([""]), "lesson.pdf", ocr=hybrid)
+
+        assert "\\lim_{x \\to 0}" in document.sections[0].text
+        assert "<khmer_reading>" not in client.calls[0]["contents"][1]
+
+    def test_transcript_is_cached_and_neither_engine_runs_again(self, tmp_path):
+        hybrid, client, engines = self._hybrid(
+            tmp_path, [_region("លីមីត", 10)], [OCR_PAGE]
+        )
+        data = make_pdf([""])
+        first = extract_document(data, "lesson.pdf", ocr=hybrid).sections[0].text
+        kiri_calls = len(engines[0].calls)
+
+        again = extract_document(data, "lesson.pdf", ocr=hybrid).sections[0].text
+        assert again == first
+        assert len(client.calls) == 1, "the vision model is not asked twice"
+        assert len(engines[0].calls) == kiri_calls, "Kiri is not asked twice"
+
+    def test_a_different_khmer_reading_gets_its_own_vision_cache_entry(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        client = FakeGeminiClient([OCR_PAGE])
+        vision = _ocr(client, tmp_path, max_retries=0)
+        page = PageImage(b"page-bytes", "image/png")
+
+        vision.transcribe_page(page, "លីមីត")
+        vision.transcribe_page(page, "ដេរីវេ")
+        assert len(client.calls) == 2, "the hint is part of the cache key"
+        vision.transcribe_page(page, "លីមីត")
+        assert len(client.calls) == 2, "the same hint is served from the cache"
+        # An unhinted read of the same page is a separate entry again.
+        vision.transcribe_page(page)
+        assert len(client.calls) == 3
+
+    def test_hybrid_needs_kiri_and_a_vision_engine(self):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+
+        with pytest.raises(ValueError, match="needs a Khmer engine"):
+            HybridPageOCR(khmer=None, vision=[])

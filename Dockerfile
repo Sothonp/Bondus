@@ -10,8 +10,11 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Dependencies first so code changes don't reinstall torch.
+# --extra cpu is required, not optional: torch and torchvision resolve from the
+# CPU index only through that extra. Without it they come from PyPI, whose Linux
+# wheel bundles ~2.5 GB of CUDA libraries and will not fit the free instance.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra cpu
 
 COPY . .
 
@@ -21,4 +24,4 @@ COPY . .
 
 EXPOSE 8000
 # Render sets PORT; default to 8000 elsewhere.
-CMD ["sh", "-c", "uv run --frozen --no-dev uvicorn src.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uv run --frozen --no-dev --extra cpu uvicorn src.api:app --host 0.0.0.0 --port ${PORT:-8000}"]

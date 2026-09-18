@@ -16,13 +16,17 @@ import base64
 import hashlib
 import io
 import logging
+import random
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.ingestion.ocr import (
+    KHMER_HINT_TEMPLATE,
+    RETRYABLE_STATUS,
     CachedPageOCR,
     GeminiPageOCR,
     OCREngine,
@@ -70,6 +74,11 @@ def trim_repetition(text: str) -> tuple[str, bool]:
         return match.group(1)
 
     return _REPEAT_LOOP.sub(keep_one, text), trimmed
+
+
+def _is_retryable(error: OCRError) -> bool:
+    """A rate limit or a server hiccup is worth another attempt; a 400 is not."""
+    return error.status is None or error.status in RETRYABLE_STATUS
 
 
 class ImageInputError(ValueError):
@@ -129,7 +138,11 @@ class GroqVisionOCR(CachedPageOCR):
         api_key: str,
         model: str,
         *,
+        mode: Literal["auto", "always"] = "always",
+        min_chars: int = 20,
         cache_dir: str | Path | None = None,
+        concurrency: int = 1,
+        max_retries: int = 0,
         timeout: float = 60.0,
         reasoning_effort: str | None = None,
         max_output_tokens: int = 1000,
@@ -137,12 +150,17 @@ class GroqVisionOCR(CachedPageOCR):
         prompt: str = QUESTION_OCR_PROMPT,
         client: Any = None,
     ) -> None:
-        super().__init__(mode="always", cache_dir=cache_dir)
+        super().__init__(
+            mode=mode, min_chars=min_chars, cache_dir=cache_dir, concurrency=concurrency
+        )
         import groq
 
         self._groq = groq
-        # One attempt: on a rate limit the next engine reads the image instead.
+        # Retries are off for a student photo: on a rate limit the next engine
+        # reads the image instead. A corpus ingest has no next engine and sets
+        # max_retries, because a dropped page is a hole in the index.
         self._client = client or groq.Groq(api_key=api_key, timeout=timeout, max_retries=0)
+        self.max_retries = max(0, max_retries)
         self.model = model
         self.reasoning_effort = reasoning_effort
         self.max_output_tokens = max_output_tokens
@@ -153,24 +171,43 @@ class GroqVisionOCR(CachedPageOCR):
 
     def _cache_key(self, payload: PageImage) -> str:
         digest = hashlib.sha256()
-        for part in ("groq-vision", QUESTION_OCR_VERSION, self.model, payload.mime_type):
+        parts = ["groq-vision", QUESTION_OCR_VERSION, self.model, payload.mime_type]
+        if self.prompt != QUESTION_OCR_PROMPT:
+            # Page OCR asks for a different transcript of the same image
+            # (headings, tables, the whole page), so it gets its own entries
+            # and the photo cache keeps the keys it already has.
+            parts.append(hashlib.sha256(self.prompt.encode("utf-8")).hexdigest())
+        for part in parts:
             digest.update(part.encode("utf-8") + b"\x00")
         digest.update(payload.data)
         return digest.hexdigest()
 
-    def _transcribe_uncached(self, payload: PageImage) -> tuple[str, bool]:
+    def _transcribe_uncached(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
+        for attempt in range(self.max_retries + 1):
+            try:
+                return self._request(payload, hint)
+            except OCRError as exc:
+                if attempt == self.max_retries or not _is_retryable(exc):
+                    raise
+                delay = min(60.0, 2.0 ** (attempt + 1)) + random.uniform(0, 1)
+                logger.info("Groq vision busy; retrying in %.0fs (attempt %d)", delay, attempt + 1)
+                time.sleep(delay)
+        raise AssertionError("unreachable")
+
+    def _request(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
         groq = self._groq
         url = f"data:{payload.mime_type};base64,{base64.b64encode(payload.data).decode('ascii')}"
         extra = {"reasoning_effort": self.reasoning_effort} if self.reasoning_effort else {}
         if self.frequency_penalty:
             extra["frequency_penalty"] = self.frequency_penalty
+        prompt = self.prompt + KHMER_HINT_TEMPLATE.format(reading=hint) if hint else self.prompt
         try:
             response = self._client.chat.completions.create(
                 model=self.model,
                 messages=[{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": self.prompt},
+                        {"type": "text", "text": prompt},
                         {"type": "image_url", "image_url": {"url": url}},
                     ],
                 }],
@@ -179,7 +216,9 @@ class GroqVisionOCR(CachedPageOCR):
                 **extra,
             )
         except groq.APIStatusError as exc:
-            raise OCRError(f"Groq vision failed ({exc.status_code}): {exc.message}") from exc
+            raise OCRError(
+                f"Groq vision failed ({exc.status_code}): {exc.message}", exc.status_code
+            ) from exc
         except groq.APIError as exc:
             raise OCRError(f"Groq vision request failed: {exc}") from exc
         choice = response.choices[0] if response.choices else None
