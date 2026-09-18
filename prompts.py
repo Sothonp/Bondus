@@ -278,38 +278,40 @@ def build_user_message(
     return "\n\n".join(parts)
 
 
+# Shown to a student, so it never names an environment variable, a provider or
+# a config file: an operator reads the real cause in the server log, which
+# FallbackGenerator already writes. "No LLM configured" and "every LLM failed"
+# look the same from a student's seat -- the tutor is not answering -- so they
+# read the same, and both keep the retrieved passages, which are still useful.
 _EXTRACTIVE_TEXT = {
     "km": {
-        "header": "**ពុំមានម៉ូដែលភាសា (LLM) ត្រូវបានកំណត់ទេ។** ខាងក្រោមនេះជាអត្ថបទដែលពាក់ព័ន្ធបំផុតពីឯកសារកម្មវិធីសិក្សា៖",
+        "header": "**គ្រូ AI មិនអាចឆ្លើយបានទេឥឡូវនេះ។** ខាងក្រោមនេះជាអត្ថបទពាក់ព័ន្ធពីកម្មវិធីសិក្សា៖",
         "empty": (
-            "**ពុំមានម៉ូដែលភាសា (LLM) ត្រូវបានកំណត់ទេ** ហើយរកមិនឃើញអត្ថបទពាក់ព័ន្ធក្នុងឯកសារដែលបានបញ្ចូលទេ។ "
-            "សូមបញ្ចូលឯកសារបន្ថែម ឬកំណត់ `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` ក្នុង `.env`។"
+            "**គ្រូ AI មិនអាចឆ្លើយបានទេឥឡូវនេះ។** សូមសាកល្បងម្ដងទៀតក្នុងពេលបន្តិចទៀត។"
         ),
         "unavailable": (
-            "**គ្រូ AI មិនអាចឆ្លើយបានបណ្ដោះអាសន្ន** ({reason})។ "
-            "ខាងក្រោមនេះជាអត្ថបទដែលពាក់ព័ន្ធបំផុតពីឯកសារកម្មវិធីសិក្សា៖"
+            "**គ្រូ AI មិនអាចឆ្លើយបានបណ្ដោះអាសន្ន។** ខាងក្រោមនេះជាអត្ថបទពាក់ព័ន្ធពីកម្មវិធីសិក្សា៖"
         ),
         "unavailable_empty": (
-            "**គ្រូ AI មិនអាចឆ្លើយបានបណ្ដោះអាសន្ន** ({reason})។ សូមព្យាយាមម្ដងទៀតក្នុងពេលបន្តិចទៀត។"
+            "**គ្រូ AI មិនអាចឆ្លើយបានបណ្ដោះអាសន្ន។** សូមព្យាយាមម្ដងទៀតក្នុងពេលបន្តិចទៀត។"
         ),
         "page": "ទំព័រ",
-        "score": "ពិន្ទុ",
     },
     "en": {
-        "header": "**No language model is configured.** These are the most relevant curriculum passages:",
+        "header": "**The AI tutor cannot answer right now.** These are the most relevant passages from the curriculum:",
         "empty": (
-            "**No language model is configured** and no indexed passage matched the question. "
-            "Ingest more documents, or set `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` in `.env`."
+            "**The AI tutor cannot answer right now**, and no curriculum passage matched your question. "
+            "The curriculum is written in Khmer, so asking in Khmer finds more — "
+            "otherwise please try again in a moment."
         ),
         "unavailable": (
-            "**The AI tutor is temporarily unavailable** ({reason}). "
-            "These are the most relevant curriculum passages:"
+            "**The AI tutor is temporarily unavailable.** "
+            "These are the most relevant passages from the curriculum:"
         ),
         "unavailable_empty": (
-            "**The AI tutor is temporarily unavailable** ({reason}). Please try again in a moment."
+            "**The AI tutor is temporarily unavailable.** Please try again in a moment."
         ),
         "page": "page",
-        "score": "score",
     },
 }
 
@@ -321,9 +323,9 @@ def build_extractive_answer(
     when every configured LLM failed (``unavailable_reason``)."""
     text = _EXTRACTIVE_TEXT[language]
     if unavailable_reason is not None:
-        header = text["unavailable"].format(reason=unavailable_reason)
+        header = text["unavailable"]
         if not chunks:
-            return text["unavailable_empty"].format(reason=unavailable_reason)
+            return text["unavailable_empty"]
     else:
         header = text["header"]
         if not chunks:
@@ -333,7 +335,7 @@ def build_extractive_answer(
         location = getattr(chunk, "title", "") or f"{chunk.source}"
         if chunk.page is not None:
             location += f", {text['page']} {chunk.page}"
-        lines.append(f"**[{number}] {location}** ({text['score']} {chunk.score:.2f})")
+        lines.append(f"**[{number}] {location}**")
         lines.append("")
         lines.append(chunk.text)
         lines.append("")
