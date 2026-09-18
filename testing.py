@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from schemas import (
     DeleteDocumentResponse,
@@ -751,6 +752,58 @@ def test_groq_waits_only_for_short_rate_limits():
     with pytest.raises(LLMError) as error:
         _run(_collect(generator))
     assert error.value.status_code == 429 and "retry in 30 s" in error.value.detail and len(calls) == 1
+
+
+def test_sea_lion_stream_yields_text_and_maps_errors():
+    import openai
+
+    from src.api import SeaLionGenerator
+
+    def chunk(content, finish=None):
+        return {
+            "id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "sea-lion-test",
+            "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": finish}],
+        }
+
+    body = _sse([(None, chunk("លីមីតគឺ ")), (None, chunk("$1$")), (None, chunk(None, "stop")), (None, "[DONE]")])
+
+    def generator(http):
+        gen = SeaLionGenerator(
+            "key", "sea-lion-test", base_url="https://api.sea-lion.ai/v1",
+            max_tokens=100, timeout=5, temperature=0.2,
+        )
+        gen._client = openai.AsyncOpenAI(
+            api_key="key", base_url="https://api.sea-lion.ai/v1", max_retries=0, http_client=http
+        )
+        return gen
+
+    items = _run(_collect(generator(_mock_http(body))))
+    assert items[:-1] == ["លីមីតគឺ ", "$1$"]
+    assert items[-1] == GeneratedAnswer(text="លីមីតគឺ $1$", stop_reason="stop", model="sea-lion-test")
+
+    # A bad key names the setting to fix, not the SDK's own wording.
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(_mock_http(b'{"error":{"message":"bad key"}}', 401))))
+    assert error.value.status_code == 502 and "SEA_LION_API_KEY" in error.value.detail
+
+    # A wrong model id says which setting picked it.
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(_mock_http(b'{"error":{"message":"no such model"}}', 404))))
+    assert error.value.status_code == 502 and "SEA_LION_MODEL" in error.value.detail
+
+
+def test_sea_lion_needs_a_model_id(tmp_path):
+    from src.api import _provider_generators, build_generator
+
+    settings = make_settings(tmp_path / "index.npz").model_copy(
+        update={"sea_lion_api_key": SecretStr("key"), "sea_lion_model": "", "llm_provider": "sea-lion"}
+    )
+    assert _provider_generators(settings, "sea-lion") == []
+    with pytest.raises(RuntimeError, match="SEA_LION_API_KEY and SEA_LION_MODEL"):
+        build_generator(settings)
+
+    with_model = settings.model_copy(update={"sea_lion_model": "sea-lion-test"})
+    assert [g.provider for g in _provider_generators(with_model, "sea-lion")] == ["sea-lion"]
 
 
 def test_gemini_stream_yields_text_and_maps_errors():

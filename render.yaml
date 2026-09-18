@@ -39,3 +39,14 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: INFO
+      # Deliberately NOT set here, and worth checking they are unset in the
+      # dashboard too:
+      #   SCORE_THRESHOLD   the e5 cutoff (0.75) drops every hashing passage,
+      #                     so answers stop being grounded. See the note above.
+      #   OCR_ENGINE        "hybrid" and "kiri" load the Kiri model and torch,
+      #                     which will not fit the free instance. Leave it
+      #                     unset so it resolves to Gemini.
+      # Optional, to answer with SEA-LION (open models for Southeast Asian
+      # languages) instead of Groq. Both are required together; add them in the
+      # dashboard, not here, so a deploy is not blocked when they are empty:
+      #   SEA_LION_API_KEY, SEA_LION_MODEL, and LLM_PROVIDER=sea-lion

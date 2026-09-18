@@ -26,6 +26,8 @@ dependencies = [
     "anthropic>=0.122",
     "google-genai>=1.0",
     "groq>=0.11",
+    # SEA-LION's API is OpenAI-compatible; the client is pointed at its base URL.
+    "openai>=1.40",
 ]
 
 [dependency-groups]
@@ -34,18 +36,47 @@ dev = [
     "httpx>=0.27",
 ]
 
-# CPU-only PyTorch wheels: avoids pulling several GB of CUDA libraries.
+[project.optional-dependencies]
+# Pick exactly one: they are declared as conflicting below, because one package
+# cannot resolve from two indexes at once.
+#   uv sync --extra cpu     the Docker image, CI and Render (see Dockerfile)
+#   uv sync --extra cuda    a machine with an NVIDIA GPU, for KIRI_DEVICE=cuda
+# The CUDA wheels are ~2.5 GB and only speed up local corpus ingestion; the
+# server never needs them (hashing embeddings, and no OCR at request time).
+# Plain `uv sync` with neither extra takes torch from PyPI, whose Linux wheel
+# bundles CUDA anyway -- always pass one.
+cpu = [
+    "torch>=2.3",
+    "torchvision>=0.18",
+]
+cuda = [
+    "torch>=2.3",
+    "torchvision>=0.18",
+]
+
 [tool.uv.sources]
-torch = [{ index = "pytorch-cpu" }]
-torchvision = [{ index = "pytorch-cpu" }]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cuda", extra = "cuda" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cuda", extra = "cuda" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true
+
 [tool.uv]
 package = false
+conflicts = [[{ extra = "cpu" }, { extra = "cuda" }]]
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests", "testing.py"]

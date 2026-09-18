@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-LLMProvider = Literal["auto", "anthropic", "gemini", "groq", "none"]
+LLMProvider = Literal["auto", "anthropic", "gemini", "groq", "sea-lion", "none"]
 EmbeddingBackend = Literal["sentence-transformers", "hashing"]
 KhmerSegmenterBackend = Literal["auto", "crf", "regex"]
-OCREngineSetting = Literal["auto", "gemini", "kiri"]
+OCREngineSetting = Literal["auto", "gemini", "kiri", "groq", "hybrid"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     # otherwise the next model in the fallback chain answers.
     groq_max_retry_wait: float = Field(12.0, ge=0.0, le=120.0)
 
+    # SEA-LION (AI Singapore), an open model family trained for Southeast Asian
+    # languages including Khmer. The API is OpenAI-compatible, so it is reached
+    # with the openai client pointed at SEA_LION_BASE_URL.
+    sea_lion_api_key: SecretStr | None = None
+    # No default model: the catalogue changes, and a wrong id fails at request
+    # time rather than at startup. Pick one from the SEA-LION docs.
+    sea_lion_model: str = ""
+    sea_lion_base_url: str = "https://api.sea-lion.ai/v1"
+    sea_lion_temperature: float = Field(0.2, ge=0.0, le=2.0)
+
     # --- Embeddings ---
     embedding_backend: EmbeddingBackend = "sentence-transformers"
     embedding_model: str = Field(
@@ -123,6 +133,16 @@ class Settings(BaseSettings):
     kiri_khmer_only: bool = True
     kiri_render_scale: float = Field(2.0, ge=0.5, le=6.0)
 
+    # OCR_ENGINE=hybrid: Kiri reads the Khmer of each page and hands its reading
+    # to a vision model, which transcribes the page with the formulas in LaTeX
+    # and spells the Khmer the way Kiri read it. Vision engines are tried in the
+    # listed order; one without a key is skipped.
+    hybrid_vision_engines: str = "gemini,groq"
+    # By default a page whose vision engines all failed is still indexed from
+    # Kiri's Khmer-only reading (prose, no formulas). Set this to fail the page
+    # instead, so a re-run picks it up rather than indexing it without its maths.
+    hybrid_require_vision: bool = False
+
     # --- Background ingestion ---
     max_ingest_jobs: int = Field(100, ge=1, le=10000)
 
@@ -135,6 +155,10 @@ class Settings(BaseSettings):
     # Groq's free tier allows 1000 output tokens per minute for Qwen; larger
     # requests are rejected outright. A question photo needs about 600.
     groq_vision_max_tokens: int = Field(1000, ge=128, le=32000)
+    # A whole textbook page is several times a question photo. The free tier
+    # rejects a request this large outright (400), and the hybrid engine then
+    # falls through to the next vision engine, so Groq page OCR needs a paid tier.
+    groq_page_max_tokens: int = Field(4000, ge=256, le=32000)
     groq_vision_frequency_penalty: float = Field(0.4, ge=0.0, le=2.0)
     gemini_vision_model: str = "gemini-3.5-flash"
     image_max_count: int = Field(4, ge=1, le=10)
@@ -159,7 +183,9 @@ class Settings(BaseSettings):
         value = value.expanduser()
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
 
-    @field_validator("anthropic_api_key", "gemini_api_key", "groq_api_key", mode="after")
+    @field_validator(
+        "anthropic_api_key", "gemini_api_key", "groq_api_key", "sea_lion_api_key", mode="after"
+    )
     @classmethod
     def _blank_key_is_none(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None or not value.get_secret_value().strip():
@@ -223,6 +249,17 @@ class Settings(BaseSettings):
         return list(dict.fromkeys(engines))
 
     @property
+    def hybrid_vision_engine_list(self) -> list[str]:
+        known = ("gemini", "groq")
+        engines = [e.strip().lower() for e in self.hybrid_vision_engines.split(",") if e.strip()]
+        unknown = sorted(set(engines) - set(known))
+        if unknown:
+            raise ValueError(
+                f"Unknown HYBRID_VISION_ENGINES: {', '.join(unknown)} (use {', '.join(known)})"
+            )
+        return list(dict.fromkeys(engines))
+
+    @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
@@ -231,7 +268,7 @@ class Settings(BaseSettings):
         return self.max_upload_mb * 1024 * 1024
 
     @property
-    def resolved_llm_provider(self) -> Literal["anthropic", "gemini", "groq", "none"]:
+    def resolved_llm_provider(self) -> Literal["anthropic", "gemini", "groq", "sea-lion", "none"]:
         if self.llm_provider != "auto":
             return self.llm_provider
         if self.anthropic_api_key is not None:
@@ -240,6 +277,8 @@ class Settings(BaseSettings):
             return "gemini"
         if self.groq_api_key is not None:
             return "groq"
+        if self.sea_lion_api_key is not None:
+            return "sea-lion"
         return "none"
 
     @property

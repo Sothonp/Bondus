@@ -1,15 +1,21 @@
 """OCR for scanned PDF pages and images.
 
-Two engines share the page cache and concurrency logic in ``CachedPageOCR``:
+Every engine shares the page cache and concurrency logic in ``CachedPageOCR``:
 
 * ``GeminiPageOCR`` sends each page to Gemini vision (as its embedded scan
   image, or as a one-page PDF when the page is not a single image) and gets
   back Unicode Khmer with formulas in LaTeX.
+* ``GroqVisionOCR`` (``src/ingestion/image_ocr.py``) does the same through a
+  Groq-hosted vision model.
 * ``KiriPageOCR`` (``src/ingestion/khmer_ocr.py``) runs the open-source Kiri
   OCR model locally and keeps Khmer words only.
+* ``HybridPageOCR`` (``src/ingestion/hybrid_ocr.py``) runs Kiri and then a
+  vision model, passing Kiri's Khmer reading to it as ``KHMER_HINT_TEMPLATE``
+  so one transcript has both the Khmer and the mathematics.
 
 Transcripts are cached on disk by content hash, so re-ingesting a document
-never pays for the same page twice.
+never pays for the same page twice. A transcript produced with a hint is
+cached separately, because a different hint is a different reading.
 """
 from __future__ import annotations
 
@@ -55,9 +61,28 @@ Transcribe everything on the page, faithfully and completely:
 Output only the transcription, with no preamble, commentary or code fences.
 If the page is blank, output nothing."""
 
+# Appended to the prompt by ``HybridPageOCR``: the local Khmer model has already
+# read the page, and its spelling is better than the vision model's.
+KHMER_HINT_VERSION = "1"
+
+KHMER_HINT_TEMPLATE = """
+
+A local Khmer OCR model has already read this page. It transcribes no formulas
+and may drop or misread a word, but its Khmer spelling is reliable — more
+reliable than yours:
+
+<khmer_reading>
+{reading}
+</khmer_reading>
+
+Treat it as the authority on Khmer spelling only. Where a Khmer word you see on
+the page appears in that reading, spell it the way the reading spells it. Do not
+copy words that are not on the page, do not follow the reading's line order, and
+transcribe every formula yourself — the reading contains none."""
+
 _CODE_FENCE = re.compile(r"\A\s*```[a-zA-Z]*\s*\n(.*?)\n\s*```\s*\Z", re.DOTALL)
 _IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-_RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 _RETRY_HINT = re.compile(r"retry in (\d+(?:\.\d+)?)\s*s", re.IGNORECASE)
 
 OCRMode = Literal["auto", "always", "never"]
@@ -72,10 +97,18 @@ class PageImage:
 
 
 class OCRError(RuntimeError):
-    pass
+    """OCR of one page failed.
+
+    ``status`` carries the HTTP status when the failure came from a hosted
+    engine, so callers can tell a rate limit from a bad request.
+    """
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
-OCREngine = Literal["gemini", "kiri", "groq"]
+OCREngine = Literal["gemini", "kiri", "groq", "hybrid"]
 
 
 def page_payload(page: Any, render_scale: float = 2.0) -> PageImage:
@@ -195,23 +228,40 @@ class CachedPageOCR:
 
     # -- transcription ----------------------------------------------------------
 
-    def _transcribe_uncached(self, payload: PageImage) -> tuple[str, bool]:
-        """Returns (transcript, truncated); raises ``OCRError`` on failure."""
+    def _transcribe_uncached(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
+        """Returns (transcript, truncated); raises ``OCRError`` on failure.
+
+        ``hint`` is a reference reading of the same page from another engine.
+        Engines that cannot use one ignore it.
+        """
         raise NotImplementedError
 
-    def transcribe_page(self, payload: PageImage) -> tuple[str, bool]:
+    def _hinted_cache_key(self, key: str, hint: str) -> str:
+        """Cache key for a transcript produced with ``hint`` in the prompt."""
+        digest = hashlib.sha256()
+        for part in (key, KHMER_HINT_VERSION, hint):
+            digest.update(part.encode("utf-8") + b"\x00")
+        return digest.hexdigest()
+
+    def transcribe_page(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
         """Transcribe one page. Returns (transcript, truncated).
 
-        Complete transcripts are cached; truncated ones never are.
+        Complete transcripts are cached; truncated ones never are. A hinted
+        transcript gets its own cache entry, because a different hint produces
+        a different reading; the unhinted entries are not valid for it.
         """
         key = self._cache_key(payload)
-        for candidate in (key, *self._legacy_cache_keys(payload)):
+        if hint:
+            candidates = (self._hinted_cache_key(key, hint),)
+        else:
+            candidates = (key, *self._legacy_cache_keys(payload))
+        for candidate in candidates:
             cached = self._read_cache(candidate)
             if cached is not None:
                 return cached, False
-        text, truncated = self._transcribe_uncached(payload)
+        text, truncated = self._transcribe_uncached(payload, hint)
         if not truncated:
-            self._write_cache(key, text)
+            self._write_cache(candidates[0], text)
         return text, truncated
 
     def transcribe(self, payload: PageImage) -> str:
@@ -317,7 +367,9 @@ class GeminiPageOCR(CachedPageOCR):
 
     # -- transcription ----------------------------------------------------------
 
-    def _request(self, payload: PageImage, max_output_tokens: int) -> tuple[str, bool]:
+    def _request(
+        self, payload: PageImage, max_output_tokens: int, hint: str | None = None
+    ) -> tuple[str, bool]:
         """Returns (transcript, truncated)."""
         types = self._types
         config = types.GenerateContentConfig(
@@ -325,12 +377,13 @@ class GeminiPageOCR(CachedPageOCR):
             max_output_tokens=max_output_tokens,
             thinking_config=types.ThinkingConfig(thinking_level=self.thinking_level.upper()),
         )
+        prompt = self.prompt + KHMER_HINT_TEMPLATE.format(reading=hint) if hint else self.prompt
         self._pace()
         response = self._client.models.generate_content(
             model=self.model,
             contents=[
                 types.Part.from_bytes(data=payload.data, mime_type=payload.mime_type),
-                self.prompt,
+                prompt,
             ],
             config=config,
         )
@@ -345,20 +398,22 @@ class GeminiPageOCR(CachedPageOCR):
             truncated = getattr(reason, "value", reason) == "MAX_TOKENS"
         return clean_transcript(text), truncated
 
-    def _request_with_retries(self, payload: PageImage, max_output_tokens: int) -> tuple[str, bool]:
+    def _request_with_retries(
+        self, payload: PageImage, max_output_tokens: int, hint: str | None = None
+    ) -> tuple[str, bool]:
         errors = self._errors
         for attempt in range(self.max_retries + 1):
             wait_hint = 0.0
             try:
-                return self._request(payload, max_output_tokens)
+                return self._request(payload, max_output_tokens, hint)
             except errors.APIError as exc:
                 # Quota errors say how long to wait ("Please retry in 46.1s").
-                hint = _RETRY_HINT.search(exc.message or "")
-                wait_hint = min(300.0, float(hint.group(1)) + 1.0) if hint else 0.0
-                retryable = (exc.code or 0) in _RETRYABLE_STATUS
+                retry_after = _RETRY_HINT.search(exc.message or "")
+                wait_hint = min(300.0, float(retry_after.group(1)) + 1.0) if retry_after else 0.0
+                retryable = (exc.code or 0) in RETRYABLE_STATUS
                 if not retryable or attempt == self.max_retries:
                     first_line = (exc.message or "").strip().splitlines()[0] if exc.message else ""
-                    raise OCRError(f"Gemini OCR failed ({exc.code}): {first_line}") from exc
+                    raise OCRError(f"Gemini OCR failed ({exc.code}): {first_line}", exc.code) from exc
             except (TimeoutError, OSError) as exc:
                 if attempt == self.max_retries:
                     raise OCRError(f"Gemini OCR request failed: {exc}") from exc
@@ -368,12 +423,12 @@ class GeminiPageOCR(CachedPageOCR):
             time.sleep(delay)
         raise AssertionError("unreachable")
 
-    def _transcribe_uncached(self, payload: PageImage) -> tuple[str, bool]:
+    def _transcribe_uncached(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
         # A transcript cut off by the output limit is retried once with a larger limit.
-        text, truncated = self._request_with_retries(payload, self.max_output_tokens)
+        text, truncated = self._request_with_retries(payload, self.max_output_tokens, hint)
         if truncated:
             logger.info("OCR transcript hit the output limit; retrying with a larger limit")
-            text, truncated = self._request_with_retries(payload, self.max_output_tokens * 4)
+            text, truncated = self._request_with_retries(payload, self.max_output_tokens * 4, hint)
         return text, truncated
 
 
@@ -391,15 +446,68 @@ def resolve_ocr_engine(settings: Settings) -> OCREngine | None:
         if settings.gemini_api_key is None:
             raise RuntimeError("OCR_ENGINE=gemini requires GEMINI_API_KEY")
         return "gemini"
+    if settings.ocr_engine == "groq":
+        if settings.groq_api_key is None:
+            raise RuntimeError("OCR_ENGINE=groq requires GROQ_API_KEY")
+        return "groq"
     if settings.ocr_engine == "kiri":
         if not kiri_available():
             raise RuntimeError("OCR_ENGINE=kiri requires kiri-ocr (uv add kiri-ocr)")
         return "kiri"
+    if settings.ocr_engine == "hybrid":
+        if not kiri_available():
+            raise RuntimeError("OCR_ENGINE=hybrid requires kiri-ocr (uv add kiri-ocr)")
+        if not _hybrid_vision_engines(settings):
+            raise RuntimeError(
+                "OCR_ENGINE=hybrid needs a vision engine for the mathematics: set "
+                "GEMINI_API_KEY or GROQ_API_KEY, and list them in HYBRID_VISION_ENGINES"
+            )
+        return "hybrid"
     if settings.gemini_api_key is not None:
         return "gemini"
     if kiri_available():
         return "kiri"
     return None
+
+
+def _hybrid_vision_engines(settings: Settings) -> list[str]:
+    """The vision engines of HYBRID_VISION_ENGINES that have a key configured."""
+    keys = {"gemini": settings.gemini_api_key, "groq": settings.groq_api_key}
+    return [name for name in settings.hybrid_vision_engine_list if keys.get(name) is not None]
+
+
+def _build_vision_engine(name: str, settings: Settings) -> CachedPageOCR:
+    """One vision engine configured for corpus pages, not for student photos."""
+    if name == "groq":
+        from src.ingestion.image_ocr import GroqVisionOCR
+
+        return GroqVisionOCR(
+            settings.groq_api_key.get_secret_value(),
+            settings.groq_vision_model,
+            mode=settings.ocr_mode,
+            min_chars=settings.ocr_min_chars,
+            cache_dir=settings.ocr_cache_dir,
+            concurrency=settings.ocr_concurrency,
+            max_retries=settings.ocr_max_retries,
+            timeout=settings.llm_timeout_seconds,
+            reasoning_effort=settings.groq_vision_reasoning_effort,
+            # A whole textbook page needs far more room than a photo of one exercise.
+            max_output_tokens=settings.groq_page_max_tokens,
+            frequency_penalty=settings.groq_vision_frequency_penalty,
+            prompt=OCR_PROMPT,
+        )
+    return GeminiPageOCR(
+        settings.gemini_api_key.get_secret_value(),
+        settings.ocr_model,
+        mode=settings.ocr_mode,
+        min_chars=settings.ocr_min_chars,
+        cache_dir=settings.ocr_cache_dir,
+        concurrency=settings.ocr_concurrency,
+        max_retries=settings.ocr_max_retries,
+        thinking_level=settings.ocr_thinking_level,
+        timeout=settings.llm_timeout_seconds,
+        requests_per_minute=settings.ocr_requests_per_minute,
+    )
 
 
 def build_ocr(settings: Settings) -> CachedPageOCR | None:
@@ -426,15 +534,33 @@ def build_ocr(settings: Settings) -> CachedPageOCR | None:
             khmer_only=settings.kiri_khmer_only,
             render_scale=settings.kiri_render_scale,
         )
-    return GeminiPageOCR(
-        settings.gemini_api_key.get_secret_value(),
-        settings.ocr_model,
-        mode=settings.ocr_mode,
-        min_chars=settings.ocr_min_chars,
-        cache_dir=settings.ocr_cache_dir,
-        concurrency=settings.ocr_concurrency,
-        max_retries=settings.ocr_max_retries,
-        thinking_level=settings.ocr_thinking_level,
-        timeout=settings.llm_timeout_seconds,
-        requests_per_minute=settings.ocr_requests_per_minute,
-    )
+    if engine == "hybrid":
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+        from src.ingestion.khmer_ocr import KiriPageOCR
+
+        khmer = KiriPageOCR(
+            settings.kiri_model,
+            mode=settings.ocr_mode,
+            min_chars=settings.ocr_min_chars,
+            cache_dir=settings.ocr_cache_dir,
+            device=settings.kiri_device,
+            decode_method=settings.kiri_decode_method,
+            min_confidence=settings.kiri_min_confidence,
+            # The hint is about Khmer spelling, so it carries Khmer words only
+            # whatever KIRI_KHMER_ONLY says; the vision model reads the maths.
+            khmer_only=True,
+            render_scale=settings.kiri_render_scale,
+        )
+        return HybridPageOCR(
+            khmer=khmer,
+            vision=[
+                _build_vision_engine(name, settings)
+                for name in _hybrid_vision_engines(settings)
+            ],
+            mode=settings.ocr_mode,
+            min_chars=settings.ocr_min_chars,
+            cache_dir=settings.ocr_cache_dir,
+            concurrency=settings.ocr_concurrency,
+            require_vision=settings.hybrid_require_vision,
+        )
+    return _build_vision_engine(engine, settings)
