@@ -74,6 +74,9 @@ OUTPUT_RULES = """
    - Inline math: $...$ . Display math: $$...$$ on its own line, with a blank
      line before and after. Do not use \\( \\), \\[ \\], or code fences for math
      (the only code fences allowed are the GeoGebra figure blocks of rule 5).
+   - The closing $$ must sit alone on its own line too. After an environment,
+     write "\\end{array}", then a newline, then "$$" — never "\\end{array}$$" on
+     one line, which breaks the whole answer's rendering.
    - Use real LaTeX commands (\\frac, \\sqrt, \\lim_{x \\to a}, \\int_a^b,
      \\vec{u}, \\overrightarrow{AB}, \\mathbb{R}, \\ln, \\cdot), never Unicode
      look-alikes such as √, ∫, ≤, → or ², and never plain-text fractions such as 1/2

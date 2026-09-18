@@ -2674,10 +2674,23 @@ async function waitForIngest(job, { interval = 2000, timeout = 30 * 60 * 1000 } 
   return job.result;
 }
 
+/* A `$$` that starts a line opens remark-math's display fence, and only a line whose sole
+   content is `$$` closes it. Models routinely end a block with `\end{array}$$` instead, and the
+   fence then runs to the end of the answer: everything after it — headings, prose, the remaining
+   steps — lands inside one math node and KaTeX renders the raw source. Put both delimiters of
+   such a block on their own lines so it closes where the model meant it to. A `$$` in the middle
+   of a line is inline math to remark-math and already works, so leave those alone. */
+const fenceDisplayMath = (text) =>
+  text.replace(/^([ \t]*)\$\$([\s\S]*?)\$\$/gm, (_, indent, body) => `${indent}$$\n${body.trim()}\n$$\n`);
+
+/* Fenced code (the GeoGebra blocks) may hold anything, so normalize only the prose around it. */
+const CODE_FENCE = /(^```[\s\S]*?^```)/gm;
+const outsideCode = (text, fix) => text.split(CODE_FENCE).map((part, i) => (i % 2 ? part : fix(part))).join("");
+
 /* The prompt asks for $...$ / $$...$$, but models sometimes emit \( \) or \[ \]. */
-const normalizeMath = (text) => text
+const normalizeMath = (text) => outsideCode(text, (part) => fenceDisplayMath(part
   .replace(/\\\[([\s\S]+?)\\\]/g, (_, body) => `\n$$\n${body.trim()}\n$$\n`)
-  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`);
+  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`)));
 
 /* While an answer is still arriving, hide a trailing unclosed $$ block or code fence so half a
    formula or graph never flashes on screen. */
