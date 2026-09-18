@@ -211,7 +211,13 @@ def test_query_on_empty_index_is_ungrounded(client):
     assert result.sources == []
     assert result.language == "km"
     assert result.provider == "none"
-    assert "LLM" in result.answer
+    # A student reads this, so it says the tutor cannot answer without naming
+    # an environment variable, a provider or a config file.
+    assert "គ្រូ AI" in result.answer
+    assert not any(
+        leak in result.answer
+        for leak in ("LLM", "API_KEY", ".env", "ANTHROPIC", "GEMINI", "GROQ")
+    )
 
 
 # ---------------------------------------------------------------------------
