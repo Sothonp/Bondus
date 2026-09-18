@@ -5,9 +5,12 @@ services:
   - type: web
     name: bondus-api
     runtime: docker
-    # Fits the free instance: hashing embeddings load no model (see envVars).
-    # For the e5 embedding model instead, use `plan: standard` (2 GB) and drop
-    # EMBEDDING_BACKEND / IMAGE_OCR_ENGINES / PRELOAD_KIRI below.
+    # EMBEDDING_BACKEND=sentence-transformers below loads the e5 model and
+    # PyTorch, which need roughly 1.5 GB -- the free instance has 512 MB and
+    # will be OOM-killed. Change this to `standard` (2 GB) before deploying.
+    # (Left as `free` deliberately: raising it costs money, so it is your call.)
+    # To go back to the free tier, set EMBEDDING_BACKEND=hashing and re-embed
+    # the index for it, as the note on that variable explains.
     plan: free
     healthCheckPath: /health
     envVars:
@@ -19,18 +22,34 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      # Lexical hashing search: no model download, no PyTorch at runtime, so the
-      # server stays inside 512 MB. The committed index is built for this backend
-      # (the server refuses a mismatched one); after re-ingesting with the e5
-      # model, convert it back with:
-      # EMBEDDING_BACKEND=hashing uv run python scripts/reembed_index.py
-      # SCORE_THRESHOLD is deliberately left unset: hashing similarities are
-      # lexical and peak near 0.4, so the e5 cutoff of 0.75 would drop every
-      # passage and answers would stop being grounded.
+      # Multilingual e5 embeddings: Khmer and English land in one semantic
+      # space, so an English question ("explain me limit") can retrieve Khmer
+      # passages about លីមីត. Lexical hashing cannot -- it matches shared
+      # tokens, and the two scripts share none.
+      #
+      # REQUIRED FIRST: the committed index is built for whichever backend made
+      # it, and the server refuses a mismatched one with EmbeddingMismatchError
+      # rather than serving nonsense. Re-embed before the first deploy with
+      # this setting, and commit the result:
+      #   EMBEDDING_BACKEND=sentence-transformers uv run python scripts/reembed_index.py
+      #
+      # SCORE_THRESHOLD is left unset so the e5 default of 0.75 applies. Do not
+      # carry over the hashing cutoff of 0.15: e5 scores sit high (~0.8) even
+      # for a loose match, so 0.15 would let every passage through.
       - key: EMBEDDING_BACKEND
-        value: hashing
-      # Read photos with the hosted vision models only; the local Kiri OCR model
-      # would load PyTorch. Groq is tried first and Gemini backs it up, so one
+        value: sentence-transformers
+      - key: EMBEDDING_MODEL
+        value: intfloat/multilingual-e5-small
+      - key: EMBEDDING_DEVICE
+        value: cpu
+      # The model is baked into the image (see Dockerfile), so this warms it
+      # from disk at boot instead of downloading ~470 MB on the first question.
+      - key: PRELOAD_EMBEDDER
+        value: "true"
+      # Read photos with the hosted vision models only. PyTorch is now in
+      # memory anyway for the embeddings, but Kiri would add its own model on
+      # top, and OCR is not worth the headroom on a 2 GB instance.
+      # Groq is tried first and Gemini backs it up, so one
       # engine being down or rate-limited no longer leaves the photo unread
       # (that needs GROQ_API_KEY above; with no key the engine is skipped).
       - key: IMAGE_OCR_ENGINES

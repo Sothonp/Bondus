@@ -16,11 +16,14 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --extra cpu
 
-COPY . .
+# Bake the embedding model into the image so a cold start warms it from disk
+# instead of pulling ~470 MB from HuggingFace on the first question -- and so a
+# HuggingFace outage cannot stop the server booting. Drop this line if you
+# switch back to EMBEDDING_BACKEND=hashing, which loads no model at all.
+RUN uv run --frozen --no-dev --extra cpu python -c \
+    "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
-# No model is downloaded here: EMBEDDING_BACKEND=hashing needs none. When using
-# sentence-transformers instead, pre-fetch it so cold starts don't:
-#   RUN uv run --frozen --no-dev python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
+COPY . .
 
 EXPOSE 8000
 # Render sets PORT; default to 8000 elsewhere.
