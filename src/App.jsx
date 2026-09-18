@@ -229,8 +229,11 @@ const WEEK_SEED = [
   { d: "Thu", h: 0.8 }, { d: "Fri", h: 0.5 }, { d: "Sat", h: 1.1 }, { d: "Sun", h: 0.5 },
 ];
 const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
+/* IELTS has no static "goal" here — it's asked fresh at the start of each diagnostic (see
+   IeltsDiagnostic's "goal" stage) and stored per-result, since it's the student's own target,
+   not something we should assume. The other three are still inert "Coming soon" placeholders. */
 const LANGS = [
-  { n: "IELTS Academic", goal: "Band 7.0", now: "—", pct: 20, c: "var(--ember)" },
+  { n: "IELTS Academic", now: "—", pct: 20, c: "var(--ember)" },
   { n: "TOEFL iBT", goal: "Score 90", now: "—", pct: 15, c: "var(--primary)" },
   { n: "HSK", goal: "Level 4", now: "—", pct: 10, c: "var(--gold)" },
   { n: "DELF", goal: "B2", now: "—", pct: 18, c: "var(--jade)" },
@@ -2370,8 +2373,11 @@ function IeltsMCQ({ questions, answers, onAnswer }) {
   );
 }
 
+const IELTS_GOAL_OPTIONS = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
+
 function IeltsDiagnostic({ dark, onExit, onComplete }) {
-  const [stage, setStage] = useState("intro"); // intro | listening | reading | writing | speaking | grading | results
+  const [stage, setStage] = useState("goal"); // goal | intro | listening | reading | writing | speaking | grading | results
+  const [goal, setGoal] = useState(null);
   const [listeningAns, setListeningAns] = useState({});
   const [readingAns, setReadingAns] = useState({});
   const [writingText, setWritingText] = useState("");
@@ -2400,7 +2406,7 @@ function IeltsDiagnostic({ dark, onExit, onComplete }) {
 
   const stages = ["listening", "reading", "writing", "speaking"];
   const stageIndex = stages.indexOf(stage);
-  const progressPct = stage === "intro" ? 0 : (stage === "grading" || stage === "results") ? 100 : Math.round(((stageIndex + 1) / stages.length) * 100);
+  const progressPct = (stage === "goal" || stage === "intro") ? 0 : (stage === "grading" || stage === "results") ? 100 : Math.round(((stageIndex + 1) / stages.length) * 100);
 
   const listeningComplete = Object.keys(listeningAns).length === IELTS_CONTENT.listening.questions.length;
   const readingComplete = Object.keys(readingAns).length === IELTS_CONTENT.reading.questions.length;
@@ -2422,7 +2428,7 @@ function IeltsDiagnostic({ dark, onExit, onComplete }) {
     const overall = roundToHalfBand((listeningBand + readingBand + writingGrade.band + speakingGrade.band) / 4);
     setResult({
       listening: listeningBand, reading: readingBand, writing: writingGrade.band, speaking: speakingGrade.band,
-      overall, feedback: { writing: writingGrade.feedback, speaking: speakingGrade.feedback }, completedAt: Date.now(),
+      overall, goal, feedback: { writing: writingGrade.feedback, speaking: speakingGrade.feedback }, completedAt: Date.now(),
     });
     setStage("results");
   };
@@ -2436,20 +2442,44 @@ function IeltsDiagnostic({ dark, onExit, onComplete }) {
             <button onClick={onExit} className="eai-focus flex items-center gap-1 text-sm eai-muted"><ChevronLeft size={16} /> Exit diagnostic</button>
             {stages.includes(stage) && <p className="text-xs eai-muted">Section {stageIndex + 1} of {stages.length}</p>}
           </div>
-          {stage !== "intro" && (
+          {stage !== "goal" && stage !== "intro" && (
             <div className="h-1.5 rounded-full eai-soft mb-6 overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${progressPct}%`, background: "var(--primary)", transition: "width .3s" }} />
             </div>
           )}
 
           <div className="eai-card p-6 sm:p-8">
+            {stage === "goal" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <Target size={20} style={{ color: "var(--primary)" }} />
+                  <h2 className="eai-display text-xl font-extrabold">What's your target band score?</h2>
+                </div>
+                <p className="text-sm eai-muted mt-1 mb-5">We'll track your progress against this goal every time you retake the diagnostic.</p>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+                  {IELTS_GOAL_OPTIONS.map((g) => (
+                    <button key={g} onClick={() => setGoal(g)}
+                      className="eai-focus py-3 rounded-2xl text-sm font-bold eai-display"
+                      style={{
+                        background: goal === g ? "var(--primary)" : "var(--card)",
+                        color: goal === g ? "#fff" : "var(--ink)",
+                        border: `1.5px solid ${goal === g ? "var(--primary)" : "var(--line)"}`,
+                      }}>
+                      {g.toFixed(1)}
+                    </button>
+                  ))}
+                </div>
+                <DiagButton onClick={() => setStage("intro")} disabled={goal == null} className="w-full mt-6">Continue <ChevronRight size={16} /></DiagButton>
+              </>
+            )}
+
             {stage === "intro" && (
               <>
                 <div className="flex items-center gap-2 mb-1">
                   <ClipboardCheck size={20} style={{ color: "var(--primary)" }} />
                   <h2 className="eai-display text-xl font-extrabold">IELTS placement diagnostic</h2>
                 </div>
-                <p className="text-sm eai-muted mt-1 mb-5">A short test across all four skills so we can estimate your current band. Takes about 15 minutes.</p>
+                <p className="text-sm eai-muted mt-1 mb-5">A short test across all four skills so we can estimate your current band toward your Band {goal?.toFixed(1)} goal. Takes about 15 minutes.</p>
                 <div className="space-y-2.5">
                   <IeltsIntroCard icon={Headphones} label="Listening" desc="Play a short audio clip, then answer 4 questions." />
                   <IeltsIntroCard icon={BookOpen} label="Reading" desc="Read a short passage, then answer 4 questions." />
@@ -2556,6 +2586,13 @@ function IeltsDiagnostic({ dark, onExit, onComplete }) {
                 <div className="text-center mb-6">
                   <p className="text-xs font-semibold eai-muted uppercase tracking-wide">Estimated overall band</p>
                   <p className="eai-display font-extrabold" style={{ fontSize: 48, color: "var(--primary)", lineHeight: 1 }}>{result.overall.toFixed(1)}</p>
+                  {result.goal != null && (
+                    <p className="text-xs eai-muted mt-1">
+                      {result.overall >= result.goal
+                        ? `🎉 You've reached your Band ${result.goal.toFixed(1)} goal!`
+                        : `Goal: Band ${result.goal.toFixed(1)} · ${(result.goal - result.overall).toFixed(1)} to go`}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
                   {IELTS_SKILL_META.map((s) => (
@@ -2608,12 +2645,15 @@ function Languages({ results = {}, onTakeDiagnostic, lang = "en" }) {
           const isIelts = l.n === "IELTS Academic";
           const result = results[l.n];
           const now = result ? `Band ${result.overall.toFixed(1)}` : l.now;
-          const pct = result ? clamp(Math.round((result.overall / 9) * 100), 4, 100) : l.pct;
+          const goalLabel = isIelts ? (result?.goal != null ? `Band ${result.goal.toFixed(1)}` : "Not set yet") : l.goal;
+          const pct = result
+            ? (isIelts && result.goal ? clamp(Math.round((result.overall / result.goal) * 100), 4, 100) : clamp(Math.round((result.overall / 9) * 100), 4, 100))
+            : l.pct;
           return (
             <div key={l.n} className="eai-card p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2"><Globe size={18} style={{ color: l.c }} /><span className="eai-display font-bold">{l.n}</span></div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--bg-soft)", color: l.c }}>Goal {l.goal}</span>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--bg-soft)", color: l.c }}>Goal {goalLabel}</span>
               </div>
               <div className="flex items-end justify-between mt-4 mb-2">
                 <span className="text-xs eai-muted">Current: <b style={{ color: "var(--ink)" }}>{now}</b></span>
