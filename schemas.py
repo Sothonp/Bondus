@@ -126,6 +126,15 @@ class QueryStreamDone(BaseModel):
     model: str | None = None
     stop_reason: str | None = None
     latency_ms: float
+    answer: str | None = Field(
+        None,
+        description=(
+            "The whole answer with its Markdown and LaTeX repaired, sent only when "
+            "repair changed something. Replace this request's deltas with it: some "
+            "fixes (closing an unclosed $$, moving Khmer out of a formula) cannot be "
+            "made on a delta in isolation."
+        ),
+    )
 
 
 class QueryStreamError(BaseModel):

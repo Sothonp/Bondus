@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from prompts import SYSTEM_PROMPT, build_extractive_answer, build_user_message
+from src.answer_format import sanitize_answer
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -100,6 +101,11 @@ class StreamReset:
 # ``stream`` yields text deltas, then one final ``GeneratedAnswer`` (its text
 # is the full answer) carrying the stop reason and model.
 StreamItem = str | GeneratedAnswer | StreamReset
+
+# The extractive answer quotes curriculum passages verbatim. Repairing its
+# formatting would rewrite the corpus's own LaTeX, so it is left as it is;
+# the repair pass exists for prose a model wrote.
+QUOTED_STOP_REASONS = {"extractive", "llm_unavailable"}
 
 INVISIBLE_CHARS = "\u200b\u200c\u200d\u2060\ufeff"
 MAX_INVISIBLE_RUN = 200
@@ -1281,8 +1287,14 @@ def create_app(
                 message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
             )
 
+        answer_text = answer.text
+        if answer.stop_reason not in QUOTED_STOP_REASONS:
+            answer_text, repairs = sanitize_answer(answer_text)
+            if repairs:
+                logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
+
         return QueryResponse(
-            answer=answer.text,
+            answer=answer_text,
             language=language,
             grounded=bool(context),
             sources=_source_chunks(context),
@@ -1341,6 +1353,11 @@ def create_app(
                 provider=generator.provider,
             ))
             final = GeneratedAnswer(text="", model=generator.model)
+            # The repairs need the whole answer: an unclosed $$ is only visible
+            # once the last delta has arrived, and a formula can be split across
+            # deltas. The deltas still stream; the done event carries the fixed
+            # text for the client to swap in.
+            streamed: list[str] = []
             if payload.generate:
                 yield line(QueryStreamStatus(stage="generating"))
                 try:
@@ -1356,8 +1373,10 @@ def create_app(
                         if isinstance(item, GeneratedAnswer):
                             final = item
                         elif isinstance(item, StreamReset):
+                            streamed.clear()  # the answer restarts with another model
                             yield line(QueryStreamReset(detail=item.detail))
                         elif item:
+                            streamed.append(item)
                             yield line(QueryStreamDelta(text=item))
                 except LLMError as exc:
                     yield line(QueryStreamError(status=exc.status_code, detail=exc.detail))
@@ -1366,11 +1385,18 @@ def create_app(
                     logger.exception("Streaming answer failed")
                     yield line(QueryStreamError(status=500, detail="Internal error while generating the answer"))
                     return
+            repairs: list[str] = []
+            repaired = ""
+            if final.stop_reason not in QUOTED_STOP_REASONS:
+                repaired, repairs = sanitize_answer("".join(streamed))
+                if repairs:
+                    logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
             yield line(QueryStreamDone(
                 provider=final.provider or generator.provider,
                 model=final.model,
                 stop_reason=final.stop_reason,
                 latency_ms=round((time.perf_counter() - started) * 1000, 1),
+                answer=repaired if repairs else None,
             ))
 
         return StreamingResponse(
