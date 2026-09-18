@@ -1246,6 +1246,15 @@ const SUBJECT_FULL_MARKS = {
   },
 };
 
+/* Official BAC II exam duration (minutes) per subject — also track-specific. Any subject/track
+   combo not listed here (e.g. French, or Science-track subjects not yet given) falls back to 180. */
+const SUBJECT_DURATION_MIN = {
+  social_science: {
+    "Khmer Literature": 150, Mathematics: 90, "Earth Science": 60,
+    History: 90, Geography: 90, Morality: 90, English: 60,
+  },
+};
+
 function Browse({ p, lang = "en" }) {
   const [year, setYear] = useState(2023);
   const [viewingPaper, setViewingPaper] = useState(null);
@@ -1282,7 +1291,7 @@ function Browse({ p, lang = "en" }) {
                   : <Bookmark size={16} className="eai-muted" />}
               </div>
               <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sub.s, lang)}</h3>
-              <p className="text-xs eai-muted mt-0.5">BAC II {year} · 180 {t(lang, "minAbbrev")} · {SUBJECT_FULL_MARKS[p.field]?.[sub.s] ?? 100} {t(lang, "marksWord")}</p>
+              <p className="text-xs eai-muted mt-0.5">BAC II {year} · {SUBJECT_DURATION_MIN[p.field]?.[sub.s] ?? 180} {t(lang, "minAbbrev")} · {SUBJECT_FULL_MARKS[p.field]?.[sub.s] ?? 100} {t(lang, "marksWord")}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
