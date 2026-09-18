@@ -1019,6 +1019,32 @@ class TestHybridOCR:
         assert "ដេរីវេ នៃ អនុគមន៍" in document.sections[0].text
         assert document.warnings == [], "a usable page is not a warning"
 
+    def test_the_khmer_only_fallback_is_not_cached_so_a_later_run_retries_vision(self, tmp_path):
+        """A page that lost its maths to a quota must not be cached that way."""
+        from src.ingestion.ocr import PageImage
+
+        payload = PageImage(b"page-bytes", "image/png")
+
+        # Vision fails: the page falls back to Kiri's formula-less reading...
+        hybrid, _, _ = self._hybrid(
+            tmp_path, [_region("ដេរីវេ នៃ អនុគមន៍", 10)], [_api_error(429)]
+        )
+        text, _ = hybrid.transcribe_page(payload)
+        assert "ដេរីវេ នៃ អនុគមន៍" in text
+        assert hybrid._read_cache(hybrid._cache_key(payload)) is None, (
+            "the degraded reading must not be cached"
+        )
+
+        # ...and a later run, with the quota back, transcribes it properly.
+        hybrid, _, _ = self._hybrid(
+            tmp_path, [_region("ដេរីវេ នៃ អនុគមន៍", 10)], [OCR_PAGE]
+        )
+        text, _ = hybrid.transcribe_page(payload)
+        assert "\\lim_{x \\to 0}" in text
+        assert hybrid._read_cache(hybrid._cache_key(payload)) is not None, (
+            "a complete reading is cached"
+        )
+
     def test_require_vision_fails_the_page_instead_of_indexing_it_without_maths(self, tmp_path):
         hybrid, _, _ = self._hybrid(
             tmp_path,
