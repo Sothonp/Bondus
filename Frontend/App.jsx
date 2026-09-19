@@ -3275,6 +3275,21 @@ const COLD_START_MS = 5000;
 const COLD_START_RETRY_MS = 4000;
 const WAKING = "Waking the AI coach server (this can take a minute after it has been idle)…";
 
+/* The models stream faster than anyone reads, and a page of Khmer and worked algebra landing
+   all at once is harder to follow than watching it arrive a step at a time. So the deltas are
+   buffered and revealed at a steady pace instead of the moment they arrive.
+
+   REVEAL_CHARS_PER_SECOND is the pace when the model can keep up with it, and a model slower
+   than that is never held back. REVEAL_CATCHUP_SECONDS is how hard a backlog pushes the pace
+   above that floor, so a fast model is slowed down rather than queued behind: at these two
+   numbers a 2500-character answer from a 400 char/s model takes about 10s to read out instead
+   of 6s, and its last line lands within about 4s of the stream closing. Raise the floor or
+   lower the catch-up to speed the reveal up. REVEAL_TICK_MS also caps the re-renders, and
+   each one re-runs Markdown and KaTeX over the whole answer. */
+const REVEAL_CHARS_PER_SECOND = 80;
+const REVEAL_CATCHUP_SECONDS = 1.5;
+const REVEAL_TICK_MS = 40;
+
 async function ragStreamRequest(body, { signal, status }) {
   const send = () => ragRequest("/api/query/stream", {
     method: "POST",
@@ -3299,12 +3314,37 @@ async function ragStreamRequest(body, { signal, status }) {
 }
 
 async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
-  let text = "";
+  let text = "";   // every delta received so far
+  let shown = 0;   // how much of it is on screen
   let sources = [];
-  let frame = 0;
-  const flush = () => { frame = 0; onUpdate({ text, rag: true, streaming: true, sources, notice: null }); };
-  const status = (notice) => { if (!text) onUpdate({ text, rag: true, streaming: true, sources, notice }); };
+  let timer = 0;
+  let since = 0;
+  const paint = () => onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: null });
+  const status = (notice) => { if (!shown) onUpdate({ text: "", rag: true, streaming: true, sources, notice }); };
   const lost = "The connection to the AI coach server was lost.";
+
+  const pump = () => {
+    timer = 0;
+    const now = Date.now();
+    // A fresh run (`since` cleared) steps one tick rather than the whole pause before it,
+    // so waiting on a slow model does not then dump its answer in one frame.
+    const elapsed = since ? Math.min(1, (now - since) / 1000) : REVEAL_TICK_MS / 1000;
+    since = now;
+    const pending = text.length - shown;
+    const rate = Math.max(REVEAL_CHARS_PER_SECOND, pending / REVEAL_CATCHUP_SECONDS);
+    shown = Math.min(text.length, shown + Math.max(1, Math.round(rate * elapsed)));
+    paint();
+    if (shown < text.length) timer = setTimeout(pump, REVEAL_TICK_MS);
+    else since = 0;
+  };
+  const reveal = () => { if (!timer && shown < text.length) timer = setTimeout(pump, REVEAL_TICK_MS); };
+  const stopPacing = () => { clearTimeout(timer); timer = 0; since = 0; };
+  /* Resolving while text is still held back would hand the finished message the whole answer
+     at once, undoing the pacing on its last lines; wait for the buffer to empty first. */
+  const drain = () => new Promise((resolve) => {
+    const wait = () => { if (shown >= text.length) return resolve(); reveal(); setTimeout(wait, REVEAL_TICK_MS); };
+    wait();
+  });
 
   /* One streamed request, appending what it produces to `text`; returns its stop reason. */
   const streamOnce = async (body) => {
@@ -3319,13 +3359,14 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
         else if (event.type === "meta") sources = event.sources?.length ? event.sources : sources;
         else if (event.type === "delta") {
           text += event.text;
-          if (!frame) frame = requestAnimationFrame(flush);
+          reveal();
         } else if (event.type === "reset") {
           // The server is restarting the answer with another model.
           text = text.slice(0, base);
-          cancelAnimationFrame(frame);
-          frame = 0;
-          onUpdate({ text, rag: true, streaming: true, sources, notice: text ? null : "Switching to another model…" });
+          shown = Math.min(shown, text.length);
+          // Whatever earlier rounds had revealed stays on screen and keeps flowing.
+          onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: shown ? null : "Switching to another model…" });
+          reveal();
         } else if (event.type === "error") throw new RagError(event.detail, event.status);
         else if (event.type === "done") {
           finished = true;
@@ -3335,9 +3376,8 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
              cannot arrive as deltas; swap the repaired text in, keeping earlier rounds. */
           if (typeof event.answer === "string") {
             text = text.slice(0, base) + event.answer;
-            cancelAnimationFrame(frame);
-            frame = 0;
-            flush();
+            shown = Math.min(shown, text.length);
+            reveal();
           }
         }
       }
@@ -3375,6 +3415,7 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
       });
     }
     if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
+    await drain();
     return { text: text || "…", rag: true, sources };
   } catch (err) {
     if (signal?.aborted) {
@@ -3390,7 +3431,7 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     if (text) return { text: `${text}\n\n*(The answer was cut off: ${err.message})*`, rag: true, sources, error: true };
     return { text: `Sorry, I couldn't answer that: ${err.message}`, error: true };
   } finally {
-    cancelAnimationFrame(frame);
+    stopPacing();
   }
 }
 
