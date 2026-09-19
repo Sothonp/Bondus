@@ -165,6 +165,10 @@ OUTPUT_RULES = """
      add a figure: a fenced code block whose info string is `geogebra` for 2D
      or `geogebra-3d` for 3D (surfaces, planes, lines and vectors in space).
      The app draws it as an interactive GeoGebra graph.
+   - Use `geogebra-3d` whenever any command needs a third coordinate: a point
+     written (x, y, z), or Plane, Sphere, Surface, Vector3D or a solid. Those
+     commands have no meaning in the 2D view, and a point such as (1, 2, 3) is
+     not a point there, so the figure fails from its first line on.
    - Inside the block write GeoGebra input-bar commands, one per line, with
      English command names and GeoGebra syntax (x^2, sqrt(x), sin(x), ln(x),
      pi), never LaTeX. Give objects short labels such as f, c, A, T.
