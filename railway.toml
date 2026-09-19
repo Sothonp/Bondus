@@ -1,0 +1,99 @@
+# Railway config for the AI coach API. The website is hosted separately (Vercel
+# or Netlify); set VITE_RAG_API_URL there to this service's URL and redeploy,
+# and set CORS_ORIGINS below to the site's origin.
+#
+# Why Railway rather than Render's free instance: the e5 embeddings need torch,
+# which is 517 MB of resident memory before the model weights load and 889 MB
+# once sentence-transformers is imported. Render's free and Starter plans are
+# both 512 MB, so the process is OOM-killed and the proxy answers 502. Railway
+# bills for what a service uses instead of capping it, and does not spin a
+# service down when it is idle -- which also removes the ~55 s wait on the first
+# question after a quiet spell.
+#
+# If you would rather not pay for that memory, EMBEDDING_BACKEND=hashing runs
+# the whole app in 62 MB. See "The cheap alternative" at the bottom.
+
+[build]
+# Use the Dockerfile, not Nixpacks: it pins torch to the CPU-only index through
+# `--extra cpu`, and the PyPI Linux wheel bundles ~2.5 GB of CUDA libraries that
+# nothing here uses. Nixpacks would not know to do that.
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# /health reports the embedding backend, the model chain and whether the
+# embedder finished loading, so a half-started container is not marked live.
+healthcheckPath = "/health"
+# The image bakes the ~470 MB e5 model, and PRELOAD_EMBEDDER warms it from disk
+# at boot rather than on the student's first question. That takes a while on a
+# cold container; a short timeout here reads it as a failed deploy and rolls
+# back. Lower it to 60 if you switch to the hashing backend, which loads
+# nothing.
+healthcheckTimeout = 300
+# A crash should be retried, but a container that cannot start at all (a bad
+# key, an index built for another backend) will not fix itself by restarting
+# forever -- let it fail and show up as a failed deploy instead.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+# The Dockerfile's CMD already binds to ${PORT}, which Railway injects.
+
+# ── Environment ──────────────────────────────────────────────────────────────
+# Railway has no equivalent of Render's envVars block, so set these in the
+# service's Variables tab. Required:
+#
+#   CORS_ORIGINS   the site's origin, e.g. https://bondus-o5w9.vercel.app
+#                  (without it the browser blocks every call and the frontend
+#                  falls back to its offline demo reply)
+#   GEMINI_API_KEY
+#   GROQ_API_KEY
+#
+#   EMBEDDING_BACKEND=sentence-transformers
+#   EMBEDDING_MODEL=intfloat/multilingual-e5-small
+#   EMBEDDING_DEVICE=cpu
+#   PRELOAD_EMBEDDER=true
+#   IMAGE_OCR_ENGINES=groq,gemini
+#   PRELOAD_KIRI=false
+#   LOG_LEVEL=INFO
+#
+# Worth adding, all of which already have these values as their defaults --
+# declared here only so they can be changed without a code deploy:
+#
+#   GROQ_REASONING_EFFORT=low      gpt-oss reasons before it answers, and those
+#   GEMINI_THINKING_LEVEL=low      tokens land before the first visible one, so
+#                                  they are the whole wait. Raise either to
+#                                  compare the "First token after N ms" line in
+#                                  the logs.
+#   LLM_SELECTION=priority         `rotate` once the head of the chain is rate
+#                                  limited most of the time.
+#   LLM_COOLDOWN_SECONDS=15
+#   LLM_MAX_COOLDOWN_SECONDS=300
+#
+# Optional, and each one adds models to the fallback chain -- without the key
+# the provider is skipped silently:
+#
+#   CEREBRAS_API_KEY, OPENROUTER_API_KEY
+#
+# Deliberately NOT set, and worth checking they are unset here too:
+#
+#   SCORE_THRESHOLD   it resolves from the backend on its own (0.75 for e5,
+#                     0.15 for hashing). Setting it by hand is how an index
+#                     stops being grounded after a backend switch.
+#   OCR_ENGINE        "hybrid" and "kiri" load a second model and torch on top
+#                     of the embeddings. Leave it unset to resolve to Gemini.
+
+# ── The cheap alternative ────────────────────────────────────────────────────
+# Lexical hashing needs no model at all: the whole app peaks at 62 MB, torch is
+# never imported, and it fits any free tier anywhere.
+#
+#   1. EMBEDDING_BACKEND=hashing
+#   2. re-embed the committed index for it and commit the result:
+#        EMBEDDING_BACKEND=hashing uv run python scripts/reembed_index.py
+#      (the stored chunks carry their own text, so this needs no corpus and no
+#      second OCR pass)
+#   3. drop the model-baking RUN line from the Dockerfile
+#   4. leave SCORE_THRESHOLD unset; it follows the backend
+#
+# What it costs: e5 puts Khmer and English in one semantic space, so "explain me
+# limit" retrieves passages about លីមីត. Hashing matches shared tokens, and the
+# two scripts share none -- an English question stops finding Khmer passages.
+# That is the whole thing the memory is being paid for.
