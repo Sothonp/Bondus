@@ -20,6 +20,7 @@ What it repairs:
 * A ``$$`` that opens mid-sentence is moved onto its own line, with a blank
   line around the block.
 * An unclosed ``$$`` or ``$`` is closed at the end.
+* A line that is a bare formula gains the ``$$`` the model forgot.
 * ``---`` rules are removed, ``##Heading`` gains its space, and a heading or
   list item that was run onto the end of another line starts a new one.
 
@@ -53,6 +54,17 @@ _TEXT_COMMAND = re.compile(r"\\(?:text|mathrm|mathbf|textbf|textit)\s*\{([^{}]*)
 _BARE_KHMER = re.compile(f"(?:\\\\[,;:!]|\\\\quad|\\s)*[{KHMER}][{KHMER}\\s\u200b]*")
 
 
+# Fenced code (the GeoGebra figure blocks) may hold anything, so the repairs
+# that read a line as prose have to stay out of it.
+_CODE_FENCE = re.compile(r"(?ms)(^```.*?^```)")
+
+# A line that is a formula and nothing else, written without its delimiters.
+# "\lim_{x\to a} f(x)=L" on its own line is not math to remark-math, so it
+# reaches the student as literal text, backslashes and all. Two letters at
+# least, so a lone "\\" line break is not mistaken for one.
+_BARE_LATEX_LINE = re.compile(r"(?m)^[ \t]*\\[a-zA-Z]{2,}[^\n]*$")
+
+
 # The delimiters added around a fragment, once the pass has reformatted them.
 _LEADING_FENCE = re.compile(r"\A\s*\$\$[ \t]*\n?")
 _TRAILING_FENCE = re.compile(r"\n?[ \t]*\$\$\s*\Z")
@@ -61,6 +73,36 @@ _TRAILING_FENCE = re.compile(r"\n?[ \t]*\$\$\s*\Z")
 def _display_block_open(text: str) -> bool:
     """Whether the text stops inside a ``$$`` block."""
     return bool(text.count("$$") % 2)
+
+
+def _outside_code(text: str, fix) -> str:
+    """Apply ``fix`` to the prose, leaving fenced code blocks untouched."""
+    parts = _CODE_FENCE.split(text)
+    return "".join(part if index % 2 else fix(part) for index, part in enumerate(parts))
+
+
+def _wrap_bare_latex(text: str) -> tuple[str, bool]:
+    """Give a naked formula line the ``$$`` the model forgot.
+
+    Only a line that is a formula on its own is wrapped. A line carrying a ``$``
+    is already delimited, and a formula sitting inside a sentence cannot be
+    told from prose without guessing -- which would put ordinary words inside a
+    formula, a worse failure than the one being fixed.
+    """
+    wrapped = False
+
+    def wrap_line(match: re.Match[str]) -> str:
+        nonlocal wrapped
+        line = match.group(0).strip()
+        if "$" in line:
+            return match.group(0)
+        wrapped = True
+        return f"\n$$\n{line}\n$$\n"
+
+    pieces = _MATH.split(text)
+    for index in range(0, len(pieces), 2):  # outside math
+        pieces[index] = _outside_code(pieces[index], lambda part: _BARE_LATEX_LINE.sub(wrap_line, part))
+    return "".join(pieces), wrapped
 
 
 def _strip_braces(argument: str) -> str:
@@ -279,6 +321,10 @@ def sanitize_answer(
         text = text.rstrip() + "\n$$"
     text, balance_notes = _balance_dollars(text, closing=not may_continue)
     notes.extend(balance_notes)
+
+    text, wrapped_bare = _wrap_bare_latex(text)
+    if wrapped_bare:
+        notes.append("wrapped a bare formula line in $$")
 
     pieces: list[str] = []
     stripped_commands = False

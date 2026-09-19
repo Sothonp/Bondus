@@ -317,7 +317,14 @@ class GeminiGenerator:
     provider: Provider = "gemini"
 
     def __init__(
-        self, api_key: str, model: str, *, max_tokens: int, timeout: float, temperature: float
+        self,
+        api_key: str,
+        model: str,
+        *,
+        max_tokens: int,
+        timeout: float,
+        temperature: float,
+        thinking_level: str = "low",
     ) -> None:
         from google import genai
         from google.genai import errors, types
@@ -336,6 +343,7 @@ class GeminiGenerator:
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.thinking_level = thinking_level
 
     def _request(self, system: str, history: Sequence[ChatTurn], user_message: str) -> dict:
         types = self._types
@@ -352,6 +360,8 @@ class GeminiGenerator:
             max_output_tokens=self.max_tokens,
             temperature=self.temperature,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            # Spent before the first token, so it is the student's whole wait.
+            thinking_config=types.ThinkingConfig(thinking_level=self.thinking_level.upper()),
         )
         return {"model": self.model, "contents": contents, "config": config}
 
@@ -444,9 +454,11 @@ class GroqGenerator:
         tokens_per_minute: int = 0,
         max_retry_wait: float = 0.0,
         min_completion_tokens: int = 256,
+        reasoning_effort: str = "",
     ) -> None:
         import groq
 
+        self.reasoning_effort = reasoning_effort
         self._groq = groq
         # Retries are handled in _create, which knows when to give up and fall back.
         self._client = groq.AsyncGroq(api_key=api_key, timeout=timeout, max_retries=0)
@@ -518,12 +530,16 @@ class GroqGenerator:
                 "Shrunk the Groq prompt to fit %d tokens/min: kept %d of %d history turns, %d of %d passages",
                 self.tokens_per_minute, len(turns), len(all_turns), len(kept), len(chunks),
             )
-        return {
+        request = {
             "model": self.model,
             "messages": messages,
             "max_completion_tokens": budget,
             "temperature": self.temperature,
         }
+        if self.reasoning_effort:
+            # Reasoning runs before the first visible token, so it is the wait.
+            request["reasoning_effort"] = self.reasoning_effort
+        return request
 
     def _error(self, exc: Exception) -> LLMError:
         groq = self._groq
@@ -1043,6 +1059,7 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
                 max_tokens=settings.llm_max_tokens,
                 timeout=settings.llm_timeout_seconds,
                 temperature=settings.gemini_temperature,
+                thinking_level=settings.gemini_thinking_level,
             )
             for model in models
         ]
@@ -1057,6 +1074,7 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
                 tokens_per_minute=settings.groq_tokens_per_minute,
                 max_retry_wait=settings.groq_max_retry_wait,
                 min_completion_tokens=settings.groq_min_completion_tokens,
+                reasoning_effort=settings.groq_reasoning_effort,
             )
         ]
     if provider == "cerebras" and settings.cerebras_api_key is not None:
@@ -1625,6 +1643,10 @@ def create_app(
             # deltas. The deltas still stream; the done event carries the fixed
             # text for the client to swap in.
             streamed: list[str] = []
+            # Time to first token is what the student actually experiences as
+            # speed: everything before it is an empty bubble. Logged per answer
+            # so a change of model, thinking level or prompt can be judged.
+            first_token_ms: float | None = None
             if payload.generate:
                 yield line(QueryStreamStatus(stage="generating"))
                 try:
@@ -1643,6 +1665,12 @@ def create_app(
                             streamed.clear()  # the answer restarts with another model
                             yield line(QueryStreamReset(detail=item.detail))
                         elif item:
+                            if first_token_ms is None:
+                                first_token_ms = round((time.perf_counter() - started) * 1000, 1)
+                                logger.info(
+                                    "First token after %.0f ms (%s %s)",
+                                    first_token_ms, generator.provider, final.model or generator.model,
+                                )
                             streamed.append(item)
                             yield line(QueryStreamDelta(text=item))
                 except LLMError as exc:
@@ -1662,11 +1690,17 @@ def create_app(
                 )
                 if repairs:
                     logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
+            total_ms = round((time.perf_counter() - started) * 1000, 1)
+            logger.info(
+                "Answer streamed in %.0f ms (first token %s)",
+                total_ms, f"{first_token_ms:.0f} ms" if first_token_ms else "never",
+            )
             yield line(QueryStreamDone(
                 provider=final.provider or generator.provider,
                 model=final.model,
                 stop_reason=final.stop_reason,
-                latency_ms=round((time.perf_counter() - started) * 1000, 1),
+                latency_ms=total_ms,
+                first_token_ms=first_token_ms,
                 answer=repaired if repairs else None,
             ))
 

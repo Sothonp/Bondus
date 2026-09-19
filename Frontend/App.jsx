@@ -3282,12 +3282,12 @@ const WAKING = "Waking the AI coach server (this can take a minute after it has 
    REVEAL_CHARS_PER_SECOND is the pace when the model can keep up with it, and a model slower
    than that is never held back. REVEAL_CATCHUP_SECONDS is how hard a backlog pushes the pace
    above that floor, so a fast model is slowed down rather than queued behind: at these two
-   numbers a 2500-character answer from a 400 char/s model takes about 10s to read out instead
-   of 6s, and its last line lands within about 4s of the stream closing. Raise the floor or
+   numbers a 2500-character answer from a 400 char/s model takes about 8s to read out instead
+   of 6s, and its last line lands within about 2s of the stream closing. Raise the floor or
    lower the catch-up to speed the reveal up. REVEAL_TICK_MS also caps the re-renders, and
    each one re-runs Markdown and KaTeX over the whole answer. */
-const REVEAL_CHARS_PER_SECOND = 80;
-const REVEAL_CATCHUP_SECONDS = 1.5;
+const REVEAL_CHARS_PER_SECOND = 180;
+const REVEAL_CATCHUP_SECONDS = 1;
 const REVEAL_TICK_MS = 40;
 
 async function ragStreamRequest(body, { signal, status }) {
@@ -3531,6 +3531,9 @@ const hideUnclosed = (text, marker) => {
 /* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 5) ── */
 const GGB_SCRIPT = "https://www.geogebra.org/apps/deployggb.js";
 const GGB_MAX_LINES = 30;
+// One missing object fails every later command that uses it, so report the first few
+// steps rather than the whole cascade.
+const GGB_MAX_REPORTED = 3;
 const GGB_BLOCKED = /^\s*(Execute|SetClickScript|SetUpdateScript|RunClickScript|RunUpdateScript|PlaySound|ReadText)\b/i;
 let ggbLoader = null;
 let ggbCounter = 0;
@@ -3553,25 +3556,63 @@ const geogebraCommands = (code) => code.split("\n")
   .filter((line) => line && !line.startsWith("#") && line.length <= 500 && !GGB_BLOCKED.test(line))
   .slice(0, GGB_MAX_LINES);
 
+/* The model picks the fence, and it does not always pick `geogebra-3d` for a figure that
+   lives in space. In the 2D graphing app "A = (1, 2, 3)" is not a point, so Plane(A, B, C)
+   fails with "Illegal argument: Point A" -- and GeoGebra says so in a modal over the chat.
+   Read the commands instead of trusting the fence. */
+const GGB_SOLID = /\b(?:Plane|PerpendicularPlane|PlaneBisector|Sphere|Surface|Cube|Prism|Pyramid|Tetrahedron|Octahedron|Cone|Cylinder|InfiniteCone|Vector3D|IntersectConic)\s*\(/i;
+const GGB_TRIPLE = /\(\s*-?\d[\d.]*\s*,\s*-?\d[\d.]*\s*,\s*-?\d[\d.]*\s*\)/;
+const GGB_Z_AXIS = /(?:^|[\s(])z\s*[=:]/im;
+const isSpatial = (commands) => commands.some(
+  (command) => GGB_SOLID.test(command) || GGB_TRIPLE.test(command) || GGB_Z_AXIS.test(command));
+
+/* "A = (1,2,3)", "c: x + y = 1" and "f(x) = x^2" each name what they build; a bare
+   construction such as Plane(A,B,C) names nothing and is checked by its arguments. */
+const GGB_LABEL = /^\s*([A-Za-z]\w*)\s*(?:\(\s*[A-Za-z]\w*\s*\))?\s*[:=]/;
+const GGB_ARGUMENTS = /\(([^()]*)\)\s*$/;
+
+/* Build the figure in the order it was written, and report the step that would not build
+   rather than leaving GeoGebra to raise a dialog the student can do nothing about. */
+function buildFigure(api, commands) {
+  const unbuilt = [];
+  try { api.setErrorDialogsActive(false); } catch { /* an older applet may not have it */ }
+  for (const command of commands) {
+    const missing = (command.match(GGB_ARGUMENTS)?.[1] || "").split(",")
+      .map((argument) => argument.trim())
+      .filter((argument) => /^[A-Za-z]\w{0,2}$/.test(argument) && !api.exists(argument));
+    if (missing.length) { unbuilt.push(`${command} (no ${missing.join(", ")})`); continue; }
+    let built = false;
+    try { built = api.evalCommand(command) !== false; } catch { built = false; }
+    const label = command.match(GGB_LABEL)?.[1];
+    if (built && label && !api.exists(label)) built = false;
+    if (!built) unbuilt.push(command);
+  }
+  return unbuilt;
+}
+
 function GeoGebraFigure({ code, is3d }) {
   const [ids] = useState(() => { ggbCounter += 1; return { container: `ggb-box-${ggbCounter}`, applet: `ggbApplet${ggbCounter}` }; });
   const ref = useRef(null);
   const [failed, setFailed] = useState(false);
+  const [unbuilt, setUnbuilt] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
+    setUnbuilt([]);
     loadGeoGebra().then(() => {
       if (cancelled || !ref.current) return;
       const commands = geogebraCommands(code);
       const applet = new window.GGBApplet({
         id: ids.applet,
-        appName: is3d ? "3d" : "graphing",
+        // A figure in space needs the 3D app whichever fence the model wrote it in.
+        appName: is3d || isSpatial(commands) ? "3d" : "graphing",
         width: Math.max(260, ref.current.clientWidth), height: 340,
         showToolBar: false, showAlgebraInput: false, showMenuBar: false,
         showResetIcon: true, enableShiftDragZoom: true, showZoomButtons: true, enableRightClick: false,
-        appletOnLoad: (api) => commands.forEach((command) => {
-          try { api.evalCommand(command); } catch { /* skip a bad line, keep the rest */ }
-        }),
+        appletOnLoad: (api) => {
+          const skipped = buildFigure(api, commands);
+          if (!cancelled && skipped.length) setUnbuilt(skipped);
+        },
       }, true);
       applet.inject(ref.current);
     }).catch(() => { if (!cancelled) setFailed(true); });
@@ -3587,7 +3628,19 @@ function GeoGebraFigure({ code, is3d }) {
       </div>
     );
   }
-  return <div id={ids.container} ref={ref} style={{ width: 520, maxWidth: "100%", height: 340, borderRadius: 12, overflow: "hidden", background: "#fff" }} />;
+  return (
+    <div>
+      <div id={ids.container} ref={ref} style={{ width: 520, maxWidth: "100%", height: 340, borderRadius: 12, overflow: "hidden", background: "#fff" }} />
+      {/* Whatever did build is still worth looking at, so the figure stays and the rest is
+          reported quietly underneath. */}
+      {unbuilt.length > 0 && (
+        <p className="text-xs eai-muted" style={{ marginTop: 6 }}>
+          Part of this figure couldn't be drawn: {unbuilt.slice(0, GGB_MAX_REPORTED).join("; ")}
+          {unbuilt.length > GGB_MAX_REPORTED ? ` (and ${unbuilt.length - GGB_MAX_REPORTED} more)` : ""}
+        </p>
+      )}
+    </div>
+  );
 }
 
 const hastText = (node) => (node.type === "text" ? node.value : (node.children || []).map(hastText).join(""));
@@ -3607,7 +3660,11 @@ function markdownComponents(streaming) {
   };
 }
 
-const KATEX_OPTIONS = { throwOnError: false, strict: false }; // Khmer inside math only warns
+/* throwOnError:false makes KaTeX print a formula it cannot parse as its own source. Left to
+   itself it prints that source in #cc0000, so one bad formula reads as an error the student
+   is meant to act on. Show it in the muted text colour instead: still visibly not a formula,
+   in both themes, without the alarm. */
+const KATEX_OPTIONS = { throwOnError: false, strict: false, errorColor: "var(--muted)" }; // Khmer inside math only warns
 const REMARK_PLUGINS = [remarkGfm, remarkMath];
 const REHYPE_PLUGINS = [[rehypeKatex, KATEX_OPTIONS]];
 const MD_COMPONENTS = markdownComponents(false);

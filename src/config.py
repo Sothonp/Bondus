@@ -78,6 +78,11 @@ class Settings(BaseSettings):
         None, validation_alias=AliasChoices("gemini_api_key", "google_api_key")
     )
     gemini_model: str = "gemini-3.8-flash"
+    # Gemini thinks before answering unless told not to, and on a tutor reply
+    # that shows its working anyway the thinking mostly buys latency: it is
+    # spent before the first token, so the student watches an empty bubble.
+    # "minimal" or "low" for chat; raise it only if answer quality drops.
+    gemini_thinking_level: Literal["minimal", "low", "medium", "high"] = "low"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
     gemini_fallback_models: str = "gemini-3.5-flash,gemini-flash-latest"
     gemini_temperature: float = Field(0.2, ge=0.0, le=2.0)
@@ -85,6 +90,12 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-120b"
     groq_temperature: float = Field(0.2, ge=0.0, le=2.0)
+    # gpt-oss reasons before it answers, and those tokens are generated before
+    # the first visible one -- so they are the student's entire wait, spent on
+    # thinking that is thrown away. "low" keeps the reasoning short; blank sends
+    # nothing, for a Groq model that rejects the parameter (the chain then moves
+    # on to the next model, which is a slow way to discover it).
+    groq_reasoning_effort: Literal["", "low", "medium", "high"] = "low"
     groq_max_tokens: int = Field(3000, ge=256, le=64000)
     # Below this many answer tokens Groq is skipped (the next model answers)
     # rather than producing a cut-off answer.

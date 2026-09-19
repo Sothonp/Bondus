@@ -125,6 +125,9 @@ class QueryStreamReset(BaseModel):
 
 class QueryStreamDone(BaseModel):
     type: Literal["done"] = "done"
+    first_token_ms: float | None = Field(
+        None, description="Time to the first text delta: the wait the student actually sees"
+    )
     provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"] | None = Field(
         None, description="The provider that actually answered (may be a fallback)"
     )
