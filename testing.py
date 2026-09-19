@@ -90,7 +90,10 @@ def _isolated_environment(monkeypatch):
     """Keep exported shell variables from leaking into test settings."""
     for name in (
         "LLM_PROVIDER", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY",
-        "GEMINI_MODEL", "GEMINI_FALLBACK_MODELS", "LLM_FALLBACK",
+        "GEMINI_MODEL", "GEMINI_FALLBACK_MODELS", "LLM_FALLBACK", "LLM_SELECTION",
+        "LLM_COOLDOWN_SECONDS", "LLM_MAX_COOLDOWN_SECONDS",
+        "CEREBRAS_API_KEY", "CEREBRAS_MODEL", "SEA_LION_API_KEY", "SEA_LION_MODEL",
+        "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "OPENROUTER_FALLBACK_MODELS",
         "EMBEDDING_BACKEND", "EMBEDDING_MODEL", "EMBED_MODEL", "VECTOR_STORE_PATH", "OCR_MODE",
         "OCR_ENGINE",
     ):
@@ -812,6 +815,117 @@ def test_sea_lion_needs_a_model_id(tmp_path):
     assert [g.provider for g in _provider_generators(with_model, "sea-lion")] == ["sea-lion"]
 
 
+def test_cerebras_stream_yields_text_and_maps_errors():
+    import openai
+
+    from src.api import CerebrasGenerator
+
+    def chunk(content, finish=None):
+        return {
+            "id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "gpt-oss-120b",
+            "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": finish}],
+        }
+
+    body = _sse([(None, chunk("ដេរីវេគឺ ")), (None, chunk("$2x$")), (None, chunk(None, "stop")), (None, "[DONE]")])
+
+    def generator(http):
+        gen = CerebrasGenerator(
+            "csk-x", "gpt-oss-120b", base_url="https://api.cerebras.ai/v1",
+            max_tokens=100, timeout=5, temperature=0.2,
+        )
+        gen._client = openai.AsyncOpenAI(
+            api_key="csk-x", base_url="https://api.cerebras.ai/v1", max_retries=0, http_client=http
+        )
+        return gen
+
+    items = _run(_collect(generator(_mock_http(body))))
+    assert items[-1] == GeneratedAnswer(text="ដេរីវេគឺ $2x$", stop_reason="stop", model="gpt-oss-120b")
+
+    # Each provider names its own settings, not SEA-LION's.
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(_mock_http(b'{"error":{"message":"bad key"}}', 401))))
+    assert error.value.status_code == 502 and "CEREBRAS_API_KEY" in error.value.detail
+
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(_mock_http(b'{"error":{"message":"no such model"}}', 404))))
+    assert "CEREBRAS_MODEL" in error.value.detail
+
+    # An unpaid account is its own status, so the rotation can rest it for long.
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(_mock_http(b'{"message":"Payment required","code":"payment_required"}', 402))))
+    assert error.value.status_code == 402 and "billing" in error.value.detail
+
+
+def test_openrouter_stream_maps_errors_and_asks_for_no_reasoning():
+    import httpx
+    import openai
+
+    from src.api import OpenRouterGenerator
+
+    def chunk(content, finish=None):
+        return {
+            "id": "c1", "object": "chat.completion.chunk", "created": 1,
+            "model": "inclusionai/ling-3.0-flash-vl:free",
+            "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": finish}],
+        }
+
+    body = _sse([(None, chunk("លីមីតគឺ ")), (None, chunk("$1$")), (None, chunk(None, "stop")), (None, "[DONE]")])
+    sent: list[httpx.Request] = []
+
+    def recording_http(payload: bytes, status_code: int = 200):
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.append(request)
+            return httpx.Response(
+                status_code, headers={"content-type": "text/event-stream"}, content=payload
+            )
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    def generator(http):
+        gen = OpenRouterGenerator(
+            "sk-or-x", "inclusionai/ling-3.0-flash-vl:free", base_url="https://openrouter.ai/api/v1",
+            max_tokens=100, timeout=5, temperature=0.2,
+            default_headers=OpenRouterGenerator.attribution("https://bondus.edu", "Bondus"),
+            extra_body=OpenRouterGenerator.no_reasoning(),
+        )
+        gen._client = openai.AsyncOpenAI(
+            api_key="sk-or-x", base_url="https://openrouter.ai/api/v1", max_retries=0,
+            http_client=http,
+            default_headers=OpenRouterGenerator.attribution("https://bondus.edu", "Bondus"),
+        )
+        return gen
+
+    items = _run(_collect(generator(recording_http(body))))
+    assert items[-1] == GeneratedAnswer(
+        text="លីមីតគឺ $1$", stop_reason="stop", model="inclusionai/ling-3.0-flash-vl:free"
+    )
+
+    # The whole completion budget must go to the explanation, not to thinking
+    # the student never sees -- that is what empties SEA-LION's Qwen answers.
+    body_sent = json.loads(sent[0].content)
+    assert body_sent["reasoning"] == {"enabled": False, "exclude": True}
+    assert sent[0].headers["X-Title"] == "Bondus"
+    assert sent[0].headers["HTTP-Referer"] == "https://bondus.edu"
+
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(recording_http(b'{"error":{"message":"bad key"}}', 401))))
+    assert error.value.status_code == 502 and "OPENROUTER_API_KEY" in error.value.detail
+
+    with pytest.raises(LLMError) as error:
+        _run(_collect(generator(recording_http(b'{"error":{"message":"no such model"}}', 404))))
+    assert "OPENROUTER_MODEL" in error.value.detail
+
+
+def test_an_unpaid_account_is_rested_for_the_longest_cooldown():
+    unpaid = FlakyGenerator("cerebras", "gpt-oss-120b", LLMError(402, "Cerebras needs billing set up"))
+    generator = _fallback(
+        unpaid, FlakyGenerator("sea-lion", "gemma"), cooldown_seconds=15, max_cooldown_seconds=300
+    )
+    assert _ask(generator) == "gemma"
+    # Not 15 s: nothing about an unpaid account clears in fifteen seconds, so it
+    # must not cost a round-trip four times a minute.
+    assert 290 < generator.resting["cerebras:gpt-oss-120b"] <= 300
+
+
 def test_gemini_stream_yields_text_and_maps_errors():
     from google.genai import errors, types
 
@@ -884,10 +998,17 @@ class FlakyGenerator(StreamingGenerator):
         yield GeneratedAnswer(text=f"partial from {self.model}", stop_reason="stop", model=self.model)
 
 
-def _fallback(*candidates):
+def _fallback(*candidates, **options):
     from src.api import FallbackGenerator
 
-    return FallbackGenerator(list(candidates))
+    return FallbackGenerator(list(candidates), **options)
+
+
+def _ask(generator) -> str:
+    answer = _run(generator.generate(
+        system="sys", history=[], user_message="q", chunks=[], language="en"
+    ))
+    return answer.model
 
 
 def test_fallback_generator_moves_past_failing_models(store_path):
@@ -900,13 +1021,83 @@ def test_fallback_generator_moves_past_failing_models(store_path):
         assert (answer.answer, answer.provider, answer.model) == (
             "answer from gemini-3.5-flash", "gemini", "gemini-3.5-flash"
         )
+        health = client.get("/health").json()
+        assert health["llm_chain"] == generator.chain and health["llm_selection"] == "priority"
+        assert list(health["llm_resting"]) == ["groq:openai/gpt-oss-120b"]
+
         events = read_stream(client.post("/api/query/stream", json={"prompt": "hi"}))
         assert [e["type"] for e in events] == ["meta", "delta", "done"]
-        assert events[0]["provider"] == "groq"  # the first choice, announced before generating
+        assert events[0]["provider"] == "groq"  # the head of the chain, announced before generating
         assert events[-1]["provider"] == "gemini" and events[-1]["model"] == "gemini-3.5-flash"
-        health = client.get("/health").json()
-        assert health["llm_chain"] == generator.chain
-    assert len(busy.calls) == 2 and len(backup.calls) == 2
+    # The second question skips the model that just failed rather than paying for
+    # its failure again.
+    assert len(busy.calls) == 1 and len(backup.calls) == 2
+
+
+def test_rotation_spreads_questions_over_the_healthy_models():
+    a = FlakyGenerator("groq", "m1")
+    b = FlakyGenerator("gemini", "m2")
+    c = FlakyGenerator("gemini", "m3")
+    rotating = _fallback(a, b, c, rotate=True)
+    assert [_ask(rotating) for _ in range(4)] == ["m1", "m2", "m3", "m1"]
+
+    ordered = _fallback(a, b, c)  # priority: the head of the chain takes every question
+    assert [_ask(ordered) for _ in range(3)] == ["m1", "m1", "m1"]
+
+
+def test_rotation_skips_a_rested_model_until_its_cooldown_passes():
+    import time
+
+    limited = FlakyGenerator("groq", "m1", LLMError(429, "rate limited"))
+    backup = FlakyGenerator("gemini", "m2")
+    generator = _fallback(limited, backup, rotate=True, cooldown_seconds=30)
+    assert [_ask(generator) for _ in range(3)] == ["m2", "m2", "m2"]
+    assert len(limited.calls) == 1  # asked once, then rested
+    assert 0 < generator.resting["groq:m1"] <= 30
+
+    limited.failure = None
+    generator._health[0].cooldown_until = time.monotonic()  # the cooldown runs out
+    assert generator.resting == {}
+    assert _ask(generator) == "m1"
+    assert generator._health[0].failures == 0  # answering clears the failure streak
+
+
+def test_cooldown_honours_retry_after_then_backs_off():
+    slow = FlakyGenerator("groq", "m1", LLMError(429, "retry in 42 s", retry_after=42))
+    generator = _fallback(
+        slow, FlakyGenerator("gemini", "m2"),
+        cooldown_seconds=10, max_cooldown_seconds=60,
+    )
+    _ask(generator)
+    assert 40 < generator.resting["groq:m1"] <= 42  # Groq's own retry-after wins
+
+    slow.failure = LLMError(503, "busy")  # no retry-after: doubling back-off, capped
+    rests = []
+    for _ in range(3):
+        generator._health[0].cooldown_until = 0.0
+        _ask(generator)
+        rests.append(round(generator.resting["groq:m1"]))
+    assert rests == [20, 40, 60]
+
+
+def test_a_refused_or_oversized_request_does_not_rest_the_model():
+    oversized = FlakyGenerator("groq", "m1", LLMError(413, "prompt leaves no room for an answer"))
+    generator = _fallback(oversized, FlakyGenerator("gemini", "m2"))
+    assert _ask(generator) == "m2"
+    # A prompt this model could not fit says nothing about the next question.
+    assert generator.resting == {}
+
+
+def test_every_model_resting_still_answers_with_the_soonest_one():
+    first = FlakyGenerator("groq", "m1", LLMError(503, "busy"))
+    second = FlakyGenerator("gemini", "m2", LLMError(503, "busy"))
+    generator = _fallback(first, second, cooldown_seconds=60)
+    _ask(generator)  # both fail and are rested
+    assert set(generator.resting) == {"groq:m1", "gemini:m2"}
+
+    first.failure = None
+    # A cooldown must never be the reason nobody is asked at all.
+    assert _ask(generator) == "m1"
 
 
 def test_fallback_generator_answers_with_passages_when_everything_fails(store_path):
@@ -1039,6 +1230,37 @@ def test_build_generator_orders_fallback_chain(tmp_path):
         "groq:openai/gpt-oss-120b", "gemini:gemini-3.6-flash",
         "gemini:gemini-3.8-flash", "gemini:gemini-3.5-flash",
     ]
+
+    # The backstops sit behind Groq and Gemini, never ahead; among themselves the
+    # general-purpose hosts go first and Khmer-trained SEA-LION answers last.
+    with_backstops = settings.model_copy(update={
+        "cerebras_api_key": SecretStr("csk-test"),
+        "openrouter_api_key": SecretStr("sk-or-test"),
+        "sea_lion_api_key": SecretStr("sk-test"),
+        "openrouter_fallback_models": "deepseek/deepseek-v4-flash-0731:free",
+    })
+    assert build_generator(with_backstops).chain == [
+        "groq:openai/gpt-oss-120b", "gemini:gemini-3.6-flash",
+        "gemini:gemini-3.8-flash", "gemini:gemini-3.5-flash",
+        "cerebras:gpt-oss-120b", "cerebras:qwen-3.8-27b",
+        "openrouter:inclusionai/ling-3.0-flash-vl:free",
+        "openrouter:deepseek/deepseek-v4-flash-0731:free",
+        "sea-lion:aisingapore/Gemma-SEA-LION-v4-27B-IT",
+    ]
+    # A key alone is enough now that each backstop has a working default model.
+    cerebras_only = make_settings(tmp_path, llm_provider="auto", cerebras_api_key="csk-test")
+    assert cerebras_only.resolved_llm_provider == "cerebras"
+    assert build_generator(cerebras_only).chain == ["cerebras:gpt-oss-120b", "cerebras:qwen-3.8-27b"]
+    chain = build_generator(settings)
+    assert (chain.rotate, chain.cooldown_seconds) == (False, settings.llm_cooldown_seconds)
+    assert build_generator(settings.model_copy(update={"llm_selection": "rotate"})).rotate is True
+    # Another model can answer while Groq is rate limited, so Groq must not spend
+    # the student's question sitting out its own retry-after.
+    assert chain.candidates[0].max_retry_wait == 0.0
+    # Alone in the chain, Groq keeps its retry: waiting beats no answer at all.
+    groq_only = build_generator(make_settings(tmp_path, llm_provider="groq", groq_api_key="gsk_test"))
+    assert groq_only.candidates[0].max_retry_wait == settings.groq_max_retry_wait
+
     assert isinstance(build_generator(settings.model_copy(update={"llm_fallback": False})), GroqGenerator)
     assert isinstance(build_generator(make_settings(tmp_path)), ExtractiveGenerator)
     with pytest.raises(RuntimeError):

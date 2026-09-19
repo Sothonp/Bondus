@@ -82,7 +82,7 @@ class QueryResponse(BaseModel):
     language: Literal["km", "en"]
     grounded: bool = Field(description="True when at least one chunk passed the threshold")
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "sea-lion", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
     model: str | None = None
     stop_reason: str | None = None
     latency_ms: float
@@ -98,7 +98,7 @@ class QueryStreamMeta(BaseModel):
     language: Literal["km", "en"]
     grounded: bool
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "sea-lion", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
 
 
 class QueryStreamStatus(BaseModel):
@@ -125,7 +125,7 @@ class QueryStreamReset(BaseModel):
 
 class QueryStreamDone(BaseModel):
     type: Literal["done"] = "done"
-    provider: Literal["anthropic", "gemini", "groq", "sea-lion", "none"] | None = Field(
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"] | None = Field(
         None, description="The provider that actually answered (may be a fallback)"
     )
     model: str | None = None
@@ -224,9 +224,16 @@ class HealthResponse(BaseModel):
     ocr_enabled: bool
     ocr_engine: Literal["gemini", "kiri", "groq", "hybrid"] | None = None
     ocr_model: str | None = None
-    llm_provider: Literal["anthropic", "gemini", "groq", "sea-lion", "none"]
+    llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
     llm_model: str | None = None
     llm_chain: list[str] = Field(default_factory=list, description="provider:model, in fallback order")
+    llm_selection: Literal["rotate", "priority"] | None = Field(
+        None, description="how the next question picks among the chain"
+    )
+    llm_resting: dict[str, float] = Field(
+        default_factory=dict,
+        description="models being skipped after a failure, and the seconds left on each",
+    )
     config_warnings: list[str] = Field(default_factory=list)
     image_ocr_engines: list[str] = Field(default_factory=list)
     default_top_k: int

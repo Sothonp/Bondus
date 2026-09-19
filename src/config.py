@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-LLMProvider = Literal["auto", "anthropic", "gemini", "groq", "sea-lion", "none"]
+LLMProvider = Literal[
+    "auto", "anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"
+]
 EmbeddingBackend = Literal["sentence-transformers", "hashing"]
 KhmerSegmenterBackend = Literal["auto", "crf", "regex"]
 OCREngineSetting = Literal["auto", "gemini", "kiri", "groq", "hybrid"]
@@ -50,6 +52,20 @@ class Settings(BaseSettings):
     # When the chosen provider fails, try the other configured providers, then
     # answer with the retrieved passages instead of an error.
     llm_fallback: bool = True
+    # How the next question picks among those models. "priority" starts at the
+    # head of the chain whenever it is healthy -- Groq answers in about 1.5 s
+    # against 10-30 s for the Gemini models, so it should carry the traffic it
+    # can. "rotate" instead starts each question a place further down, sharing
+    # the load across several free tiers so none reaches its quota alone; it
+    # costs latency, and is the better setting once the question rate is high
+    # enough that the head of the chain is rate limited most of the time.
+    # Either way a model that fails is rested and skipped (see below).
+    llm_selection: Literal["priority", "rotate"] = "priority"
+    # A model that rate limited or fell over is skipped for this long (doubling
+    # while it keeps failing, up to the maximum) rather than being retried on
+    # every question. A provider that sends `retry-after` sets its own wait.
+    llm_cooldown_seconds: float = Field(15.0, ge=0.0)
+    llm_max_cooldown_seconds: float = Field(300.0, ge=1.0)
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = Field(
@@ -80,13 +96,65 @@ class Settings(BaseSettings):
     # otherwise the next model in the fallback chain answers.
     groq_max_retry_wait: float = Field(12.0, ge=0.0, le=120.0)
 
+    # Cerebras serves the same open models as Groq on its own hardware, so it is
+    # a separate quota for an answer of the same character: when Groq has spent
+    # its tokens for the minute, `gpt-oss-120b` here is the identical model.
+    # OpenAI-compatible, so it is reached with the openai client.
+    cerebras_api_key: SecretStr | None = None
+    cerebras_model: str = "gpt-oss-120b"
+    # Tried in order when the main model is overloaded, rate limited or unavailable.
+    cerebras_fallback_models: str = "qwen-3.8-27b"
+    cerebras_base_url: str = "https://api.cerebras.ai/v1"
+    cerebras_temperature: float = Field(0.2, ge=0.0, le=2.0)
+    # The free tier caps the context at 8192 tokens, the same shape of limit Groq
+    # has, so the prompt is shrunk to fit the same way. 0 = no limit (paid tier).
+    cerebras_tokens_per_minute: int = Field(8000, ge=0)
+    cerebras_min_completion_tokens: int = Field(1500, ge=64, le=64000)
+    cerebras_max_retry_wait: float = Field(0.0, ge=0.0, le=120.0)
+
+    # OpenRouter fronts many providers behind one key, so it is the broadest
+    # backstop: when Groq, Gemini and Cerebras have all run dry it reaches a
+    # different set of hosts entirely. Keys start with `sk-or-`. Models whose id
+    # ends in `:free` cost nothing but are rate limited per minute and per day.
+    # OPEN_ROUTER_API_KEY is accepted too: the product is written both ways, and
+    # a key silently ignored over a spelling is an outage nobody thinks to look for.
+    openrouter_api_key: SecretStr | None = Field(
+        None, validation_alias=AliasChoices("openrouter_api_key", "open_router_api_key")
+    )
+    # Measured on 2026-09-19 against two Khmer calculus questions: these three
+    # each answered correctly in Khmer with $$ formulas, twice. Both Gemma free
+    # endpoints were rate limited upstream (shared across all OpenRouter users,
+    # nothing to do with this key), and two others were rejected -- dots-3 lost
+    # its LaTeX and its answer on the second question, nemotron-3.5-lightning
+    # took 193 s to answer wrongly. `GET {base_url}/models` lists what is free
+    # now; retest before changing these, because one good answer proves nothing.
+    openrouter_model: str = "inclusionai/ling-3.0-flash-vl:free"
+    # Tried in order when the main model is overloaded, rate limited or unavailable.
+    # DeepSeek writes the most Khmer of the three but takes about half as long
+    # again; the Nemotron is the least consistent in latency.
+    openrouter_fallback_models: str = (
+        "deepseek/deepseek-v4-flash-0731:free,nvidia/nemotron-3-ultra-550b-a55b:free"
+    )
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_temperature: float = Field(0.2, ge=0.0, le=2.0)
+    # Nearly every free model here can think before answering, which spends the
+    # completion budget on reasoning the student never sees. Off by default; set
+    # this false only for a model that answers better with it.
+    openrouter_disable_reasoning: bool = True
+    # Optional: OpenRouter attributes traffic to an app through these headers.
+    openrouter_site_url: str = ""
+    openrouter_app_name: str = "Bondus"
+
     # SEA-LION (AI Singapore), an open model family trained for Southeast Asian
     # languages including Khmer. The API is OpenAI-compatible, so it is reached
     # with the openai client pointed at SEA_LION_BASE_URL.
     sea_lion_api_key: SecretStr | None = None
-    # No default model: the catalogue changes, and a wrong id fails at request
-    # time rather than at startup. Pick one from the SEA-LION docs.
-    sea_lion_model: str = ""
+    # Verified against the live catalogue on 2026-09-19; `GET {base_url}/models`
+    # lists what the key can actually reach, and a wrong id fails at request time
+    # rather than at startup. Gemma is the default rather than the newer
+    # Qwen-SEA-LION-v4.5, which reasons before answering and returns an empty
+    # answer when the token budget runs out in its reasoning.
+    sea_lion_model: str = "aisingapore/Gemma-SEA-LION-v4-27B-IT"
     sea_lion_base_url: str = "https://api.sea-lion.ai/v1"
     sea_lion_temperature: float = Field(0.2, ge=0.0, le=2.0)
 
@@ -184,7 +252,8 @@ class Settings(BaseSettings):
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
 
     @field_validator(
-        "anthropic_api_key", "gemini_api_key", "groq_api_key", "sea_lion_api_key", mode="after"
+        "anthropic_api_key", "gemini_api_key", "groq_api_key", "cerebras_api_key",
+        "openrouter_api_key", "sea_lion_api_key", mode="after",
     )
     @classmethod
     def _blank_key_is_none(cls, value: SecretStr | None) -> SecretStr | None:
@@ -223,6 +292,16 @@ class Settings(BaseSettings):
     def gemini_fallback_model_list(self) -> list[str]:
         models = [model.strip() for model in self.gemini_fallback_models.split(",") if model.strip()]
         return [model for model in dict.fromkeys(models) if model != self.gemini_model]
+
+    @property
+    def openrouter_fallback_model_list(self) -> list[str]:
+        models = [m.strip() for m in self.openrouter_fallback_models.split(",") if m.strip()]
+        return [model for model in dict.fromkeys(models) if model != self.openrouter_model]
+
+    @property
+    def cerebras_fallback_model_list(self) -> list[str]:
+        models = [model.strip() for model in self.cerebras_fallback_models.split(",") if model.strip()]
+        return [model for model in dict.fromkeys(models) if model != self.cerebras_model]
 
     @model_validator(mode="after")
     def _scale_score_threshold(self) -> "Settings":
@@ -268,7 +347,9 @@ class Settings(BaseSettings):
         return self.max_upload_mb * 1024 * 1024
 
     @property
-    def resolved_llm_provider(self) -> Literal["anthropic", "gemini", "groq", "sea-lion", "none"]:
+    def resolved_llm_provider(
+        self,
+    ) -> Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]:
         if self.llm_provider != "auto":
             return self.llm_provider
         if self.anthropic_api_key is not None:
@@ -277,6 +358,10 @@ class Settings(BaseSettings):
             return "gemini"
         if self.groq_api_key is not None:
             return "groq"
+        if self.cerebras_api_key is not None:
+            return "cerebras"
+        if self.openrouter_api_key is not None:
+            return "openrouter"
         if self.sea_lion_api_key is not None:
             return "sea-lion"
         return "none"

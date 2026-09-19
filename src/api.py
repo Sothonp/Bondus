@@ -69,7 +69,7 @@ from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
 logger = logging.getLogger("reanmath")
 
-Provider = Literal["anthropic", "gemini", "groq", "sea-lion", "none"]
+Provider = Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
 
 
 # ---------------------------------------------------------------------------
@@ -77,10 +77,13 @@ Provider = Literal["anthropic", "gemini", "groq", "sea-lion", "none"]
 # ---------------------------------------------------------------------------
 
 class LLMError(RuntimeError):
-    def __init__(self, status_code: int, detail: str) -> None:
+    def __init__(self, status_code: int, detail: str, retry_after: float | None = None) -> None:
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+        # Seconds the provider itself asked us to wait, when it said so. The
+        # rotation rests the model for exactly that long instead of guessing.
+        self.retry_after = retry_after
 
 
 @dataclass(frozen=True)
@@ -428,6 +431,7 @@ class GroqGenerator:
     """Open models (gpt-oss, Qwen, Llama) served by Groq's OpenAI-compatible API."""
 
     provider: Provider = "groq"
+    label = "Groq"
 
     def __init__(
         self,
@@ -562,19 +566,22 @@ class GroqGenerator:
                 if attempt == 2 or wait is None or wait > self.max_retry_wait:
                     detail = f"Groq rate limit reached; retry in {wait:.0f} s" if wait else None
                     error = self._error(exc)
-                    raise (LLMError(429, detail) if detail else error) from exc
+                    raise (LLMError(429, detail, retry_after=wait) if detail else error) from exc
                 logger.info("Groq rate limited; retrying in %.1f s", wait)
                 await asyncio.sleep(wait)
             except self._groq.APIError as exc:
                 raise self._error(exc) from exc
 
     def _check(self, text: str, finish_reason: str | None) -> None:
+        # ``label`` rather than "Groq": the OpenAI-compatible providers inherit
+        # this, and a backstop's empty answer blamed on Groq sends whoever is
+        # debugging it to the wrong provider.
         if finish_reason == "content_filter":
             raise LLMError(422, "The model declined to answer this request.")
         if not text:
-            raise LLMError(502, f"Groq returned an empty response (finish_reason={finish_reason})")
+            raise LLMError(502, f"{self.label} returned an empty response (finish_reason={finish_reason})")
         if finish_reason == "length":
-            logger.warning("Groq response hit its completion-token budget")
+            logger.warning("%s response hit its completion-token budget (%s)", self.label, self.model)
 
     async def generate(self, *, system, history, user_message, chunks, language, message_builder=None) -> GeneratedAnswer:
         response = await self._create(self._request(system, history, user_message, chunks, message_builder))
@@ -610,19 +617,20 @@ class GroqGenerator:
         yield GeneratedAnswer(text=text, stop_reason=finish_reason, model=model)
 
 
-class SeaLionGenerator:
-    """SEA-LION (AI Singapore), an open model family built for Southeast Asian
-    languages, through its OpenAI-compatible API.
+class OpenAICompatibleGenerator:
+    """A provider that speaks the OpenAI chat-completions API.
 
     The request and response shapes are the ones ``GroqGenerator`` already
     speaks, so the message building, budget shrinking and stream handling are
-    inherited; only the client and the error mapping differ.
+    inherited; a subclass supplies its name, its endpoint and its key.
     """
 
-    provider: Provider = "sea-lion"
+    provider: Provider
+    label = "The API"  # how this provider is named in an error shown to a student
+    key_env = "API_KEY"  # the setting that holds its key, named in that error
+    model_env = "MODEL"
 
     _messages = staticmethod(GroqGenerator._messages)
-    _request = GroqGenerator._request
     _completion_budget = GroqGenerator._completion_budget
     estimate_tokens = staticmethod(GroqGenerator.estimate_tokens)
     _check = GroqGenerator._check
@@ -640,14 +648,19 @@ class SeaLionGenerator:
         tokens_per_minute: int = 0,
         max_retry_wait: float = 0.0,
         min_completion_tokens: int = 256,
+        default_headers: dict[str, str] | None = None,
+        extra_body: dict | None = None,
     ) -> None:
         import openai
 
         self._openai = openai
         # Retries are handled in _create, which knows when to give up and fall back.
         self._client = openai.AsyncOpenAI(
-            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0
+            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0,
+            default_headers=default_headers or None,
         )
+        # Request fields outside the OpenAI schema that this provider understands.
+        self.extra_body = extra_body or None
         self.base_url = base_url
         self.max_retry_wait = max_retry_wait
         self.min_completion_tokens = min(min_completion_tokens, max_tokens)
@@ -656,31 +669,43 @@ class SeaLionGenerator:
         self.temperature = temperature
         self.tokens_per_minute = tokens_per_minute
 
+    def _request(self, *args, **kwargs) -> dict:
+        request = GroqGenerator._request(self, *args, **kwargs)
+        if self.extra_body:
+            request["extra_body"] = self.extra_body
+        return request
+
     def _error(self, exc: Exception) -> LLMError:
         openai = self._openai
+        name = self.label
         if isinstance(exc, openai.AuthenticationError):
-            return LLMError(502, "SEA-LION rejected the API key (check SEA_LION_API_KEY)")
+            return LLMError(502, f"{name} rejected the API key (check {self.key_env})")
         if isinstance(exc, openai.PermissionDeniedError):
-            return LLMError(502, f"SEA-LION permission denied: {exc.message}")
+            return LLMError(502, f"{name} permission denied: {exc.message}")
         if isinstance(exc, openai.NotFoundError):
             return LLMError(
                 502,
-                f"Unknown SEA-LION model '{self.model}': {exc.message} "
-                f"(set SEA_LION_MODEL to a model the API lists)",
+                f"Unknown {name} model '{self.model}': {exc.message} "
+                f"(set {self.model_env} to a model the API lists)",
             )
+        # The account is out of credit. Nothing about this clears on its own, so
+        # it is reported as a 402 and rested for the longest cooldown rather than
+        # being retried a few seconds later.
+        if isinstance(exc, openai.APIStatusError) and exc.status_code == 402:
+            return LLMError(402, f"{name} needs billing set up before it will answer")
         if isinstance(exc, openai.BadRequestError):
-            return LLMError(502, f"SEA-LION rejected the request: {exc.message}")
+            return LLMError(502, f"{name} rejected the request: {exc.message}")
         if isinstance(exc, openai.RateLimitError):
-            return LLMError(429, "SEA-LION rate limit reached; retry shortly")
+            return LLMError(429, f"{name} rate limit reached; retry shortly")
         if isinstance(exc, openai.InternalServerError):
-            return LLMError(503, f"SEA-LION is temporarily unavailable ({exc.status_code})")
+            return LLMError(503, f"{name} is temporarily unavailable ({exc.status_code})")
         if isinstance(exc, openai.APIStatusError):
-            return LLMError(502, f"SEA-LION API error ({exc.status_code}): {exc.message}")
+            return LLMError(502, f"{name} API error ({exc.status_code}): {exc.message}")
         if isinstance(exc, openai.APITimeoutError):
-            return LLMError(504, "SEA-LION request timed out")
+            return LLMError(504, f"{name} request timed out")
         if isinstance(exc, openai.APIConnectionError):
-            return LLMError(503, f"Could not reach the SEA-LION API at {self.base_url}")
-        return LLMError(502, f"SEA-LION API error: {exc}")
+            return LLMError(503, f"Could not reach the {name} API at {self.base_url}")
+        return LLMError(502, f"{name} API error: {exc}")
 
     async def _create(self, request: dict, **extra):
         """One request, retried once if the API asks for a short enough wait."""
@@ -690,10 +715,10 @@ class SeaLionGenerator:
             except self._openai.RateLimitError as exc:
                 wait = self._retry_after(exc)
                 if attempt == 2 or wait is None or wait > self.max_retry_wait:
-                    detail = f"SEA-LION rate limit reached; retry in {wait:.0f} s" if wait else None
+                    detail = f"{self.label} rate limit reached; retry in {wait:.0f} s" if wait else None
                     error = self._error(exc)
-                    raise (LLMError(429, detail) if detail else error) from exc
-                logger.info("SEA-LION rate limited; retrying in %.1f s", wait)
+                    raise (LLMError(429, detail, retry_after=wait) if detail else error) from exc
+                logger.info("%s rate limited; retrying in %.1f s", self.label, wait)
                 await asyncio.sleep(wait)
             except self._openai.APIError as exc:
                 raise self._error(exc) from exc
@@ -732,6 +757,67 @@ class SeaLionGenerator:
         yield GeneratedAnswer(text=text, stop_reason=finish_reason, model=model)
 
 
+class SeaLionGenerator(OpenAICompatibleGenerator):
+    """SEA-LION (AI Singapore), an open model family built for Southeast Asian
+    languages -- Khmer among them, which the other providers handle far less
+    well than they handle English."""
+
+    provider: Provider = "sea-lion"
+    label = "SEA-LION"
+    key_env = "SEA_LION_API_KEY"
+    model_env = "SEA_LION_MODEL"
+
+
+class OpenRouterGenerator(OpenAICompatibleGenerator):
+    """OpenRouter, which fronts many providers behind one key and one endpoint.
+
+    That makes it the broadest backstop available: when Groq, Gemini and
+    Cerebras have all run dry, this reaches a different set of hosts entirely.
+    Its free models are the ones whose id ends in ``:free``.
+    """
+
+    provider: Provider = "openrouter"
+    label = "OpenRouter"
+    key_env = "OPENROUTER_API_KEY"
+    model_env = "OPENROUTER_MODEL"
+
+    @staticmethod
+    def attribution(site_url: str, app_name: str) -> dict[str, str]:
+        """The headers OpenRouter uses to attribute traffic to an application."""
+        headers = {}
+        if site_url:
+            headers["HTTP-Referer"] = site_url
+        if app_name:
+            headers["X-Title"] = app_name
+        return headers
+
+    @staticmethod
+    def no_reasoning() -> dict:
+        """Ask for the answer, not the thinking.
+
+        Most of the free models here can reason before answering, and a model
+        that does spends the completion budget on thought the student never
+        sees -- which is how SEA-LION's Qwen returns an empty answer. Turning it
+        off keeps the whole budget for the explanation. Models whose reasoning
+        is mandatory reject this, and the chain moves on to the next one.
+        """
+        return {"reasoning": {"enabled": False, "exclude": True}}
+
+
+class CerebrasGenerator(OpenAICompatibleGenerator):
+    """Cerebras, which serves the same open models on its own hardware.
+
+    Useful as a backstop precisely because it is a separate quota: its
+    ``gpt-oss-120b`` is the model Groq serves, so when Groq has run out of
+    tokens for the minute the answer does not have to change character.
+    """
+
+    provider: Provider = "cerebras"
+    label = "Cerebras"
+    key_env = "CEREBRAS_API_KEY"
+    model_env = "CEREBRAS_MODEL"
+
+
 class ExtractiveGenerator:
     """No LLM: answer with the retrieved passages themselves."""
 
@@ -756,56 +842,162 @@ class ExtractiveGenerator:
         yield answer
 
 
-class FallbackGenerator:
-    """Tries each generator in turn until one answers.
+# A model that just refused the request, or was asked for more than it allows,
+# is answering about this one question -- it is not out of service, so it keeps
+# its turn in the rotation.
+NO_COOLDOWN_STATUSES = frozenset({413, 422})
 
-    Any ``LLMError`` except a refusal (422) moves on to the next candidate. A
-    stream only switches before its first text arrives; after that the error
-    is reported. If every candidate fails, the retrieved passages are returned
-    with a note that the tutor is unavailable.
+# An unpaid account or a rejected key is not a busy minute: nothing about it
+# clears while the server runs, so the model is rested for the longest cooldown
+# instead of costing a round-trip every fifteen seconds.
+LASTING_FAILURE_STATUSES = frozenset({402})
+
+
+@dataclass
+class ModelHealth:
+    """How a candidate has been behaving lately.
+
+    A model that rate limited or fell over is rested until ``cooldown_until``,
+    so the next student's question is not spent rediscovering that it is down.
     """
 
-    def __init__(self, candidates: Sequence[AnswerGenerator]) -> None:
+    cooldown_until: float = 0.0
+    failures: int = 0
+    detail: str | None = None
+
+    def resting_for(self, now: float) -> float:
+        return max(0.0, self.cooldown_until - now)
+
+
+class FallbackGenerator:
+    """Spreads questions over the configured models and routes around the sick ones.
+
+    Every candidate that is not resting is tried in turn until one answers. Any
+    ``LLMError`` except a refusal (422) moves on to the next, and rests the model
+    that failed -- for as long as it asked for (Groq sends ``retry-after``) or an
+    exponential back-off -- so later questions skip it instead of paying its
+    timeout again. With ``rotate`` on, each question also starts one place
+    further down the list, so no single free-tier model absorbs all the traffic
+    and burns its per-minute quota while the others sit idle.
+
+    A stream only switches before its first text arrives; after that the client
+    is told to start over. If every candidate fails, the retrieved passages are
+    returned with a note that the tutor is unavailable.
+    """
+
+    def __init__(
+        self,
+        candidates: Sequence[AnswerGenerator],
+        *,
+        rotate: bool = False,
+        cooldown_seconds: float = 15.0,
+        max_cooldown_seconds: float = 300.0,
+    ) -> None:
         if not candidates:
             raise ValueError("at least one generator is required")
         self.candidates = list(candidates)
         self.provider: Provider = self.candidates[0].provider
         self.model = self.candidates[0].model
+        self.rotate = rotate
+        self.cooldown_seconds = cooldown_seconds
+        self.max_cooldown_seconds = max_cooldown_seconds
+        self._health = [ModelHealth() for _ in self.candidates]
+        self._cursor = 0
 
     @property
     def chain(self) -> list[str]:
-        return [f"{c.provider}:{c.model}" if c.model else c.provider for c in self.candidates]
+        return [self._name(c) for c in self.candidates]
 
     @staticmethod
-    def _skip(candidate: AnswerGenerator, exc: LLMError) -> None:
+    def _name(candidate: AnswerGenerator) -> str:
+        return f"{candidate.provider}:{candidate.model}" if candidate.model else candidate.provider
+
+    @property
+    def resting(self) -> dict[str, float]:
+        """Models being skipped right now, and the seconds left on each."""
+        now = time.monotonic()
+        return {
+            self._name(candidate): round(health.resting_for(now), 1)
+            for candidate, health in zip(self.candidates, self._health)
+            if health.resting_for(now) > 0
+        }
+
+    def _order(self) -> list[int]:
+        """Candidate indices to try, healthiest first.
+
+        Rested models still come last rather than being dropped: a stale
+        cooldown must never be the reason a student gets no answer at all.
+        """
+        now = time.monotonic()
+        ready = [i for i, health in enumerate(self._health) if health.resting_for(now) <= 0]
+        waiting = sorted(
+            (i for i in range(len(self.candidates)) if self._health[i].resting_for(now) > 0),
+            key=lambda i: self._health[i].cooldown_until,
+        )
+        if ready and self.rotate:
+            start = next((n for n, i in enumerate(ready) if i >= self._cursor), 0)
+            ready = ready[start:] + ready[:start]
+            self._cursor = (ready[0] + 1) % len(self.candidates)
+        return ready + waiting
+
+    def _cooldown(self, exc: LLMError, failures: int) -> float:
+        if exc.status_code in LASTING_FAILURE_STATUSES:
+            return self.max_cooldown_seconds
+        if exc.retry_after is not None:
+            return min(max(exc.retry_after, 1.0), self.max_cooldown_seconds)
+        return min(self.cooldown_seconds * 2 ** (failures - 1), self.max_cooldown_seconds)
+
+    def _recovered(self, index: int) -> None:
+        health = self._health[index]
+        if health.failures:
+            logger.info("%s is answering again", self._name(self.candidates[index]))
+        self._health[index] = ModelHealth()
+
+    def _skip(self, index: int, exc: LLMError) -> None:
         if exc.status_code == 422:  # a refusal is an answer, not an outage
             raise exc
+        candidate = self.candidates[index]
+        if exc.status_code in NO_COOLDOWN_STATUSES:
+            logger.warning(
+                "%s rejected this request (%d: %s); trying the next model",
+                self._name(candidate), exc.status_code, exc.detail,
+            )
+            return
+        health = self._health[index]
+        health.failures += 1
+        health.detail = exc.detail
+        rest = self._cooldown(exc, health.failures)
+        health.cooldown_until = time.monotonic() + rest
         logger.warning(
-            "%s (%s) failed with %d: %s; trying the next model",
-            candidate.provider, candidate.model, exc.status_code, exc.detail,
+            "%s failed with %d: %s; resting it for %.0f s and trying the next model",
+            self._name(candidate), exc.status_code, exc.detail, rest,
         )
 
     @staticmethod
-    def _last_resort(error: LLMError) -> ExtractiveGenerator:
+    def _last_resort(error: LLMError | None) -> ExtractiveGenerator:
         logger.error("Every configured model failed; answering with retrieved passages")
-        return ExtractiveGenerator(unavailable_reason=error.detail)
+        return ExtractiveGenerator(unavailable_reason=error.detail if error else None)
 
     async def generate(self, **kwargs) -> GeneratedAnswer:
         error: LLMError | None = None
-        for candidate in self.candidates:
+        for index in self._order():
+            candidate = self.candidates[index]
             try:
                 answer = await candidate.generate(**kwargs)
                 text = OutputGuard(candidate.model).feed(answer.text)
-                return replace(answer, text=text, provider=candidate.provider)
             except LLMError as exc:
                 error = exc
-                self._skip(candidate, exc)
+                self._skip(index, exc)
+                continue
+            self._recovered(index)
+            return replace(answer, text=text, provider=candidate.provider)
         fallback = self._last_resort(error)
         return replace(await fallback.generate(**kwargs), provider="none")
 
     async def stream(self, **kwargs) -> AsyncIterator[StreamItem]:
         error: LLMError | None = None
-        for candidate in self.candidates:
+        for index in self._order():
+            candidate = self.candidates[index]
             started = False
             try:
                 async for item in stream_answer(candidate, **kwargs):
@@ -814,13 +1006,15 @@ class FallbackGenerator:
                     elif isinstance(item, str):
                         started = True
                     yield item
-                return
             except LLMError as exc:
                 error = exc
-                self._skip(candidate, exc)
+                self._skip(index, exc)
                 if started:
                     # The client already shows part of this answer; tell it to start over.
                     yield StreamReset(detail=exc.detail)
+                continue
+            self._recovered(index)
+            return
         fallback = self._last_resort(error)
         async for item in fallback.stream(**kwargs):
             yield replace(item, provider="none") if isinstance(item, GeneratedAnswer) else item
@@ -865,6 +1059,47 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
                 min_completion_tokens=settings.groq_min_completion_tokens,
             )
         ]
+    if provider == "cerebras" and settings.cerebras_api_key is not None:
+        models = [settings.cerebras_model]
+        if settings.llm_fallback:
+            models += settings.cerebras_fallback_model_list
+        return [
+            CerebrasGenerator(
+                settings.cerebras_api_key.get_secret_value(),
+                model,
+                base_url=settings.cerebras_base_url,
+                max_tokens=settings.llm_max_tokens,
+                timeout=settings.llm_timeout_seconds,
+                temperature=settings.cerebras_temperature,
+                tokens_per_minute=settings.cerebras_tokens_per_minute,
+                max_retry_wait=settings.cerebras_max_retry_wait,
+                min_completion_tokens=settings.cerebras_min_completion_tokens,
+            )
+            for model in models
+        ]
+    if provider == "openrouter" and settings.openrouter_api_key is not None:
+        models = [settings.openrouter_model]
+        if settings.llm_fallback:
+            models += settings.openrouter_fallback_model_list
+        return [
+            OpenRouterGenerator(
+                settings.openrouter_api_key.get_secret_value(),
+                model,
+                base_url=settings.openrouter_base_url,
+                max_tokens=settings.llm_max_tokens,
+                timeout=settings.llm_timeout_seconds,
+                temperature=settings.openrouter_temperature,
+                default_headers=OpenRouterGenerator.attribution(
+                    settings.openrouter_site_url, settings.openrouter_app_name
+                ),
+                extra_body=(
+                    OpenRouterGenerator.no_reasoning()
+                    if settings.openrouter_disable_reasoning
+                    else None
+                ),
+            )
+            for model in models
+        ]
     if provider == "sea-lion" and settings.sea_lion_api_key is not None:
         if not settings.sea_lion_model:
             logger.error("SEA_LION_API_KEY is set but SEA_LION_MODEL is empty; skipping SEA-LION")
@@ -894,10 +1129,27 @@ def build_generator(settings: Settings) -> AnswerGenerator:
         raise RuntimeError(f"LLM_PROVIDER={provider} requires {needs}")
     if not settings.llm_fallback:
         return candidates[0]
-    for other in ("anthropic", "gemini", "groq", "sea-lion"):
+    # The backstops come after Groq and Gemini: they are for when those two have
+    # nothing left to give, not the models that answer first. Among themselves,
+    # the general-purpose hosts go first and SEA-LION last -- it is the slowest,
+    # but it is the one trained for Khmer, so it is the right final answer rather
+    # than a degraded one.
+    for other in ("anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion"):
         if other != provider:
             candidates += _provider_generators(settings, other)
-    return FallbackGenerator(candidates)
+    if len(candidates) > 1:
+        for candidate in candidates:
+            # Another model can answer now, so sitting out a rate limit would only
+            # add that wait to the student's question. The rotation rests the
+            # model for the same period instead and asks someone else.
+            if isinstance(candidate, (GroqGenerator, OpenAICompatibleGenerator)):
+                candidate.max_retry_wait = 0.0
+    return FallbackGenerator(
+        candidates,
+        rotate=settings.llm_selection == "rotate",
+        cooldown_seconds=settings.llm_cooldown_seconds,
+        max_cooldown_seconds=settings.llm_max_cooldown_seconds,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1265,6 +1517,12 @@ def create_app(
             llm_provider=state.generator.provider,
             llm_model=state.generator.model,
             llm_chain=getattr(state.generator, "chain", []),
+            llm_selection=(
+                ("rotate" if state.generator.rotate else "priority")
+                if isinstance(state.generator, FallbackGenerator)
+                else None
+            ),
+            llm_resting=getattr(state.generator, "resting", {}),
             config_warnings=settings.config_warnings,
             image_ocr_engines=state.image_ocr.engines if state.image_ocr is not None else [],
             default_top_k=settings.top_k,
