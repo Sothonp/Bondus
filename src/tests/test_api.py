@@ -127,3 +127,28 @@ class TestRequestValidation:
             assert c.post(
                 "/api/query/stream", json={"prompt": "hi", "continues_maths": True}
             ).status_code == 422
+
+
+class TestProviderRequests:
+    """Cerebras, OpenRouter and SEA-LION borrow GroqGenerator._request, so a
+    parameter added for Groq must not break them."""
+
+    @staticmethod
+    def _built(cls, **extra):
+        return cls("key", "some-model", max_tokens=1000, timeout=30.0,
+                   temperature=0.2, **extra)._request("system", [], "hello")
+
+    def test_groq_sends_its_reasoning_effort(self):
+        from src.api import GroqGenerator
+        assert self._built(GroqGenerator, reasoning_effort="low")["reasoning_effort"] == "low"
+
+    def test_groq_sends_nothing_when_it_is_blank(self):
+        from src.api import GroqGenerator
+        assert "reasoning_effort" not in self._built(GroqGenerator, reasoning_effort="")
+
+    @pytest.mark.parametrize("name", ["CerebrasGenerator", "OpenRouterGenerator", "SeaLionGenerator"])
+    def test_the_openai_compatible_providers_build_a_request(self, name):
+        import src.api as api
+        request = self._built(getattr(api, name), base_url="https://example.invalid/v1")
+        assert request["model"] == "some-model"
+        assert "reasoning_effort" not in request, "that parameter is Groq's"
