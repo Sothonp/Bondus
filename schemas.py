@@ -43,6 +43,11 @@ class QueryRequest(_StrictModel):
         None, max_length=100, description="Restrict retrieval to these document sources"
     )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
+    continues_math: bool = Field(
+        False,
+        description="This request carries on an answer that stopped inside a $$ block, so the "
+        "formatting repair must not close the block the model is about to close itself",
+    )
 
     @model_validator(mode="after")
     def _needs_question(self) -> "QueryRequest":

@@ -22,6 +22,11 @@ What it repairs:
 * An unclosed ``$$`` or ``$`` is closed at the end.
 * ``---`` rules are removed, ``##Heading`` gains its space, and a heading or
   list item that was run onto the end of another line starts a new one.
+
+A long exercise does not fit in one response, so the client asks the model to
+carry on and joins the rounds into one answer. A round can therefore begin and
+end in the middle of a display block, and ``opens_in_math`` / ``may_continue``
+say so -- see ``sanitize_answer``.
 """
 from __future__ import annotations
 
@@ -46,6 +51,16 @@ _ARGUMENT_STOP = set(" \t+-*/=,)]}")
 _TEXT_COMMAND = re.compile(r"\\(?:text|mathrm|mathbf|textbf|textit)\s*\{([^{}]*)\}")
 # A run of Khmer sitting bare in a formula, with any spacing macros around it.
 _BARE_KHMER = re.compile(f"(?:\\\\[,;:!]|\\\\quad|\\s)*[{KHMER}][{KHMER}\\s\u200b]*")
+
+
+# The delimiters added around a fragment, once the pass has reformatted them.
+_LEADING_FENCE = re.compile(r"\A\s*\$\$[ \t]*\n?")
+_TRAILING_FENCE = re.compile(r"\n?[ \t]*\$\$\s*\Z")
+
+
+def _display_block_open(text: str) -> bool:
+    """Whether the text stops inside a ``$$`` block."""
+    return bool(text.count("$$") % 2)
 
 
 def _strip_braces(argument: str) -> str:
@@ -158,20 +173,25 @@ def _clean_math(body: str) -> tuple[str, list[str]]:
     return body.strip(), lifted
 
 
-def _balance_dollars(text: str) -> tuple[str, list[str]]:
+def _balance_dollars(text: str, *, closing: bool = True) -> tuple[str, list[str]]:
     """Close a display or inline block the model left open.
 
     An unclosed block hides every line after it, so closing it at the end is
     always better than leaving it: the worst case is one formula rendered
     oddly, instead of the rest of the answer disappearing.
+
+    ``closing`` is false while another round is still to come, where the model
+    closes the block itself and an extra delimiter would be the bug.
     """
     notes: list[str] = []
-    if text.count("$$") % 2:
+    if _display_block_open(text):
+        if not closing:
+            return text, notes
         text = text.rstrip() + "\n$$"
         notes.append("closed an unclosed $$ block")
     # Count inline $ only outside display blocks.
     outside = re.sub(r"(?s)\$\$.*?\$\$", "", text)
-    if outside.count("$") % 2:
+    if outside.count("$") % 2 and closing:
         text = text.rstrip() + "$"
         notes.append("closed an unclosed $")
     return text, notes
@@ -226,11 +246,23 @@ def _fix_display_blocks(text: str) -> tuple[str, list[str]]:
     return re.sub(r"\n{3,}", "\n\n", text).strip(), notes
 
 
-def sanitize_answer(text: str) -> tuple[str, list[str]]:
+def sanitize_answer(
+    text: str, *, opens_in_math: bool = False, may_continue: bool = False
+) -> tuple[str, list[str]]:
     """Return the answer with its formatting repaired, plus what was changed.
 
     The notes are for logging, not for the student: an answer that needed
     repair is a sign the prompt is drifting from what the renderer accepts.
+
+    ``opens_in_math`` says the text carries on the display block the previous
+    round stopped inside, and ``may_continue`` that the model ran out of room
+    and another round will follow. Both make the text a fragment rather than a
+    whole answer, and a fragment must not be closed off: remark-math pairs
+    ``$$`` in document order, so one delimiter too many puts every block after
+    it out of step -- the prose ends up inside a formula, where KaTeX prints it
+    in red, and the formulas render as plain Markdown that eats the backslash
+    of every ``\\,`` and ``\\;``. Give the fragment the delimiters it is
+    missing instead, repair it as a whole, and take them off again.
     """
     if not text or not text.strip():
         return text, []
@@ -239,7 +271,13 @@ def sanitize_answer(text: str) -> tuple[str, list[str]]:
     notes: list[str] = []
     text, delimiter_notes = _normalise_delimiters(text)
     notes.extend(delimiter_notes)
-    text, balance_notes = _balance_dollars(text)
+
+    if opens_in_math:
+        text = "$$\n" + text
+    reopen = may_continue and _display_block_open(text)
+    if reopen:
+        text = text.rstrip() + "\n$$"
+    text, balance_notes = _balance_dollars(text, closing=not may_continue)
     notes.extend(balance_notes)
 
     pieces: list[str] = []
@@ -277,6 +315,14 @@ def sanitize_answer(text: str) -> tuple[str, list[str]]:
     notes.extend(structure_notes)
     text, display_notes = _fix_display_blocks(text)
     notes.extend(display_notes)
+
+    # Hand the fragment back as it arrived: still open where the next round
+    # picks it up, still headless where the previous one left off.
+    if opens_in_math:
+        text = _LEADING_FENCE.sub("", text, count=1)
+    if reopen:
+        text = _TRAILING_FENCE.sub("", text, count=1)
+
     # Normalising whitespace inside a formula can report a change that leaves
     # the answer identical; only report what actually moved.
     if text == original:

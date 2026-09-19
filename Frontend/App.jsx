@@ -3369,6 +3369,9 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
           { role: "assistant", content: text.slice(-CONTINUE_CONTEXT_CHARS) },
         ],
         images: [],
+        // The round picks the formula up mid-block, so the server must leave this
+        // round headless instead of repairing it as a whole answer.
+        continues_math: opensInDisplayMath(text),
       });
     }
     if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
@@ -3432,6 +3435,39 @@ const outsideCode = (text, fix) => text.split(CODE_FENCE).map((part, i) => (i % 
    mid-block, or writes one $$ too many, loses the whole tail of its answer that way. Drop the
    unmatched fence so the tail renders as ordinary Markdown. */
 const LINE_FENCE = /^[ \t]*\$\$[ \t]*$/gm;
+
+/* Whether the text so far stops inside a display block, matching what the server counts
+   in answer_format._display_block_open. */
+const opensInDisplayMath = (text) => (text.split("$$").length - 1) % 2 === 1;
+
+/* remark-math pairs the fences in document order, so one stray `$$` puts every block
+   after it out of step: the prose lands inside a formula, where KaTeX prints it in red,
+   and the formulas render as plain Markdown -- which quietly eats the backslash of every
+   `\,` and `\;`. The server keeps its own delimiters balanced, but a model can still
+   write one too many. Score the blocks the current pairing picks out against the ones a
+   pairing shifted by a fence would, and shift when the shifted reading wins. */
+const LATEX_COMMAND = /\\[a-zA-Z]{2,}/;
+const NOT_MATH = /```|\*\*|\$|(?:^|\n)[ \t]*#{1,6}[ \t]/;
+
+const blockScore = (segments, first) => {
+  let score = 0;
+  for (let i = first; i < segments.length; i += 2) {
+    const body = segments[i].trim();
+    if (!body) continue;
+    if (NOT_MATH.test(body) || KHMER_CHAR.test(body)) score -= 1;
+    else if (LATEX_COMMAND.test(body)) score += 1;
+  }
+  return score;
+};
+
+const realignFences = (text) => {
+  const segments = text.split(/^[ \t]*\$\$[ \t]*$/m);
+  // Segment 1 is the first block as it stands; segment 2 is the first block one fence on.
+  if (segments.length < 4) return text;
+  if (blockScore(segments, 2) <= blockScore(segments, 1)) return text;
+  return text.replace(/^[ \t]*\$\$[ \t]*\n?/m, "");
+};
+
 const dropDanglingFence = (text) => {
   LINE_FENCE.lastIndex = 0;
   let match, count = 0, at = -1, len = 0;
@@ -3440,9 +3476,9 @@ const dropDanglingFence = (text) => {
 };
 
 /* The prompt asks for $...$ / $$...$$, but models sometimes emit \( \) or \[ \]. */
-const normalizeMath = (text) => outsideCode(text, (part) => dropDanglingFence(fenceDisplayMath(part
+const normalizeMath = (text) => outsideCode(text, (part) => dropDanglingFence(realignFences(fenceDisplayMath(part
   .replace(/\\\[([\s\S]+?)\\\]/g, (_, body) => `\n$$\n${body.trim()}\n$$\n`)
-  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`))));
+  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`)))));
 
 /* While an answer is still arriving, hide a trailing unclosed $$ block or code fence so half a
    formula or graph never flashes on screen. */

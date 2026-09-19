@@ -1,13 +1,15 @@
 """The answer repair pass: it must fix what breaks the renderer, and only that."""
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from src.answer_format import sanitize_answer
 
 
-def fixed(text: str) -> str:
-    return sanitize_answer(text)[0]
+def fixed(text: str, **kwargs) -> str:
+    return sanitize_answer(text, **kwargs)[0]
 
 
 class TestLeavesGoodAnswersAlone:
@@ -122,3 +124,54 @@ class TestNotes:
 
     def test_no_notes_when_nothing_moved(self):
         assert sanitize_answer("សួស្តី $x=1$")[1] == []
+
+
+class TestContinuedAnswers:
+    """A long exercise is answered over several rounds joined into one answer.
+
+    remark-math pairs ``$$`` in document order, so a round that is closed off
+    when it should stay open puts every block after it one delimiter out of
+    step: the prose lands inside a formula (KaTeX prints it in red) and the
+    formulas render as plain Markdown, which eats the backslash of each
+    ``\\,`` and ``\\;``.
+    """
+
+    ROUND_ONE = "**ជំហាន ៣**\n\n$$\nA = \\Bigl[-\\frac{\\ln x}"
+    ROUND_TWO = (
+        "{x}\\Bigr]_{1}^{e^{0.5}}\n"
+        "$$\n"
+        "\n"
+        "ដូច្នេះផ្ទៃរវាង $C$ ពី $x=1$ គឺ\n"
+        "\n"
+        "$$\n"
+        "A=\\int_{1}^{e^{0.5}}\\frac{\\ln x}{x^{2}}\\,dx\n"
+        "$$\n"
+    )
+
+    def test_a_truncated_round_keeps_its_block_open(self):
+        repaired = fixed(self.ROUND_ONE, may_continue=True)
+        assert repaired.count("$$") == 1, "the next round closes the block itself"
+        assert repaired.endswith("\\frac{\\ln x}")
+
+    def test_a_truncated_round_is_still_closed_when_nothing_follows(self):
+        assert fixed(self.ROUND_ONE).count("$$") == 2
+
+    def test_a_truncated_round_keeps_an_inline_formula_open(self):
+        assert fixed("តម្លៃ $x = 5", may_continue=True).count("$") == 1
+
+    def test_a_continuing_round_does_not_grow_a_delimiter(self):
+        repaired = fixed(self.ROUND_TWO, opens_in_math=True)
+        assert repaired.count("$$") == 3, "the opening fence belongs to the round before"
+        assert not repaired.lstrip().startswith("$$")
+
+    def test_the_joined_rounds_pair_up_as_the_model_meant(self):
+        joined = fixed(self.ROUND_ONE, may_continue=True) + fixed(self.ROUND_TWO, opens_in_math=True)
+        blocks = re.split(r"(?m)^[ \t]*\$\$[ \t]*$", joined)
+        assert len(blocks) == 5, "two blocks, three stretches of prose"
+        assert "\\Bigl[-\\frac{\\ln x}{x}\\Bigr]" in blocks[1], "the split formula rejoins"
+        assert "ដូច្នេះផ្ទៃរវាង" in blocks[2], "the prose stays prose"
+        assert "\\int_{1}^{e^{0.5}}" in blocks[3]
+
+    def test_a_whole_round_inside_one_block_keeps_both_ends_open(self):
+        repaired = fixed("x^{2} + 2x", opens_in_math=True, may_continue=True)
+        assert "$" not in repaired

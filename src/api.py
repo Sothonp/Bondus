@@ -107,6 +107,11 @@ StreamItem = str | GeneratedAnswer | StreamReset
 # the repair pass exists for prose a model wrote.
 QUOTED_STOP_REASONS = {"extractive", "llm_unavailable"}
 
+# The model ran out of room mid-answer, under each provider's name for it. The
+# client asks it to carry on, so this response is a fragment: the repair pass
+# leaves the last block open for the next round to close (see answer_format).
+TRUNCATED_STOP_REASONS = {"length", "max_tokens", "MAX_TOKENS"}
+
 INVISIBLE_CHARS = "\u200b\u200c\u200d\u2060\ufeff"
 MAX_INVISIBLE_RUN = 200
 
@@ -1289,7 +1294,11 @@ def create_app(
 
         answer_text = answer.text
         if answer.stop_reason not in QUOTED_STOP_REASONS:
-            answer_text, repairs = sanitize_answer(answer_text)
+            answer_text, repairs = sanitize_answer(
+                answer_text,
+                opens_in_math=payload.continues_math,
+                may_continue=answer.stop_reason in TRUNCATED_STOP_REASONS,
+            )
             if repairs:
                 logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
 
@@ -1388,7 +1397,11 @@ def create_app(
             repairs: list[str] = []
             repaired = ""
             if final.stop_reason not in QUOTED_STOP_REASONS:
-                repaired, repairs = sanitize_answer("".join(streamed))
+                repaired, repairs = sanitize_answer(
+                    "".join(streamed),
+                    opens_in_math=payload.continues_math,
+                    may_continue=final.stop_reason in TRUNCATED_STOP_REASONS,
+                )
                 if repairs:
                     logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
             yield line(QueryStreamDone(
