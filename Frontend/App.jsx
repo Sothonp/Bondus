@@ -3282,12 +3282,12 @@ const WAKING = "Waking the AI coach server (this can take a minute after it has 
    REVEAL_CHARS_PER_SECOND is the pace when the model can keep up with it, and a model slower
    than that is never held back. REVEAL_CATCHUP_SECONDS is how hard a backlog pushes the pace
    above that floor, so a fast model is slowed down rather than queued behind: at these two
-   numbers a 2500-character answer from a 400 char/s model takes about 10s to read out instead
-   of 6s, and its last line lands within about 4s of the stream closing. Raise the floor or
+   numbers a 2500-character answer from a 400 char/s model takes about 8s to read out instead
+   of 6s, and its last line lands within about 2s of the stream closing. Raise the floor or
    lower the catch-up to speed the reveal up. REVEAL_TICK_MS also caps the re-renders, and
    each one re-runs Markdown and KaTeX over the whole answer. */
-const REVEAL_CHARS_PER_SECOND = 80;
-const REVEAL_CATCHUP_SECONDS = 1.5;
+const REVEAL_CHARS_PER_SECOND = 180;
+const REVEAL_CATCHUP_SECONDS = 1;
 const REVEAL_TICK_MS = 40;
 
 async function ragStreamRequest(body, { signal, status }) {
