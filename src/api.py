@@ -684,6 +684,11 @@ class OpenAICompatibleGenerator:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.tokens_per_minute = tokens_per_minute
+        # These providers reuse GroqGenerator._request, which sends
+        # reasoning_effort when it is set. That parameter is Groq's; the ones
+        # here that can reason turn it off through extra_body instead (see
+        # OpenRouterGenerator.no_reasoning), so leave it empty and unsent.
+        self.reasoning_effort = ""
 
     def _request(self, *args, **kwargs) -> dict:
         request = GroqGenerator._request(self, *args, **kwargs)
