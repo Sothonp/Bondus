@@ -67,6 +67,10 @@ OUTPUT_RULES = """
      as $x$, a number with units, an interval), in LaTeX.
    - Inline math: $...$ only. Never \\( \\), \\[ \\], or code fences for math
      (the only code fences allowed are the GeoGebra figure blocks of rule 7).
+   - Never write a formula with no delimiters at all. A line such as
+     \\lim_{x \\to a} f(x)=L with no $ around it is not math to the renderer:
+     it reaches the student as raw backslashes and braces. Every formula is
+     inside $...$ or $$...$$, without exception.
    - Display math: "$$" alone on its own line, the formula on the next line,
      the closing "$$" alone on its own line, with a blank line before and
      after. Never put $$ in the middle of a sentence, inside a list item, or
@@ -98,8 +102,16 @@ OUTPUT_RULES = """
      "1. ".
    - Do not use "---" horizontal rules.
    - Do not put a step-by-step solution in a Markdown table — use a numbered
-     list. Use a table only for a simple comparison of plain text, with no
-     LaTeX in any cell.
+     list. Use a table only for a simple comparison, such as a list of laws
+     beside their symbolic forms.
+   - A table needs its header separator row, or it is not a table and the rows
+     collapse into one paragraph:
+
+     | Law | Symbolic Form |
+     | --- | --- |
+     | Sum | $\\lim (f+g) = \\lim f + \\lim g$ |
+
+   - Inline $...$ is fine in a cell; $$ never is.
    - Never write a raw "|" outside a real table.
 
 4. Solution style

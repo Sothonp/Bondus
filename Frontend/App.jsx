@@ -3607,7 +3607,11 @@ function markdownComponents(streaming) {
   };
 }
 
-const KATEX_OPTIONS = { throwOnError: false, strict: false }; // Khmer inside math only warns
+/* throwOnError:false makes KaTeX print a formula it cannot parse as its own source. Left to
+   itself it prints that source in #cc0000, so one bad formula reads as an error the student
+   is meant to act on. Show it in the muted text colour instead: still visibly not a formula,
+   in both themes, without the alarm. */
+const KATEX_OPTIONS = { throwOnError: false, strict: false, errorColor: "var(--muted)" }; // Khmer inside math only warns
 const REMARK_PLUGINS = [remarkGfm, remarkMath];
 const REHYPE_PLUGINS = [[rehypeKatex, KATEX_OPTIONS]];
 const MD_COMPONENTS = markdownComponents(false);

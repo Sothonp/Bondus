@@ -175,3 +175,39 @@ class TestContinuedAnswers:
     def test_a_whole_round_inside_one_block_keeps_both_ends_open(self):
         repaired = fixed("x^{2} + 2x", opens_in_math=True, may_continue=True)
         assert "$" not in repaired
+
+
+class TestBareFormulas:
+    """A formula written without delimiters reaches the student as backslashes."""
+
+    def test_a_bare_formula_line_is_wrapped(self):
+        repaired = fixed("The definition is\n\n\\lim_{x \\to a} f(x)=L\n\nwhen it converges.")
+        assert "$$\n\\lim_{x \\to a} f(x)=L\n$$" in repaired
+
+    def test_the_wrap_is_reported(self):
+        _, notes = sanitize_answer("\\int_0^1 x^2\\,dx = \\frac{1}{3}")
+        assert "wrapped a bare formula line in $$" in notes
+
+    @pytest.mark.parametrize("line", [
+        "$\\lim_{x \\to a} f(x)=L$",
+        "| Sum | $\\lim (f+g)$ |",
+    ])
+    def test_a_line_that_already_has_delimiters_is_left_alone(self, line):
+        assert fixed(f"Before\n\n{line}\n\nAfter") == f"Before\n\n{line}\n\nAfter"
+
+    def test_prose_around_a_formula_is_not_wrapped(self):
+        """Only a line that is a formula on its own; guessing would put words in math."""
+        answer = "គេបាន f(x)=L ដូច្នេះ"
+        assert fixed(answer) == answer
+
+    def test_a_geogebra_block_is_not_touched(self):
+        answer = "រូប៖\n\n```geogebra\nf(x) = x^2\nZoomIn(-4, -6, 6, 5)\n```"
+        assert fixed(answer) == answer
+
+    def test_a_line_inside_a_display_block_is_not_rewrapped(self):
+        repaired = fixed("$$\n\\frac{1}{2}\n$$")
+        assert repaired.count("$$") == 2
+
+    def test_a_lone_line_break_is_not_a_formula(self):
+        answer = "first \\\\ second"
+        assert "$$" not in fixed(answer)
