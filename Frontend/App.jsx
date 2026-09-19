@@ -3528,7 +3528,7 @@ const hideUnclosed = (text, marker) => {
   return parts.length % 2 === 0 ? parts.slice(0, -1).join(marker) : text;
 };
 
-/* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 5) ── */
+/* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 7) ── */
 const GGB_SCRIPT = "https://www.geogebra.org/apps/deployggb.js";
 const GGB_MAX_LINES = 30;
 // One missing object fails every later command that uses it, so report the first few
