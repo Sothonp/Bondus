@@ -1,14 +1,16 @@
 """Local Khmer OCR with Kiri OCR (https://github.com/mrrtmob/kiri-ocr).
 
 Kiri detects text lines on a page image and recognises each one with a small
-Transformer model that runs on the CPU, so no API key is needed. It reads
-Khmer well but cannot transcribe formulas, so by default only Khmer words are
-kept: every recognised line is reduced to its runs of Khmer script (letters,
+Transformer model that runs on the CPU (or on the GPU with ``KIRI_DEVICE=cuda``),
+so no API key is needed. It reads Khmer well but cannot transcribe formulas, so
+by default only Khmer words are kept: every recognised line is reduced to its
+runs of Khmer script (letters,
 Khmer digits and Khmer punctuation) and lines below ``min_confidence`` are
 dropped (the published model scores even clean lines around 0.4-0.45, so
 the default cut-off is low). Latin letters, Arabic digits and math symbols,
 which Kiri tends to misread in formulas, are removed rather than indexed as
-noise.
+noise. To keep the formulas of a page as well, pair Kiri with a vision model
+through ``OCR_ENGINE=hybrid`` (``src/ingestion/hybrid_ocr.py``).
 
 Kiri reads images from disk, so each page is written to a temporary PNG/JPEG
 first. PDF pages that are not a single embedded scan are rendered with
@@ -226,7 +228,8 @@ class KiriPageOCR(CachedPageOCR):
                 lines.append(" ".join(words))
         return "\n".join(lines)
 
-    def _transcribe_uncached(self, payload: PageImage) -> tuple[str, bool]:
+    def _transcribe_uncached(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
+        # Kiri reads the page image alone; another engine's reading cannot help it.
         image, suffix = self._page_image(payload)
         results = self._recognise(image, suffix)
         text = self.text_from_results(results)

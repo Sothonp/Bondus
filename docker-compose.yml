@@ -18,7 +18,7 @@ x-app: &app
 services:
   reanmath:
     <<: *app
-    command: ["uv", "run", "--frozen", "--no-dev", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uv", "run", "--frozen", "--no-dev", "--extra", "cpu", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -30,10 +30,13 @@ services:
       start_period: 180s
 
   # One-off corpus indexing: docker compose run --rm ingest
+  # Uses the CPU wheels like the server. For GPU ingestion (KIRI_DEVICE=cuda)
+  # run the script on the host with `uv sync --extra cuda` instead: passing a
+  # GPU through to the container needs a runtime this compose file does not set up.
   ingest:
     <<: *app
     profiles: ["tools"]
-    command: ["uv", "run", "--frozen", "--no-dev", "python", "scripts/ingest_corpus.py"]
+    command: ["uv", "run", "--frozen", "--no-dev", "--extra", "cpu", "python", "scripts/ingest_corpus.py"]
 
 volumes:
   uv-venv:

@@ -370,6 +370,85 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
 @media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
 
+/* AI Coach chat (Claude / ChatGPT style) */
+/* Fills what is left under the app header (64px) and main's padding (2x24px).
+   dvh keeps the composer clear of a mobile browser's retracting URL bar, and the
+   floor is low enough that a short window scrolls the messages, not the composer. */
+.eai-coach-view{ height:calc(100vh - 112px); height:calc(100dvh - 112px); min-height:360px; }
+.eai-chat-col{ max-width:768px; margin:0 auto; padding:20px 16px 12px; display:flex; flex-direction:column; gap:22px; }
+.eai-user-bubble{ background:var(--bg-soft); color:var(--ink); border-radius:20px; padding:10px 16px; max-width:85%; white-space:pre-wrap; line-height:1.55; font-size:15px; overflow-wrap:anywhere; }
+.eai-chat-img{ width:168px; height:168px; object-fit:cover; border-radius:14px; border:1px solid var(--line); display:block; cursor:zoom-in; }
+.eai-avatar{ width:30px; height:30px; border-radius:99px; background:var(--primary); display:grid; place-items:center; flex:none; margin-top:1px; }
+.eai-msg-actions{ display:flex; align-items:flex-start; gap:6px; margin-top:6px; flex-wrap:wrap; }
+.eai-msg-actions details{ margin-top:5px; }
+.eai-icon-btn{ width:36px; height:36px; border-radius:99px; display:grid; place-items:center; color:var(--muted); background:transparent; border:none; cursor:pointer; transition:background .15s ease, color .15s ease; }
+.eai-icon-btn:hover{ background:var(--bg-soft); color:var(--ink); }
+.eai-icon-btn.sm{ width:28px; height:28px; border-radius:8px; }
+.eai-composer-wrap{ max-width:768px; margin:0 auto; width:100%; padding:6px 16px 4px; }
+.eai-composer{ background:var(--card); border:1px solid var(--line); border-radius:26px; box-shadow:var(--shadow); transition:border-color .15s ease; }
+.eai-composer:focus-within{ border-color:var(--primary); }
+.eai-composer.drag{ border-color:var(--primary); border-style:dashed; }
+.eai-composer-input{ display:block; width:100%; resize:none; border:none; outline:none; background:transparent; color:var(--ink); font:inherit; font-size:15px; line-height:1.5; padding:14px 18px 6px; max-height:200px; overflow-y:auto; }
+.eai-composer-input::placeholder{ color:var(--muted); }
+.eai-send{ width:36px; height:36px; border-radius:99px; display:grid; place-items:center; background:var(--ink); color:var(--card); border:none; cursor:pointer; transition:opacity .15s ease; }
+.eai-send:disabled{ opacity:.25; cursor:default; }
+.eai-attach{ position:relative; width:64px; height:64px; border-radius:12px; overflow:hidden; border:1px solid var(--line); flex:none; }
+.eai-attach img{ width:100%; height:100%; object-fit:cover; display:block; }
+.eai-attach > button{ position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:99px; background:rgba(0,0,0,.7); color:#fff; display:grid; place-items:center; border:none; cursor:pointer; }
+.eai-attach-busy{ position:absolute; inset:0; background:rgba(255,255,255,.6); display:grid; place-items:center; color:#333; }
+.eai-menu{ position:absolute; bottom:44px; left:0; width:280px; background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:6px; z-index:20; }
+.eai-menu button{ width:100%; display:flex; gap:10px; align-items:flex-start; text-align:left; padding:9px 10px; border-radius:10px; background:none; border:none; color:var(--ink); cursor:pointer; font-size:14px; }
+.eai-menu button:hover:not(:disabled){ background:var(--bg-soft); }
+.eai-menu button:disabled{ opacity:.5; cursor:default; }
+.eai-menu svg{ flex:none; margin-top:2px; }
+.eai-suggest{ text-align:left; padding:12px 14px; border-radius:16px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:14px; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+.eai-suggest:hover{ background:var(--bg-soft); border-color:var(--primary); }
+.eai-reading{ max-width:85%; font-size:13px; color:var(--muted); }
+.eai-reading summary{ cursor:pointer; display:inline-flex; gap:6px; align-items:center; list-style:none; border-radius:8px; padding:2px 4px; }
+.eai-reading summary::-webkit-details-marker{ display:none; }
+.eai-reading[open] summary svg:last-child{ transform:rotate(180deg); }
+.eai-reading > div{ margin-top:6px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--card); text-align:left; }
+.eai-status{ display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:14px; min-height:30px; }
+.eai-shimmer{ background:linear-gradient(90deg, var(--muted) 35%, var(--ink) 50%, var(--muted) 65%); background-size:250% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:shimmer 1.8s linear infinite; }
+@keyframes shimmer{ from{ background-position:100% 0; } to{ background-position:-150% 0; } }
+.eai-spin{ animation:spin 1s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.eai-drop{ position:absolute; inset:0; z-index:30; display:grid; place-items:center; padding:24px; text-align:center; color:var(--primary); background:color-mix(in srgb, var(--bg) 85%, transparent); border:2px dashed var(--primary); border-radius:22px; pointer-events:none; }
+.eai-lightbox{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.85); display:grid; place-items:center; padding:24px; cursor:zoom-out; }
+.eai-lightbox img{ max-width:100%; max-height:100%; border-radius:12px; }
+.eai-footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:6px; }
+@media (prefers-reduced-motion: reduce){ .eai-spin,.eai-shimmer{ animation:none; } .eai-shimmer{ color:var(--muted); background:none; } }
+/* AI Coach answers: Markdown + KaTeX */
+/* Khmer stacks diacritics above and below the line, so answers need more leading
+   than Latin text before the rows of a derivation stop touching each other. */
+.eai-md{ line-height:1.8; }
+.eai-md > * + *{ margin-top:.7em; }
+.eai-md ol{ list-style:decimal; padding-left:1.4em; } .eai-md ul{ list-style:disc; padding-left:1.4em; }
+.eai-md li + li{ margin-top:.35em; }
+.eai-md li > ul,.eai-md li > ol{ margin-top:.35em; padding-left:1.1em; }
+.eai-md li::marker{ color:var(--muted); }
+.eai-md h1,.eai-md h2,.eai-md h3,.eai-md h4{ font-weight:700; }
+/* One heading per part of an exercise: a rule and real space above it so eight
+   answers read as eight blocks instead of one wall of Khmer and LaTeX. */
+.eai-md h2,.eai-md h3,.eai-md h4{ font-size:1em; margin-top:1.3em; padding-top:.75em; border-top:1px solid var(--line); }
+.eai-md > :first-child{ margin-top:0; padding-top:0; border-top:none; }
+.eai-md strong{ font-weight:700; }
+.eai-md a{ color:var(--primary); text-decoration:underline; }
+.eai-md code{ font-size:.9em; background:var(--card); border-radius:6px; padding:.1em .35em; }
+.eai-md pre{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; overflow-x:auto; }
+.eai-md pre code{ background:none; padding:0; }
+.eai-md table{ border-collapse:collapse; } .eai-md th,.eai-md td{ border:1px solid var(--line); padding:4px 8px; }
+.eai-md blockquote{ border-left:3px solid var(--line); padding-left:10px; color:var(--muted); }
+/* A displayed step can be wider than the column and taller than its line box.
+   Scroll it sideways rather than squeezing it, and clip with a margin so tall
+   parts (\lim limits, nested \frac, a \left[ that spans two rows) keep their
+   ascenders instead of being sliced off. overflow-y:clip is ignored by older
+   browsers, which fall back to the hidden above it. */
+.eai-md .katex-display{ overflow-x:auto; overflow-y:hidden; overflow-y:clip; overflow-clip-margin:.5em; padding:.4em .1em; margin:.7em 0; }
+.eai-md .katex{ font-size:1.05em; }
+.eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
+@media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
+
 /* ── Welcome hero card ── */
 .eai-hero-card{ position:relative; overflow:hidden; border-radius:22px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); display:flex; }
 .eai-hero-content{ position:relative; z-index:3; padding:32px; flex:1 1 auto; min-width:0; }
@@ -3175,12 +3254,41 @@ const toRagHistory = (history) => history
    Attached photos are read by the server first; onImages receives what it read. */
 const TRUNCATED_STOPS = new Set(["length", "max_tokens", "MAX_TOKENS"]);
 
+/* A full BAC II exercise runs to six or eight parts, and one model response often
+   stops in the middle of part 4. Rather than handing the student half a proof and
+   asking them to type "continue", pick the answer up where it stopped and keep
+   streaming into the same message. Three rounds is enough for the longest past
+   paper; past that the note below is honest about the limit. */
+const CONTINUE_ROUNDS = 3;
+const CONTINUE_CONTEXT_CHARS = 12000;
+const CONTINUE_QUERY_CHARS = 800;
+const KHMER_CHAR = /[\u1780-\u17ff]/;
+const CONTINUE_PROMPT = {
+  km: "បន្តចម្លើយពីកន្លែងដែលអ្នកឈប់។ កុំចាប់ផ្ដើមឡើងវិញ កុំនិយាយឡើងវិញ ហើយកុំសរុបអ្វីដែលបានសរសេររួច។",
+  en: "Continue the answer from exactly where you stopped. Do not restart, repeat or summarise what you already wrote.",
+};
+
 /* Free hosting tiers stop the API when it is idle, so the first request after a quiet spell waits
    for it to boot — or is refused while it boots. Say so rather than looking stuck, and retry once
    before falling back to the offline reply. Streaming a query is read-only, so a retry is safe. */
 const COLD_START_MS = 5000;
 const COLD_START_RETRY_MS = 4000;
 const WAKING = "Waking the AI coach server (this can take a minute after it has been idle)…";
+
+/* The models stream faster than anyone reads, and a page of Khmer and worked algebra landing
+   all at once is harder to follow than watching it arrive a step at a time. So the deltas are
+   buffered and revealed at a steady pace instead of the moment they arrive.
+
+   REVEAL_CHARS_PER_SECOND is the pace when the model can keep up with it, and a model slower
+   than that is never held back. REVEAL_CATCHUP_SECONDS is how hard a backlog pushes the pace
+   above that floor, so a fast model is slowed down rather than queued behind: at these two
+   numbers a 2500-character answer from a 400 char/s model takes about 8s to read out instead
+   of 6s, and its last line lands within about 2s of the stream closing. Raise the floor or
+   lower the catch-up to speed the reveal up. REVEAL_TICK_MS also caps the re-renders, and
+   each one re-runs Markdown and KaTeX over the whole answer. */
+const REVEAL_CHARS_PER_SECOND = 180;
+const REVEAL_CATCHUP_SECONDS = 1;
+const REVEAL_TICK_MS = 40;
 
 async function ragStreamRequest(body, { signal, status }) {
   const send = () => ragRequest("/api/query/stream", {
@@ -3206,46 +3314,108 @@ async function ragStreamRequest(body, { signal, status }) {
 }
 
 async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
-  let text = "";
-  let stopReason = null;
+  let text = "";   // every delta received so far
+  let shown = 0;   // how much of it is on screen
   let sources = [];
-  let finished = false;
-  let frame = 0;
-  const flush = () => { frame = 0; onUpdate({ text, rag: true, streaming: true, sources, notice: null }); };
-  const status = (notice) => { if (!text) onUpdate({ text, rag: true, streaming: true, sources, notice }); };
+  let timer = 0;
+  let since = 0;
+  const paint = () => onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: null });
+  const status = (notice) => { if (!shown) onUpdate({ text: "", rag: true, streaming: true, sources, notice }); };
   const lost = "The connection to the AI coach server was lost.";
-  try {
-    status(images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching);
-    const res = await ragStreamRequest(
-      JSON.stringify({
-        prompt: t,
-        history: toRagHistory(history),
-        images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
-      }),
-      { signal, status },
-    );
+
+  const pump = () => {
+    timer = 0;
+    const now = Date.now();
+    // A fresh run (`since` cleared) steps one tick rather than the whole pause before it,
+    // so waiting on a slow model does not then dump its answer in one frame.
+    const elapsed = since ? Math.min(1, (now - since) / 1000) : REVEAL_TICK_MS / 1000;
+    since = now;
+    const pending = text.length - shown;
+    const rate = Math.max(REVEAL_CHARS_PER_SECOND, pending / REVEAL_CATCHUP_SECONDS);
+    shown = Math.min(text.length, shown + Math.max(1, Math.round(rate * elapsed)));
+    paint();
+    if (shown < text.length) timer = setTimeout(pump, REVEAL_TICK_MS);
+    else since = 0;
+  };
+  const reveal = () => { if (!timer && shown < text.length) timer = setTimeout(pump, REVEAL_TICK_MS); };
+  const stopPacing = () => { clearTimeout(timer); timer = 0; since = 0; };
+  /* Resolving while text is still held back would hand the finished message the whole answer
+     at once, undoing the pacing on its last lines; wait for the buffer to empty first. */
+  const drain = () => new Promise((resolve) => {
+    const wait = () => { if (shown >= text.length) return resolve(); reveal(); setTimeout(wait, REVEAL_TICK_MS); };
+    wait();
+  });
+
+  /* One streamed request, appending what it produces to `text`; returns its stop reason. */
+  const streamOnce = async (body) => {
+    const base = text.length; // a model switch rewinds this request's own output, not the answer so far
+    let finished = false;
+    let stopReason = null;
+    const res = await ragStreamRequest(JSON.stringify(body), { signal, status });
     try {
       for await (const event of readNdjson(res)) {
         if (event.type === "status") status(STAGE_LABELS[event.stage]);
         else if (event.type === "images") onImages?.(event.images);
-        else if (event.type === "meta") sources = event.sources || [];
+        else if (event.type === "meta") sources = event.sources?.length ? event.sources : sources;
         else if (event.type === "delta") {
           text += event.text;
-          if (!frame) frame = requestAnimationFrame(flush);
+          reveal();
         } else if (event.type === "reset") {
           // The server is restarting the answer with another model.
-          text = "";
-          cancelAnimationFrame(frame);
-          frame = 0;
-          onUpdate({ text, rag: true, streaming: true, sources, notice: "Switching to another model…" });
+          text = text.slice(0, base);
+          shown = Math.min(shown, text.length);
+          // Whatever earlier rounds had revealed stays on screen and keeps flowing.
+          onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: shown ? null : "Switching to another model…" });
+          reveal();
         } else if (event.type === "error") throw new RagError(event.detail, event.status);
-        else if (event.type === "done") { finished = true; stopReason = event.stop_reason; }
+        else if (event.type === "done") {
+          finished = true;
+          stopReason = event.stop_reason;
+          /* The server repaired this request's Markdown/LaTeX. Some fixes (closing an
+             unclosed $$, lifting Khmer out of a formula) need the whole answer and so
+             cannot arrive as deltas; swap the repaired text in, keeping earlier rounds. */
+          if (typeof event.answer === "string") {
+            text = text.slice(0, base) + event.answer;
+            shown = Math.min(shown, text.length);
+            reveal();
+          }
+        }
       }
     } catch (err) {
       throw err instanceof RagError || signal?.aborted ? err : new RagError(lost, 0);
     }
     if (!finished) throw new RagError(lost, 0);
-    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(The answer reached its length limit. Ask me to continue.)*";
+    return stopReason;
+  };
+
+  try {
+    status(images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching);
+    let stopReason = await streamOnce({
+      prompt: t,
+      history: toRagHistory(history),
+      images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
+    });
+    // The photos are already read, so a continuation sends the answer so far instead.
+    for (let round = 0; TRUNCATED_STOPS.has(stopReason) && round < CONTINUE_ROUNDS && !signal?.aborted; round++) {
+      // The question rides along so retrieval finds the same passages again; on its
+      // own the continuation phrase matches nothing and the server would announce
+      // mid-answer that the curriculum does not cover this.
+      const lang = KHMER_CHAR.test(text) ? "km" : "en";
+      stopReason = await streamOnce({
+        prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
+        history: [
+          ...toRagHistory(history),
+          { role: "user", content: (t || "(photo)").slice(0, 20000) },
+          { role: "assistant", content: text.slice(-CONTINUE_CONTEXT_CHARS) },
+        ],
+        images: [],
+        // The round picks the formula up mid-block, so the server must leave this
+        // round headless instead of repairing it as a whole answer.
+        continues_math: opensInDisplayMath(text),
+      });
+    }
+    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
+    await drain();
     return { text: text || "…", rag: true, sources };
   } catch (err) {
     if (signal?.aborted) {
@@ -3261,7 +3431,7 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     if (text) return { text: `${text}\n\n*(The answer was cut off: ${err.message})*`, rag: true, sources, error: true };
     return { text: `Sorry, I couldn't answer that: ${err.message}`, error: true };
   } finally {
-    cancelAnimationFrame(frame);
+    stopPacing();
   }
 }
 
@@ -3299,10 +3469,57 @@ const fenceDisplayMath = (text) =>
 const CODE_FENCE = /(^```[\s\S]*?^```)/gm;
 const outsideCode = (text, fix) => text.split(CODE_FENCE).map((part, i) => (i % 2 ? part : fix(part))).join("");
 
+/* An odd number of display fences leaves the last one open, and remark-math then reads
+   everything after it — headings, prose, the remaining steps, a GeoGebra block — as a single
+   formula, which KaTeX prints as raw red source (throwOnError is off). It survives to the end
+   of a finished answer, where hideUnclosed no longer applies: a model that runs out of room
+   mid-block, or writes one $$ too many, loses the whole tail of its answer that way. Drop the
+   unmatched fence so the tail renders as ordinary Markdown. */
+const LINE_FENCE = /^[ \t]*\$\$[ \t]*$/gm;
+
+/* Whether the text so far stops inside a display block, matching what the server counts
+   in answer_format._display_block_open. */
+const opensInDisplayMath = (text) => (text.split("$$").length - 1) % 2 === 1;
+
+/* remark-math pairs the fences in document order, so one stray `$$` puts every block
+   after it out of step: the prose lands inside a formula, where KaTeX prints it in red,
+   and the formulas render as plain Markdown -- which quietly eats the backslash of every
+   `\,` and `\;`. The server keeps its own delimiters balanced, but a model can still
+   write one too many. Score the blocks the current pairing picks out against the ones a
+   pairing shifted by a fence would, and shift when the shifted reading wins. */
+const LATEX_COMMAND = /\\[a-zA-Z]{2,}/;
+const NOT_MATH = /```|\*\*|\$|(?:^|\n)[ \t]*#{1,6}[ \t]/;
+
+const blockScore = (segments, first) => {
+  let score = 0;
+  for (let i = first; i < segments.length; i += 2) {
+    const body = segments[i].trim();
+    if (!body) continue;
+    if (NOT_MATH.test(body) || KHMER_CHAR.test(body)) score -= 1;
+    else if (LATEX_COMMAND.test(body)) score += 1;
+  }
+  return score;
+};
+
+const realignFences = (text) => {
+  const segments = text.split(/^[ \t]*\$\$[ \t]*$/m);
+  // Segment 1 is the first block as it stands; segment 2 is the first block one fence on.
+  if (segments.length < 4) return text;
+  if (blockScore(segments, 2) <= blockScore(segments, 1)) return text;
+  return text.replace(/^[ \t]*\$\$[ \t]*\n?/m, "");
+};
+
+const dropDanglingFence = (text) => {
+  LINE_FENCE.lastIndex = 0;
+  let match, count = 0, at = -1, len = 0;
+  while ((match = LINE_FENCE.exec(text))) { count++; at = match.index; len = match[0].length; }
+  return count % 2 === 0 ? text : text.slice(0, at) + text.slice(at + len);
+};
+
 /* The prompt asks for $...$ / $$...$$, but models sometimes emit \( \) or \[ \]. */
-const normalizeMath = (text) => outsideCode(text, (part) => fenceDisplayMath(part
+const normalizeMath = (text) => outsideCode(text, (part) => dropDanglingFence(realignFences(fenceDisplayMath(part
   .replace(/\\\[([\s\S]+?)\\\]/g, (_, body) => `\n$$\n${body.trim()}\n$$\n`)
-  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`)));
+  .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body.trim()}$`)))));
 
 /* While an answer is still arriving, hide a trailing unclosed $$ block or code fence so half a
    formula or graph never flashes on screen. */
@@ -3311,9 +3528,12 @@ const hideUnclosed = (text, marker) => {
   return parts.length % 2 === 0 ? parts.slice(0, -1).join(marker) : text;
 };
 
-/* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 5) ── */
+/* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 7) ── */
 const GGB_SCRIPT = "https://www.geogebra.org/apps/deployggb.js";
 const GGB_MAX_LINES = 30;
+// One missing object fails every later command that uses it, so report the first few
+// steps rather than the whole cascade.
+const GGB_MAX_REPORTED = 3;
 const GGB_BLOCKED = /^\s*(Execute|SetClickScript|SetUpdateScript|RunClickScript|RunUpdateScript|PlaySound|ReadText)\b/i;
 let ggbLoader = null;
 let ggbCounter = 0;
@@ -3336,25 +3556,63 @@ const geogebraCommands = (code) => code.split("\n")
   .filter((line) => line && !line.startsWith("#") && line.length <= 500 && !GGB_BLOCKED.test(line))
   .slice(0, GGB_MAX_LINES);
 
+/* The model picks the fence, and it does not always pick `geogebra-3d` for a figure that
+   lives in space. In the 2D graphing app "A = (1, 2, 3)" is not a point, so Plane(A, B, C)
+   fails with "Illegal argument: Point A" -- and GeoGebra says so in a modal over the chat.
+   Read the commands instead of trusting the fence. */
+const GGB_SOLID = /\b(?:Plane|PerpendicularPlane|PlaneBisector|Sphere|Surface|Cube|Prism|Pyramid|Tetrahedron|Octahedron|Cone|Cylinder|InfiniteCone|Vector3D|IntersectConic)\s*\(/i;
+const GGB_TRIPLE = /\(\s*-?\d[\d.]*\s*,\s*-?\d[\d.]*\s*,\s*-?\d[\d.]*\s*\)/;
+const GGB_Z_AXIS = /(?:^|[\s(])z\s*[=:]/im;
+const isSpatial = (commands) => commands.some(
+  (command) => GGB_SOLID.test(command) || GGB_TRIPLE.test(command) || GGB_Z_AXIS.test(command));
+
+/* "A = (1,2,3)", "c: x + y = 1" and "f(x) = x^2" each name what they build; a bare
+   construction such as Plane(A,B,C) names nothing and is checked by its arguments. */
+const GGB_LABEL = /^\s*([A-Za-z]\w*)\s*(?:\(\s*[A-Za-z]\w*\s*\))?\s*[:=]/;
+const GGB_ARGUMENTS = /\(([^()]*)\)\s*$/;
+
+/* Build the figure in the order it was written, and report the step that would not build
+   rather than leaving GeoGebra to raise a dialog the student can do nothing about. */
+function buildFigure(api, commands) {
+  const unbuilt = [];
+  try { api.setErrorDialogsActive(false); } catch { /* an older applet may not have it */ }
+  for (const command of commands) {
+    const missing = (command.match(GGB_ARGUMENTS)?.[1] || "").split(",")
+      .map((argument) => argument.trim())
+      .filter((argument) => /^[A-Za-z]\w{0,2}$/.test(argument) && !api.exists(argument));
+    if (missing.length) { unbuilt.push(`${command} (no ${missing.join(", ")})`); continue; }
+    let built = false;
+    try { built = api.evalCommand(command) !== false; } catch { built = false; }
+    const label = command.match(GGB_LABEL)?.[1];
+    if (built && label && !api.exists(label)) built = false;
+    if (!built) unbuilt.push(command);
+  }
+  return unbuilt;
+}
+
 function GeoGebraFigure({ code, is3d }) {
   const [ids] = useState(() => { ggbCounter += 1; return { container: `ggb-box-${ggbCounter}`, applet: `ggbApplet${ggbCounter}` }; });
   const ref = useRef(null);
   const [failed, setFailed] = useState(false);
+  const [unbuilt, setUnbuilt] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
+    setUnbuilt([]);
     loadGeoGebra().then(() => {
       if (cancelled || !ref.current) return;
       const commands = geogebraCommands(code);
       const applet = new window.GGBApplet({
         id: ids.applet,
-        appName: is3d ? "3d" : "graphing",
+        // A figure in space needs the 3D app whichever fence the model wrote it in.
+        appName: is3d || isSpatial(commands) ? "3d" : "graphing",
         width: Math.max(260, ref.current.clientWidth), height: 340,
         showToolBar: false, showAlgebraInput: false, showMenuBar: false,
         showResetIcon: true, enableShiftDragZoom: true, showZoomButtons: true, enableRightClick: false,
-        appletOnLoad: (api) => commands.forEach((command) => {
-          try { api.evalCommand(command); } catch { /* skip a bad line, keep the rest */ }
-        }),
+        appletOnLoad: (api) => {
+          const skipped = buildFigure(api, commands);
+          if (!cancelled && skipped.length) setUnbuilt(skipped);
+        },
       }, true);
       applet.inject(ref.current);
     }).catch(() => { if (!cancelled) setFailed(true); });
@@ -3370,7 +3628,19 @@ function GeoGebraFigure({ code, is3d }) {
       </div>
     );
   }
-  return <div id={ids.container} ref={ref} style={{ width: 520, maxWidth: "100%", height: 340, borderRadius: 12, overflow: "hidden", background: "#fff" }} />;
+  return (
+    <div>
+      <div id={ids.container} ref={ref} style={{ width: 520, maxWidth: "100%", height: 340, borderRadius: 12, overflow: "hidden", background: "#fff" }} />
+      {/* Whatever did build is still worth looking at, so the figure stays and the rest is
+          reported quietly underneath. */}
+      {unbuilt.length > 0 && (
+        <p className="text-xs eai-muted" style={{ marginTop: 6 }}>
+          Part of this figure couldn't be drawn: {unbuilt.slice(0, GGB_MAX_REPORTED).join("; ")}
+          {unbuilt.length > GGB_MAX_REPORTED ? ` (and ${unbuilt.length - GGB_MAX_REPORTED} more)` : ""}
+        </p>
+      )}
+    </div>
+  );
 }
 
 const hastText = (node) => (node.type === "text" ? node.value : (node.children || []).map(hastText).join(""));
@@ -3390,7 +3660,11 @@ function markdownComponents(streaming) {
   };
 }
 
-const KATEX_OPTIONS = { throwOnError: false, strict: false }; // Khmer inside math only warns
+/* throwOnError:false makes KaTeX print a formula it cannot parse as its own source. Left to
+   itself it prints that source in #cc0000, so one bad formula reads as an error the student
+   is meant to act on. Show it in the muted text colour instead: still visibly not a formula,
+   in both themes, without the alarm. */
+const KATEX_OPTIONS = { throwOnError: false, strict: false, errorColor: "var(--muted)" }; // Khmer inside math only warns
 const REMARK_PLUGINS = [remarkGfm, remarkMath];
 const REHYPE_PLUGINS = [[rehypeKatex, KATEX_OPTIONS]];
 const MD_COMPONENTS = markdownComponents(false);
@@ -3791,7 +4065,7 @@ function Coach({ p }) {
   const firstName = p.name.split(" ")[0];
 
   return (
-    <div className="eai-rise flex flex-col relative" style={{ height: "calc(100vh - 130px)", minHeight: 520 }} {...dragHandlers}>
+    <div className="eai-rise eai-coach-view flex flex-col relative" {...dragHandlers}>
       <div className="flex items-center justify-between gap-3 flex-wrap pb-2">
         <div className="flex items-center gap-2.5">
           <h2 className="eai-display text-lg font-extrabold">AI Coach</h2>

@@ -43,6 +43,11 @@ class QueryRequest(_StrictModel):
         None, max_length=100, description="Restrict retrieval to these document sources"
     )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
+    continues_math: bool = Field(
+        False,
+        description="This request carries on an answer that stopped inside a $$ block, so the "
+        "formatting repair must not close the block the model is about to close itself",
+    )
 
     @model_validator(mode="after")
     def _needs_question(self) -> "QueryRequest":
@@ -77,7 +82,7 @@ class QueryResponse(BaseModel):
     language: Literal["km", "en"]
     grounded: bool = Field(description="True when at least one chunk passed the threshold")
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
     model: str | None = None
     stop_reason: str | None = None
     latency_ms: float
@@ -93,7 +98,7 @@ class QueryStreamMeta(BaseModel):
     language: Literal["km", "en"]
     grounded: bool
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
 
 
 class QueryStreamStatus(BaseModel):
@@ -120,12 +125,24 @@ class QueryStreamReset(BaseModel):
 
 class QueryStreamDone(BaseModel):
     type: Literal["done"] = "done"
-    provider: Literal["anthropic", "gemini", "groq", "none"] | None = Field(
+    first_token_ms: float | None = Field(
+        None, description="Time to the first text delta: the wait the student actually sees"
+    )
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"] | None = Field(
         None, description="The provider that actually answered (may be a fallback)"
     )
     model: str | None = None
     stop_reason: str | None = None
     latency_ms: float
+    answer: str | None = Field(
+        None,
+        description=(
+            "The whole answer with its Markdown and LaTeX repaired, sent only when "
+            "repair changed something. Replace this request's deltas with it: some "
+            "fixes (closing an unclosed $$, moving Khmer out of a formula) cannot be "
+            "made on a delta in isolation."
+        ),
+    )
 
 
 class QueryStreamError(BaseModel):
@@ -208,11 +225,18 @@ class HealthResponse(BaseModel):
     embedding_loaded: bool
     khmer_segmenter: str
     ocr_enabled: bool
-    ocr_engine: Literal["gemini", "kiri"] | None = None
+    ocr_engine: Literal["gemini", "kiri", "groq", "hybrid"] | None = None
     ocr_model: str | None = None
-    llm_provider: Literal["anthropic", "gemini", "groq", "none"]
+    llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
     llm_model: str | None = None
     llm_chain: list[str] = Field(default_factory=list, description="provider:model, in fallback order")
+    llm_selection: Literal["rotate", "priority"] | None = Field(
+        None, description="how the next question picks among the chain"
+    )
+    llm_resting: dict[str, float] = Field(
+        default_factory=dict,
+        description="models being skipped after a failure, and the seconds left on each",
+    )
     config_warnings: list[str] = Field(default_factory=list)
     image_ocr_engines: list[str] = Field(default_factory=list)
     default_top_k: int

@@ -10,15 +10,21 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # Dependencies first so code changes don't reinstall torch.
+# --extra cpu is required, not optional: torch and torchvision resolve from the
+# CPU index only through that extra. Without it they come from PyPI, whose Linux
+# wheel bundles ~2.5 GB of CUDA libraries and will not fit the free instance.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra cpu
+
+# Bake the embedding model into the image so a cold start warms it from disk
+# instead of pulling ~470 MB from HuggingFace on the first question -- and so a
+# HuggingFace outage cannot stop the server booting. Drop this line if you
+# switch back to EMBEDDING_BACKEND=hashing, which loads no model at all.
+RUN uv run --frozen --no-dev --extra cpu python -c \
+    "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
 COPY . .
 
-# No model is downloaded here: EMBEDDING_BACKEND=hashing needs none. When using
-# sentence-transformers instead, pre-fetch it so cold starts don't:
-#   RUN uv run --frozen --no-dev python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
-
 EXPOSE 8000
 # Render sets PORT; default to 8000 elsewhere.
-CMD ["sh", "-c", "uv run --frozen --no-dev uvicorn src.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uv run --frozen --no-dev --extra cpu uvicorn src.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
