@@ -359,14 +359,6 @@ const STYLES = `
 .eai-tile{ transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; cursor:pointer; }
 .eai-tile:hover{ transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--primary); }
 .eai-focus:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
-.eai-glass-pill{ transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease; }
-.eai-glass-pill:hover{ transform: translateY(-2px); }
-.theme-light .eai-glass-pill:hover{ background: rgba(255,255,255,0.78) !important; box-shadow: 0 8px 26px rgba(31,38,135,0.2) !important; }
-.theme-dark .eai-glass-pill:hover{ background: rgba(40,42,76,0.65) !important; box-shadow: 0 8px 26px rgba(0,0,0,0.5) !important; }
-.eai-glass-pill:active{ transform: translateY(0); }
-.eai-glass-lift{ transition: transform .2s ease, box-shadow .2s ease, filter .2s ease, background-color .2s ease; }
-.eai-glass-lift:hover{ transform: translateY(-2px) scale(1.01); }
-.eai-glass-lift:active{ transform: translateY(0) scale(1); }
 input.eai-input, select.eai-input{ background:var(--bg-soft); color:var(--ink); border:1px solid var(--line); border-radius:14px; }
 input.eai-input::placeholder{ color:var(--muted); }
 .eai-rise{ animation:rise .5s cubic-bezier(.2,.7,.3,1) both; }
@@ -755,9 +747,9 @@ const ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "ជម្រ�
    but styled inline rather than via that class, since .eai-ob-toggle hardcodes position:fixed
    (fine for a lone corner button, but it fights layout when composed into a flex row alongside
    other controls — the same reason the header's dark-mode button also skips that class). */
-function LangToggle({ lang, setLang, style, className = "" }) {
+function LangToggle({ lang, setLang, style }) {
   return (
-    <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className={`eai-focus eai-km ${className}`}
+    <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
       style={{
         height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--line)",
         background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center",
@@ -806,7 +798,7 @@ function OnboardingLayout({ dark, setDark, step, title, description, onBack, chi
               <BondusLogo />
             </div>
             <div>
-              <p className="eai-display font-extrabold text-lg leading-none">Bondus</p>
+              <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
               <p className="eai-km text-xs eai-muted">រៀនពូកែ ប្រឡងជាប់</p>
             </div>
           </div>
@@ -951,139 +943,92 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
    that data in place so it can be recovered here later. */
 
+function BondusCharacter() {
+  return (
+    <img
+      src="/logos/Bondus_mascout_nobg.png"
+      alt="BONDUS mascot - friendly owl reading a book"
+      style={{ width: "100%", height: "auto", display: "block" }}
+      onError={(e) => {
+        e.target.style.display = "none";
+      }}
+    />
+  );
+}
+
 function BondusLogo() {
   return (
     <img
-      src="/logos/BONDUS%20(2).png"
+      src="/logos/Bondus_mascout_nobg.png"
       alt="BONDUS"
       style={{ width: "100%", height: "100%", objectFit: "contain" }}
     />
   );
 }
 
-/* Each slide of the onboarding intro carousel. `icon: "logo"` renders the BONDUS mark image;
-   any other value is a lucide icon component rendered on a soft primary circle instead. */
-const INTRO_STEPS = [
-  { eyebrowKey: "welcomeHeading", titleKey: "welcomeBrand", icon: "logo", headlineKey: "welcomeSubtitle", subtextKey: null, ctaKey: "getStarted" },
-  { eyebrowKey: "welcomeBrand", titleKey: "studyEffectively", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: null, ctaKey: "next" },
-  { eyebrowKey: "introTrackEyebrow", titleKey: "introTrackTitle", icon: BarChart3, headlineKey: "introTrackHeadline", subtextKey: null, ctaKey: "next" },
-  { eyebrowKey: "introCoachEyebrow", titleKey: "introCoachTitle", icon: Sparkles, headlineKey: "introCoachHeadline", subtextKey: null },
-];
-
-/* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
-   carousel (à la a typical school-app intro). The last slide swaps its CTA for the same
-   Create account / Login choice the old standalone Welcome screen used to show. */
-function Intro({ dark, setDark, lang, setLang, onLogin, onCreate, step, setStep }) {
-  const s = INTRO_STEPS[step];
-  const isLast = step === INTRO_STEPS.length - 1;
-  const advance = () => setStep((v) => v + 1);
-
+function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{
-      display: "flex", flexDirection: "column", justifyContent: "space-between",
-      minHeight: "100vh", padding: "24px", background: "var(--bg)", position: "relative", overflow: "hidden",
-    }}>
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
 
-      {/* Top row: toggles — in normal flow (not position:fixed) so they can't drift off a
-          shorter or embedded viewport (e.g. a browser wrapper whose 100vh isn't the real screen). */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
-        <LangToggle lang={lang} setLang={setLang} className="eai-glass-pill" style={{ border: "1px solid var(--line)", background: "var(--card)" }} />
-        <button onClick={() => setDark((d) => !d)} className="eai-focus eai-glass-pill" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ width: 44, height: 44, borderRadius: 14, color: "var(--ink)", display: "grid", placeItems: "center", border: "1px solid var(--line)", background: "var(--card)" }}>
+      {/* Decorative corner accents */}
+      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+
+      {/* Theme + language toggles */}
+      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
+        <LangToggle lang={lang} setLang={setLang} style={{ border: "2px solid var(--primary)", background: "var(--card)" }} />
+        <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "2px solid var(--primary)", background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
 
-      {/* Center content: header, illustration, headline and dots all live in one flex column so
-          they stack and space themselves consistently instead of fighting for position. */}
-      <div style={{
-        display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
-        flexGrow: 1, justifyContent: "center", gap: 32, width: "100%", maxWidth: 420, margin: "0 auto", padding: "24px 4px",
-      }}>
-        <div>
-          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: lang === "km" ? "none" : "uppercase", color: "var(--primary)", marginBottom: 6 }}>
-            {t(lang, s.eyebrowKey)}
-          </p>
-          <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(30px, 6vw, 40px)", fontWeight: 800, color: "var(--ink)", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
-            {t(lang, s.titleKey)}
+      {/* Responsive Welcome Content */}
+      <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
+
+        {/* Top spacing */}
+        <div style={{ height: "32px" }}></div>
+
+        {/* Content Section — text/buttons kept at a comfortable reading width */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", width: "100%", maxWidth: "480px" }}>
+          {/* Heading */}
+          <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
+            {t(lang, "welcomeHeading")} <span style={{ color: "var(--primary)" }}>{t(lang, "welcomeBrand")}</span>
           </h1>
-        </div>
+          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+            {t(lang, "welcomeSubtitle")}
+          </p>
 
-        {s.icon === "logo" ? (
-          <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-            <img src="/logos/BONDUS%20(2).png" alt="BONDUS" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          </div>
-        ) : (
-          <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", background: "var(--primary-soft)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-            <s.icon size={84} style={{ width: "42%", height: "42%", color: "var(--primary)", opacity: 0.6 }} />
-          </div>
-        )}
-
-        <div>
-          <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)" }}>
-            {t(lang, s.headlineKey)}
-          </h2>
-          {s.subtextKey && (
-            <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6, marginTop: 10 }}>
-              {t(lang, s.subtextKey)}
-            </p>
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 6 }}>
-          {INTRO_STEPS.map((_, i) => (
-            <span key={i} style={{
-              width: i === step ? 22 : 8, height: 8, borderRadius: 999,
-              background: i === step ? "var(--primary)" : "var(--line)",
-              transition: "width .2s ease, background-color .2s ease",
-            }} />
-          ))}
-        </div>
-      </div>
-
-      {/* Bottom: CTA — pinned to the bottom edge by the root's justify-content:space-between.
-          The last slide swaps the single "Next" button for Create account / Login, same as the
-          old Welcome screen, just styled to match this carousel. */}
-      <div style={{ width: "100%", maxWidth: 420, margin: "0 auto", flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-        {isLast ? (
-          <>
+          {/* Buttons */}
+          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "48px" }}>
             <button
               onClick={onCreate}
-              className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
-              style={{
-                width: "100%", padding: "16px 16px", color: "var(--primary)", fontWeight: 700, borderRadius: "9999px",
-                border: "2px solid var(--primary)", background: "transparent", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
-              }}
+              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
+              style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
+              onMouseEnter={(e) => e.target.style.background = "var(--primary-soft)"}
+              onMouseLeave={(e) => e.target.style.background = "transparent"}
             >
               {t(lang, "createAccount")}
             </button>
             <button
               onClick={onLogin}
-              className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
-              style={{
-                width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
-                borderRadius: "9999px", border: "none", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
-                boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
-              }}
+              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
+              style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
+              onMouseEnter={(e) => e.target.style.filter = "brightness(0.9)"}
+              onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
             >
               {t(lang, "login")}
             </button>
-          </>
-        ) : (
-          <button
-            onClick={advance}
-            className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
-            style={{
-              width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
-              borderRadius: "9999px", border: "none", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
-            }}
-          >
-            {t(lang, s.ctaKey)} <ChevronRight size={18} />
-          </button>
-        )}
+          </div>
+        </div>
+
+        {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flex: 1, marginTop: "24px" }}>
+          <div style={{ width: "clamp(220px, 28vw, 420px)", maxWidth: "90vw" }}>
+            <BondusCharacter />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -4390,13 +4335,6 @@ const NAV = [
    breaks rendering. */
 const STRINGS = {
   en: {
-    // Intro splash
-    getStarted: "Get started", studyEffectively: "Study Effectively", next: "Next",
-    introCollabHeadline: "Access notes and materials instantly.",
-    introTrackEyebrow: "Personalized", introTrackTitle: "Track Your Progress",
-    introTrackHeadline: "See exactly what to study next.",
-    introCoachEyebrow: "AI-Powered", introCoachTitle: "Meet Your AI Coach",
-    introCoachHeadline: "Get instant help, anytime you're stuck.",
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
@@ -4516,13 +4454,6 @@ const STRINGS = {
     goToDashboard: "Go to my dashboard",
   },
   km: {
-    // Intro splash
-    getStarted: "ចាប់ផ្តើម", studyEffectively: "សិក្សាប្រកបដោយប្រសិទ្ធភាព", next: "បន្ទាប់",
-    introCollabHeadline: "ចូលប្រើកំណត់ត្រា និងឯកសារភ្លាមៗ។",
-    introTrackEyebrow: "ផ្ទាល់ខ្លួន", introTrackTitle: "តាមដានវឌ្ឍនភាពរបស់អ្នក",
-    introTrackHeadline: "មើលច្បាស់ថាត្រូវរៀនអ្វីបន្ទាប់។",
-    introCoachEyebrow: "ដំណើរការដោយ AI", introCoachTitle: "ជួបគ្រូបង្វឹក AI របស់អ្នក",
-    introCoachHeadline: "ទទួលបានជំនួយភ្លាមៗ នៅពេលអ្នកជាប់គាំង។",
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
@@ -4671,16 +4602,14 @@ export default function App() {
   const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
   const [showWelcomeBack, setShowWelcomeBack] = useState(isReturningUser);
   const [profile, setProfile] = useState(saved?.profile ?? null);
-  const [entry, setEntry] = useState("intro"); // "intro" | "login" | "create" — which pre-account screen to show when there's no active profile yet
-  const [introStep, setIntroStep] = useState(0); // which Intro carousel slide to show — jumped to the last (login/create) slide when backing out of Login/Register
-  const backToIntroAuth = () => { setIntroStep(INTRO_STEPS.length - 1); setEntry("intro"); };
+  const [entry, setEntry] = useState("welcome"); // "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [tab, setTab] = useState("dashboard");
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
@@ -4707,7 +4636,7 @@ export default function App() {
   // can restore the same account later by matching the phone number used at signup.
   const handleLogout = () => {
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("intro"); setIntroStep(0);
+    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
   };
 
   // Matches a phone number against whatever's currently saved in this browser. Returns true/false
@@ -4807,9 +4736,9 @@ export default function App() {
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
-  if (!profile && entry === "intro") return <Intro dark={dark} setDark={setDark} lang={lang} setLang={setLang} step={introStep} setStep={setIntroStep} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={backToIntroAuth} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={backToIntroAuth} lang={lang} setLang={setLang} />;
+  if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
+  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
+  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} />;
   if (takingLangTest) return (
     <IeltsDiagnostic
@@ -4840,7 +4769,7 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
             {NAV.map((n) => {
