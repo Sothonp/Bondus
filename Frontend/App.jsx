@@ -806,7 +806,7 @@ function OnboardingLayout({ dark, setDark, step, title, description, onBack, chi
               <BondusLogo />
             </div>
             <div>
-              <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
+              <p className="eai-display font-extrabold text-lg leading-none">Bondus</p>
               <p className="eai-km text-xs eai-muted">រៀនពូកែ ប្រឡងជាប់</p>
             </div>
           </div>
@@ -4839,7 +4839,7 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
             {NAV.map((n) => {
