@@ -1,6 +1,7 @@
 """Unit tests for the ingestion, embedding, vector store and retrieval layers."""
 from __future__ import annotations
 
+import json
 import os
 import random
 import unicodedata
@@ -1098,3 +1099,187 @@ class TestHybridOCR:
 
         with pytest.raises(ValueError, match="needs a Khmer engine"):
             HybridPageOCR(khmer=None, vision=[])
+
+def _scripted(name, text, truncated=False):
+    """A vision engine that always gives the same reading."""
+    from src.ingestion.ocr import CachedPageOCR, OCRError
+
+    class Scripted(CachedPageOCR):
+        engine = name
+        model = "m"
+
+        def __init__(self):
+            super().__init__()
+            self.hints = []
+
+        def _cache_key(self, payload):
+            return name
+
+        def _transcribe_uncached(self, payload, hint=None):
+            self.hints.append(hint)
+            if isinstance(text, Exception):
+                raise text
+            return text, truncated
+
+    Scripted.OCRError = OCRError
+    return Scripted()
+
+
+LEAKED = (
+    "It looks like $-\\frac{x}{2}$ but wait, is it a 0 or a 2? "
+    "Let's look at question 3: $-\\frac{x}{2}$."
+)
+
+
+class TestEnsembleOCR:
+    """Kiri reads the Khmer; several vision engines read the maths, and the
+    reading that agrees best with Kiri and with the other engines is kept."""
+
+    KIRI = "គណនា លីមីត នៃ អនុគមន៍"
+    GOOD = "គណនា លីមីត នៃ អនុគមន៍ $\\lim_{x \\to 0} \\frac{\\sin 3x}{x}$ គេបាន $3$ ។"
+    # Same maths, Khmer garbled (the vision models' weak spot).
+    GARBLED = "គណណា លីមិត នៃ អនុគុមន៍ $\\lim_{x\\to 0}\\frac{\\sin 3x}{x}$ គេបាន $3$ ។"
+    # Good Khmer, but a formula no other engine saw and the answer missing.
+    INVENTED = "គណនា លីមីត នៃ អនុគមន៍ $\\lim_{x \\to 1} x^9$ ។"
+
+    def _ensemble(self, tmp_path, *engines, **kwargs):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+
+        khmer, _ = _kiri(tmp_path, [_region(self.KIRI, 10)])
+        return HybridPageOCR(
+            khmer=khmer, vision=list(engines), combine="ensemble",
+            cache_dir=tmp_path / "hybrid", **kwargs,
+        )
+
+    def test_every_engine_reads_with_the_khmer_hint_and_the_best_reading_wins(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        engines = [
+            _scripted("groq", self.GARBLED),
+            _scripted("gemini", self.GOOD),
+            _scripted("openrouter", self.INVENTED),
+        ]
+        text, truncated = self._ensemble(tmp_path, *engines).transcribe_page(PageImage(b"p", "image/png"))
+
+        assert text == self.GOOD and not truncated
+        assert all(engine.hints == [self.KIRI] for engine in engines), "each got Kiri's reading"
+
+    def test_readings_are_kept_whole_never_spliced(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        text, _ = self._ensemble(
+            tmp_path, _scripted("groq", self.GARBLED), _scripted("gemini", self.GOOD)
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text in (self.GOOD, self.GARBLED)
+
+    def test_a_reading_with_leaked_reasoning_is_rejected(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        text, _ = self._ensemble(
+            tmp_path, _scripted("groq", LEAKED), _scripted("gemini", self.GARBLED)
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text == self.GARBLED
+
+    def test_a_failed_engine_does_not_sink_the_page(self, tmp_path):
+        from src.ingestion.ocr import OCRError, PageImage
+
+        text, _ = self._ensemble(
+            tmp_path, _scripted("groq", OCRError("429", 429)), _scripted("gemini", self.GOOD)
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text == self.GOOD
+
+    def test_a_complete_reading_beats_a_cut_off_one(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        text, truncated = self._ensemble(
+            tmp_path,
+            _scripted("gemini", self.GOOD, truncated=True),
+            _scripted("groq", self.GARBLED),
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text == self.GARBLED and not truncated
+
+    def test_all_readings_unusable_falls_back_to_kiri_uncached(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        page = PageImage(b"p", "image/png")
+        hybrid = self._ensemble(tmp_path, _scripted("groq", LEAKED), _scripted("gemini", LEAKED))
+        text, _ = hybrid.transcribe_page(page)
+        assert text == self.KIRI
+        assert hybrid._read_cache(hybrid._cache_key(page)) is None
+
+    def test_ensemble_and_first_keep_separate_cache_entries(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        page = PageImage(b"p", "image/png")
+        ensemble = self._ensemble(tmp_path, _scripted("groq", self.GOOD), _scripted("gemini", self.GOOD))
+        first = self._ensemble(tmp_path, _scripted("groq", self.GOOD), _scripted("gemini", self.GOOD))
+        first.combine = "first"
+        assert ensemble._cache_key(page) != first._cache_key(page)
+
+    def test_first_mode_skips_a_leaked_reading(self, tmp_path):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+        from src.ingestion.ocr import PageImage
+
+        khmer, _ = _kiri(tmp_path, [_region(self.KIRI, 10)])
+        hybrid = HybridPageOCR(
+            khmer=khmer, vision=[_scripted("groq", LEAKED), _scripted("gemini", self.GOOD)],
+            cache_dir=tmp_path / "hybrid",
+        )
+        assert hybrid.transcribe_page(PageImage(b"p", "image/png"))[0] == self.GOOD
+
+
+class TestReadingChecks:
+    def test_reading_problems(self):
+        from src.ingestion.hybrid_ocr import reading_problems
+
+        assert reading_problems(TestEnsembleOCR.GOOD) == []
+        assert "reasoning leak" in reading_problems(LEAKED)
+        assert "unbalanced $" in reading_problems("គេបាន $x+1 = 2 ។")
+        assert "repeated lines" in reading_problems("បើ នោះ ឬ\n" * 5)
+
+    def test_a_leaked_reading_is_neither_cached_nor_served_from_the_cache(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        engine = _scripted("groq", LEAKED)
+        engine.cache_dir = tmp_path
+        page = PageImage(b"p", "image/png")
+        engine.transcribe_page(page)
+        assert not list(tmp_path.glob("*.md")), "a leaked reading is not cached"
+
+        (tmp_path / "groq.md").write_text(LEAKED, encoding="utf-8")  # cached before the check
+        engine.transcribe_page(page)
+        assert len(engine.hints) == 2, "the leaked cache entry is read again"
+
+    def test_openrouter_vision_sends_max_tokens_and_no_reasoning(self, tmp_path):
+        import httpx
+        import openai
+
+        from src.ingestion.image_ocr import OpenRouterVisionOCR
+        from src.ingestion.ocr import OCRError, PageImage
+
+        requests = []
+
+        def handler(request):
+            requests.append(json.loads(request.content))
+            if len(requests) > 1:
+                return httpx.Response(429, json={"error": {"message": "slow down"}})
+            return httpx.Response(200, json={
+                "id": "x", "object": "chat.completion", "created": 1, "model": "vl",
+                "choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": "$x^2$"}}],
+            })
+
+        client = openai.OpenAI(
+            api_key="k", base_url="https://openrouter.ai/api/v1", max_retries=0,
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        ocr = OpenRouterVisionOCR("k", "vl", client=client, cache_dir=tmp_path, max_output_tokens=900)
+        assert ocr.transcribe_page(PageImage(b"a", "image/png")) == ("$x^2$", False)
+        body = requests[0]
+        assert body["max_tokens"] == 900 and "max_completion_tokens" not in body
+        assert body["reasoning"] == {"enabled": False, "exclude": True}
+
+        with pytest.raises(OCRError) as error:
+            ocr.transcribe_page(PageImage(b"b", "image/png"))
+        assert error.value.status == 429 and "OpenRouter vision" in str(error.value)
+

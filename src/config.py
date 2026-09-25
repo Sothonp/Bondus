@@ -114,7 +114,8 @@ class Settings(BaseSettings):
     cerebras_api_key: SecretStr | None = None
     cerebras_model: str = "gpt-oss-120b"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
-    cerebras_fallback_models: str = "qwen-3.8-27b"
+    # No Chinese models (project rule); Cerebras has no other free model to fall back on.
+    cerebras_fallback_models: str = ""
     cerebras_base_url: str = "https://api.cerebras.ai/v1"
     cerebras_temperature: float = Field(0.2, ge=0.0, le=2.0)
     # The free tier caps the context at 8192 tokens, the same shape of limit Groq
@@ -139,13 +140,13 @@ class Settings(BaseSettings):
     # its LaTeX and its answer on the second question, nemotron-3.5-lightning
     # took 193 s to answer wrongly. `GET {base_url}/models` lists what is free
     # now; retest before changing these, because one good answer proves nothing.
-    openrouter_model: str = "inclusionai/ling-3.0-flash-vl:free"
+    # Ling and DeepSeek were dropped on 2026-09-26: the project uses no Chinese
+    # models, which leaves the Nemotron of those three.
+    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
-    # DeepSeek writes the most Khmer of the three but takes about half as long
-    # again; the Nemotron is the least consistent in latency.
-    openrouter_fallback_models: str = (
-        "deepseek/deepseek-v4-flash-0731:free,nvidia/nemotron-3-ultra-550b-a55b:free"
-    )
+    # Gemma has not been retested on Khmer answers; its free endpoint is often
+    # rate limited upstream.
+    openrouter_fallback_models: str = "google/gemma-4-31b-it:free"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_temperature: float = Field(0.2, ge=0.0, le=2.0)
     # Nearly every free model here can think before answering, which spends the
@@ -216,11 +217,21 @@ class Settings(BaseSettings):
     # to a vision model, which transcribes the page with the formulas in LaTeX
     # and spells the Khmer the way Kiri read it. Vision engines are tried in the
     # listed order; one without a key is skipped.
-    hybrid_vision_engines: str = "gemini,groq"
+    # Groq is not a default: its only vision model is Qwen, and the project uses
+    # no Chinese models.
+    hybrid_vision_engines: str = "gemini,openrouter"
     # By default a page whose vision engines all failed is still indexed from
     # Kiri's Khmer-only reading (prose, no formulas). Set this to fail the page
     # instead, so a re-run picks it up rather than indexing it without its maths.
     hybrid_require_vision: bool = False
+    # With several vision engines: "first" keeps the first usable reading (one
+    # call per page); "ensemble" asks them all at once and keeps the reading that
+    # agrees best with Kiri's Khmer and with the other engines' formulas.
+    hybrid_combine: Literal["first", "ensemble"] = "first"
+    # Must accept images and must not be a Chinese model. Free endpoints are
+    # shared by all OpenRouter users and often rate limited upstream;
+    # ling-3.0-flash-vl stopped being free on 2026-09-26.
+    openrouter_vision_model: str = "google/gemma-4-31b-it:free"
 
     # --- Background ingestion ---
     max_ingest_jobs: int = Field(100, ge=1, le=10000)
@@ -228,7 +239,9 @@ class Settings(BaseSettings):
     # --- Images attached to questions ---
     # Engines read each photo in parallel: Kiri (local, free) for Khmer words and a
     # vision model for math/LaTeX. Vision models are tried in the listed order.
-    image_ocr_engines: str = "kiri,groq,gemini"
+    # Groq is left out by default: its only vision model is Qwen (see
+    # hybrid_vision_engines).
+    image_ocr_engines: str = "kiri,gemini"
     groq_vision_model: str = "qwen/qwen3.8-27b"
     groq_vision_reasoning_effort: str | None = None
     # Groq's free tier allows 1000 output tokens per minute for Qwen; larger
@@ -340,7 +353,7 @@ class Settings(BaseSettings):
 
     @property
     def hybrid_vision_engine_list(self) -> list[str]:
-        known = ("gemini", "groq")
+        known = ("gemini", "groq", "openrouter")
         engines = [e.strip().lower() for e in self.hybrid_vision_engines.split(",") if e.strip()]
         unknown = sorted(set(engines) - set(known))
         if unknown:
