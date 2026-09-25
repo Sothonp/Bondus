@@ -973,8 +973,7 @@ const INTRO_STEPS = [
 /* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
    carousel (à la a typical school-app intro). The last slide swaps its CTA for the same
    Create account / Login choice the old standalone Welcome screen used to show. */
-function Intro({ dark, setDark, lang, setLang, onLogin, onCreate }) {
-  const [step, setStep] = useState(0);
+function Intro({ dark, setDark, lang, setLang, onLogin, onCreate, step, setStep }) {
   const s = INTRO_STEPS[step];
   const isLast = step === INTRO_STEPS.length - 1;
   const advance = () => setStep((v) => v + 1);
@@ -4673,6 +4672,8 @@ export default function App() {
   const [showWelcomeBack, setShowWelcomeBack] = useState(isReturningUser);
   const [profile, setProfile] = useState(saved?.profile ?? null);
   const [entry, setEntry] = useState("intro"); // "intro" | "login" | "create" — which pre-account screen to show when there's no active profile yet
+  const [introStep, setIntroStep] = useState(0); // which Intro carousel slide to show — jumped to the last (login/create) slide when backing out of Login/Register
+  const backToIntroAuth = () => { setIntroStep(INTRO_STEPS.length - 1); setEntry("intro"); };
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
@@ -4706,7 +4707,7 @@ export default function App() {
   // can restore the same account later by matching the phone number used at signup.
   const handleLogout = () => {
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("intro");
+    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("intro"); setIntroStep(0);
   };
 
   // Matches a phone number against whatever's currently saved in this browser. Returns true/false
@@ -4806,9 +4807,9 @@ export default function App() {
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
-  if (!profile && entry === "intro") return <Intro dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("intro")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("intro")} lang={lang} setLang={setLang} />;
+  if (!profile && entry === "intro") return <Intro dark={dark} setDark={setDark} lang={lang} setLang={setLang} step={introStep} setStep={setIntroStep} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
+  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={backToIntroAuth} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
+  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={backToIntroAuth} lang={lang} setLang={setLang} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} />;
   if (takingLangTest) return (
     <IeltsDiagnostic
