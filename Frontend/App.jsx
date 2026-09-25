@@ -359,6 +359,14 @@ const STYLES = `
 .eai-tile{ transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; cursor:pointer; }
 .eai-tile:hover{ transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--primary); }
 .eai-focus:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
+.eai-glass-pill{ transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease; }
+.eai-glass-pill:hover{ transform: translateY(-2px); }
+.theme-light .eai-glass-pill:hover{ background: rgba(255,255,255,0.78) !important; box-shadow: 0 8px 26px rgba(31,38,135,0.2) !important; }
+.theme-dark .eai-glass-pill:hover{ background: rgba(40,42,76,0.65) !important; box-shadow: 0 8px 26px rgba(0,0,0,0.5) !important; }
+.eai-glass-pill:active{ transform: translateY(0); }
+.eai-glass-lift{ transition: transform .2s ease, box-shadow .2s ease, filter .2s ease, background-color .2s ease; }
+.eai-glass-lift:hover{ transform: translateY(-2px) scale(1.01); }
+.eai-glass-lift:active{ transform: translateY(0) scale(1); }
 input.eai-input, select.eai-input{ background:var(--bg-soft); color:var(--ink); border:1px solid var(--line); border-radius:14px; }
 input.eai-input::placeholder{ color:var(--muted); }
 .eai-rise{ animation:rise .5s cubic-bezier(.2,.7,.3,1) both; }
@@ -747,9 +755,9 @@ const ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "ជម្រ�
    but styled inline rather than via that class, since .eai-ob-toggle hardcodes position:fixed
    (fine for a lone corner button, but it fights layout when composed into a flex row alongside
    other controls — the same reason the header's dark-mode button also skips that class). */
-function LangToggle({ lang, setLang, style }) {
+function LangToggle({ lang, setLang, style, className = "" }) {
   return (
-    <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
+    <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className={`eai-focus eai-km ${className}`}
       style={{
         height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--line)",
         background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center",
@@ -978,13 +986,13 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
 
       {/* Theme + language toggles — frosted glass pills */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
-        <LangToggle lang={lang} setLang={setLang} style={{
+        <LangToggle lang={lang} setLang={setLang} className="eai-glass-pill" style={{
           border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.65)",
           background: dark ? "rgba(30,32,60,0.45)" : "rgba(255,255,255,0.45)",
           backdropFilter: "blur(18px) saturate(180%)", WebkitBackdropFilter: "blur(18px) saturate(180%)",
           boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 4px 20px rgba(31,38,135,0.12)",
         }} />
-        <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+        <button onClick={() => setDark((d) => !d)} className="eai-focus eai-glass-pill" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
           style={{
             position: "static", width: 44, height: 44, borderRadius: 14, color: "var(--ink)", display: "grid", placeItems: "center",
             transition: "background-color .15s ease, transform .12s ease",
@@ -1026,7 +1034,7 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
           <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <button
               onClick={onCreate}
-              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
+              className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
               style={{
                 width: "100%", padding: "14px 16px", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px",
                 cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)",
@@ -1042,7 +1050,7 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
             </button>
             <button
               onClick={onLogin}
-              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
+              className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
               style={{
                 width: "100%", padding: "14px 16px", color: "white", fontWeight: "600", borderRadius: "9999px",
                 cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)",
