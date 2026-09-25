@@ -967,7 +967,7 @@ function BondusCharacter() {
 function BondusLogo() {
   return (
     <img
-      src="/logos/Bondus_mascout_nobg.png"
+      src="/logos/BONDUS%20(2).png"
       alt="BONDUS"
       style={{ width: "100%", height: "100%", objectFit: "contain" }}
     />
