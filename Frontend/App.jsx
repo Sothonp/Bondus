@@ -977,9 +977,9 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
 
       {/* Theme + language toggles */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
-        <LangToggle lang={lang} setLang={setLang} />
+        <LangToggle lang={lang} setLang={setLang} style={{ border: "2px solid var(--primary)", background: "var(--card)" }} />
         <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-soft)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
+          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "2px solid var(--primary)", background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
