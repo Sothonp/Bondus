@@ -980,12 +980,14 @@ function BondusLogo() {
 function Intro({ dark, setDark, lang, setLang, onNext }) {
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{
-      minHeight: "100vh", background: "var(--bg)",
-      display: "flex", flexDirection: "column", alignItems: "center", position: "relative", overflow: "hidden",
+      display: "flex", flexDirection: "column", justifyContent: "space-between",
+      minHeight: "100vh", padding: "24px", background: "var(--bg)", position: "relative", overflow: "hidden",
     }}>
       <style>{STYLES}</style>
 
-      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
+      {/* Top row: toggles — in normal flow (not position:fixed) so they can't drift off a
+          shorter or embedded viewport (e.g. a browser wrapper whose 100vh isn't the real screen). */}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
         <LangToggle lang={lang} setLang={setLang} className="eai-glass-pill" style={{ border: "1px solid var(--line)", background: "var(--card)" }} />
         <button onClick={() => setDark((d) => !d)} className="eai-focus eai-glass-pill" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
           style={{ width: 44, height: 44, borderRadius: 14, color: "var(--ink)", display: "grid", placeItems: "center", border: "1px solid var(--line)", background: "var(--card)" }}>
@@ -993,23 +995,26 @@ function Intro({ dark, setDark, lang, setLang, onNext }) {
         </button>
       </div>
 
-      <div style={{ width: "100%", maxWidth: 420, padding: "96px 28px 0", position: "relative", zIndex: 1 }}>
-        <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: lang === "km" ? "none" : "uppercase", color: "var(--primary)", marginBottom: 6 }}>
-          {t(lang, "welcomeHeading")}
-        </p>
-        <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(30px, 6vw, 40px)", fontWeight: 800, color: "var(--ink)", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
-          {t(lang, "welcomeBrand")}
-        </h1>
-      </div>
-
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
-        <div style={{ width: 200, height: 200, borderRadius: "50%", background: "var(--primary-soft)", display: "grid", placeItems: "center" }}>
-          <GraduationCap size={96} style={{ color: "var(--primary)", opacity: 0.55 }} />
+      {/* Center content: header, illustration, headline and dots all live in one flex column so
+          they stack and space themselves consistently instead of fighting for position. */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+        flexGrow: 1, justifyContent: "center", gap: 32, width: "100%", maxWidth: 420, margin: "0 auto", padding: "24px 4px",
+      }}>
+        <div>
+          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: lang === "km" ? "none" : "uppercase", color: "var(--primary)", marginBottom: 6 }}>
+            {t(lang, "welcomeHeading")}
+          </p>
+          <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(30px, 6vw, 40px)", fontWeight: 800, color: "var(--ink)", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
+            {t(lang, "welcomeBrand")}
+          </h1>
         </div>
-      </div>
 
-      <div style={{ width: "100%", maxWidth: 420, padding: "0 28px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: 24, position: "relative", zIndex: 1 }}>
-        <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
+        <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", background: "var(--primary-soft)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+          <GraduationCap size={96} style={{ width: "48%", height: "48%", color: "var(--primary)", opacity: 0.55 }} />
+        </div>
+
+        <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)" }}>
           {t(lang, "welcomeSubtitle")}
         </h2>
 
@@ -1018,7 +1023,10 @@ function Intro({ dark, setDark, lang, setLang, onNext }) {
           <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--line)" }} />
           <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--line)" }} />
         </div>
+      </div>
 
+      {/* Bottom: CTA — pinned to the bottom edge by the root's justify-content:space-between. */}
+      <div style={{ width: "100%", maxWidth: 420, margin: "0 auto", flexShrink: 0 }}>
         <button
           onClick={onNext}
           className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
