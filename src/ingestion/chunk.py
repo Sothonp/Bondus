@@ -16,7 +16,7 @@ from __future__ import annotations
 import bisect
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from src.ingestion.khmer_segment import ZWSP, strip_word_boundaries
 from src.ingestion.latex_guard import PLACEHOLDER_PATTERN, sub_vault, unmask_latex
@@ -43,6 +43,11 @@ _ATOM = re.compile(
     re.DOTALL,
 )
 _TRIM_CHARS = " \t\n\r" + ZWSP
+# Enough for a function definition and its domain, and small next to the spare
+# room in the embedding window (the corpus sits at a median of 199 tokens of
+# e5's 512), so carrying it costs retrieval nothing it did not already have.
+STEM_CHARS = 200
+_STEM_BREAKS = ("។", "៕", ". ", "\n")
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,14 @@ class Chunk:
     page: int | None = None
     last_page: int | None = None
     heading: str = ""
+    # The opening of the exercise this chunk continues, restored and plain. A
+    # past-paper exercise runs past one chunk, and its later parts ("ខ. សិក្សា
+    # អថេរភាព") only mean something next to the f(x) stated once at the top --
+    # which lands in the first chunk alone. Carrying it makes every chunk
+    # answerable on its own, and tells apart the many exercises that share a
+    # heading as unhelpful as "VI. (២០ពិន្ទុ)". Empty on the first chunk,
+    # which is the stem.
+    stem: str = ""
 
     @property
     def restored_text(self) -> str:
@@ -153,6 +166,44 @@ class RecursiveCharacterTextSplitter:
         return text.strip(_TRIM_CHARS)
 
 
+def derive_stem(opening: str, limit: int = STEM_CHARS) -> str:
+    """The opening of an exercise, cut back to a sentence boundary.
+
+    ``opening`` is the restored text of a run's first chunk. Cutting mid-formula
+    or mid-Khmer-word would hand the embedder a fragment, so the text is trimmed
+    at the last sentence end that fits, and only failing that at ``limit``.
+    """
+    text = strip_word_boundaries(opening).strip()
+    if len(text) <= limit:
+        return text
+    window = text[:limit]
+    cut = max(window.rfind(mark) + len(mark) for mark in _STEM_BREAKS)
+    if cut > 0:
+        return window[:cut].strip()
+    # One long sentence: fall back to whole atoms, so the stem never ends in
+    # half a Khmer cluster or half a placeholder.
+    kept = 0
+    for atom in _ATOM.finditer(text):
+        if atom.end() > limit:
+            break
+        kept = atom.end()
+    return text[:kept].strip()
+
+
+def attach_stems(chunks: list[Chunk]) -> list[Chunk]:
+    """Give every chunk after the first the opening of the run it belongs to.
+
+    The first chunk is left alone: it already holds the stem, and repeating it
+    would embed the same sentence twice.
+    """
+    if len(chunks) < 2:
+        return chunks
+    stem = derive_stem(chunks[0].restored_text)
+    if not stem:
+        return chunks
+    return [chunks[0]] + [replace(chunk, stem=stem) for chunk in chunks[1:]]
+
+
 def restored_length(vault: dict[str, str]) -> Callable[[str], int]:
     """Length of text as it will be displayed: formulas at full length,
     word-boundary markers not counted."""
@@ -217,4 +268,4 @@ def chunk_text(
                 heading=heading,
             )
         )
-    return chunks
+    return attach_stems(chunks)

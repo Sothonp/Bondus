@@ -147,6 +147,10 @@ OUTPUT_RULES = """
      wording -- not to fence in what you are allowed to teach. Answer the
      question fully every time: from the passages where they help, and from
      general mathematical knowledge everywhere else.
+   - A passage may open with a <continues> element. That is the start of the
+     exercise the passage was cut from, not the passage itself: read it to
+     learn what the passage's "f", "ក." or "ខ." refer to, and cite the
+     passage, never the <continues>.
    - When a passage supports a statement, definition, formula or worked
      example you use, cite it inline as [1], [2], matching the passage id,
      and follow the notation and method that passage uses.
@@ -252,10 +256,13 @@ class ContextChunk(Protocol):
     page: int | None
     score: float
     text: str
+    stem: str
 
 
 def _escape_passage(text: str) -> str:
-    return text.replace("</passage", "&lt;/passage").replace("</context", "&lt;/context")
+    for tag in ("</passage", "</context", "</continues"):
+        text = text.replace(tag, "&lt;" + tag[1:])
+    return text
 
 
 def _escape_attribute(value: str) -> str:
@@ -274,9 +281,15 @@ def build_context_block(chunks: Sequence[ContextChunk]) -> str:
             value = getattr(chunk, name, "")
             if value:
                 page += f' {"section" if name == "heading" else name}="{_escape_attribute(value)}"'
+        # A passage from the middle of an exercise is a part without its
+        # question. The stem is what the part refers to, so it is given first
+        # and marked as such, rather than run together with the passage as if
+        # the model had retrieved both.
+        stem = getattr(chunk, "stem", "")
+        opening = f"<continues>\n{_escape_passage(stem)}\n</continues>\n" if stem else ""
         passages.append(
             f'<passage id="{number}" source="{_escape_attribute(chunk.source)}"{page} '
-            f'score="{chunk.score:.3f}">\n{_escape_passage(chunk.text)}\n</passage>'
+            f'score="{chunk.score:.3f}">\n{opening}{_escape_passage(chunk.text)}\n</passage>'
         )
     return "<context>\n" + "\n".join(passages) + "\n</context>"
 

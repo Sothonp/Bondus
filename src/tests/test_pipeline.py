@@ -1100,6 +1100,7 @@ class TestHybridOCR:
         with pytest.raises(ValueError, match="needs a Khmer engine"):
             HybridPageOCR(khmer=None, vision=[])
 
+
 def _scripted(name, text, truncated=False):
     """A vision engine that always gives the same reading."""
     from src.ingestion.ocr import CachedPageOCR, OCRError
@@ -1283,3 +1284,75 @@ class TestReadingChecks:
             ocr.transcribe_page(PageImage(b"b", "image/png"))
         assert error.value.status == 429 and "OpenRouter vision" in str(error.value)
 
+
+class TestExerciseStems:
+    """A past-paper exercise runs past one chunk. Its later parts refer to an
+    f(x) stated once at the top, so every chunk after the first carries it."""
+
+    @staticmethod
+    def _chunks(text, **kw):
+        from src.ingestion.chunk import chunk_text
+        return chunk_text(text, {}, chunk_size=kw.get("chunk_size", 120), chunk_overlap=10)
+
+    def test_later_chunks_carry_the_opening(self):
+        text = (
+            "គេមានអនុគមន៍ f ដែល f(x) = x^2 + 3x កំណត់លើ R។ "
+            "ក. គណនាលីមីតនៃ f នៅពេល x ខិតទៅរក ០។ "
+            "ខ. សិក្សាអថេរភាពនៃអនុគមន៍ f នៅលើចន្លោះកំណត់របស់វា។ "
+            "គ. គូសក្រាបតាងអនុគមន៍ f ក្នុងតម្រុយអរតូណរម៉ាល់។"
+        )
+        chunks = self._chunks(text)
+        assert len(chunks) > 1, "need a split for this test to mean anything"
+        assert chunks[0].stem == "", "the first chunk is the stem"
+        assert all(c.stem for c in chunks[1:]), "every later part needs the statement"
+        assert "f(x) = x^2 + 3x" in chunks[1].stem
+
+    def test_a_single_chunk_exercise_gets_no_stem(self):
+        """Nothing was cut off, so there is nothing to carry."""
+        chunks = self._chunks("គេមានអនុគមន៍ f(x) = x។", chunk_size=500)
+        assert len(chunks) == 1
+        assert chunks[0].stem == ""
+
+    def test_the_stem_stops_at_a_sentence_boundary(self):
+        from src.ingestion.chunk import STEM_CHARS, derive_stem
+        opening = "ដំបូង។ " + "ក" * (STEM_CHARS * 2)
+        stem = derive_stem(opening)
+        assert stem.endswith("។"), "a stem cut mid-word embeds a fragment"
+        assert len(stem) <= STEM_CHARS
+
+    def test_the_embedded_text_is_unchanged_by_default(self):
+        """stem_embedding_chars=0 keeps retrieval exactly as it was: the stem
+        is for the model to read, not for the embedder to match on."""
+        from src.ingestion import embedding_text
+        from src.ingestion.chunk import Chunk
+        chunk = Chunk(text="ខ. សិក្សាអថេរភាព", heading="VI. (២០ពិន្ទុ)", stem="គេមានអនុគមន៍ f(x) = x^2")
+        assert "f(x)" not in embedding_text("វិញ្ញាសា ២០២៣", chunk)
+
+    def test_the_stem_reaches_the_embedding_text_when_asked(self):
+        from src.ingestion import embedding_text
+        from src.ingestion.chunk import Chunk
+        chunk = Chunk(text="ខ. សិក្សាអថេរភាព", heading="VI. (២០ពិន្ទុ)", stem="គេមានអនុគមន៍ f(x) = x^2")
+        text = embedding_text("វិញ្ញាសា ២០២៣", chunk, stem_chars=200)
+        assert "f(x) = x^2" in text
+        assert text.index("f(x)") < text.index("សិក្សាអថេរភាព"), "statement comes before the part"
+
+    def test_a_stem_already_in_the_heading_is_not_repeated(self):
+        from src.ingestion import embedding_text
+        from src.ingestion.chunk import Chunk
+        stem = "គេមានអនុគមន៍ f(x) = x^2"
+        chunk = Chunk(text="ខ. សិក្សាអថេរភាព", heading=f"VI. {stem}", stem=stem)
+        assert embedding_text("", chunk, stem_chars=200).count(stem) == 1
+
+    def test_the_model_is_shown_the_stem(self):
+        """The half that costs nothing: whatever retrieval did, the model sees
+        the statement the retrieved part refers to."""
+        from prompts import build_context_block
+
+        class Hit:
+            source, page, score = "paper.pdf", 3, 0.81
+            text, stem = "ខ. សិក្សាអថេរភាព", "គេមានអនុគមន៍ f(x) = x^2 + 3x"
+
+        block = build_context_block([Hit()])
+        assert "<continues>" in block
+        assert "f(x) = x^2 + 3x" in block
+        assert block.index("f(x)") < block.index("សិក្សាអថេរភាព")

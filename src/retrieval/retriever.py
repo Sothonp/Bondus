@@ -22,6 +22,7 @@ class RetrievedChunk:
     text: str  # formulas restored
     title: str = ""
     heading: str = ""
+    stem: str = ""  # opening of the exercise this chunk continues, if any
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -81,6 +82,7 @@ class Retriever:
                 text=strip_word_boundaries(unmask_latex(hit.record.text, hit.record.vault)),
                 title=hit.record.metadata.get("title") or "",
                 heading=hit.record.metadata.get("heading") or "",
+                stem=hit.record.metadata.get("stem") or "",
             )
             for hit in hits
         ]
