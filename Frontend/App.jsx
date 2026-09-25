@@ -971,15 +971,28 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
 
-      {/* Decorative corner accents */}
-      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
-      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+      {/* Decorative corner accents — bolder + more of them so the glass panels below have color to refract */}
+      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.35), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.35), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
+      <div style={{ position: "absolute", top: "30%", right: "8%", width: 220, height: 220, background: "radial-gradient(circle, rgba(94, 234, 212, 0.25), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
 
-      {/* Theme + language toggles */}
+      {/* Theme + language toggles — frosted glass pills */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
-        <LangToggle lang={lang} setLang={setLang} style={{ border: "2px solid var(--primary)", background: "var(--card)" }} />
+        <LangToggle lang={lang} setLang={setLang} style={{
+          border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.65)",
+          background: dark ? "rgba(30,32,60,0.45)" : "rgba(255,255,255,0.45)",
+          backdropFilter: "blur(18px) saturate(180%)", WebkitBackdropFilter: "blur(18px) saturate(180%)",
+          boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 4px 20px rgba(31,38,135,0.12)",
+        }} />
         <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "2px solid var(--primary)", background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
+          style={{
+            position: "static", width: 44, height: 44, borderRadius: 14, color: "var(--ink)", display: "grid", placeItems: "center",
+            transition: "background-color .15s ease, transform .12s ease",
+            border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.65)",
+            background: dark ? "rgba(30,32,60,0.45)" : "rgba(255,255,255,0.45)",
+            backdropFilter: "blur(18px) saturate(180%)", WebkitBackdropFilter: "blur(18px) saturate(180%)",
+            boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 4px 20px rgba(31,38,135,0.12)",
+          }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
@@ -990,32 +1003,55 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
         {/* Top spacing */}
         <div style={{ height: "32px" }}></div>
 
-        {/* Content Section — text/buttons kept at a comfortable reading width */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", width: "100%", maxWidth: "480px" }}>
+        {/* Content Section — a frosted glass panel floating over the gradient, iOS-style */}
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+          width: "100%", maxWidth: "480px", padding: "40px 32px", borderRadius: "32px",
+          background: dark ? "rgba(20, 21, 44, 0.4)" : "rgba(255, 255, 255, 0.4)",
+          backdropFilter: "blur(28px) saturate(180%)", WebkitBackdropFilter: "blur(28px) saturate(180%)",
+          border: dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,255,255,0.6)",
+          boxShadow: dark
+            ? "0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)"
+            : "0 8px 32px rgba(31,38,135,0.12), inset 0 1px 0 rgba(255,255,255,0.6)",
+        }}>
           {/* Heading */}
           <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
             {t(lang, "welcomeHeading")} <span style={{ color: "var(--primary)" }}>{t(lang, "welcomeBrand")}</span>
           </h1>
-          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
+          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "40px", lineHeight: "1.6", maxWidth: "100%" }}>
             {t(lang, "welcomeSubtitle")}
           </p>
 
           {/* Buttons */}
-          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "48px" }}>
+          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <button
               onClick={onCreate}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
-              style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
-              onMouseEnter={(e) => e.target.style.background = "var(--primary-soft)"}
-              onMouseLeave={(e) => e.target.style.background = "transparent"}
+              style={{
+                width: "100%", padding: "14px 16px", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px",
+                cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)",
+                border: dark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(255,255,255,0.8)",
+                background: dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)",
+                backdropFilter: "blur(14px) saturate(160%)", WebkitBackdropFilter: "blur(14px) saturate(160%)",
+                boxShadow: "0 2px 10px rgba(31,38,135,0.08), inset 0 1px 0 rgba(255,255,255,0.4)",
+              }}
+              onMouseEnter={(e) => e.target.style.background = dark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.75)"}
+              onMouseLeave={(e) => e.target.style.background = dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)"}
             >
               {t(lang, "createAccount")}
             </button>
             <button
               onClick={onLogin}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
-              style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
-              onMouseEnter={(e) => e.target.style.filter = "brightness(0.9)"}
+              style={{
+                width: "100%", padding: "14px 16px", color: "white", fontWeight: "600", borderRadius: "9999px",
+                cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)",
+                background: "linear-gradient(180deg, rgba(90,89,201,0.95), rgba(64,63,176,0.92))",
+                backdropFilter: "blur(14px) saturate(160%)", WebkitBackdropFilter: "blur(14px) saturate(160%)",
+                border: "1px solid rgba(255,255,255,0.3)",
+                boxShadow: "0 4px 16px rgba(55,48,163,0.35), inset 0 1px 0 rgba(255,255,255,0.35)",
+              }}
+              onMouseEnter={(e) => e.target.style.filter = "brightness(0.95)"}
               onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
             >
               {t(lang, "login")}
