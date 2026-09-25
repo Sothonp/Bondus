@@ -752,7 +752,7 @@ function LangToggle({ lang, setLang, style }) {
     <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
       style={{
         height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--line)",
-        background: "var(--bg-soft)", color: "var(--ink)", display: "grid", placeItems: "center",
+        background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center",
         fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color .15s ease, transform .12s ease",
         ...style,
       }}
@@ -4811,7 +4811,7 @@ export default function App() {
               </div>
               <div className="flex items-center gap-2 ml-auto">
                 <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />
-                <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus eai-soft grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)" }}>
+                <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
                 <div className="grid place-items-center rounded-full text-sm font-bold text-white" style={{ width: 38, height: 38, background: "var(--primary)" }}>{initials}</div>
