@@ -965,7 +965,8 @@ function BondusLogo() {
    any other value is a lucide icon component rendered on a soft primary circle instead. */
 const INTRO_STEPS = [
   { eyebrowKey: "welcomeHeading", titleKey: "welcomeBrand", icon: "logo", headlineKey: "welcomeSubtitle", subtextKey: null, ctaKey: "getStarted" },
-  { eyebrowKey: "welcomeBrand", titleKey: "studyEffectively", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: null },
+  { eyebrowKey: "welcomeBrand", titleKey: "studyEffectively", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: null, ctaKey: "next" },
+  { eyebrowKey: "introTrackEyebrow", titleKey: "introTrackTitle", icon: BarChart3, headlineKey: "introTrackHeadline", subtextKey: null },
 ];
 
 /* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
@@ -4390,8 +4391,10 @@ const NAV = [
 const STRINGS = {
   en: {
     // Intro splash
-    getStarted: "Get started", studyEffectively: "Study Effectively",
+    getStarted: "Get started", studyEffectively: "Study Effectively", next: "Next",
     introCollabHeadline: "Access notes and materials instantly.",
+    introTrackEyebrow: "Personalized", introTrackTitle: "Track Your Progress",
+    introTrackHeadline: "See exactly what to study next.",
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
@@ -4512,8 +4515,10 @@ const STRINGS = {
   },
   km: {
     // Intro splash
-    getStarted: "ចាប់ផ្តើម", studyEffectively: "សិក្សាប្រកបដោយប្រសិទ្ធភាព",
+    getStarted: "ចាប់ផ្តើម", studyEffectively: "សិក្សាប្រកបដោយប្រសិទ្ធភាព", next: "បន្ទាប់",
     introCollabHeadline: "ចូលប្រើកំណត់ត្រា និងឯកសារភ្លាមៗ។",
+    introTrackEyebrow: "ផ្ទាល់ខ្លួន", introTrackTitle: "តាមដានវឌ្ឍនភាពរបស់អ្នក",
+    introTrackHeadline: "មើលច្បាស់ថាត្រូវរៀនអ្វីបន្ទាប់។",
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
