@@ -966,7 +966,8 @@ function BondusLogo() {
 const INTRO_STEPS = [
   { eyebrowKey: "welcomeHeading", titleKey: "welcomeBrand", icon: "logo", headlineKey: "welcomeSubtitle", subtextKey: null, ctaKey: "getStarted" },
   { eyebrowKey: "welcomeBrand", titleKey: "studyEffectively", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: null, ctaKey: "next" },
-  { eyebrowKey: "introTrackEyebrow", titleKey: "introTrackTitle", icon: BarChart3, headlineKey: "introTrackHeadline", subtextKey: null },
+  { eyebrowKey: "introTrackEyebrow", titleKey: "introTrackTitle", icon: BarChart3, headlineKey: "introTrackHeadline", subtextKey: null, ctaKey: "next" },
+  { eyebrowKey: "introCoachEyebrow", titleKey: "introCoachTitle", icon: Sparkles, headlineKey: "introCoachHeadline", subtextKey: null },
 ];
 
 /* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
@@ -4395,6 +4396,8 @@ const STRINGS = {
     introCollabHeadline: "Access notes and materials instantly.",
     introTrackEyebrow: "Personalized", introTrackTitle: "Track Your Progress",
     introTrackHeadline: "See exactly what to study next.",
+    introCoachEyebrow: "AI-Powered", introCoachTitle: "Meet Your AI Coach",
+    introCoachHeadline: "Get instant help, anytime you're stuck.",
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
@@ -4519,6 +4522,8 @@ const STRINGS = {
     introCollabHeadline: "ចូលប្រើកំណត់ត្រា និងឯកសារភ្លាមៗ។",
     introTrackEyebrow: "ផ្ទាល់ខ្លួន", introTrackTitle: "តាមដានវឌ្ឍនភាពរបស់អ្នក",
     introTrackHeadline: "មើលច្បាស់ថាត្រូវរៀនអ្វីបន្ទាប់។",
+    introCoachEyebrow: "ដំណើរការដោយ AI", introCoachTitle: "ជួបគ្រូបង្វឹក AI របស់អ្នក",
+    introCoachHeadline: "ទទួលបានជំនួយភ្លាមៗ នៅពេលអ្នកជាប់គាំង។",
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
