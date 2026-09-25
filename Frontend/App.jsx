@@ -951,19 +951,6 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
    that data in place so it can be recovered here later. */
 
-function BondusCharacter() {
-  return (
-    <img
-      src="/logos/Bondus_mascout_nobg.png"
-      alt="BONDUS mascot - friendly owl reading a book"
-      style={{ width: "100%", height: "auto", display: "block" }}
-      onError={(e) => {
-        e.target.style.display = "none";
-      }}
-    />
-  );
-}
-
 function BondusLogo() {
   return (
     <img
@@ -978,17 +965,17 @@ function BondusLogo() {
    any other value is a lucide icon component rendered on a soft primary circle instead. */
 const INTRO_STEPS = [
   { eyebrowKey: "welcomeHeading", titleKey: "welcomeBrand", icon: "logo", headlineKey: "welcomeSubtitle", subtextKey: null, ctaKey: "getStarted" },
-  { eyebrowKey: "introCollabEyebrow", titleKey: "introCollabTitle", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: "introCollabSubtext", ctaKey: "next" },
+  { eyebrowKey: "introCollabEyebrow", titleKey: "introCollabTitle", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: "introCollabSubtext" },
 ];
 
 /* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
-   carousel (à la a typical school-app intro) that hands off to Welcome (Create account /
-   Login) once the last slide's CTA is pressed. */
-function Intro({ dark, setDark, lang, setLang, onNext }) {
+   carousel (à la a typical school-app intro). The last slide swaps its CTA for the same
+   Create account / Login choice the old standalone Welcome screen used to show. */
+function Intro({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   const [step, setStep] = useState(0);
   const s = INTRO_STEPS[step];
   const isLast = step === INTRO_STEPS.length - 1;
-  const advance = () => (isLast ? onNext() : setStep((v) => v + 1));
+  const advance = () => setStep((v) => v + 1);
 
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{
@@ -1054,96 +1041,19 @@ function Intro({ dark, setDark, lang, setLang, onNext }) {
         </div>
       </div>
 
-      {/* Bottom: CTA — pinned to the bottom edge by the root's justify-content:space-between. */}
-      <div style={{ width: "100%", maxWidth: 420, margin: "0 auto", flexShrink: 0 }}>
-        <button
-          onClick={advance}
-          className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
-          style={{
-            width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
-            borderRadius: "9999px", border: "none", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
-          }}
-        >
-          {t(lang, s.ctaKey)} <ChevronRight size={18} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
-  return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
-      <style>{STYLES}</style>
-
-      {/* Decorative corner accents — bolder + more of them so the glass panels below have color to refract */}
-      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.35), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
-      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.35), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
-      <div style={{ position: "absolute", top: "30%", right: "8%", width: 220, height: 220, background: "radial-gradient(circle, rgba(94, 234, 212, 0.25), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
-
-      {/* Theme + language toggles — frosted glass pills */}
-      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
-        <LangToggle lang={lang} setLang={setLang} className="eai-glass-pill" style={{
-          border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.65)",
-          background: dark ? "rgba(30,32,60,0.45)" : "rgba(255,255,255,0.45)",
-          backdropFilter: "blur(18px) saturate(180%)", WebkitBackdropFilter: "blur(18px) saturate(180%)",
-          boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 4px 20px rgba(31,38,135,0.12)",
-        }} />
-        <button onClick={() => setDark((d) => !d)} className="eai-focus eai-glass-pill" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{
-            position: "static", width: 44, height: 44, borderRadius: 14, color: "var(--ink)", display: "grid", placeItems: "center",
-            transition: "background-color .15s ease, transform .12s ease",
-            border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.65)",
-            background: dark ? "rgba(30,32,60,0.45)" : "rgba(255,255,255,0.45)",
-            backdropFilter: "blur(18px) saturate(180%)", WebkitBackdropFilter: "blur(18px) saturate(180%)",
-            boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 4px 20px rgba(31,38,135,0.12)",
-          }}>
-          {dark ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-      </div>
-
-      {/* Responsive Welcome Content */}
-      <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
-
-        {/* Top spacing */}
-        <div style={{ height: "32px" }}></div>
-
-        {/* Content Section — a frosted glass panel floating over the gradient, iOS-style */}
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
-          width: "100%", maxWidth: "480px", padding: "40px 32px", borderRadius: "32px",
-          background: dark ? "rgba(20, 21, 44, 0.4)" : "rgba(255, 255, 255, 0.4)",
-          backdropFilter: "blur(28px) saturate(180%)", WebkitBackdropFilter: "blur(28px) saturate(180%)",
-          border: dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,255,255,0.6)",
-          boxShadow: dark
-            ? "0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)"
-            : "0 8px 32px rgba(31,38,135,0.12), inset 0 1px 0 rgba(255,255,255,0.6)",
-        }}>
-          {/* Heading */}
-          <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
-            {t(lang, "welcomeHeading")} <span style={{ color: "var(--primary)" }}>{t(lang, "welcomeBrand")}</span>
-          </h1>
-          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "40px", lineHeight: "1.6", maxWidth: "100%" }}>
-            {t(lang, "welcomeSubtitle")}
-          </p>
-
-          {/* Buttons */}
-          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px" }}>
+      {/* Bottom: CTA — pinned to the bottom edge by the root's justify-content:space-between.
+          The last slide swaps the single "Next" button for Create account / Login, same as the
+          old Welcome screen, just styled to match this carousel. */}
+      <div style={{ width: "100%", maxWidth: 420, margin: "0 auto", flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        {isLast ? (
+          <>
             <button
               onClick={onCreate}
               className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
               style={{
-                width: "100%", padding: "14px 16px", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px",
-                cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)",
-                border: dark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(255,255,255,0.8)",
-                background: dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)",
-                backdropFilter: "blur(14px) saturate(160%)", WebkitBackdropFilter: "blur(14px) saturate(160%)",
-                boxShadow: "0 2px 10px rgba(31,38,135,0.08), inset 0 1px 0 rgba(255,255,255,0.4)",
+                width: "100%", padding: "16px 16px", color: "var(--primary)", fontWeight: 700, borderRadius: "9999px",
+                border: "2px solid var(--primary)", background: "transparent", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
               }}
-              onMouseEnter={(e) => e.target.style.background = dark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.75)"}
-              onMouseLeave={(e) => e.target.style.background = dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)"}
             >
               {t(lang, "createAccount")}
             </button>
@@ -1151,27 +1061,28 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
               onClick={onLogin}
               className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
               style={{
-                width: "100%", padding: "14px 16px", color: "white", fontWeight: "600", borderRadius: "9999px",
-                cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)",
-                background: "linear-gradient(180deg, rgba(90,89,201,0.95), rgba(64,63,176,0.92))",
-                backdropFilter: "blur(14px) saturate(160%)", WebkitBackdropFilter: "blur(14px) saturate(160%)",
-                border: "1px solid rgba(255,255,255,0.3)",
-                boxShadow: "0 4px 16px rgba(55,48,163,0.35), inset 0 1px 0 rgba(255,255,255,0.35)",
+                width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
+                borderRadius: "9999px", border: "none", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
+                boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
               }}
-              onMouseEnter={(e) => e.target.style.filter = "brightness(0.95)"}
-              onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
             >
               {t(lang, "login")}
             </button>
-          </div>
-        </div>
-
-        {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flex: 1, marginTop: "24px" }}>
-          <div style={{ width: "clamp(220px, 28vw, 420px)", maxWidth: "90vw" }}>
-            <BondusCharacter />
-          </div>
-        </div>
+          </>
+        ) : (
+          <button
+            onClick={advance}
+            className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
+            style={{
+              width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
+              borderRadius: "9999px", border: "none", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
+            }}
+          >
+            {t(lang, s.ctaKey)} <ChevronRight size={18} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -4479,7 +4390,7 @@ const NAV = [
 const STRINGS = {
   en: {
     // Intro splash
-    getStarted: "Get started", next: "Next",
+    getStarted: "Get started",
     introCollabEyebrow: "Collaborate", introCollabTitle: "Share & Learn Together",
     introCollabHeadline: "Access notes and materials instantly.",
     introCollabSubtext: "Connect with peers, exchange study resources, and find everything you need in one unified hub.",
@@ -4603,7 +4514,7 @@ const STRINGS = {
   },
   km: {
     // Intro splash
-    getStarted: "ចាប់ផ្តើម", next: "បន្ទាប់",
+    getStarted: "ចាប់ផ្តើម",
     introCollabEyebrow: "សហការគ្នា", introCollabTitle: "ចែករំលែក និងរៀនសូត្រជាមួយគ្នា",
     introCollabHeadline: "ចូលប្រើកំណត់ត្រា និងឯកសារភ្លាមៗ។",
     introCollabSubtext: "ភ្ជាប់ទំនាក់ទំនងជាមួយមិត្តរួមថ្នាក់ ដោះដូរធនធានសិក្សា និងស្វែងរកអ្វីៗគ្រប់យ៉ាងនៅកន្លែងតែមួយ។",
@@ -4755,7 +4666,7 @@ export default function App() {
   const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
   const [showWelcomeBack, setShowWelcomeBack] = useState(isReturningUser);
   const [profile, setProfile] = useState(saved?.profile ?? null);
-  const [entry, setEntry] = useState("intro"); // "intro" | "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
+  const [entry, setEntry] = useState("intro"); // "intro" | "login" | "create" — which pre-account screen to show when there's no active profile yet
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
@@ -4789,7 +4700,7 @@ export default function App() {
   // can restore the same account later by matching the phone number used at signup.
   const handleLogout = () => {
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
+    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("intro");
   };
 
   // Matches a phone number against whatever's currently saved in this browser. Returns true/false
@@ -4889,10 +4800,9 @@ export default function App() {
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
-  if (!profile && entry === "intro") return <Intro dark={dark} setDark={setDark} lang={lang} setLang={setLang} onNext={() => setEntry("welcome")} />;
-  if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
+  if (!profile && entry === "intro") return <Intro dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
+  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("intro")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
+  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("intro")} lang={lang} setLang={setLang} />;
   if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} />;
   if (takingLangTest) return (
     <IeltsDiagnostic
