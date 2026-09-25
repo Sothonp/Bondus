@@ -4679,7 +4679,7 @@ export default function App() {
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [tab, setTab] = useState("dashboard");
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
