@@ -4318,11 +4318,11 @@ function SuperBondus({ lang = "en" }) {
 
 /* ════════════════════════ Shell ════════════════════════ */
 const NAV = [
+  { id: "dashboard", label: "Dashboard", labelKm: "ផ្ទាំងគ្រប់គ្រង", icon: LayoutDashboard },
   { id: "browse", label: "Browse exams", labelKm: "រកមើលកម្រងសំណួរ", icon: BookOpen },
   { id: "practice", label: "Practice", labelKm: "លំហាត់អនុវត្ត", icon: Target },
   { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
-  { id: "dashboard", label: "Dashboard", labelKm: "ផ្ទាំងគ្រប់គ្រង", icon: LayoutDashboard },
   { id: "languages", label: "Languages", labelKm: "ភាសាបរទេស", icon: Globe },
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
