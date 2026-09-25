@@ -3868,6 +3868,17 @@ function Coach({ p }) {
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // A public deployment runs with ALLOW_WRITES=false, where /api/ingest is a 403.
+  // Ask once, so the library upload is hidden rather than failing when tapped.
+  // Photos are a query, not a write, and stay available either way.
+  const [canAddDocs, setCanAddDocs] = useState(false);
+  useEffect(() => {
+    let live = true;
+    ragFetch("/health")
+      .then((h) => live && setCanAddDocs(h.writes_enabled !== false))
+      .catch(() => {});   // unreachable: the first question reports it properly
+    return () => { live = false; };
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [lightbox, setLightbox] = useState(null);
@@ -3950,7 +3961,7 @@ function Coach({ p }) {
     const files = [...(fileList || [])];
     if (!files.length || !active.canUpload) return;
     const images = files.filter(isImageFile);
-    const docs = files.filter((f) => !isImageFile(f));
+    const docs = canAddDocs ? files.filter((f) => !isImageFile(f)) : [];
     if (images.length) addImages(images);
     if (docs.length) uploadDocs(docs);
   };
@@ -4146,10 +4157,12 @@ function Coach({ p }) {
                         <ImagePlus size={17} />
                         <span><span className="block font-medium">Add photos</span><span className="block text-xs eai-muted">Ask about a problem (up to {COACH_MAX_IMAGES})</span></span>
                       </button>
-                      <button role="menuitem" onClick={() => { setMenuOpen(false); docRef.current?.click(); }} disabled={uploading}>
-                        <FileUp size={17} />
-                        <span><span className="block font-medium">Add to study library</span><span className="block text-xs eai-muted">PDF, notes or scans the coach can search</span></span>
-                      </button>
+                      {canAddDocs && (
+                        <button role="menuitem" onClick={() => { setMenuOpen(false); docRef.current?.click(); }} disabled={uploading}>
+                          <FileUp size={17} />
+                          <span><span className="block font-medium">Add to study library</span><span className="block text-xs eai-muted">PDF, notes or scans the coach can search</span></span>
+                        </button>
+                      )}
                     </div>
                   )}
                   <input ref={photoRef} type="file" accept="image/*" multiple hidden
@@ -4170,7 +4183,7 @@ function Coach({ p }) {
         <p className="eai-footnote">AI Coach can make mistakes. Double-check important steps.</p>
       </div>
 
-      {dragging && <div className="eai-drop"><div className="flex items-center gap-2 font-semibold"><ImagePlus size={20} /> Drop photos to ask about them, or documents to add to your library</div></div>}
+      {dragging && <div className="eai-drop"><div className="flex items-center gap-2 font-semibold"><ImagePlus size={20} /> {canAddDocs ? "Drop photos to ask about them, or documents to add to your library" : "Drop photos to ask about them"}</div></div>}
       {lightbox && (
         <div className="eai-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label="Photo preview">
           <img src={lightbox} alt="Attached photo" />

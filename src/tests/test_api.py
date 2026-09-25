@@ -152,3 +152,60 @@ class TestProviderRequests:
         request = self._built(getattr(api, name), base_url="https://example.invalid/v1")
         assert request["model"] == "some-model"
         assert "reasoning_effort" not in request, "that parameter is Groq's"
+
+
+class TestReadOnlyServer:
+    """ALLOW_WRITES=false is what a public deployment runs with: the index every
+    student searches is built where the corpus is, not through the open API."""
+
+    @staticmethod
+    def _client(store_path, *, allow_writes: bool) -> TestClient:
+        settings = Settings(
+            _env_file=None,
+            embedding_backend="hashing",
+            llm_provider="none",
+            vector_store_path=store_path,
+            allow_writes=allow_writes,
+        )
+        return TestClient(create_app(settings, generator=ScriptedGenerator(["ok"])))
+
+    def test_ingest_is_refused(self, store_path):
+        client = self._client(store_path, allow_writes=False)
+        response = client.post(
+            "/api/ingest", files={"file": ("notes.md", b"# Notes\n\nSome text.", "text/markdown")}
+        )
+        assert response.status_code == 403
+        assert "read-only" in response.json()["detail"]
+
+    def test_pasted_text_is_refused_too(self, store_path):
+        client = self._client(store_path, allow_writes=False)
+        response = client.post(
+            "/api/ingest/text", json={"text": "Some text.", "source_name": "notes.md"}
+        )
+        assert response.status_code == 403
+
+    def test_deleting_a_document_is_refused(self, store_path):
+        client = self._client(store_path, allow_writes=False)
+        assert client.delete("/api/documents/anything.pdf").status_code == 403
+
+    def test_reading_still_works(self, store_path):
+        """The refusal is about changing the index, not about using it."""
+        with self._client(store_path, allow_writes=False) as c:
+            assert c.get("/api/documents").status_code == 200
+            health = c.get("/health")
+            assert health.status_code == 200
+            assert health.json()["writes_enabled"] is False
+
+    def test_answering_still_works(self, store_path):
+        """A student asking a question must not be caught by the write lock."""
+        with self._client(store_path, allow_writes=False) as c:
+            assert c.post("/api/query", json={"prompt": "តើលីមីតជាអ្វី?"}).status_code == 200
+
+    def test_writes_are_allowed_by_default(self, store_path):
+        """Local development, and the machine that builds the index, keep both."""
+        with self._client(store_path, allow_writes=True) as c:
+            response = c.post(
+                "/api/ingest", files={"file": ("notes.md", b"# Notes\n\nSome text.", "text/markdown")}
+            )
+            assert response.status_code == 200, response.text
+            assert c.get("/health").json()["writes_enabled"] is True

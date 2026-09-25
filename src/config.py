@@ -44,6 +44,12 @@ class Settings(BaseSettings):
         "http://localhost:8000,http://127.0.0.1:8000"
     )
     max_upload_mb: int = Field(25, ge=1, le=500)
+    # Ingesting and deleting documents change the one index every student
+    # searches, and the API has no accounts to tell them apart -- so on a public
+    # deployment anyone who finds the URL could add passages to everyone's
+    # answers, or delete the curriculum. Set ALLOW_WRITES=false there and build
+    # the index locally, where this stays true.
+    allow_writes: bool = True
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
@@ -190,6 +196,23 @@ class Settings(BaseSettings):
     frontend_dist_dir: Path = PROJECT_ROOT / "dist"
 
     # --- Ingestion ---
+    # A chunk cut from the middle of an exercise carries that exercise's
+    # opening statement (see ingestion.chunk.attach_stems). The model is always
+    # shown it, which costs retrieval nothing. Repeating it in the *embedded*
+    # text is a trade-off, measured on this corpus at recall@5 over 130
+    # continuation chunks:
+    #
+    #   chars |  question names the function  |  question gives only the task
+    #       0 |             32.3%             |            73.8%
+    #      80 |             46.9%             |            56.9%
+    #     200 |             62.3%             |            47.7%
+    #
+    # Longer helps a student who states the problem ("for f(x)=..., study the
+    # variation") and hurts one who asks the task alone -- though for that
+    # second kind any exercise on the topic is a fine answer, which the measure
+    # above does not credit. 0 keeps retrieval exactly as it was; raise it if
+    # your students tend to paste the whole question.
+    stem_embedding_chars: int = Field(0, ge=0, le=500)
     chunk_size: int = Field(500, ge=50, le=20000)
     chunk_overlap: int = Field(50, ge=0)
     khmer_segmenter: KhmerSegmenterBackend = "auto"
