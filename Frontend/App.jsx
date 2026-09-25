@@ -974,10 +974,22 @@ function BondusLogo() {
   );
 }
 
-/* First screen a new visitor ever sees — a white splash intro with purple accents (à la a
-   typical school-app onboarding slide) that hands off to Welcome (Create account / Login)
-   on "Get started". */
+/* Each slide of the onboarding intro carousel. `icon: "logo"` renders the BONDUS mark image;
+   any other value is a lucide icon component rendered on a soft primary circle instead. */
+const INTRO_STEPS = [
+  { eyebrowKey: "welcomeHeading", titleKey: "welcomeBrand", icon: "logo", headlineKey: "welcomeSubtitle", subtextKey: null, ctaKey: "getStarted" },
+  { eyebrowKey: "introCollabEyebrow", titleKey: "introCollabTitle", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: "introCollabSubtext", ctaKey: "next" },
+];
+
+/* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
+   carousel (à la a typical school-app intro) that hands off to Welcome (Create account /
+   Login) once the last slide's CTA is pressed. */
 function Intro({ dark, setDark, lang, setLang, onNext }) {
+  const [step, setStep] = useState(0);
+  const s = INTRO_STEPS[step];
+  const isLast = step === INTRO_STEPS.length - 1;
+  const advance = () => (isLast ? onNext() : setStep((v) => v + 1));
+
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{
       display: "flex", flexDirection: "column", justifyContent: "space-between",
@@ -1003,32 +1015,49 @@ function Intro({ dark, setDark, lang, setLang, onNext }) {
       }}>
         <div>
           <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: lang === "km" ? "none" : "uppercase", color: "var(--primary)", marginBottom: 6 }}>
-            {t(lang, "welcomeHeading")}
+            {t(lang, s.eyebrowKey)}
           </p>
           <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(30px, 6vw, 40px)", fontWeight: 800, color: "var(--ink)", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
-            {t(lang, "welcomeBrand")}
+            {t(lang, s.titleKey)}
           </h1>
         </div>
 
-        <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-          <img src="/logos/BONDUS%20(2).png" alt="BONDUS" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {s.icon === "logo" ? (
+          <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+            <img src="/logos/BONDUS%20(2).png" alt="BONDUS" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
+        ) : (
+          <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", background: "var(--primary-soft)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <s.icon size={84} style={{ width: "42%", height: "42%", color: "var(--primary)", opacity: 0.6 }} />
+          </div>
+        )}
+
+        <div>
+          <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)" }}>
+            {t(lang, s.headlineKey)}
+          </h2>
+          {s.subtextKey && (
+            <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6, marginTop: 10 }}>
+              {t(lang, s.subtextKey)}
+            </p>
+          )}
         </div>
 
-        <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)" }}>
-          {t(lang, "welcomeSubtitle")}
-        </h2>
-
         <div style={{ display: "flex", gap: 6 }}>
-          <span style={{ width: 22, height: 8, borderRadius: 999, background: "var(--primary)" }} />
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--line)" }} />
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--line)" }} />
+          {INTRO_STEPS.map((_, i) => (
+            <span key={i} style={{
+              width: i === step ? 22 : 8, height: 8, borderRadius: 999,
+              background: i === step ? "var(--primary)" : "var(--line)",
+              transition: "width .2s ease, background-color .2s ease",
+            }} />
+          ))}
         </div>
       </div>
 
       {/* Bottom: CTA — pinned to the bottom edge by the root's justify-content:space-between. */}
       <div style={{ width: "100%", maxWidth: 420, margin: "0 auto", flexShrink: 0 }}>
         <button
-          onClick={onNext}
+          onClick={advance}
           className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
           style={{
             width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
@@ -1037,7 +1066,7 @@ function Intro({ dark, setDark, lang, setLang, onNext }) {
             boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
           }}
         >
-          {t(lang, "getStarted")} <ChevronRight size={18} />
+          {t(lang, s.ctaKey)} <ChevronRight size={18} />
         </button>
       </div>
     </div>
@@ -4450,7 +4479,10 @@ const NAV = [
 const STRINGS = {
   en: {
     // Intro splash
-    getStarted: "Get started",
+    getStarted: "Get started", next: "Next",
+    introCollabEyebrow: "Collaborate", introCollabTitle: "Share & Learn Together",
+    introCollabHeadline: "Access notes and materials instantly.",
+    introCollabSubtext: "Connect with peers, exchange study resources, and find everything you need in one unified hub.",
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
@@ -4571,7 +4603,10 @@ const STRINGS = {
   },
   km: {
     // Intro splash
-    getStarted: "ចាប់ផ្តើម",
+    getStarted: "ចាប់ផ្តើម", next: "បន្ទាប់",
+    introCollabEyebrow: "សហការគ្នា", introCollabTitle: "ចែករំលែក និងរៀនសូត្រជាមួយគ្នា",
+    introCollabHeadline: "ចូលប្រើកំណត់ត្រា និងឯកសារភ្លាមៗ។",
+    introCollabSubtext: "ភ្ជាប់ទំនាក់ទំនងជាមួយមិត្តរួមថ្នាក់ ដោះដូរធនធានសិក្សា និងស្វែងរកអ្វីៗគ្រប់យ៉ាងនៅកន្លែងតែមួយ។",
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
