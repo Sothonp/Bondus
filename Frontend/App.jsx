@@ -974,6 +974,68 @@ function BondusLogo() {
   );
 }
 
+/* First screen a new visitor ever sees — a white splash intro with purple accents (à la a
+   typical school-app onboarding slide) that hands off to Welcome (Create account / Login)
+   on "Get started". */
+function Intro({ dark, setDark, lang, setLang, onNext }) {
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{
+      minHeight: "100vh", background: "var(--bg)",
+      display: "flex", flexDirection: "column", alignItems: "center", position: "relative", overflow: "hidden",
+    }}>
+      <style>{STYLES}</style>
+
+      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
+        <LangToggle lang={lang} setLang={setLang} className="eai-glass-pill" style={{ border: "1px solid var(--line)", background: "var(--card)" }} />
+        <button onClick={() => setDark((d) => !d)} className="eai-focus eai-glass-pill" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          style={{ width: 44, height: 44, borderRadius: 14, color: "var(--ink)", display: "grid", placeItems: "center", border: "1px solid var(--line)", background: "var(--card)" }}>
+          {dark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
+
+      <div style={{ width: "100%", maxWidth: 420, padding: "96px 28px 0", position: "relative", zIndex: 1 }}>
+        <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: lang === "km" ? "none" : "uppercase", color: "var(--primary)", marginBottom: 6 }}>
+          {t(lang, "welcomeHeading")}
+        </p>
+        <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(30px, 6vw, 40px)", fontWeight: 800, color: "var(--ink)", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
+          {t(lang, "welcomeBrand")}
+        </h1>
+      </div>
+
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+        <div style={{ width: 200, height: 200, borderRadius: "50%", background: "var(--primary-soft)", display: "grid", placeItems: "center" }}>
+          <GraduationCap size={96} style={{ color: "var(--primary)", opacity: 0.55 }} />
+        </div>
+      </div>
+
+      <div style={{ width: "100%", maxWidth: 420, padding: "0 28px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: 24, position: "relative", zIndex: 1 }}>
+        <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
+          {t(lang, "welcomeSubtitle")}
+        </h2>
+
+        <div style={{ display: "flex", gap: 6 }}>
+          <span style={{ width: 22, height: 8, borderRadius: 999, background: "var(--primary)" }} />
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--line)" }} />
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--line)" }} />
+        </div>
+
+        <button
+          onClick={onNext}
+          className={`eai-focus eai-glass-lift ${lang === "km" ? "eai-km" : ""}`}
+          style={{
+            width: "100%", padding: "16px 16px", background: "var(--primary)", color: "#fff", fontWeight: 700,
+            borderRadius: "9999px", border: "none", cursor: "pointer", fontSize: "clamp(14px, 1.5vw, 16px)",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: "0 8px 24px rgba(55,48,163,0.3)",
+          }}
+        >
+          {t(lang, "getStarted")} <ChevronRight size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
@@ -4379,6 +4441,8 @@ const NAV = [
    breaks rendering. */
 const STRINGS = {
   en: {
+    // Intro splash
+    getStarted: "Get started",
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
@@ -4498,6 +4562,8 @@ const STRINGS = {
     goToDashboard: "Go to my dashboard",
   },
   km: {
+    // Intro splash
+    getStarted: "ចាប់ផ្តើម",
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
@@ -4646,7 +4712,7 @@ export default function App() {
   const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
   const [showWelcomeBack, setShowWelcomeBack] = useState(isReturningUser);
   const [profile, setProfile] = useState(saved?.profile ?? null);
-  const [entry, setEntry] = useState("welcome"); // "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
+  const [entry, setEntry] = useState("intro"); // "intro" | "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
@@ -4780,6 +4846,7 @@ export default function App() {
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
+  if (!profile && entry === "intro") return <Intro dark={dark} setDark={setDark} lang={lang} setLang={setLang} onNext={() => setEntry("welcome")} />;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
   if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
   if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
