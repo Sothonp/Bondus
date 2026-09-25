@@ -21,9 +21,11 @@ from src.ingestion import (
 from src.ingestion.chunk import RecursiveCharacterTextSplitter, chunk_text, restored_length
 from src.ingestion.extract import (
     ExtractionError,
+    HeadingTracker,
     UnsupportedFileTypeError,
     clean_markdown,
     extract_document,
+    split_markdown_sections,
 )
 from src.ingestion.khmer_segment import (
     ZWSP,
@@ -350,6 +352,29 @@ class TestChunking:
 # ---------------------------------------------------------------------------
 
 class TestExtraction:
+    def test_plain_exercise_and_sitting_lines_open_headings(self):
+        tracker = HeadingTracker()
+        page_one = (
+            "### VI. (២០ពិន្ទុ)\nគេមានអនុគមន៍ $f(x)=x^2$ ។\n"
+            "សម័យប្រឡង៖ ២០ សីហា ២០១៨ លេខទំនាក់ទំនង៖០១៥៤៣៩៧៩០\n"
+            "I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។\n"
+            "១.គណនា $P(A)$ ។\n"
+        )
+        page_two = "ក. រកប្រូបាប។\nII. (១៥ពិន្ទុ) គេឲ្យ $Z = 1+i$ ។\n"
+        sections = split_markdown_sections(page_one, tracker, 1) + split_markdown_sections(
+            page_two, tracker, 2
+        )
+        assert [(s.page, s.heading, s.starts_heading) for s in sections] == [
+            (1, "VI. (២០ពិន្ទុ)", True),
+            (1, "សម័យប្រឡង៖ ២០ សីហា ២០១៨", True),
+            (1, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។", True),
+            (2, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។", False),
+            (2, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › II. (១៥ពិន្ទុ) គេឲ្យ $Z = 1+i$ ។", True),
+        ]
+        # Numbered parts stay inside their exercise, and inside a fence nothing is a heading.
+        fenced = split_markdown_sections("```\nIII. (៥ពិន្ទុ)\n```", HeadingTracker())
+        assert [s.starts_heading for s in fenced] == [False]
+
     def test_clean_markdown_keeps_latex_intact(self):
         markdown = (
             "---\ntitle: Notes\n---\n# លីមីត\n\n"
