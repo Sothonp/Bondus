@@ -1010,8 +1010,8 @@ function Intro({ dark, setDark, lang, setLang, onNext }) {
           </h1>
         </div>
 
-        <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", background: "var(--primary-soft)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-          <GraduationCap size={96} style={{ width: "48%", height: "48%", color: "var(--primary)", opacity: 0.55 }} />
+        <div style={{ width: 200, height: 200, maxWidth: "50vw", maxHeight: "50vw", borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+          <img src="/logos/BONDUS%20(2).png" alt="BONDUS" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
 
         <h2 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 700, color: "var(--ink)" }}>
