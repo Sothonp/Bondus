@@ -965,7 +965,7 @@ function BondusLogo() {
    any other value is a lucide icon component rendered on a soft primary circle instead. */
 const INTRO_STEPS = [
   { eyebrowKey: "welcomeHeading", titleKey: "welcomeBrand", icon: "logo", headlineKey: "welcomeSubtitle", subtextKey: null, ctaKey: "getStarted" },
-  { eyebrowKey: "introCollabEyebrow", titleKey: "introCollabTitle", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: null },
+  { eyebrowKey: "welcomeBrand", titleKey: "studyEffectively", icon: FileText, headlineKey: "introCollabHeadline", subtextKey: null },
 ];
 
 /* First screens a new visitor ever sees — a short white-with-purple-accents onboarding
@@ -4390,8 +4390,7 @@ const NAV = [
 const STRINGS = {
   en: {
     // Intro splash
-    getStarted: "Get started",
-    introCollabEyebrow: "Collaborate", introCollabTitle: "Share & Learn Together",
+    getStarted: "Get started", studyEffectively: "Study Effectively",
     introCollabHeadline: "Access notes and materials instantly.",
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
@@ -4513,8 +4512,7 @@ const STRINGS = {
   },
   km: {
     // Intro splash
-    getStarted: "ចាប់ផ្តើម",
-    introCollabEyebrow: "សហការគ្នា", introCollabTitle: "ចែករំលែក និងរៀនសូត្រជាមួយគ្នា",
+    getStarted: "ចាប់ផ្តើម", studyEffectively: "សិក្សាប្រកបដោយប្រសិទ្ធភាព",
     introCollabHeadline: "ចូលប្រើកំណត់ត្រា និងឯកសារភ្លាមៗ។",
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
