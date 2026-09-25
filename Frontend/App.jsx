@@ -337,7 +337,7 @@ const STYLES = `
 
 .theme-light{
   --bg:#FFFFFF; --bg-soft:#F1EADB; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
-  --line:#ECE3D3; --primary:#403FB0; --primary-soft:#ECECFB; --gold:#E29A30; --gold-soft:#FBEFD7;
+  --line:#ECE3D3; --primary:#1E293B; --primary-soft:#E7E9EE; --gold:#E29A30; --gold-soft:#FBEFD7;
   --ember:#D9543F; --ember-soft:#FAE2DB; --jade:#159A82; --jade-soft:#DBF1EC;
   --shadow:0 1px 2px rgba(26,27,58,.04), 0 10px 30px rgba(26,27,58,.07);
 }
