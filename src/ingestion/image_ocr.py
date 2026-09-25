@@ -132,6 +132,11 @@ class GroqVisionOCR(CachedPageOCR):
     """Transcribes an image with a Groq-hosted vision model (e.g. Qwen)."""
 
     engine: OCREngine = "groq"  # type: ignore[assignment]
+    label = "Groq vision"
+    _cache_prefix = "groq-vision"
+    # Groq takes the newer name; some OpenAI-compatible hosts know only max_tokens.
+    _token_param = "max_completion_tokens"
+    extra_body: dict | None = None
 
     def __init__(
         self,
@@ -171,7 +176,7 @@ class GroqVisionOCR(CachedPageOCR):
 
     def _cache_key(self, payload: PageImage) -> str:
         digest = hashlib.sha256()
-        parts = ["groq-vision", QUESTION_OCR_VERSION, self.model, payload.mime_type]
+        parts = [self._cache_prefix, QUESTION_OCR_VERSION, self.model, payload.mime_type]
         if self.prompt != QUESTION_OCR_PROMPT:
             # Page OCR asks for a different transcript of the same image
             # (headings, tables, the whole page), so it gets its own entries
@@ -190,7 +195,7 @@ class GroqVisionOCR(CachedPageOCR):
                 if attempt == self.max_retries or not _is_retryable(exc):
                     raise
                 delay = min(60.0, 2.0 ** (attempt + 1)) + random.uniform(0, 1)
-                logger.info("Groq vision busy; retrying in %.0fs (attempt %d)", delay, attempt + 1)
+                logger.info("%s busy; retrying in %.0fs (attempt %d)", self.label, delay, attempt + 1)
                 time.sleep(delay)
         raise AssertionError("unreachable")
 
@@ -200,6 +205,8 @@ class GroqVisionOCR(CachedPageOCR):
         extra = {"reasoning_effort": self.reasoning_effort} if self.reasoning_effort else {}
         if self.frequency_penalty:
             extra["frequency_penalty"] = self.frequency_penalty
+        if self.extra_body:
+            extra["extra_body"] = self.extra_body
         prompt = self.prompt + KHMER_HINT_TEMPLATE.format(reading=hint) if hint else self.prompt
         try:
             response = self._client.chat.completions.create(
@@ -211,16 +218,16 @@ class GroqVisionOCR(CachedPageOCR):
                         {"type": "image_url", "image_url": {"url": url}},
                     ],
                 }],
-                max_completion_tokens=self.max_output_tokens,
+                **{self._token_param: self.max_output_tokens},
                 temperature=0.0,
                 **extra,
             )
         except groq.APIStatusError as exc:
             raise OCRError(
-                f"Groq vision failed ({exc.status_code}): {exc.message}", exc.status_code
+                f"{self.label} failed ({exc.status_code}): {exc.message}", exc.status_code
             ) from exc
         except groq.APIError as exc:
-            raise OCRError(f"Groq vision request failed: {exc}") from exc
+            raise OCRError(f"{self.label} request failed: {exc}") from exc
         choice = response.choices[0] if response.choices else None
         text = clean_transcript((choice.message.content if choice else None) or "")
         text, looped = trim_repetition(text)
@@ -229,8 +236,47 @@ class GroqVisionOCR(CachedPageOCR):
         # A looping or cut-off reading is reported as truncated, so it is not cached.
         truncated = looped or bool(choice and choice.finish_reason == "length")
         if not text.strip():
-            raise OCRError("Groq vision returned no text")
+            raise OCRError(f"{self.label} returned no text")
         return text, truncated
+
+
+class OpenRouterVisionOCR(GroqVisionOCR):
+    """Transcribes an image with a vision model on OpenRouter.
+
+    OpenRouter speaks the OpenAI API, whose client has the same
+    ``chat.completions.create`` call and the same error classes as Groq's, so
+    only the client, the token parameter and the cache entries differ.
+    """
+
+    engine: OCREngine = "openrouter"  # type: ignore[assignment]
+    label = "OpenRouter vision"
+    _cache_prefix = "openrouter-vision"
+    _token_param = "max_tokens"
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        base_url: str = "https://openrouter.ai/api/v1",
+        timeout: float = 60.0,
+        default_headers: dict[str, str] | None = None,
+        disable_reasoning: bool = True,
+        client: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        import openai
+
+        client = client or openai.OpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0,
+            default_headers=default_headers or None,
+        )
+        super().__init__(api_key, model, timeout=timeout, client=client, **kwargs)
+        # ``_request`` names its errors through this module.
+        self._groq = openai
+        # A free model that thinks first spends the page's budget on the thinking.
+        if disable_reasoning:
+            self.extra_body = {"reasoning": {"enabled": False, "exclude": True}}
 
 
 class QuestionGeminiOCR(GeminiPageOCR):

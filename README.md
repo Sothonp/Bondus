@@ -124,8 +124,8 @@ same minute usually goes to Gemini. Misplaced keys (e.g. a Gemini key in
 
 **Photos in questions.** Each photo is shrunk and turned upright, then read by
 two kinds of engine at the same time: Kiri OCR (local and free, good at Khmer
-words) and a vision model (Groq `qwen/qwen3.8-27b`, then Gemini as a
-backup, good at formulas). Both readings go to the answering model, which
+words) and a vision model (Gemini, good at formulas; the project uses no
+Chinese models, so Groq's Qwen is off by default). Both readings go to the answering model, which
 combines them, so merging needs no extra API call. Readings are cached by image,
 looping readings are trimmed, and the student can open "Text read from photo"
 to check what was read, including why an engine came back empty (a timeout or
