@@ -328,12 +328,12 @@ const LEADERBOARD_SEED = [
 
 /* ════════════════════════ Theme + base styles ════════════════════════ */
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap');
 
 .eai-root{ font-family:'Plus Jakarta Sans', system-ui, sans-serif; color:var(--ink);
   background:var(--bg); min-height:100vh; -webkit-font-smoothing:antialiased; }
 .eai-display{ font-family:'Sora', system-ui, sans-serif; letter-spacing:-0.02em; }
-.eai-km{ font-family:'Noto Sans Khmer', system-ui, sans-serif; }
+.eai-km{ font-family:'Kantumruy Pro', system-ui, sans-serif; }
 
 .theme-light{
   --bg:#FFFFFF; --bg-soft:#F1EADB; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
