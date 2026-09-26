@@ -762,7 +762,7 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ob-btn-secondary:hover{ background:var(--card); border-color:var(--primary); transform:translateY(-1px); }
 
 .eai-ob-option-card{ position:relative; border-radius:18px; padding:22px; border:1px solid var(--line); background:var(--surface-2);
-  transition:background-color .2s ease, border-color .2s ease; }
+  transition:background-color .2s ease, border-color .2s ease; display:flex; flex-direction:column; height:100%; }
 .eai-ob-option-card.is-primary{ background:var(--primary-soft); border-color:var(--primary); }
 .eai-ob-badge{ position:absolute; top:16px; right:16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
   padding:4px 9px; border-radius:999px; background:var(--primary); color:#fff; }
@@ -1085,16 +1085,20 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
   return (
     <div className={`eai-ob-option-card ${primary ? "is-primary" : ""}`}>
       {badge && <span className="eai-ob-badge">{badge}</span>}
-      <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: primary ? "var(--primary)" : "var(--bg-soft)" }}>
-        <Icon size={19} color={primary ? "#fff" : "var(--ink)"} />
+      {/* flex:1 spacer absorbs the height difference between cards with shorter/longer
+          descriptions, so the buttons below always land on the same line. */}
+      <div style={{ flex: 1 }}>
+        <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: primary ? "var(--primary)" : "var(--bg-soft)" }}>
+          <Icon size={19} color={primary ? "#fff" : "var(--ink)"} />
+        </div>
+        <h3 className={`eai-display font-bold mt-3 text-base ${kmClass(title)}`}>{title}</h3>
+        <p className={`text-sm eai-muted mt-1.5 leading-relaxed ${kmClass(description)}`}>{description}</p>
+        {benefits && (
+          <ul className="eai-ob-benefits">
+            {benefits.map((b) => <li key={b} className={kmClass(b)}><CheckCircle2 size={13} style={{ color: "var(--primary)", flexShrink: 0 }} /> {b}</li>)}
+          </ul>
+        )}
       </div>
-      <h3 className={`eai-display font-bold mt-3 text-base ${kmClass(title)}`}>{title}</h3>
-      <p className={`text-sm eai-muted mt-1.5 leading-relaxed ${kmClass(description)}`}>{description}</p>
-      {benefits && (
-        <ul className="eai-ob-benefits">
-          {benefits.map((b) => <li key={b} className={kmClass(b)}><CheckCircle2 size={13} style={{ color: "var(--primary)", flexShrink: 0 }} /> {b}</li>)}
-        </ul>
-      )}
       {primary ? (
         <PrimaryButton onClick={onClick} className={`mt-5 w-full ${kmClass(buttonLabel)}`}><Sparkles size={16} /> {buttonLabel}</PrimaryButton>
       ) : (
