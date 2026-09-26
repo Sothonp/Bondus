@@ -3682,21 +3682,6 @@ function RichAnswer({ text, streaming }) {
   );
 }
 
-/* Numbered like the passages the model cites as [1], [2], … */
-function SourceList({ sources }) {
-  if (!sources?.length) return null;
-  return (
-    <details className="mt-2 text-xs eai-muted">
-      <summary style={{ cursor: "pointer" }}>Sources ({sources.length})</summary>
-      <ol className="mt-1 space-y-0.5">
-        {sources.map((s, i) => (
-          <li key={s.id}>[{i + 1}] {s.title || s.source}{s.page != null ? ` · p. ${s.page}` : ""}</li>
-        ))}
-      </ol>
-    </details>
-  );
-}
-
 const COACH_MODES = {
   study: {
     label: "Study Help", icon: BookOpen,
@@ -3853,7 +3838,6 @@ function AssistantMessage({ m, Icon }) {
         {!m.streaming && m.text && (
           <div className="eai-msg-actions">
             <CopyButton text={m.text} />
-            {m.rag && <SourceList sources={m.sources} />}
           </div>
         )}
       </div>

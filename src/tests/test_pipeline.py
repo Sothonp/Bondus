@@ -21,9 +21,11 @@ from src.ingestion import (
 from src.ingestion.chunk import RecursiveCharacterTextSplitter, chunk_text, restored_length
 from src.ingestion.extract import (
     ExtractionError,
+    HeadingTracker,
     UnsupportedFileTypeError,
     clean_markdown,
     extract_document,
+    split_markdown_sections,
 )
 from src.ingestion.khmer_segment import (
     ZWSP,
@@ -350,6 +352,64 @@ class TestChunking:
 # ---------------------------------------------------------------------------
 
 class TestExtraction:
+    def test_plain_exercise_and_sitting_lines_open_headings(self):
+        tracker = HeadingTracker()
+        page_one = (
+            "### VI. (២០ពិន្ទុ)\nគេមានអនុគមន៍ $f(x)=x^2$ ។\n"
+            "សម័យប្រឡង៖ ២០ សីហា ២០១៨ លេខទំនាក់ទំនង៖០១៥៤៣៩៧៩០\n"
+            "I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។\n"
+            "១.គណនា $P(A)$ ។\n"
+        )
+        page_two = "ក. រកប្រូបាប។\nII. (១៥ពិន្ទុ) គេឲ្យ $Z = 1+i$ ។\n"
+        sections = split_markdown_sections(page_one, tracker, 1) + split_markdown_sections(
+            page_two, tracker, 2
+        )
+        assert [(s.page, s.heading, s.starts_heading) for s in sections] == [
+            (1, "VI. (២០ពិន្ទុ)", True),
+            (1, "សម័យប្រឡង៖ ២០ សីហា ២០១៨", True),
+            (1, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។", True),
+            (2, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។", False),
+            (2, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › II. (១៥ពិន្ទុ) គេឲ្យ $Z = 1+i$ ។", True),
+        ]
+        # Numbered parts stay inside their exercise, and inside a fence nothing is a heading.
+        fenced = split_markdown_sections("```\nIII. (៥ពិន្ទុ)\n```", HeadingTracker())
+        assert [s.starts_heading for s in fenced] == [False]
+
+    def test_a_book_tracker_carries_headings_from_image_to_image(self):
+        class PageReader:
+            def transcribe_pages(self, pages):
+                return {1: pages[1].data.decode("utf-8")}, []
+
+        pages = [
+            "# ចំនួនកុំផ្លិច\n## ទម្រង់ត្រីកោណមាត្រ\n$z = r(\\cos\\theta + i\\sin\\theta)$",
+            "$z^n = r^n(\\cos n\\theta + i\\sin n\\theta)$\n## ឫសទី n\nរូបមន្ត",
+        ]
+        tracker = HeadingTracker()
+        second = [
+            extract_document(text.encode("utf-8"), f"sheet-{n}.jpg", PageReader(), tracker)
+            for n, text in enumerate(pages, start=1)
+        ][1]
+        assert [(s.heading, s.starts_heading) for s in second.sections] == [
+            ("ចំនួនកុំផ្លិច › ទម្រង់ត្រីកោណមាត្រ", False),
+            ("ចំនួនកុំផ្លិច › ឫសទី n", True),
+        ]
+        # Without the book's tracker, each image starts with no heading at all.
+        alone = extract_document(pages[1].encode("utf-8"), "sheet-2.jpg", PageReader())
+        assert alone.sections[0].heading == ""
+
+    def test_catalogued_pages_name_their_book(self):
+        import importlib.util
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "scripts" / "ingest_corpus.py"
+        spec = importlib.util.spec_from_file_location("ingest_corpus", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        book = "សង្ខេបរូបមន្តគណិតវិទ្យា ថ្នាក់ទី១២ (ខេង តេងហៀង និង គីម សេងហុង)"
+        assert module.book_of(f"{book} ទំព័រ 5 ជួរទី2") == book
+        assert module.book_of(f"{book} ទំព័រ 6") == book
+        assert module.book_of("វិញ្ញាសាប្រឡងបាក់ឌុបគណិតវិទ្យា ២០០២–២០២៣") == ""
+
     def test_clean_markdown_keeps_latex_intact(self):
         markdown = (
             "---\ntitle: Notes\n---\n# លីមីត\n\n"
@@ -980,6 +1040,85 @@ class TestKiriOCR:
             extract_document(b"img", "photo.jpeg", ocr=None)
         with pytest.raises(UnsupportedFileTypeError):
             extract_document(b"img", "photo.gif", ocr=None)
+
+
+class TestSuryaOCR:
+    def test_blocks_become_markdown_with_headings_and_formulas(self):
+        from src.ingestion.surya_ocr import blocks_to_markdown
+
+        blocks = [
+            {"label": "SectionHeader", "html": "<h2><b>មេរៀនទី៣</b></h2>"},
+            {"label": "SectionHeader", "html": "<h2>ភាពជាប់នៃអនុគមន៍</h2>"},
+            {"label": "SectionHeader", "html": "<h1>២. អនុគមន៍បន្លាយតាមភាពជាប់</h1>"},
+            {"label": "Text", "html": "<p>បើ <math>k = 0</math> ហើយ <math>f(a) \\cdot f(b) &lt; 0</math> នោះមាន <math>c</math></p>"},
+            {"label": "ListGroup", "html": "<ul><li>• <math>f</math> កំណត់ចំពោះ <math>x = a</math></li><li>• ជាប់</li></ul>"},
+            {"label": "Equation", "html": "<p><math>\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1</math></p>"},
+            {"label": "Equation", "html": "១. <math>\\sin(-\\alpha) = -\\sin\\alpha</math>"},
+            {"label": "Table", "html": "<table><tr><th>ច្បាប់</th><th>រូបមន្ត</th></tr><tr><td>ផលបូក</td><td><math>a+b</math></td></tr></table>"},
+            {"label": "Figure", "html": "<img>"},
+            {"label": "PageFooter", "html": "<p>www.facebook.com/7khmer</p>"},
+        ]
+        assert blocks_to_markdown(blocks).split("\n\n") == [
+            # Levels come from the heading's wording, whatever h-tag Surya chose.
+            "# មេរៀនទី៣",
+            "## ភាពជាប់នៃអនុគមន៍",
+            "### ២. អនុគមន៍បន្លាយតាមភាពជាប់",
+            # The < inside a formula is not a tag: nothing after it is lost.
+            "បើ $k = 0$ ហើយ $f(a) \\cdot f(b) < 0$ នោះមាន $c$",
+            "- $f$ កំណត់ចំពោះ $x = a$\n- ជាប់",
+            "$$\n\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1\n$$",
+            "១. $\\sin(-\\alpha) = -\\sin\\alpha$",
+            "| ច្បាប់ | រូបមន្ត |\n| --- | --- |\n| ផលបូក | $a+b$ |",
+        ]
+
+    def test_pages_go_through_one_long_lived_worker(self, tmp_path):
+        import sys
+
+        from src.ingestion.ocr import PageImage
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        worker = tmp_path / "fake_worker.py"
+        worker.write_text(
+            "import json, sys\n"
+            "starts = open(sys.argv[1], 'a'); starts.write('x'); starts.close()\n"
+            "for line in sys.stdin:\n"
+            "    path = json.loads(line)['image']\n"
+            "    data = open(path, 'rb').read().decode()\n"
+            "    if data == 'broken':\n"
+            "        print(json.dumps({'error': 'ValueError: bad page'}), flush=True)\n"
+            "        continue\n"
+            "    html = '<h1>' + data + '</h1>'\n"
+            "    print(json.dumps({'blocks': [{'label': 'SectionHeader', 'html': html}]}), flush=True)\n",
+            encoding="utf-8",
+        )
+        starts = tmp_path / "starts"
+        ocr = SuryaPageOCR(
+            "unused", cache_dir=tmp_path / "cache",
+            worker_command=[sys.executable, str(worker), str(starts)],
+        )
+        try:
+            transcripts, warnings = ocr.transcribe_pages({
+                1: PageImage("ភាពជាប់".encode(), "image/png"),
+                2: PageImage(b"limits", "image/jpeg"),
+                3: PageImage(b"broken", "image/png"),
+            })
+            assert transcripts == {1: "## ភាពជាប់", 2: "## limits"}
+            assert any("Surya failed: ValueError: bad page" in warning for warning in warnings)
+            # Cached: a second read never reaches the worker.
+            assert ocr.transcribe_page(PageImage(b"limits", "image/jpeg")) == ("## limits", False)
+        finally:
+            ocr.close()
+        assert starts.read_text() == "x", "one worker served every page"
+
+    def test_surya_needs_its_own_python(self):
+        from src.config import Settings
+        from src.ingestion.ocr import build_ocr, resolve_ocr_engine
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        with pytest.raises(RuntimeError, match="SURYA_PYTHON"):
+            resolve_ocr_engine(Settings(ocr_engine="surya", _env_file=None))
+        engine = build_ocr(Settings(ocr_engine="surya", surya_python="/opt/surya/bin/python", _env_file=None))
+        assert isinstance(engine, SuryaPageOCR) and engine.python == "/opt/surya/bin/python"
 
 
 class TestHybridOCR:

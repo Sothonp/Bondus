@@ -160,6 +160,18 @@ _MAX_HEADING_CHARS = 120
 _ATX_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _FENCE_LINE = re.compile(r"^\s{0,3}(```|~~~)")
 _HEADING_DECORATION = re.compile(r"^[\s*_✧◆◇♦•▪■□☐✦❖\-–—]+|[\s*_:៖]+$")
+# Past papers carry their structure in plain lines the vision model only
+# sometimes writes as Markdown headings: the sitting ("សម័យប្រឡង៖ ២០ សីហា
+# ២០១៨") that opens each paper, and the exercise ("II. (១៥ពិន្ទុ) ...") that
+# opens each question. Missed, an exercise ran on under the one before it,
+# with that one's heading and stem. They are promoted to the levels the model
+# uses when it does write them as headings.
+_PAPER_LINE = re.compile(r"^\s{0,3}\**\s*(សម័យប្រឡង\s*៖?\s*.*?[០-៩0-9]{4})")
+_EXERCISE_LINE = re.compile(
+    r"^\s{0,3}\**\s*[IVX]{1,4}\s*\.\s*\**\s*\(\s*[០-៩0-9]+\s*ពិន្ទុ\s*\)"
+)
+_PAPER_LEVEL = 2
+_EXERCISE_LEVEL = 3
 
 
 class HeadingTracker:
@@ -186,6 +198,26 @@ def _heading_title(raw: str) -> str:
     return title
 
 
+def _line_heading(line: str) -> tuple[int, str] | None:
+    """The (level, title) a line opens, or None for body text."""
+    match = _ATX_HEADING.match(line)
+    if match:
+        title = _heading_title(match.group(2))
+        if not title:
+            return None
+        paper = _PAPER_LINE.match(title)
+        # The phone number and duration some papers run onto the sitting line
+        # are not part of the paper's name.
+        return (len(match.group(1)), paper.group(1) if paper else title)
+    paper = _PAPER_LINE.match(line)
+    if paper:
+        return (_PAPER_LEVEL, _heading_title(paper.group(1)))
+    if _EXERCISE_LINE.match(line):
+        title = _heading_title(line)
+        return (_EXERCISE_LEVEL, title) if title else None
+    return None
+
+
 def split_markdown_sections(
     markdown: str, tracker: HeadingTracker, page: int | None = None, ocr: bool = False
 ) -> list[Section]:
@@ -194,22 +226,22 @@ def split_markdown_sections(
     Each section keeps its heading line as text and records the heading path
     from ``tracker``, which is updated so later pages continue the path.
     """
-    blocks: list[tuple[bool, list[str]]] = [(False, [])]
+    blocks: list[tuple[tuple[int, str] | None, list[str]]] = [(None, [])]
     in_fence = False
     for line in markdown.split("\n"):
         if _FENCE_LINE.match(line):
             in_fence = not in_fence
-        match = None if in_fence else _ATX_HEADING.match(line)
-        if match and _heading_title(match.group(2)):
-            blocks.append((True, [line]))
+        heading = None if in_fence else _line_heading(line)
+        if heading:
+            blocks.append((heading, [line]))
         else:
             blocks[-1][1].append(line)
 
     sections: list[Section] = []
-    for starts_heading, lines in blocks:
-        if starts_heading:
-            match = _ATX_HEADING.match(lines[0])
-            tracker.push(len(match.group(1)), _heading_title(match.group(2)))
+    for heading, lines in blocks:
+        if heading:
+            tracker.push(*heading)
+        starts_heading = heading is not None
         text = clean_markdown("\n".join(lines))
         if text.strip():
             sections.append(Section(text, page, ocr, tracker.path, starts_heading))
@@ -346,15 +378,25 @@ def extract_pdf(data: bytes, source: str, ocr: PageOCR | None = None) -> Extract
 
 # --- Images -----------------------------------------------------------------
 
-def extract_image(data: bytes, filename: str, ocr: PageOCR | None) -> ExtractedDocument:
-    """A photo or scan of one page, transcribed by OCR as page 1."""
+def extract_image(
+    data: bytes, filename: str, ocr: PageOCR | None, tracker: HeadingTracker | None = None
+) -> ExtractedDocument:
+    """A photo or scan of one page, transcribed by OCR as page 1.
+
+    A book scanned one image per page runs its sections across images, as a
+    PDF runs them across pages. Passing the book's ``tracker`` from image to
+    image lets text at the top of a page continue the heading the previous
+    page left open, instead of losing it.
+    """
     if ocr is None:
         raise ExtractionError(
             "Image uploads need OCR; set GEMINI_API_KEY or install kiri-ocr, and OCR_MODE must not be 'never'"
         )
     payload = PageImage(data, IMAGE_MIME_TYPES[Path(filename).suffix.lower()])
     transcripts, warnings = ocr.transcribe_pages({1: payload})
-    sections = split_markdown_sections(transcripts.get(1, ""), HeadingTracker(), 1, ocr=True)
+    sections = split_markdown_sections(
+        transcripts.get(1, ""), tracker if tracker is not None else HeadingTracker(), 1, ocr=True
+    )
     if not sections and not warnings:
         warnings.append("OCR found no text in the image")
     return ExtractedDocument(
@@ -364,16 +406,23 @@ def extract_image(data: bytes, filename: str, ocr: PageOCR | None) -> ExtractedD
 
 # --- Dispatch ---------------------------------------------------------------
 
-def extract_document(data: bytes, filename: str, ocr: PageOCR | None = None) -> ExtractedDocument:
+def extract_document(
+    data: bytes,
+    filename: str,
+    ocr: PageOCR | None = None,
+    tracker: HeadingTracker | None = None,
+) -> ExtractedDocument:
     """Extract text sections from raw file bytes, dispatching on extension.
 
     ``ocr`` is used for images and for PDF pages it reports as needing OCR.
+    ``tracker`` carries headings over from the previous page of the same book,
+    for images (see ``extract_image``).
     """
     file_format = detect_format(filename)
     if file_format == "pdf":
         return extract_pdf(data, filename, ocr)
     if file_format == "image":
-        return extract_image(data, filename, ocr)
+        return extract_image(data, filename, ocr, tracker)
 
     if file_format == "markdown":
         sections = split_markdown_sections(decode_text_bytes(data), HeadingTracker())
@@ -384,10 +433,13 @@ def extract_document(data: bytes, filename: str, ocr: PageOCR | None = None) -> 
 
 
 def extract_file(
-    path: str | Path, source: str | None = None, ocr: PageOCR | None = None
+    path: str | Path,
+    source: str | None = None,
+    ocr: PageOCR | None = None,
+    tracker: HeadingTracker | None = None,
 ) -> ExtractedDocument:
     path = Path(path)
     detect_format(path.name)
-    document = extract_document(path.read_bytes(), path.name, ocr)
+    document = extract_document(path.read_bytes(), path.name, ocr, tracker)
     document.source = source or path.name
     return document

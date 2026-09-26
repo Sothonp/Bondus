@@ -13,6 +13,12 @@ An optional ``catalog.json`` in the data directory maps those relative paths
 to readable titles ({"lesson2.pdf": "មេរៀនទី២ លីមីតនៃអនុគមន៍"}). The title is
 embedded with every chunk and shown to the model, which helps when file
 names say nothing about the content.
+
+A book scanned one image per page is catalogued page by page ("<book> ទំព័រ
+5"). Images whose titles name the same book are read in file order with one
+heading path between them, so a topic that runs onto the next image keeps its
+heading. Index such a book whole: with ``--only`` or ``--skip-existing`` the
+pages left out do not pass their headings on.
 """
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ import argparse
 import fnmatch
 import json
 import logging
+import re
 import sys
 import time
 from pathlib import Path
@@ -42,6 +49,7 @@ from src.ingestion import (  # noqa: E402
     index_document,
     prepare_document,
 )
+from src.ingestion.extract import HeadingTracker, detect_format  # noqa: E402
 from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore  # noqa: E402
 
 logger = logging.getLogger("ingest_corpus")
@@ -62,6 +70,14 @@ def discover_files(data_dir: Path, extensions: set[str], only: list[str] | None 
         if path.is_file() and path.suffix.lower() in extensions:
             files.append(path)
     return files
+
+
+_PAGE_SUFFIX = re.compile(r"\s*ទំព័រ\s*\S+.*$")
+
+
+def book_of(title: str) -> str:
+    """The book a catalogued page belongs to: its title without the page part."""
+    return _PAGE_SUFFIX.sub("", title).strip() if _PAGE_SUFFIX.search(title) else ""
 
 
 def load_catalog(path: Path) -> dict[str, str]:
@@ -146,14 +162,23 @@ def main(argv: list[str] | None = None) -> int:
     if ocr is not None:
         logger.info("OCR: %s %s (mode=%s, cache=%s)", ocr.engine, ocr.model, ocr.mode, ocr.cache_dir)
 
+    trackers: dict[str, HeadingTracker] = {}
+
+    def extract(path: Path, source: str):
+        title = catalog.get(source, "")
+        book = book_of(title) if detect_format(path.name) == "image" else ""
+        tracker = trackers.setdefault(book, HeadingTracker()) if book else None
+        document = extract_file(path, source=source, ocr=ocr, tracker=tracker)
+        document.title = title
+        return document
+
     if args.dry_run:
         total_chunks = total_formulas = 0
         failures = 0
         for path in files:
             source = path.relative_to(data_dir).as_posix()
             try:
-                document = extract_file(path, source=source, ocr=ocr)
-                document.title = catalog.get(source, "")
+                document = extract(path, source)
                 prepared = prepare_document(
                     document,
                     chunk_size=settings.chunk_size,
@@ -199,8 +224,7 @@ def main(argv: list[str] | None = None) -> int:
                 logger.info("%s: already indexed, skipped", prefix)
                 continue
             try:
-                document = extract_file(path, source=source, ocr=ocr)
-                document.title = catalog.get(source, "")
+                document = extract(path, source)
                 result = index_document(
                     document,
                     store=store,
