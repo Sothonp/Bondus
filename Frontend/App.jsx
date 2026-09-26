@@ -13,6 +13,7 @@ import {
   ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
+  Briefcase, DollarSign, Compass,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -32,6 +33,67 @@ const FIELD_META = {
   social_science: { label: "Social Science", km: "វិទ្យាសាស្ត្រសង្គម", icon: Landmark, color: "var(--gold)", blurb: "Literature, history, geography and civics-focused track.", blurbKm: "ផ្នែកផ្តោតលើអក្សរសាស្ត្រ ប្រវត្តិវិទ្យា ភូមិវិទ្យា និងសីលធម៌។" },
 };
 
+/* ── University pathway (separate from the Grade 11/12 BAC II model above) ──
+   A university profile never touches FIELD_SUBJECTS/FIELD_META — it has its own goals/major/year
+   onboarding and its own Hub, so "University" never gets routed into BAC II content. */
+const UNI_GOALS = [
+  { id: "prepare_university", label: "Prepare for University", labelKm: "រៀបចំសម្រាប់សាកលវិទ្យាល័យ", icon: GraduationCap },
+  { id: "learn_subjects", label: "Learn University Subjects", labelKm: "រៀនមុខវិជ្ជាសាកលវិទ្យាល័យ", icon: BookOpen },
+  { id: "career_prep", label: "Career & Job Preparation", labelKm: "រៀបចំអាជីព និងការងារ", icon: Briefcase },
+  { id: "study_abroad", label: "Study Abroad", labelKm: "សិក្សានៅបរទេស", icon: Globe },
+  { id: "scholarship_prep", label: "Scholarship Preparation", labelKm: "រៀបចំអាហារូបករណ៍", icon: DollarSign },
+  { id: "language_prep", label: "IELTS / TOEFL / Language Prep", labelKm: "រៀបចំ IELTS/TOEFL/ភាសា", icon: Mic },
+  { id: "explore_majors", label: "Explore Majors & Careers", labelKm: "ស្វែងរកជំនាញ និងអាជីព", icon: Compass },
+  { id: "find_university", label: "Find a University", labelKm: "ស្វែងរកសាកលវិទ្យាល័យ", icon: Landmark },
+];
+
+const UNI_FIELDS = [
+  { id: "computer_science", label: "Computer Science", labelKm: "វិទ្យាសាស្ត្រកុំព្យូទ័រ" },
+  { id: "software_engineering", label: "Software Engineering", labelKm: "វិស្វកម្មសូហ្វវែរ" },
+  { id: "information_technology", label: "Information Technology", labelKm: "បច្ចេកវិទ្យាព័ត៌មាន" },
+  { id: "data_science", label: "Data Science", labelKm: "វិទ្យាសាស្ត្រទិន្នន័យ" },
+  { id: "cybersecurity", label: "Cybersecurity", labelKm: "សន្តិសុខសាយប័រ" },
+  { id: "business", label: "Business", labelKm: "ពាណិជ្ជកម្ម" },
+  { id: "finance", label: "Finance", labelKm: "ហិរញ្ញវត្ថុ" },
+  { id: "accounting", label: "Accounting", labelKm: "គណនេយ្យ" },
+  { id: "engineering", label: "Engineering", labelKm: "វិស្វកម្ម" },
+  { id: "medicine", label: "Medicine", labelKm: "វេជ្ជសាស្ត្រ" },
+  { id: "law", label: "Law", labelKm: "នីតិសាស្ត្រ" },
+  { id: "design", label: "Design", labelKm: "រចនាកម្ម" },
+  { id: "education", label: "Education", labelKm: "អប់រំ" },
+  { id: "social_sciences", label: "Social Sciences", labelKm: "សិក្សាសង្គម" },
+  { id: "other", label: "Other", labelKm: "ផ្សេងទៀត" },
+];
+
+const UNI_YEARS = [
+  { id: "preparing", label: "Preparing for university", labelKm: "កំពុងរៀបចំចូលសាកលវិទ្យាល័យ" },
+  { id: "year1", label: "1st Year", labelKm: "ឆ្នាំទី១" },
+  { id: "year2", label: "2nd Year", labelKm: "ឆ្នាំទី២" },
+  { id: "year3", label: "3rd Year", labelKm: "ឆ្នាំទី៣" },
+  { id: "year4plus", label: "4th Year+", labelKm: "ឆ្នាំទី៤ ឡើងទៅ" },
+  { id: "graduating", label: "Graduating", labelKm: "ជិតបញ្ចប់ការសិក្សា" },
+  { id: "not_enrolled", label: "Not enrolled yet", labelKm: "មិនទាន់ចូលរៀន" },
+];
+
+/* Sample "Continue Learning" course outlines — Phase 1 only ships real content for Computer
+   Science to prove the pattern; other majors show a "coming soon" state instead of fake content. */
+const UNI_COURSES = {
+  computer_science: [
+    { id: "js_fundamentals", title: "JavaScript Fundamentals", titleKm: "មូលដ្ឋានគ្រឹះ JavaScript",
+      lessons: ["Variables & data types", "Functions & scope", "Arrays & objects", "DOM basics"],
+      lessonsKm: ["អថេរ និងប្រភេទទិន្នន័យ", "អនុគមន៍ និង scope", "អារេ និងវត្ថុ", "មូលដ្ឋាន DOM"] },
+    { id: "data_structures", title: "Data Structures", titleKm: "រចនាសម្ព័ន្ធទិន្នន័យ",
+      lessons: ["Arrays & linked lists", "Stacks & queues", "Trees & graphs", "Big-O basics"],
+      lessonsKm: ["អារេ និង linked list", "Stack និង queue", "ដើមឈើ និងក្រាហ្វ", "មូលដ្ឋាន Big-O"] },
+    { id: "database_sql", title: "Database & SQL", titleKm: "មូលដ្ឋានទិន្នន័យ និង SQL",
+      lessons: ["Tables & relationships", "SELECT / WHERE / JOIN", "Indexes", "Normalization basics"],
+      lessonsKm: ["តារាង និងទំនាក់ទំនង", "SELECT / WHERE / JOIN", "លិបិក្រម", "មូលដ្ឋាន Normalization"] },
+    { id: "git_github", title: "Git & GitHub", titleKm: "Git និង GitHub",
+      lessons: ["Commits & branches", "Merging & conflicts", "Pull requests", "Working with a team"],
+      lessonsKm: ["Commit និង branch", "Merge និងជម្លោះ", "Pull request", "ធ្វើការជាក្រុម"] },
+  ],
+};
+
 const EXAM_YEARS = [2026, 2027, 2028];
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
 const MISTAKE_TYPES = [
@@ -47,6 +109,12 @@ const MISTAKE_TYPE_LABEL_KM = {
 const mistakeTypeLabel = (mt, lang) => (lang === "km" ? (MISTAKE_TYPE_LABEL_KM[mt] ?? mt) : mt);
 
 const subjectId = (s) => s.toLowerCase().replace(/\s+/g, "_");
+
+/* Auto-detects Khmer script in a string so shared low-level components (CardHead, FormField,
+   SelectField, OnboardingOptionCard, Pill…) can switch to the Kantumruy Pro font (.eai-km)
+   without every call site needing to thread a `lang` prop through just for this. */
+const KHMER_RE = /[ក-៿]/;
+const kmClass = (s) => (typeof s === "string" && KHMER_RE.test(s) ? "eai-km" : "");
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
@@ -123,6 +191,17 @@ function buildProfile(reg) {
    the "reassess" half of the assess → identify weakness → recommend → practice → reassess loop —
    call it fresh (useMemo) whenever topicMastery changes and the whole app updates with it. */
 function deriveInsights(p, topicMastery) {
+  // University profiles never had a BAC II track (p.field), so they skip the whole mastery
+  // engine below and get empty-but-safe defaults instead — every consumer (Progress, Coach's
+  // study/major fallbacks) can rely on subjects/weak/strong always being arrays.
+  if (p.educationLevel === "university") {
+    return {
+      subjects: [], weak: [], strong: [], avg: null,
+      prediction: { A: 0, B: 0, C: 0, D: 0, E: 0 }, gradeRange: "—",
+      readiness: { overall: 0, mastery: 0, coverage: 0, consistency: 0, speed: 0 },
+      priorityTopic: null, strongestTopic: null, plan: [], recommendedLesson: null, recs: [],
+    };
+  }
   const subjectNames = FIELD_SUBJECTS[p.field];
   const prior = (s) => (p.subjectsToImprove?.includes(subjectId(s)) ? 45 : null);
 
@@ -665,8 +744,8 @@ function Pill({ icon: Icon, color, soft, label, value }) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: soft }}>
       <Icon size={16} style={{ color }} />
-      <span className="text-sm font-bold eai-display" style={{ color: "var(--ink)" }}>{value}</span>
-      <span className="text-xs eai-muted hidden sm:inline">{label}</span>
+      <span className={`text-sm font-bold eai-display ${kmClass(value)}`} style={{ color: "var(--ink)" }}>{value}</span>
+      <span className={`text-xs eai-muted hidden sm:inline ${kmClass(label)}`}>{label}</span>
     </div>
   );
 }
@@ -675,7 +754,7 @@ function CardHead({ title, kh, action }) {
   return (
     <div className="flex items-center justify-between mb-4">
       <div>
-        <h3 className="eai-display font-bold text-base">{title}</h3>
+        <h3 className={`eai-display font-bold text-base ${kmClass(title)}`}>{title}</h3>
         {kh && <p className="eai-km text-xs eai-muted mt-0.5">{kh}</p>}
       </div>
       {action}
@@ -742,6 +821,8 @@ function RecommendedLessonCard({ title, subject, duration, description, xp, imag
    `.eai-onboarding` class so this palette never leaks into the rest of the app. */
 const ONBOARDING_STEPS = ["Account details", "Academic track", "Learning preferences", "Getting started"];
 const ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "ជម្រើសផ្នែកសិក្សា", "ចំណង់ចំណូលចិត្តក្នុងការសិក្សា", "ចាប់ផ្តើម"];
+const UNI_ONBOARDING_STEPS = ["Account details", "Your goals", "Your field", "Your year"];
+const UNI_ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "គោលដៅរបស់អ្នក", "ជំនាញរបស់អ្នក", "ឆ្នាំសិក្សា"];
 
 /* Switches the app's UI language (English / Khmer) — visually matches ThemeToggle/.eai-ob-toggle
    but styled inline rather than via that class, since .eai-ob-toggle hardcodes position:fixed
@@ -762,15 +843,15 @@ function LangToggle({ lang, setLang, style }) {
   );
 }
 
-function OnboardingProgress({ step, lang = "en" }) {
-  const pct = (step / ONBOARDING_STEPS.length) * 100;
-  const steps = lang === "km" ? ONBOARDING_STEPS_KM : ONBOARDING_STEPS;
+function OnboardingProgress({ step, lang = "en", stepLabels, stepLabelsKm }) {
+  const list = lang === "km" ? (stepLabelsKm || ONBOARDING_STEPS_KM) : (stepLabels || ONBOARDING_STEPS);
+  const pct = (step / list.length) * 100;
   return (
     <div className="eai-ob-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
-      aria-label={`Step ${step} of ${steps.length}: ${steps[step - 1]}`}>
+      aria-label={`Step ${step} of ${list.length}: ${list[step - 1]}`}>
       <div className="eai-ob-progress-top">
-        <span className={`eai-ob-progress-step ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "stepWord")} {step} {t(lang, "ofWord")} {steps.length}</span>
-        <span className={`eai-ob-progress-label ${lang === "km" ? "eai-km" : ""}`}>{steps[step - 1]}</span>
+        <span className={`eai-ob-progress-step ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "stepWord")} {step} {t(lang, "ofWord")} {list.length}</span>
+        <span className={`eai-ob-progress-label ${lang === "km" ? "eai-km" : ""}`}>{list[step - 1]}</span>
       </div>
       <div className="eai-ob-progress-track">
         <div className="eai-ob-progress-fill" style={{ width: `${pct}%` }} />
@@ -779,7 +860,7 @@ function OnboardingProgress({ step, lang = "en" }) {
   );
 }
 
-function OnboardingLayout({ dark, setDark, step, title, description, onBack, children, lang = "en", setLang }) {
+function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, children, lang = "en", setLang }) {
   return (
     <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
@@ -804,7 +885,7 @@ function OnboardingLayout({ dark, setDark, step, title, description, onBack, chi
           </div>
 
           <div className="eai-ob-card">
-            {step != null && <OnboardingProgress step={step} lang={lang} />}
+            {step != null && <OnboardingProgress step={step} lang={lang} stepLabels={stepLabels} stepLabelsKm={stepLabelsKm} />}
             <div className="eai-ob-back-row">
               {onBack ? (
                 <button onClick={onBack} className={`eai-ob-back eai-focus ${lang === "km" ? "eai-km" : ""}`}>
@@ -836,7 +917,7 @@ function OnboardingLayout({ dark, setDark, step, title, description, onBack, chi
 function FormField({ label, required, error, children }) {
   return (
     <label className="block">
-      <span className="eai-ob-label">{label}{required && <span style={{ color: "var(--ember)" }}> *</span>}</span>
+      <span className={`eai-ob-label ${kmClass(label)}`}>{label}{required && <span style={{ color: "var(--ember)" }}> *</span>}</span>
       <div className="mt-1.5">{children}</div>
       {error && <p className="eai-ob-error" role="alert"><AlertTriangle size={12} /> {error}</p>}
     </label>
@@ -847,7 +928,7 @@ function SelectField({ label, required, value, onChange, options, autoComplete }
   return (
     <FormField label={label} required={required}>
       <select className="eai-ob-input eai-focus" value={value} onChange={onChange} autoComplete={autoComplete}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {options.map((o) => <option key={o.value} value={o.value} className={kmClass(o.label)}>{o.label}</option>)}
       </select>
     </FormField>
   );
@@ -921,17 +1002,17 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
       <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: primary ? "var(--primary)" : "var(--bg-soft)" }}>
         <Icon size={19} color={primary ? "#fff" : "var(--ink)"} />
       </div>
-      <h3 className="eai-display font-bold mt-3 text-base">{title}</h3>
-      <p className="text-sm eai-muted mt-1.5 leading-relaxed">{description}</p>
+      <h3 className={`eai-display font-bold mt-3 text-base ${kmClass(title)}`}>{title}</h3>
+      <p className={`text-sm eai-muted mt-1.5 leading-relaxed ${kmClass(description)}`}>{description}</p>
       {benefits && (
         <ul className="eai-ob-benefits">
-          {benefits.map((b) => <li key={b}><CheckCircle2 size={13} style={{ color: "var(--primary)", flexShrink: 0 }} /> {b}</li>)}
+          {benefits.map((b) => <li key={b} className={kmClass(b)}><CheckCircle2 size={13} style={{ color: "var(--primary)", flexShrink: 0 }} /> {b}</li>)}
         </ul>
       )}
       {primary ? (
-        <PrimaryButton onClick={onClick} className="mt-5 w-full"><Sparkles size={16} /> {buttonLabel}</PrimaryButton>
+        <PrimaryButton onClick={onClick} className={`mt-5 w-full ${kmClass(buttonLabel)}`}><Sparkles size={16} /> {buttonLabel}</PrimaryButton>
       ) : (
-        <SecondaryButton onClick={onClick} className="mt-5 w-full">{buttonLabel}</SecondaryButton>
+        <SecondaryButton onClick={onClick} className={`mt-5 w-full ${kmClass(buttonLabel)}`}>{buttonLabel}</SecondaryButton>
       )}
     </div>
   );
@@ -1060,28 +1141,58 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
 }
 
 /* ════════════════════════ Registration ════════════════════════
-   Steps 1–3 of the onboarding flow (account details, academic track, learning preferences).
+   Step 0 asks "High School or University" first — the two paths never share content after that.
+   High-school steps 1–3 (account details, academic track, learning preferences) are the original
+   BAC II flow, unchanged. University steps 1–4 (account details, goals, field, year) build a
+   separate `universityProfile` and never touch FIELD_SUBJECTS/BAC II content at all.
    `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
    goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
 function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
   const [step, setStep] = useState(initialStep ?? 0);
   const [form, setForm] = useState(initialForm ?? {
-    name: "", phone: "", age: "", grade: "12", field: "", target: "A",
+    name: "", phone: "", age: "",
+    educationLevel: null, // "highschool" | "university" — locked in once chosen at step 0
+    // High-school (BAC II) fields:
+    grade: "12", field: "", target: "A",
     targetExamYear: EXAM_YEARS[1], dailyMinutes: 60, targetUniversity: "",
     subjectsToImprove: [],
+    // University fields:
+    universityGoals: [], universityMajor: "", universityYear: "",
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
+  const isUni = form.educationLevel === "university";
 
-  // Unlimited multi-select.
+  // Unlimited multi-select (high-school "subjects to improve").
   const toggleImprove = (id) => setForm((f) => ({
     ...f, subjectsToImprove: f.subjectsToImprove.includes(id) ? f.subjectsToImprove.filter((x) => x !== id) : [...f.subjectsToImprove, id],
   }));
   const clearSubjects = () => setForm((f) => ({ ...f, subjectsToImprove: [] }));
+  // University "goals" multi-select (unlimited).
+  const toggleGoal = (id) => setForm((f) => ({
+    ...f, universityGoals: f.universityGoals.includes(id) ? f.universityGoals.filter((x) => x !== id) : [...f.universityGoals, id],
+  }));
 
+  // ── Step 0: education level gate ──
   if (step === 0) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={1} onBack={onBack} lang={lang} setLang={setLang}
+      <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
+        title={t(lang, "eduLevelTitle")} description={t(lang, "eduLevelDesc")}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
+            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
+          <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
+            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setStep(1); }} />
+        </div>
+      </OnboardingLayout>
+    );
+  }
+
+  // ── Step 1: account details (shared layout; grade/target only shown for high school) ──
+  if (step === 1) {
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
+        onBack={() => setStep(0)} lang={lang} setLang={setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
@@ -1096,22 +1207,74 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
             <input type="number" min="8" max="99" inputMode="numeric" className="eai-ob-input eai-focus" placeholder="18"
               value={form.age} onChange={(e) => set("age", e.target.value)} />
           </FormField>
-          <SelectField label={t(lang, "gradeLevelLabel")} value={form.grade} onChange={(e) => set("grade", e.target.value)}
-            options={[{ value: "11", label: t(lang, "grade11") }, { value: "12", label: t(lang, "grade12") }]} />
-          <SelectField label={t(lang, "targetGradeLabel")} value={form.target} onChange={(e) => set("target", e.target.value)}
-            options={["A", "B", "C", "D", "E"].map((g) => ({ value: g, label: `${t(lang, "gradeWord")} ${g}` }))} />
+          {!isUni && (
+            <>
+              <SelectField label={t(lang, "gradeLevelLabel")} value={form.grade} onChange={(e) => set("grade", e.target.value)}
+                options={[{ value: "11", label: t(lang, "grade11") }, { value: "12", label: t(lang, "grade12") }]} />
+              <SelectField label={t(lang, "targetGradeLabel")} value={form.target} onChange={(e) => set("target", e.target.value)}
+                options={["A", "B", "C", "D", "E"].map((g) => ({ value: g, label: `${t(lang, "gradeWord")} ${g}` }))} />
+            </>
+          )}
         </div>
 
-        <PrimaryButton onClick={() => setStep(1)} disabled={!form.name.trim()} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
-          {t(lang, "continueToTrack")} <ChevronRight size={16} />
+        <PrimaryButton onClick={() => setStep(2)} disabled={!form.name.trim()} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
+          {isUni ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
         </PrimaryButton>
       </OnboardingLayout>
     );
   }
 
-  if (step === 1) {
+  // ── University steps 2–4 ──
+  if (isUni && step === 2) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(0)} lang={lang} setLang={setLang}
+      <OnboardingLayout dark={dark} setDark={setDark} step={2} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+        onBack={() => setStep(1)} lang={lang} setLang={setLang}
+        title={t(lang, "uniGoalsTitle")} description={t(lang, "uniGoalsDesc")}>
+        <div className="flex flex-wrap gap-2">
+          {UNI_GOALS.map((g) => (
+            <SubjectChip key={g.id} label={lang === "km" ? g.labelKm : g.label} selected={form.universityGoals.includes(g.id)} onToggle={() => toggleGoal(g.id)} lang={lang} />
+          ))}
+        </div>
+
+        <PrimaryButton onClick={() => setStep(3)} disabled={form.universityGoals.length === 0} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
+          {t(lang, "continueWord")} <ChevronRight size={16} />
+        </PrimaryButton>
+      </OnboardingLayout>
+    );
+  }
+  if (isUni && step === 3) {
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={3} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+        onBack={() => setStep(2)} lang={lang} setLang={setLang}
+        title={t(lang, "uniFieldTitle")} description={t(lang, "uniFieldDesc")}>
+        <SelectField label={t(lang, "uniFieldTitle")} value={form.universityMajor} onChange={(e) => set("universityMajor", e.target.value)}
+          options={[{ value: "", label: t(lang, "notSureYet") }, ...UNI_FIELDS.map((f) => ({ value: f.id, label: lang === "km" ? f.labelKm : f.label }))]} />
+
+        <PrimaryButton onClick={() => setStep(4)} disabled={!form.universityMajor} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
+          {t(lang, "continueWord")} <ChevronRight size={16} />
+        </PrimaryButton>
+      </OnboardingLayout>
+    );
+  }
+  if (isUni && step === 4) {
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={4} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+        onBack={() => setStep(3)} lang={lang} setLang={setLang}
+        title={t(lang, "uniYearTitle")} description={t(lang, "uniYearDesc")}>
+        <SelectField label={t(lang, "uniYearTitle")} value={form.universityYear} onChange={(e) => set("universityYear", e.target.value)}
+          options={UNI_YEARS.map((y) => ({ value: y.id, label: lang === "km" ? y.labelKm : y.label }))} />
+
+        <PrimaryButton onClick={() => onComplete({ ...form, age: Number(form.age) || null })} disabled={!form.universityYear} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
+          {t(lang, "continueWord")} <ChevronRight size={16} />
+        </PrimaryButton>
+      </OnboardingLayout>
+    );
+  }
+
+  // ── High-school step 2: academic track ──
+  if (step === 2) {
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
         title={t(lang, "chooseTrackTitle")} description={t(lang, "chooseTrackDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
           {Object.entries(FIELD_META).map(([key, meta]) => (
@@ -1119,15 +1282,16 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           ))}
         </div>
 
-        <PrimaryButton onClick={() => setStep(2)} disabled={!canFinish} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
+        <PrimaryButton onClick={() => setStep(3)} disabled={!canFinish} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
           {t(lang, "continueWord")} <ChevronRight size={16} />
         </PrimaryButton>
       </OnboardingLayout>
     );
   }
 
+  // ── High-school step 3: learning preferences ──
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(1)} lang={lang} setLang={setLang}
+    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
       title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}>
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
@@ -3037,6 +3201,212 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
   );
 }
 
+/* ════════════════════════ University Hub ════════════════════════
+   Replaces Dashboard/Browse/Practice/Progress for university profiles — none of the BAC II
+   mastery engine applies here (see deriveInsights' university branch above), so this section
+   builds its own lightweight views straight off `p.universityProfile` instead. */
+function UniversityHub({ p, go, lang = "en" }) {
+  const up = p.universityProfile || {};
+  const major = UNI_FIELDS.find((f) => f.id === up.major);
+  const year = UNI_YEARS.find((y) => y.id === up.year);
+  const courses = UNI_COURSES[up.major] || [];
+  const goals = up.goals || [];
+  const [openCourse, setOpenCourse] = useState(null);
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "dashGreetingPrefix")} {p.name.split(" ")[0]}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>
+          {major ? (lang === "km" ? major.labelKm : major.label) : ""}{year ? ` · ${lang === "km" ? year.labelKm : year.label}` : ""}
+        </p>
+      </div>
+
+      {goals.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {goals.map((gid) => {
+            const g = UNI_GOALS.find((x) => x.id === gid);
+            if (!g) return null;
+            return (
+              <span key={gid} className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                <g.icon size={12} /> {lang === "km" ? g.labelKm : g.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Continue Learning */}
+      <div className="eai-card p-6">
+        <CardHead title={t(lang, "uniHubContinueLearning")} />
+        {courses.length ? (
+          <div className="space-y-3">
+            {courses.map((c) => {
+              const isOpen = openCourse === c.id;
+              return (
+                <div key={c.id} className="eai-card overflow-hidden">
+                  <button onClick={() => setOpenCourse(isOpen ? null : c.id)} className="eai-focus w-full flex items-center justify-between gap-3 p-4 text-left">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <BookOpen size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                      <span className={`eai-display font-bold text-sm truncate ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? c.titleKm : c.title}</span>
+                      <span className="text-xs eai-muted flex-shrink-0">({c.lessons.length})</span>
+                    </div>
+                    <ChevronRight size={16} className="eai-muted flex-shrink-0" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s ease" }} />
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-4 space-y-2.5 border-t" style={{ borderColor: "var(--line)" }}>
+                      {(lang === "km" ? c.lessonsKm : c.lessons).map((l, i) => (
+                        <div key={i} className="flex items-center gap-2 pt-3">
+                          <Circle size={5} style={{ fill: "var(--muted)" }} className="flex-shrink-0" />
+                          <span className={`text-sm ${lang === "km" ? "eai-km" : ""}`}>{l}</span>
+                        </div>
+                      ))}
+                      <p className={`text-xs eai-muted pt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniHubLessonsComingSoon")}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniHubCoursesComingSoon")}</p>
+        )}
+      </div>
+
+      {/* Explore teaser */}
+      <div className="eai-card p-6">
+        <CardHead title={t(lang, "navExplore")} action={<button onClick={() => go("explore")} className={`eai-focus text-xs font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{t(lang, "viewWord")}</button>} />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { icon: Sparkles, label: t(lang, "askAiCoach"), tab: "coach" },
+            { icon: Mic, label: "IELTS / TOEFL", tab: "languages" },
+            { icon: Landmark, label: t(lang, "navUniversities"), tab: "universities" },
+          ].map((it) => (
+            <button key={it.tab} onClick={() => go(it.tab)} className={`eai-tile eai-focus p-4 rounded-2xl border text-left ${lang === "km" ? "eai-km" : ""}`} style={{ borderColor: "var(--line)" }}>
+              <it.icon size={20} style={{ color: "var(--primary)" }} />
+              <p className="text-sm font-semibold mt-2">{it.label}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Full-page "Explore" hub for university profiles — categorized links to what already exists
+   today, with honest "coming soon" tags for what Phase 2 (Scholarship Center, university filters,
+   subject quizzes) will add. Reachable from UNI_NAV and from the Hub's teaser row above. */
+function UniversityExplore({ go, lang = "en" }) {
+  const categories = [
+    { title: t(lang, "exploreLearnTitle"), items: [
+      { icon: Sparkles, label: t(lang, "askAiCoach"), onClick: () => go("coach") },
+    ] },
+    { title: t(lang, "explorePrepareTitle"), items: [
+      { icon: Mic, label: "IELTS / TOEFL", onClick: () => go("languages") },
+    ] },
+    { title: t(lang, "exploreDiscoverTitle"), items: [
+      { icon: Landmark, label: t(lang, "navUniversities"), onClick: () => go("universities") },
+      { icon: DollarSign, label: t(lang, "scholarshipsWord"), disabled: true },
+    ] },
+    { title: t(lang, "explorePracticeTitle"), items: [
+      { icon: Target, label: t(lang, "quizzesMockExams"), disabled: true },
+    ] },
+  ];
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "navExplore")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniExploreDesc")}</p>
+      </div>
+      {categories.map((cat) => (
+        <div key={cat.title} className="eai-card p-6">
+          <CardHead title={cat.title} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {cat.items.map((it) => (
+              <button key={it.label} onClick={it.onClick} disabled={it.disabled}
+                className={`eai-tile eai-focus p-4 rounded-2xl border text-left ${it.disabled ? "cursor-not-allowed" : ""} ${lang === "km" ? "eai-km" : ""}`}
+                style={{ borderColor: "var(--line)", opacity: it.disabled ? 0.6 : 1 }}>
+                <it.icon size={20} style={{ color: "var(--primary)" }} />
+                <p className="text-sm font-semibold mt-2">{it.label}</p>
+                {it.disabled && <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "comingSoon")}</p>}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Lightweight Progress view for university profiles — the BAC II Progress component's "Exam
+   readiness"/"Subject mastery" framing doesn't apply here, so this only shows what's honestly
+   real for a university account right now (streak, XP, leaderboard) rather than fabricating
+   course-completion stats before real lesson tracking exists. */
+function UniversityProgress({ p, lang = "en" }) {
+  const leaderboard = useMemo(() => {
+    const entries = [...LEADERBOARD_SEED, { name: p.name, xp: p.xp, isYou: true }];
+    return entries.sort((a, b) => b.xp - a.xp).map((e, i) => ({ ...e, rank: i + 1 }));
+  }, [p.name, p.xp]);
+  const you = leaderboard.find((e) => e.isYou);
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "navProgress")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniProgressDesc")}</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { l: t(lang, "streakKeepIt"), v: `${p.streak}`, icon: Flame, c: "var(--ember)" },
+          { l: "XP", v: p.xp.toLocaleString(), icon: Zap, c: "var(--gold)" },
+          { l: "Level", v: `${p.level}`, icon: TrendingUp, c: "var(--primary)" },
+        ].map((s) => (
+          <div key={s.l} className="eai-card p-4 flex items-center gap-3">
+            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 38, height: 38, background: "var(--bg-soft)" }}>
+              <s.icon size={18} style={{ color: s.c }} />
+            </div>
+            <div className="min-w-0">
+              <p className="eai-display text-xl font-extrabold leading-none">{s.v}</p>
+              <p className={`text-xs eai-muted mt-0.5 truncate ${lang === "km" ? "eai-km" : ""}`}>{s.l}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="eai-card p-6">
+        <CardHead title={t(lang, "leaderboard")} />
+        <div className="space-y-1.5">
+          {leaderboard.slice(0, 8).map((e) => (
+            <div key={e.name} className="flex items-center gap-3 p-2.5 rounded-2xl" style={{ background: e.isYou ? "var(--primary-soft)" : "transparent" }}>
+              <div className="grid place-items-center rounded-full flex-shrink-0 eai-display font-bold text-xs" style={{
+                width: 28, height: 28,
+                background: e.rank === 1 ? "var(--gold-soft)" : e.rank === 3 ? "var(--ember-soft)" : "var(--bg-soft)",
+                color: e.rank === 1 ? "var(--gold)" : e.rank === 3 ? "var(--ember)" : "var(--muted)",
+              }}>
+                {e.rank === 1 ? <Crown size={14} /> : e.rank}
+              </div>
+              <p className="text-sm font-semibold truncate flex-1 min-w-0" style={{ color: e.isYou ? "var(--primary)" : "var(--ink)" }}>
+                {e.name}{e.isYou && <span className={`text-xs eai-muted font-normal ${lang === "km" ? "eai-km" : ""}`}> · {t(lang, "youWord")}</span>}
+              </p>
+              <span className="text-xs font-bold eai-display flex items-center gap-1 flex-shrink-0" style={{ color: "var(--gold)" }}>
+                <Zap size={12} /> {e.xp.toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+        {you.rank > 8 && (
+          <p className={`text-xs eai-muted mt-3 text-center ${lang === "km" ? "eai-km" : ""}`}>#{you.rank} · {you.xp.toLocaleString()} XP</p>
+        )}
+      </div>
+
+      <div className="eai-card p-6 text-center">
+        <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniProgressComingSoon")}</p>
+      </div>
+    </div>
+  );
+}
+
 /* ════════════════════════ AI Coach (self-contained demo tutor) ════════════════════════ */
 /* Profile-aware scripted replies — no backend or API key needed. Extend SCRIPTS freely. */
 
@@ -3175,6 +3545,47 @@ async function majorGuidanceReply(t, p, history) {
     return data.text;
   } catch {
     return majorCoachReply(t, p);
+  }
+}
+
+/* Scripted fallback for University Mentor when /api/university-mentor is unreachable. */
+function universityCoachReply(text, p) {
+  const t = text.toLowerCase();
+  const up = p.universityProfile || {};
+  const major = UNI_FIELDS.find((f) => f.id === up.major)?.label || "your field";
+
+  if (/\bcourse|lesson|learn\b/.test(t))
+    return `Check the Continue Learning section on your University Hub for a ${major} course outline. Full interactive lessons are coming soon — for now, tell me a specific topic and I'll do my best to explain it.`;
+  if (/\bscholarship|fund\w*\b/.test(t))
+    return `A dedicated Scholarship Center is coming soon. In the meantime, tell me what you're eligible for (grades, English score, target country) and I can point you toward the kind of scholarships to search for.`;
+  if (/\bcareer|job\b/.test(t))
+    return `For ${major}, the strongest early moves are usually a portfolio/projects, an internship, and networking in that field. Want a starter checklist for one of those?`;
+  if (/\b(hello|hi|hey)\b|សួស្តី/.test(t))
+    return `Hi ${p.name.split(" ")[0]}! I'm your university mentor for ${major}. Ask me about coursework, career prep, scholarships, or studying abroad.`;
+
+  return `I can help with ${major} coursework, career prep, scholarships, or study-abroad questions. What's on your mind?`;
+}
+
+/* University Mentor calls /api/university-mentor (same Gemini+Groq serverless pattern as Major
+   Guidance), grounded in the student's major/year/goals instead of a BAC II track. Falls back to
+   the scripted matcher above on any failure. */
+async function universityMentorReply(t, p, history) {
+  const up = p.universityProfile || {};
+  try {
+    const res = await fetch("/api/university-mentor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: t,
+        history: history.map((m) => ({ role: m.role, text: m.text })),
+        context: { name: p.name, major: up.major, year: up.year, goals: up.goals },
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.text) throw new Error(data.error || "Request failed");
+    return data.text;
+  } catch {
+    return universityCoachReply(t, p);
   }
 }
 
@@ -3717,6 +4128,15 @@ const COACH_MODES = {
     intro: "Tell me a subject you enjoy or an interest, and I'll suggest real majors at Cambodian universities.",
     reply: majorGuidanceReply,
   },
+  university: {
+    label: "University Mentor", icon: Compass,
+    subtitle: "Knows your major, year and goals — coursework, career prep, scholarships and study abroad",
+    greeting: (p) => `Hi ${p.name.split(" ")[0]}! I'm your university mentor. Ask me about ${UNI_FIELDS.find((f) => f.id === p.universityProfile?.major)?.label || "your field"} coursework, career prep, scholarships, or studying abroad.`,
+    suggestions: (p) => ["Help me understand a topic", "What should I do to prepare for a career in this field?", "What scholarships should I look for?"],
+    placeholder: "Ask about your major, career, or scholarships…",
+    intro: "Tell me what you're working on — a course topic, a career question, or a scholarship you're eyeing — and I'll help.",
+    reply: universityMentorReply,
+  },
 };
 
 /* ── Chat UI (Claude / ChatGPT style): message column, rich composer, photo questions ── */
@@ -3861,9 +4281,17 @@ function AssistantMessage({ m, Icon }) {
   );
 }
 
+/* University profiles only ever see the University Mentor mode — Study Help is explicitly
+   grounded in "the Grade 12 curriculum" and Major Guidance in BAC II subjects, so showing either
+   to a university student would be exactly the BAC II routing bug this Hub exists to avoid. */
+const COACH_MODE_IDS_UNIVERSITY = ["university"];
+const COACH_MODE_IDS_HIGHSCHOOL = ["study", "major"];
+
 function Coach({ p }) {
-  const [mode, setMode] = useState("study");
-  const [msgsByMode, setMsgsByMode] = useState({ study: [], major: [] });
+  const isUni = p.educationLevel === "university";
+  const [mode, setMode] = useState(isUni ? "university" : "study");
+  const [msgsByMode, setMsgsByMode] = useState({ study: [], major: [], university: [] });
+  const availableModeIds = isUni ? COACH_MODE_IDS_UNIVERSITY : COACH_MODE_IDS_HIGHSCHOOL;
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -4072,7 +4500,7 @@ function Coach({ p }) {
           <span className="text-xs eai-muted hidden md:inline">{active.subtitle}</span>
         </div>
         <div className="flex gap-1 p-1 rounded-full eai-soft">
-          {Object.entries(COACH_MODES).map(([id, m]) => (
+          {availableModeIds.map((id) => [id, COACH_MODES[id]]).map(([id, m]) => (
             <button key={id} onClick={() => setMode(id)}
               className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5"
               style={{ background: mode === id ? "var(--card)" : "transparent", color: mode === id ? "var(--ink)" : "var(--muted)", boxShadow: mode === id ? "var(--shadow)" : "none" }}>
@@ -4328,6 +4756,18 @@ const NAV = [
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
 ];
 
+/* Sidebar shown instead of NAV for university profiles — no Browse-exams/Practice (both BAC II
+   specific), and University Hub replaces Dashboard. This is the actual fix for "University
+   shouldn't send users to Grade 12/BAC II content." */
+const UNI_NAV = [
+  { id: "universityHub", label: "University Hub", labelKm: "មជ្ឈមណ្ឌលសាកលវិទ្យាល័យ", icon: LayoutDashboard },
+  { id: "explore", label: "Explore", labelKm: "ស្វែងរក", icon: Compass },
+  { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
+  { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
+  { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
+  { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
+];
+
 /* ════════════════════════ UI localization (English / Khmer) ════════════════════════
    A small, hand-picked dictionary for the highest-traffic screens (nav, welcome, dashboard,
    language hub) rather than a full line-by-line translation of the whole app — t(lang, key)
@@ -4422,6 +4862,22 @@ const STRINGS = {
     errEnterPhone: "Enter the phone number you used to sign up.",
     errPhoneNotFound: "We couldn't find an account with that phone number on this device.",
     // Register
+    eduLevelTitle: "What's your education level?",
+    eduLevelDesc: "This decides what Bondus shows you next — high school and university have completely different content.",
+    highSchoolOptTitle: "High School", highSchoolOptDesc: "Grade 11 or 12, preparing for the BAC II exam.",
+    universityOptTitle: "University", universityOptDesc: "Already at university, or preparing for university entrance.",
+    uniGoalsTitle: "What are you looking for?", uniGoalsDesc: "Select everything that applies — you can change this later.",
+    uniFieldTitle: "What's your field?", uniFieldDesc: "Pick the closest match — you can change this later.",
+    uniYearTitle: "Where are you now?", uniYearDesc: "So we can tailor what we show you.",
+    // University Hub
+    uniHubContinueLearning: "Continue learning",
+    uniHubCoursesComingSoon: "Course content for this field is coming soon. In the meantime, explore Universities, IELTS prep, or ask your AI mentor.",
+    uniHubLessonsComingSoon: "Full interactive lessons are coming soon — this is the course outline.",
+    uniExploreDesc: "Everything you need, organized in one place — instead of searching across the web.",
+    exploreLearnTitle: "Learn", explorePrepareTitle: "Prepare", exploreDiscoverTitle: "Discover", explorePracticeTitle: "Practice",
+    askAiCoach: "Ask your AI coach", scholarshipsWord: "Scholarships", quizzesMockExams: "Quizzes & mock exams",
+    uniProgressDesc: "Your learning activity across Bondus.",
+    uniProgressComingSoon: "Detailed course and quiz analytics are coming soon.",
     createAccountTitle: "Create your account", createAccountDesc: "A few details so your AI coach and study plan fit you.",
     fullNameLabel: "Full name", ageLabel: "Age", gradeLevelLabel: "Grade level",
     grade11: "Grade 11", grade12: "Grade 12 (BAC II)", targetGradeLabel: "Target grade", gradeWord: "Grade",
@@ -4541,6 +4997,22 @@ const STRINGS = {
     errEnterPhone: "សូមបញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើចុះឈ្មោះ។",
     errPhoneNotFound: "យើងរកមិនឃើញគណនីជាមួយលេខទូរស័ព្ទនោះនៅលើឧបករណ៍នេះទេ។",
     // Register
+    eduLevelTitle: "តើកម្រិតការសិក្សារបស់អ្នកគឺជាអ្វី?",
+    eduLevelDesc: "នេះកំណត់នូវអ្វីដែល Bondus បង្ហាញអ្នកបន្ទាប់ — ថ្នាក់វិទ្យាល័យ និងសាកលវិទ្យាល័យមានខ្លឹមសារខុសគ្នាទាំងស្រុង។",
+    highSchoolOptTitle: "វិទ្យាល័យ", highSchoolOptDesc: "ថ្នាក់ទី១១ ឬទី១២ រៀបចំសម្រាប់ការប្រឡង BAC II។",
+    universityOptTitle: "សាកលវិទ្យាល័យ", universityOptDesc: "កំពុងសិក្សានៅសាកលវិទ្យាល័យ ឬរៀបចំចូលរៀន។",
+    uniGoalsTitle: "តើអ្នកកំពុងស្វែងរកអ្វី?", uniGoalsDesc: "ជ្រើសរើសអ្វីៗគ្រប់យ៉ាងដែលពាក់ព័ន្ធ — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
+    uniFieldTitle: "តើជំនាញរបស់អ្នកគឺជាអ្វី?", uniFieldDesc: "ជ្រើសរើសជម្រើសដែលនិងគ្នាបំផុត — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
+    uniYearTitle: "តើអ្នកនៅដំណាក់កាលណា?", uniYearDesc: "ដើម្បីឲ្យយើងកែសម្រួលអ្វីដែលបង្ហាញអ្នក។",
+    // University Hub
+    uniHubContinueLearning: "បន្តការសិក្សា",
+    uniHubCoursesComingSoon: "ខ្លឹមសារវគ្គសិក្សាសម្រាប់ជំនាញនេះនឹងមកដល់ឆាប់ៗនេះ។ ចន្លោះពេលនេះ សូមស្វែងរកសាកលវិទ្យាល័យ រៀបចំ IELTS ឬសួរគ្រូបង្វឹក AI របស់អ្នក។",
+    uniHubLessonsComingSoon: "មេរៀនអន្តរកម្មពេញលេញនឹងមកដល់ឆាប់ៗនេះ — នេះជាគ្រោងវគ្គសិក្សា។",
+    uniExploreDesc: "អ្វីៗគ្រប់យ៉ាងដែលអ្នកត្រូវការ រៀបចំនៅកន្លែងតែមួយ — ជំនួសឲ្យការស្វែងរកនៅលើអ៊ីនធឺណិត។",
+    exploreLearnTitle: "រៀន", explorePrepareTitle: "រៀបចំ", exploreDiscoverTitle: "ស្វែងយល់", explorePracticeTitle: "អនុវត្ត",
+    askAiCoach: "សួរគ្រូបង្វឹក AI របស់អ្នក", scholarshipsWord: "អាហារូបករណ៍", quizzesMockExams: "កម្រងសំណួរ និងការប្រឡងសាកល្បង",
+    uniProgressDesc: "សកម្មភាពសិក្សារបស់អ្នកនៅលើ Bondus។",
+    uniProgressComingSoon: "ការវិភាគលម្អិតអំពីវគ្គសិក្សា និងកម្រងសំណួរនឹងមកដល់ឆាប់ៗនេះ។",
     createAccountTitle: "បង្កើតគណនីរបស់អ្នក", createAccountDesc: "ព័ត៌មានមួយចំនួនដើម្បីឲ្យគ្រូបង្វឹក AI និងផែនការសិក្សាសមស្របនឹងអ្នក។",
     fullNameLabel: "ឈ្មោះពេញ", ageLabel: "អាយុ", gradeLevelLabel: "កម្រិតថ្នាក់",
     grade11: "ថ្នាក់ទី១១", grade12: "ថ្នាក់ទី១២ (BAC II)", targetGradeLabel: "និទ្ទេសគោលដៅ", gradeWord: "និទ្ទេស",
@@ -4608,7 +5080,7 @@ export default function App() {
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
   const [dark, setDark] = useState(true);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
@@ -4651,14 +5123,29 @@ export default function App() {
     setPlan(data.plan ?? []);
     setBonusXp(data.bonusXp ?? 0);
     setShowWelcomeBack(true);
+    setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
 
   // Registration collects answers, then the student chooses to take the diagnostic now or explore
   // first — self-reports alone aren't trusted, but personalization is never required to start.
-  const handleRegister = (reg) => { setPendingReg(reg); setResumeReg(null); };
+  // University profiles skip AssessmentChoice/Diagnostic entirely — there's no BAC II mastery
+  // engine for them, so the account activates immediately into the University Hub.
+  const handleRegister = (reg) => {
+    if (reg.educationLevel === "university") {
+      // Register's form keeps these as flat fields (universityGoals/Major/Year); nest them into
+      // universityProfile here so UniversityHub, the University Mentor Coach mode and
+      // deriveInsights only ever have one shape to read from.
+      const { universityGoals, universityMajor, universityYear, ...rest } = reg;
+      const built = buildProfile({ ...rest, universityProfile: { goals: universityGoals, major: universityMajor, year: universityYear } });
+      setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
+      setTab("universityHub");
+      return;
+    }
+    setPendingReg(reg); setResumeReg(null);
+  };
   // "Back" from the step-4 AssessmentChoice screen — re-opens Register at step 3 with prior answers intact.
-  const handleBackToPreferences = () => { setResumeReg({ form: pendingReg, step: 2 }); setPendingReg(null); };
+  const handleBackToPreferences = () => { setResumeReg({ form: pendingReg, step: 3 }); setPendingReg(null); };
   const handleDiagnosticComplete = (diagnosticMastery) => {
     const built = buildProfile(pendingReg);
     const insights = deriveInsights(built, diagnosticMastery);
@@ -4749,11 +5236,15 @@ export default function App() {
   );
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const isUniProfile = profile.educationLevel === "university";
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} lang={lang} />,
     browse: <Browse p={p} lang={lang} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
-    universities: <Universities lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />, progress: <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} />,
+    universities: <Universities lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
+    progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} />,
+    universityHub: <UniversityHub p={p} go={go} lang={lang} />,
+    explore: <UniversityExplore go={go} lang={lang} />,
     super: <SuperBondus lang={lang} />,
   }[tab];
 
@@ -4772,7 +5263,7 @@ export default function App() {
             <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
-            {NAV.map((n) => {
+            {(isUniProfile ? UNI_NAV : NAV).map((n) => {
               const on = tab === n.id;
               const premiumColor = "var(--gold)";
               return (

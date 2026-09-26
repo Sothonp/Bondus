@@ -17,6 +17,12 @@
   to = "/.netlify/functions/major-guidance"
   status = 200
 
+# Keep the frontend's /api/university-mentor path working on Netlify.
+[[redirects]]
+  from = "/api/university-mentor"
+  to = "/.netlify/functions/university-mentor"
+  status = 200
+
 # Single-page app: every other path serves index.html.
 [[redirects]]
   from = "/*"
