@@ -650,7 +650,19 @@ input.eai-input::placeholder{ color:var(--muted); }
    step's question, one at a time, instead of a plain heading. */
 .eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:0px; margin-bottom:22px; }
 .eai-ob-mascot-avatar{ width:132px; height:180px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
-.eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; }
+.eai-ob-mascot-avatar img{ animation:eai-ob-mascot-idle 2.8s ease-in-out infinite; transform-origin:70% 100%; }
+/* A gentle head-nod + lean-toward-the-bubble loop — the mascot "asks" the question and points
+   toward it, rebuilt as a whole-image rock since the art is one static render, not a rigged/
+   layered character. */
+@keyframes eai-ob-mascot-idle{
+  0%, 100% { transform:translateY(0) rotate(0deg); }
+  20% { transform:translateY(-3px) rotate(5deg); }
+  45% { transform:translateY(0) rotate(3deg); }
+  70% { transform:translateY(-5px) rotate(-3deg); }
+  85% { transform:translateY(-1px) rotate(0deg); }
+}
+.eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; animation:eai-ob-bubble-in .35s ease-out; }
+@keyframes eai-ob-bubble-in{ from{ opacity:0; transform:translateX(-8px) scale(.97); } to{ opacity:1; transform:none; } }
 .eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:64px; width:14px; height:14px; background:var(--card);
   border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:rotate(45deg); border-radius:0 0 0 3px; }
 .eai-ob-bubble .eai-ob-title{ font-size:20px; margin:0; }
@@ -705,6 +717,8 @@ input.eai-input::placeholder{ color:var(--muted); }
 @media (prefers-reduced-motion: reduce){
   .eai-ob-progress-fill{ transition:none; }
   .eai-ob-track-card, .eai-ob-btn-primary, .eai-ob-btn-secondary, .eai-ob-toggle{ transition:none; }
+  .eai-ob-mascot-avatar img{ animation:none; }
+  .eai-ob-bubble{ animation:none; }
 }
 `;
 
