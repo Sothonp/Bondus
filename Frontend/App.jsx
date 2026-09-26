@@ -911,7 +911,9 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
 
             {(title || description) && (
               <div className="eai-ob-mascot-row">
-                <div className="eai-ob-mascot-avatar"><BondusLogo /></div>
+                <div className="eai-ob-mascot-avatar">
+                  <img src="/logos/Bondus_mascot_headphones.png" alt="Bondus mascot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
                 <div className="eai-ob-bubble">
                   {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
                   {description && <p className={`eai-ob-desc ${lang === "km" ? "eai-km" : ""}`}>{description}</p>}
