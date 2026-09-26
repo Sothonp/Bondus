@@ -1257,7 +1257,6 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
       <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
         <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
           value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
-          onFocus={() => setMascotState("hover")} onBlur={() => setMascotState("idle")}
           onKeyDown={(e) => e.key === "Enter" && submit()} />
       </FormField>
 
@@ -1292,9 +1291,6 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
   const isUni = form.educationLevel === "university";
-  const [mascotState, setMascotState] = useState("idle");
-  const hoverOn = () => setMascotState("hover");
-  const hoverOff = () => setMascotState("idle");
 
   // Unlimited multi-select (high-school "subjects to improve").
   const toggleImprove = (id) => setForm((f) => ({
@@ -1309,17 +1305,13 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── Step 0: education level gate ──
   if (step === 0) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} onBack={onBack} lang={lang} setLang={setLang}
+      <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
         title={t(lang, "eduLevelTitle")} description={t(lang, "eduLevelDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
-            <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
-              buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
-          </div>
-          <div onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
-            <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
-              buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setStep(1); }} />
-          </div>
+          <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
+            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
+          <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
+            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setStep(1); }} />
         </div>
       </OnboardingLayout>
     );
@@ -1328,7 +1320,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── Step 1: account details (shared layout; grade/target only shown for high school) ──
   if (step === 1) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
+      <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
         onBack={() => setStep(0)} lang={lang} setLang={setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
@@ -1364,7 +1356,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── University steps 2–4 ──
   if (isUni && step === 2) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={2} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+      <OnboardingLayout dark={dark} setDark={setDark} step={2} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
         onBack={() => setStep(1)} lang={lang} setLang={setLang}
         title={t(lang, "uniGoalsTitle")} description={t(lang, "uniGoalsDesc")}>
         <div className="flex flex-wrap gap-2">
@@ -1381,7 +1373,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   }
   if (isUni && step === 3) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={3} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+      <OnboardingLayout dark={dark} setDark={setDark} step={3} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
         onBack={() => setStep(2)} lang={lang} setLang={setLang}
         title={t(lang, "uniFieldTitle")} description={t(lang, "uniFieldDesc")}>
         <SelectField label={t(lang, "uniFieldTitle")} value={form.universityMajor} onChange={(e) => set("universityMajor", e.target.value)}
@@ -1395,7 +1387,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   }
   if (isUni && step === 4) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={4} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+      <OnboardingLayout dark={dark} setDark={setDark} step={4} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
         onBack={() => setStep(3)} lang={lang} setLang={setLang}
         title={t(lang, "uniYearTitle")} description={t(lang, "uniYearDesc")}>
         <SelectField label={t(lang, "uniYearTitle")} value={form.universityYear} onChange={(e) => set("universityYear", e.target.value)}
@@ -1411,7 +1403,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── High-school step 2: academic track ──
   if (step === 2) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
+      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
         title={t(lang, "chooseTrackTitle")} description={t(lang, "chooseTrackDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
           {Object.entries(FIELD_META).map(([key, meta]) => (
@@ -1428,7 +1420,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 
   // ── High-school step 3: learning preferences ──
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
+    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
       title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}>
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
