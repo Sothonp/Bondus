@@ -650,16 +650,16 @@ input.eai-input::placeholder{ color:var(--muted); }
    step's question, one at a time, instead of a plain heading. */
 .eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:0px; margin-bottom:22px; }
 .eai-ob-mascot-avatar{ width:132px; height:180px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
-.eai-ob-mascot-avatar img{ animation:eai-ob-mascot-idle 2.8s ease-in-out infinite; transform-origin:70% 100%; }
-/* A gentle head-nod + lean-toward-the-bubble loop — the mascot "asks" the question and points
-   toward it, rebuilt as a whole-image rock since the art is one static render, not a rigged/
+.eai-ob-mascot-avatar img{ animation:eai-ob-mascot-idle 3.2s ease-in-out infinite; transform-origin:50% 100%; }
+/* A gentle plant-footed sway + breathing loop — no vertical lift (transform-origin is the feet,
+   and there's no translateY), so it rocks and swells in place instead of floating. Simulates a
+   "nod toward the bubble" via the rotate, since the art is one static render, not a rigged/
    layered character. */
 @keyframes eai-ob-mascot-idle{
-  0%, 100% { transform:translateY(0) rotate(0deg); }
-  20% { transform:translateY(-3px) rotate(5deg); }
-  45% { transform:translateY(0) rotate(3deg); }
-  70% { transform:translateY(-5px) rotate(-3deg); }
-  85% { transform:translateY(-1px) rotate(0deg); }
+  0%, 100% { transform:rotate(0deg) scaleY(1); }
+  25% { transform:rotate(4deg) scaleY(1.015); }
+  50% { transform:rotate(0deg) scaleY(1); }
+  75% { transform:rotate(-3deg) scaleY(1.01); }
 }
 .eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; animation:eai-ob-bubble-in .35s ease-out; }
 @keyframes eai-ob-bubble-in{ from{ opacity:0; transform:translateX(-8px) scale(.97); } to{ opacity:1; transform:none; } }
