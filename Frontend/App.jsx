@@ -662,7 +662,7 @@ input.eai-input::placeholder{ color:var(--muted); }
    idle = organic breathing/sway, feet planted, no floating. Other states are one-shot reactions
    to real UI events (hover a button, submit a form, log in) rather than loops. */
 .eai-mascot{ display:inline-block; }
-.eai-mascot-img{ transform-origin:50% 100%; will-change:transform; }
+.eai-mascot-img{ transform-origin:50% 100%; will-change:transform; -webkit-user-drag:none; user-select:none; -webkit-user-select:none; pointer-events:none; }
 
 .eai-mascot-idle .eai-mascot-img{ animation:eai-mascot-idle 3.2s ease-in-out infinite; }
 @keyframes eai-mascot-idle{
