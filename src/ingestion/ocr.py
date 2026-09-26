@@ -108,7 +108,7 @@ class OCRError(RuntimeError):
         self.status = status
 
 
-OCREngine = Literal["gemini", "kiri", "groq", "openrouter", "hybrid"]
+OCREngine = Literal["gemini", "kiri", "groq", "openrouter", "surya", "hybrid"]
 
 # A vision model that thinks out loud writes its doubts into the transcript
 # ("It looks like $-\frac{x}{2}$ but wait, is it a 0 or a 2?"), often in a loop.
@@ -478,13 +478,19 @@ def resolve_ocr_engine(settings: Settings) -> OCREngine | None:
         if not kiri_available():
             raise RuntimeError("OCR_ENGINE=kiri requires kiri-ocr (uv add kiri-ocr)")
         return "kiri"
+    if settings.ocr_engine == "surya":
+        if not settings.surya_python:
+            raise RuntimeError(
+                "OCR_ENGINE=surya requires SURYA_PYTHON, the python of an environment with surya-ocr"
+            )
+        return "surya"
     if settings.ocr_engine == "hybrid":
         if not kiri_available():
             raise RuntimeError("OCR_ENGINE=hybrid requires kiri-ocr (uv add kiri-ocr)")
         if not _hybrid_vision_engines(settings):
             raise RuntimeError(
                 "OCR_ENGINE=hybrid needs a vision engine for the mathematics: set "
-                "GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY, and list them in "
+                "GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY (or SURYA_PYTHON), and list them in "
                 "HYBRID_VISION_ENGINES"
             )
         return "hybrid"
@@ -501,12 +507,26 @@ def _hybrid_vision_engines(settings: Settings) -> list[str]:
         "gemini": settings.gemini_api_key,
         "groq": settings.groq_api_key,
         "openrouter": settings.openrouter_api_key,
+        "surya": settings.surya_python,
     }
     return [name for name in settings.hybrid_vision_engine_list if keys.get(name) is not None]
 
 
 def _build_vision_engine(name: str, settings: Settings) -> CachedPageOCR:
     """One vision engine configured for corpus pages, not for student photos."""
+    if name == "surya":
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        return SuryaPageOCR(
+            settings.surya_python,
+            backend=settings.surya_backend,
+            llama_binary=settings.surya_llama_binary,
+            timeout=settings.surya_timeout_seconds,
+            render_scale=settings.kiri_render_scale,
+            mode=settings.ocr_mode,
+            min_chars=settings.ocr_min_chars,
+            cache_dir=settings.ocr_cache_dir,
+        )
     if name == "groq":
         from src.ingestion.image_ocr import GroqVisionOCR
 

@@ -18,7 +18,7 @@ LLMProvider = Literal[
 ]
 EmbeddingBackend = Literal["sentence-transformers", "hashing"]
 KhmerSegmenterBackend = Literal["auto", "crf", "regex"]
-OCREngineSetting = Literal["auto", "gemini", "kiri", "groq", "hybrid"]
+OCREngineSetting = Literal["auto", "gemini", "kiri", "groq", "surya", "hybrid"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
@@ -236,12 +236,23 @@ class Settings(BaseSettings):
     kiri_khmer_only: bool = True
     kiri_render_scale: float = Field(2.0, ge=0.5, le=6.0)
 
+    # Surya 2 (local, open source): whole pages with clean LaTeX and headings,
+    # weaker Khmer than Kiri (see src/ingestion/surya_ocr.py). surya-ocr cannot
+    # share this project's environment, so SURYA_PYTHON is the interpreter of a
+    # separate one with surya-ocr installed. It serves its model with llama.cpp
+    # (SURYA_LLAMA_BINARY, the llama-server binary) or vLLM (in Docker).
+    surya_python: str | None = None
+    surya_backend: Literal["llamacpp", "vllm"] | None = None
+    surya_llama_binary: str | None = None
+    surya_timeout_seconds: float = Field(600.0, gt=0)
+
     # OCR_ENGINE=hybrid: Kiri reads the Khmer of each page and hands its reading
     # to a vision model, which transcribes the page with the formulas in LaTeX
     # and spells the Khmer the way Kiri read it. Vision engines are tried in the
     # listed order; one without a key is skipped.
     # Groq is not a default: its only vision model is Qwen, and the project uses
-    # no Chinese models.
+    # no Chinese models. surya is the local one (needs SURYA_PYTHON); it takes no
+    # hint, so Kiri's reading does not reach it.
     hybrid_vision_engines: str = "gemini,openrouter"
     # By default a page whose vision engines all failed is still indexed from
     # Kiri's Khmer-only reading (prose, no formulas). Set this to fail the page
@@ -376,7 +387,7 @@ class Settings(BaseSettings):
 
     @property
     def hybrid_vision_engine_list(self) -> list[str]:
-        known = ("gemini", "groq", "openrouter")
+        known = ("gemini", "groq", "openrouter", "surya")
         engines = [e.strip().lower() for e in self.hybrid_vision_engines.split(",") if e.strip()]
         unknown = sorted(set(engines) - set(known))
         if unknown:

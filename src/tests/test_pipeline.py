@@ -1042,6 +1042,85 @@ class TestKiriOCR:
             extract_document(b"img", "photo.gif", ocr=None)
 
 
+class TestSuryaOCR:
+    def test_blocks_become_markdown_with_headings_and_formulas(self):
+        from src.ingestion.surya_ocr import blocks_to_markdown
+
+        blocks = [
+            {"label": "SectionHeader", "html": "<h2><b>មេរៀនទី៣</b></h2>"},
+            {"label": "SectionHeader", "html": "<h2>ភាពជាប់នៃអនុគមន៍</h2>"},
+            {"label": "SectionHeader", "html": "<h1>២. អនុគមន៍បន្លាយតាមភាពជាប់</h1>"},
+            {"label": "Text", "html": "<p>បើ <math>k = 0</math> ហើយ <math>f(a) \\cdot f(b) &lt; 0</math> នោះមាន <math>c</math></p>"},
+            {"label": "ListGroup", "html": "<ul><li>• <math>f</math> កំណត់ចំពោះ <math>x = a</math></li><li>• ជាប់</li></ul>"},
+            {"label": "Equation", "html": "<p><math>\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1</math></p>"},
+            {"label": "Equation", "html": "១. <math>\\sin(-\\alpha) = -\\sin\\alpha</math>"},
+            {"label": "Table", "html": "<table><tr><th>ច្បាប់</th><th>រូបមន្ត</th></tr><tr><td>ផលបូក</td><td><math>a+b</math></td></tr></table>"},
+            {"label": "Figure", "html": "<img>"},
+            {"label": "PageFooter", "html": "<p>www.facebook.com/7khmer</p>"},
+        ]
+        assert blocks_to_markdown(blocks).split("\n\n") == [
+            # Levels come from the heading's wording, whatever h-tag Surya chose.
+            "# មេរៀនទី៣",
+            "## ភាពជាប់នៃអនុគមន៍",
+            "### ២. អនុគមន៍បន្លាយតាមភាពជាប់",
+            # The < inside a formula is not a tag: nothing after it is lost.
+            "បើ $k = 0$ ហើយ $f(a) \\cdot f(b) < 0$ នោះមាន $c$",
+            "- $f$ កំណត់ចំពោះ $x = a$\n- ជាប់",
+            "$$\n\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1\n$$",
+            "១. $\\sin(-\\alpha) = -\\sin\\alpha$",
+            "| ច្បាប់ | រូបមន្ត |\n| --- | --- |\n| ផលបូក | $a+b$ |",
+        ]
+
+    def test_pages_go_through_one_long_lived_worker(self, tmp_path):
+        import sys
+
+        from src.ingestion.ocr import PageImage
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        worker = tmp_path / "fake_worker.py"
+        worker.write_text(
+            "import json, sys\n"
+            "starts = open(sys.argv[1], 'a'); starts.write('x'); starts.close()\n"
+            "for line in sys.stdin:\n"
+            "    path = json.loads(line)['image']\n"
+            "    data = open(path, 'rb').read().decode()\n"
+            "    if data == 'broken':\n"
+            "        print(json.dumps({'error': 'ValueError: bad page'}), flush=True)\n"
+            "        continue\n"
+            "    html = '<h1>' + data + '</h1>'\n"
+            "    print(json.dumps({'blocks': [{'label': 'SectionHeader', 'html': html}]}), flush=True)\n",
+            encoding="utf-8",
+        )
+        starts = tmp_path / "starts"
+        ocr = SuryaPageOCR(
+            "unused", cache_dir=tmp_path / "cache",
+            worker_command=[sys.executable, str(worker), str(starts)],
+        )
+        try:
+            transcripts, warnings = ocr.transcribe_pages({
+                1: PageImage("ភាពជាប់".encode(), "image/png"),
+                2: PageImage(b"limits", "image/jpeg"),
+                3: PageImage(b"broken", "image/png"),
+            })
+            assert transcripts == {1: "## ភាពជាប់", 2: "## limits"}
+            assert any("Surya failed: ValueError: bad page" in warning for warning in warnings)
+            # Cached: a second read never reaches the worker.
+            assert ocr.transcribe_page(PageImage(b"limits", "image/jpeg")) == ("## limits", False)
+        finally:
+            ocr.close()
+        assert starts.read_text() == "x", "one worker served every page"
+
+    def test_surya_needs_its_own_python(self):
+        from src.config import Settings
+        from src.ingestion.ocr import build_ocr, resolve_ocr_engine
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        with pytest.raises(RuntimeError, match="SURYA_PYTHON"):
+            resolve_ocr_engine(Settings(ocr_engine="surya", _env_file=None))
+        engine = build_ocr(Settings(ocr_engine="surya", surya_python="/opt/surya/bin/python", _env_file=None))
+        assert isinstance(engine, SuryaPageOCR) and engine.python == "/opt/surya/bin/python"
+
+
 class TestHybridOCR:
     """Kiri reads the Khmer, the vision model reads the mathematics."""
 
