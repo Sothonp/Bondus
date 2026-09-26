@@ -375,6 +375,41 @@ class TestExtraction:
         fenced = split_markdown_sections("```\nIII. (៥ពិន្ទុ)\n```", HeadingTracker())
         assert [s.starts_heading for s in fenced] == [False]
 
+    def test_a_book_tracker_carries_headings_from_image_to_image(self):
+        class PageReader:
+            def transcribe_pages(self, pages):
+                return {1: pages[1].data.decode("utf-8")}, []
+
+        pages = [
+            "# ចំនួនកុំផ្លិច\n## ទម្រង់ត្រីកោណមាត្រ\n$z = r(\\cos\\theta + i\\sin\\theta)$",
+            "$z^n = r^n(\\cos n\\theta + i\\sin n\\theta)$\n## ឫសទី n\nរូបមន្ត",
+        ]
+        tracker = HeadingTracker()
+        second = [
+            extract_document(text.encode("utf-8"), f"sheet-{n}.jpg", PageReader(), tracker)
+            for n, text in enumerate(pages, start=1)
+        ][1]
+        assert [(s.heading, s.starts_heading) for s in second.sections] == [
+            ("ចំនួនកុំផ្លិច › ទម្រង់ត្រីកោណមាត្រ", False),
+            ("ចំនួនកុំផ្លិច › ឫសទី n", True),
+        ]
+        # Without the book's tracker, each image starts with no heading at all.
+        alone = extract_document(pages[1].encode("utf-8"), "sheet-2.jpg", PageReader())
+        assert alone.sections[0].heading == ""
+
+    def test_catalogued_pages_name_their_book(self):
+        import importlib.util
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "scripts" / "ingest_corpus.py"
+        spec = importlib.util.spec_from_file_location("ingest_corpus", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        book = "សង្ខេបរូបមន្តគណិតវិទ្យា ថ្នាក់ទី១២ (ខេង តេងហៀង និង គីម សេងហុង)"
+        assert module.book_of(f"{book} ទំព័រ 5 ជួរទី2") == book
+        assert module.book_of(f"{book} ទំព័រ 6") == book
+        assert module.book_of("វិញ្ញាសាប្រឡងបាក់ឌុបគណិតវិទ្យា ២០០២–២០២៣") == ""
+
     def test_clean_markdown_keeps_latex_intact(self):
         markdown = (
             "---\ntitle: Notes\n---\n# លីមីត\n\n"
