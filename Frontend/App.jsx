@@ -1242,27 +1242,59 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
 }
 
 function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", setLang }) {
+  const [method, setMethod] = useState("phone"); // "phone" | "email"
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [mascotState, setMascotState] = useState("idle");
   const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
+  const switchMethod = (m) => { setMethod(m); setError(""); };
   const submit = () => {
-    if (!phone.trim()) { setError(t(lang, "errEnterPhone")); shake(); return; }
+    const creds = method === "phone" ? { phone: phone.trim() } : { email: email.trim(), password };
+    if (method === "phone" ? !creds.phone : !creds.email || !creds.password) {
+      setError(t(lang, method === "phone" ? "errEnterPhone" : "errEnterEmailPassword")); shake(); return;
+    }
     setMascotState("celebration");
-    // A brief optimistic celebration before the real check — if the phone genuinely isn't found,
+    // A brief optimistic celebration before the real check — if the account genuinely isn't found,
     // it flips to the sad state with the error instead, rather than staying stuck celebrating.
     setTimeout(() => {
-      if (!onLogin(phone.trim())) { setError(t(lang, "errPhoneNotFound")); shake(); }
+      if (!onLogin(creds)) { setError(t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound")); shake(); }
     }, 500);
   };
   return (
     <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
       title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}>
-      <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
-        <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
-          value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
-          onKeyDown={(e) => e.key === "Enter" && submit()} />
-      </FormField>
+      <div className="flex gap-1 p-1 rounded-full eai-soft" style={{ width: "fit-content", marginBottom: 18 }}>
+        {["phone", "email"].map((m) => (
+          <button key={m} onClick={() => switchMethod(m)}
+            className={`eai-focus text-xs font-semibold px-3.5 py-1.5 rounded-full ${lang === "km" ? "eai-km" : ""}`}
+            style={{ background: method === m ? "var(--card)" : "transparent", color: method === m ? "var(--ink)" : "var(--muted)", boxShadow: method === m ? "var(--shadow)" : "none" }}>
+            {t(lang, m === "phone" ? "loginWithPhone" : "loginWithEmail")}
+          </button>
+        ))}
+      </div>
+
+      {method === "phone" ? (
+        <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
+          <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
+            value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </FormField>
+      ) : (
+        <div className="space-y-4">
+          <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
+            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
+              value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && submit()} />
+          </FormField>
+          <FormField label={t(lang, "passwordLabel")} required>
+            <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="current-password"
+              value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && submit()} />
+          </FormField>
+        </div>
+      )}
 
       <PrimaryButton onClick={submit} className={`w-full mt-6 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
       <p className={`text-center text-xs eai-muted mt-4 ${lang === "km" ? "eai-km" : ""}`}>
@@ -4999,6 +5031,9 @@ const STRINGS = {
     phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
     errEnterPhone: "Enter the phone number you used to sign up.",
     errPhoneNotFound: "We couldn't find an account with that phone number on this device.",
+    errEnterEmailPassword: "Enter the email and password you used to sign up.",
+    errEmailNotFound: "We couldn't find an account with that email and password on this device.",
+    loginWithPhone: "Phone", loginWithEmail: "Email",
     // Register
     eduLevelTitle: "What's your education level?",
     eduLevelDesc: "This decides what Bondus shows you next — high school and university have completely different content.",
@@ -5134,6 +5169,9 @@ const STRINGS = {
     phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
     errEnterPhone: "សូមបញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើចុះឈ្មោះ។",
     errPhoneNotFound: "យើងរកមិនឃើញគណនីជាមួយលេខទូរស័ព្ទនោះនៅលើឧបករណ៍នេះទេ។",
+    errEnterEmailPassword: "សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់ដែលអ្នកបានប្រើចុះឈ្មោះ។",
+    errEmailNotFound: "យើងរកមិនឃើញគណនីជាមួយអ៊ីមែល និងពាក្យសម្ងាត់នោះនៅលើឧបករណ៍នេះទេ។",
+    loginWithPhone: "លេខទូរស័ព្ទ", loginWithEmail: "អ៊ីមែល",
     // Register
     eduLevelTitle: "តើកម្រិតការសិក្សារបស់អ្នកគឺជាអ្វី?",
     eduLevelDesc: "នេះកំណត់នូវអ្វីដែល Bondus បង្ហាញអ្នកបន្ទាប់ — ថ្នាក់វិទ្យាល័យ និងសាកលវិទ្យាល័យមានខ្លឹមសារខុសគ្នាទាំងស្រុង។",
@@ -5249,12 +5287,16 @@ export default function App() {
     setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
   };
 
-  // Matches a phone number against whatever's currently saved in this browser. Returns true/false
-  // so the Login screen can show "account not found" inline instead of failing silently.
-  const handleLogin = (phone) => {
+  // Matches either a phone number or an email+password against whatever's currently saved in
+  // this browser. Returns true/false so the Login screen can show "account not found" inline
+  // instead of failing silently.
+  const handleLogin = ({ phone, email, password } = {}) => {
     const data = loadSaved();
-    const clean = phone.replace(/\s+/g, "");
-    if (!data?.profile || data.profile.phone?.replace(/\s+/g, "") !== clean) return false;
+    if (!data?.profile) return false;
+    const matched = phone
+      ? data.profile.phone?.replace(/\s+/g, "") === phone.replace(/\s+/g, "")
+      : data.profile.email?.trim().toLowerCase() === email.trim().toLowerCase() && data.profile.password === password;
+    if (!matched) return false;
     setProfile(data.profile);
     setTopicMastery(data.topicMastery ?? {});
     setPractice(data.practice ?? {});
