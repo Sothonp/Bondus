@@ -28,12 +28,6 @@ dependencies = [
     "groq>=0.11",
     # SEA-LION's API is OpenAI-compatible; the client is pointed at its base URL.
     "openai>=1.40",
-    "langchain>=1.4.2",
-    "khmercut>=0.2.0",
-    "pix2text>=1.1.7",
-    "texify>=0.2.1",
-    "chandra-ocr>=0.2.0",
-    "docling>=2.130.0",
 ]
 
 [dependency-groups]
