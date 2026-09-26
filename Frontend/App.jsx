@@ -1283,7 +1283,7 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
 function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
   const [step, setStep] = useState(initialStep ?? 0);
   const [form, setForm] = useState(initialForm ?? {
-    name: "", phone: "", age: "",
+    name: "", phone: "", email: "", age: "",
     educationLevel: null, // "highschool" | "university" — locked in once chosen at step 0
     // High-school (BAC II) fields:
     grade: "12", field: "", target: "A",
@@ -1335,6 +1335,10 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           <FormField label={t(lang, "phoneNumberLabel")} required>
             <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
               value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+          </FormField>
+          <FormField label={t(lang, "emailLabel")}>
+            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
+              value={form.email} onChange={(e) => set("email", e.target.value)} />
           </FormField>
           <FormField label={t(lang, "ageLabel")}>
             <input type="number" min="8" max="99" inputMode="numeric" className="eai-ob-input eai-focus" placeholder="18"
@@ -5009,7 +5013,7 @@ const STRINGS = {
     uniProgressDesc: "Your learning activity across Bondus.",
     uniProgressComingSoon: "Detailed course and quiz analytics are coming soon.",
     createAccountTitle: "Create your account", createAccountDesc: "A few details so your AI coach and study plan fit you.",
-    fullNameLabel: "Full name", ageLabel: "Age", gradeLevelLabel: "Grade level",
+    fullNameLabel: "Full name", emailLabel: "Email", ageLabel: "Age", gradeLevelLabel: "Grade level",
     grade11: "Grade 11", grade12: "Grade 12 (BAC II)", targetGradeLabel: "Target grade", gradeWord: "Grade",
     continueToTrack: "Continue to academic track", continueWord: "Continue",
     chooseTrackTitle: "Choose your academic track",
@@ -5144,7 +5148,7 @@ const STRINGS = {
     uniProgressDesc: "សកម្មភាពសិក្សារបស់អ្នកនៅលើ Bondus។",
     uniProgressComingSoon: "ការវិភាគលម្អិតអំពីវគ្គសិក្សា និងកម្រងសំណួរនឹងមកដល់ឆាប់ៗនេះ។",
     createAccountTitle: "បង្កើតគណនីរបស់អ្នក", createAccountDesc: "ព័ត៌មានមួយចំនួនដើម្បីឲ្យគ្រូបង្វឹក AI និងផែនការសិក្សាសមស្របនឹងអ្នក។",
-    fullNameLabel: "ឈ្មោះពេញ", ageLabel: "អាយុ", gradeLevelLabel: "កម្រិតថ្នាក់",
+    fullNameLabel: "ឈ្មោះពេញ", emailLabel: "អ៊ីមែល", ageLabel: "អាយុ", gradeLevelLabel: "កម្រិតថ្នាក់",
     grade11: "ថ្នាក់ទី១១", grade12: "ថ្នាក់ទី១២ (BAC II)", targetGradeLabel: "និទ្ទេសគោលដៅ", gradeWord: "និទ្ទេស",
     continueToTrack: "បន្តទៅផ្នែកសិក្សា", continueWord: "បន្ត",
     chooseTrackTitle: "ជ្រើសរើសផ្នែកសិក្សារបស់អ្នក",
