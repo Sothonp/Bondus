@@ -649,13 +649,13 @@ input.eai-input::placeholder{ color:var(--muted); }
 /* "Mascot asks" question presentation — the owl beside a speech bubble holding the current
    step's question, one at a time, instead of a plain heading. */
 .eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:14px; margin-bottom:22px; }
-.eai-ob-mascot-avatar{ width:88px; height:88px; border-radius:50%; overflow:hidden; flex-shrink:0; background:transparent; }
+.eai-ob-mascot-avatar{ width:88px; height:120px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
 .eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; }
-.eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:28px; width:14px; height:14px; background:var(--card);
+.eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:44px; width:14px; height:14px; background:var(--card);
   border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:rotate(45deg); border-radius:0 0 0 3px; }
 .eai-ob-bubble .eai-ob-title{ font-size:20px; margin:0; }
 .eai-ob-bubble .eai-ob-desc{ margin-top:4px; font-size:14px; }
-@media (max-width:640px){ .eai-ob-mascot-avatar{ width:68px; height:68px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
+@media (max-width:640px){ .eai-ob-mascot-avatar{ width:68px; height:92px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
 
 .eai-ob-label{ font-size:13px; font-weight:600; color:var(--label); display:block; }
 .eai-ob-input{ height:48px; width:100%; border-radius:14px; border:1px solid var(--input-border); background:var(--bg-soft); color:var(--ink);
@@ -912,7 +912,7 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
             {(title || description) && (
               <div className="eai-ob-mascot-row">
                 <div className="eai-ob-mascot-avatar">
-                  <img src="/logos/Bondus_mascot_headphones_transparent.png" alt="Bondus mascot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src="/logos/Bondus_mascot_headphones_transparent.png" alt="Bondus mascot" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 </div>
                 <div className="eai-ob-bubble">
                   {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
