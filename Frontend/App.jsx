@@ -650,17 +650,6 @@ input.eai-input::placeholder{ color:var(--muted); }
    step's question, one at a time, instead of a plain heading. */
 .eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:0px; margin-bottom:22px; }
 .eai-ob-mascot-avatar{ width:132px; height:180px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
-.eai-ob-mascot-avatar img{ animation:eai-ob-mascot-idle 3.2s ease-in-out infinite; transform-origin:50% 100%; }
-/* A gentle plant-footed sway + breathing loop — no vertical lift (transform-origin is the feet,
-   and there's no translateY), so it rocks and swells in place instead of floating. Simulates a
-   "nod toward the bubble" via the rotate, since the art is one static render, not a rigged/
-   layered character. */
-@keyframes eai-ob-mascot-idle{
-  0%, 100% { transform:rotate(0deg) scaleY(1); }
-  25% { transform:rotate(4deg) scaleY(1.015); }
-  50% { transform:rotate(0deg) scaleY(1); }
-  75% { transform:rotate(-3deg) scaleY(1.01); }
-}
 .eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; animation:eai-ob-bubble-in .35s ease-out; }
 @keyframes eai-ob-bubble-in{ from{ opacity:0; transform:translateX(-8px) scale(.97); } to{ opacity:1; transform:none; } }
 .eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:64px; width:14px; height:14px; background:var(--card);
@@ -668,6 +657,74 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ob-bubble .eai-ob-title{ font-size:20px; margin:0; }
 .eai-ob-bubble .eai-ob-desc{ margin-top:4px; font-size:14px; }
 @media (max-width:640px){ .eai-ob-mascot-avatar{ width:104px; height:142px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
+
+/* ── Mascot: whole-image "acted" states (see Mascot component) ──
+   idle = organic breathing/sway, feet planted, no floating. Other states are one-shot reactions
+   to real UI events (hover a button, submit a form, log in) rather than loops. */
+.eai-mascot{ display:inline-block; }
+.eai-mascot-img{ transform-origin:50% 100%; will-change:transform; }
+
+.eai-mascot-idle .eai-mascot-img{ animation:eai-mascot-idle 3.2s ease-in-out infinite; }
+@keyframes eai-mascot-idle{
+  0%, 100% { transform:rotate(0deg) scaleY(1); }
+  25% { transform:rotate(4deg) scaleY(1.015); }
+  50% { transform:rotate(0deg) scaleY(1); }
+  75% { transform:rotate(-3deg) scaleY(1.01); }
+}
+
+.eai-mascot-hover .eai-mascot-img{ animation:none; transform:rotate(-6deg) scale(1.06); transition:transform .25s ease-out; }
+
+.eai-mascot-happy .eai-mascot-img{ animation:eai-mascot-happy .7s ease-in-out 1; }
+@keyframes eai-mascot-happy{
+  0% { transform:translateY(0) rotate(0deg); }
+  30% { transform:translateY(-14px) rotate(-6deg); }
+  55% { transform:translateY(0) rotate(4deg); }
+  75% { transform:translateY(-5px) rotate(-2deg); }
+  100% { transform:translateY(0) rotate(0deg); }
+}
+
+.eai-mascot-sad .eai-mascot-img{ animation:eai-mascot-sad .5s ease-out 1 forwards; }
+@keyframes eai-mascot-sad{
+  0% { transform:rotate(0deg) scaleY(1); filter:none; }
+  100% { transform:rotate(4deg) scaleY(.95) translateY(3px); filter:saturate(.7) brightness(.96); }
+}
+
+.eai-mascot-loading .eai-mascot-img{ animation:eai-mascot-loading 1.1s ease-in-out infinite; }
+@keyframes eai-mascot-loading{
+  0%, 100% { transform:scale(1); opacity:1; }
+  50% { transform:scale(.96); opacity:.8; }
+}
+
+.eai-mascot-success .eai-mascot-img{ animation:eai-mascot-success .5s cubic-bezier(.34,1.56,.64,1) 1; }
+@keyframes eai-mascot-success{
+  0% { transform:scale(1) rotate(0deg); }
+  50% { transform:scale(1.14) rotate(-4deg); }
+  100% { transform:scale(1) rotate(0deg); }
+}
+.eai-mascot-badge{ position:absolute; top:-2px; right:-2px; width:26px; height:26px; border-radius:50%; background:var(--jade); color:#fff;
+  display:grid; place-items:center; box-shadow:0 2px 8px rgba(0,0,0,.2); animation:eai-mascot-badge-in .3s ease-out; z-index:2; }
+@keyframes eai-mascot-badge-in{ from{ transform:scale(0); opacity:0; } to{ transform:scale(1); opacity:1; } }
+
+.eai-mascot-celebration .eai-mascot-img{ animation:eai-mascot-celebrate 1s ease-in-out 1; }
+@keyframes eai-mascot-celebrate{
+  0% { transform:translateY(0) rotate(0deg) scale(1); }
+  20% { transform:translateY(-18px) rotate(-10deg) scale(1.05); }
+  40% { transform:translateY(0) rotate(8deg) scale(1); }
+  60% { transform:translateY(-10px) rotate(-6deg) scale(1.03); }
+  80% { transform:translateY(0) rotate(3deg) scale(1); }
+  100% { transform:translateY(0) rotate(0deg) scale(1); }
+}
+.eai-mascot-confetti{ position:absolute; inset:-20px; pointer-events:none; overflow:visible; z-index:1; }
+.eai-mascot-confetti span{ position:absolute; top:40%; left:50%; width:7px; height:7px; border-radius:2px; animation:eai-confetti-burst 1.1s ease-out forwards; }
+@keyframes eai-confetti-burst{
+  0% { transform:translate(0,0) rotate(0deg); opacity:1; }
+  100% { transform:translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity:0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .eai-mascot-img{ animation:none !important; transition:none !important; }
+  .eai-mascot-confetti{ display:none; }
+}
 
 .eai-ob-label{ font-size:13px; font-weight:600; color:var(--label); display:block; }
 .eai-ob-input{ height:48px; width:100%; border-radius:14px; border:1px solid var(--input-border); background:var(--bg-soft); color:var(--ink);
@@ -717,7 +774,6 @@ input.eai-input::placeholder{ color:var(--muted); }
 @media (prefers-reduced-motion: reduce){
   .eai-ob-progress-fill{ transition:none; }
   .eai-ob-track-card, .eai-ob-btn-primary, .eai-ob-btn-secondary, .eai-ob-toggle{ transition:none; }
-  .eai-ob-mascot-avatar img{ animation:none; }
   .eai-ob-bubble{ animation:none; }
 }
 `;
@@ -887,7 +943,7 @@ function OnboardingProgress({ step, lang = "en", stepLabels, stepLabelsKm }) {
   );
 }
 
-function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, children, lang = "en", setLang }) {
+function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, children, lang = "en", setLang, mascotState = "idle" }) {
   return (
     <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
@@ -926,7 +982,7 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
             {(title || description) && (
               <div className="eai-ob-mascot-row">
                 <div className="eai-ob-mascot-avatar">
-                  <img src="/logos/Bondus_mascot_headphones_transparent.png" alt="Bondus mascot" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  <Mascot src="/logos/Bondus_mascot_headphones_transparent.png" state={mascotState} fill />
                 </div>
                 <div className="eai-ob-bubble">
                   {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
@@ -1054,16 +1110,45 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
    that data in place so it can be recovered here later. */
 
-function BondusCharacter() {
+/* Small confetti burst used by Mascot's "celebration" state — a handful of colored particles
+   flying outward and fading, randomized once per mount so repeated celebrations don't look
+   identical. Pure CSS animation driven by --dx/--dy/--rot custom properties per particle. */
+const CONFETTI_COLORS = ["var(--primary)", "var(--gold)", "var(--jade)", "var(--ember)"];
+function ConfettiBurst() {
+  const particles = useMemo(() => Array.from({ length: 14 }, (_, i) => {
+    const angle = (Math.PI * 2 * i) / 14 + (Math.random() * 0.5 - 0.25);
+    const dist = 55 + Math.random() * 45;
+    return {
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      dx: `${Math.cos(angle) * dist}px`,
+      dy: `${Math.sin(angle) * dist - 18}px`,
+      rot: `${Math.round(Math.random() * 360)}deg`,
+      delay: `${Math.random() * 0.12}s`,
+    };
+  }), []);
   return (
-    <img
-      src="/logos/Bondus_mascout_nobg.png"
-      alt="BONDUS mascot - friendly owl reading a book"
-      style={{ width: "100%", height: "auto", display: "block" }}
-      onError={(e) => {
-        e.target.style.display = "none";
-      }}
-    />
+    <div className="eai-mascot-confetti" aria-hidden="true">
+      {particles.map((p) => (
+        <span key={p.id} style={{ background: p.color, "--dx": p.dx, "--dy": p.dy, "--rot": p.rot, animationDelay: p.delay }} />
+      ))}
+    </div>
+  );
+}
+
+/* Reusable animated mascot — one static image "acted" through whole-image CSS states rather than
+   independently-rigged parts (see the session note on why: the art is a single flattened render,
+   not separated layers). `fill` sizes it to 100%/100% of a pre-sized parent (e.g. the onboarding
+   avatar slot); omit it to size naturally off width like a normal responsive image (e.g. Welcome's
+   big illustration). States: idle | hover | happy | sad | loading | success | celebration. */
+function Mascot({ src, state = "idle", fill = false, alt = "Bondus mascot", className = "", style }) {
+  return (
+    <div className={`eai-mascot eai-mascot-${state} ${className}`} style={{ position: "relative", ...(fill ? { width: "100%", height: "100%" } : null), ...style }}>
+      <img src={src} alt={alt} className="eai-mascot-img"
+        style={fill ? { width: "100%", height: "100%", objectFit: "contain", display: "block" } : { width: "100%", height: "auto", display: "block" }} />
+      {state === "success" && <span className="eai-mascot-badge" aria-hidden="true"><Check size={14} /></span>}
+      {state === "celebration" && <ConfettiBurst />}
+    </div>
   );
 }
 
@@ -1078,6 +1163,13 @@ function BondusLogo() {
 }
 
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
+  const [mascotState, setMascotState] = useState("idle");
+  // A brief celebration beat before actually navigating away, so the animation has time to play —
+  // otherwise the screen unmounts the instant onLogin fires and nothing is ever seen.
+  const handleLoginClick = () => {
+    setMascotState("celebration");
+    setTimeout(onLogin, 900);
+  };
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
@@ -1117,17 +1209,17 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
               onClick={onCreate}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
-              onMouseEnter={(e) => e.target.style.background = "var(--primary-soft)"}
-              onMouseLeave={(e) => e.target.style.background = "transparent"}
+              onMouseEnter={(e) => { e.target.style.background = "var(--primary-soft)"; setMascotState("hover"); }}
+              onMouseLeave={(e) => { e.target.style.background = "transparent"; setMascotState("idle"); }}
             >
               {t(lang, "createAccount")}
             </button>
             <button
-              onClick={onLogin}
+              onClick={handleLoginClick}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
-              onMouseEnter={(e) => e.target.style.filter = "brightness(0.9)"}
-              onMouseLeave={(e) => e.target.style.filter = "brightness(1)"}
+              onMouseEnter={(e) => { e.target.style.filter = "brightness(0.9)"; setMascotState("hover"); }}
+              onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; setMascotState((s) => (s === "celebration" ? s : "idle")); }}
             >
               {t(lang, "login")}
             </button>
@@ -1137,7 +1229,7 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
         {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flex: 1, marginTop: "24px" }}>
           <div style={{ width: "clamp(220px, 28vw, 420px)", maxWidth: "90vw" }}>
-            <BondusCharacter />
+            <Mascot src="/logos/Bondus_mascout_nobg.png" state={mascotState} alt="BONDUS mascot" />
           </div>
         </div>
       </div>
@@ -1148,16 +1240,24 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
 function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", setLang }) {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
+  const [mascotState, setMascotState] = useState("idle");
+  const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
   const submit = () => {
-    if (!phone.trim()) { setError(t(lang, "errEnterPhone")); return; }
-    if (!onLogin(phone.trim())) setError(t(lang, "errPhoneNotFound"));
+    if (!phone.trim()) { setError(t(lang, "errEnterPhone")); shake(); return; }
+    setMascotState("celebration");
+    // A brief optimistic celebration before the real check — if the phone genuinely isn't found,
+    // it flips to the sad state with the error instead, rather than staying stuck celebrating.
+    setTimeout(() => {
+      if (!onLogin(phone.trim())) { setError(t(lang, "errPhoneNotFound")); shake(); }
+    }, 500);
   };
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
       title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}>
       <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
         <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
           value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
+          onFocus={() => setMascotState("hover")} onBlur={() => setMascotState("idle")}
           onKeyDown={(e) => e.key === "Enter" && submit()} />
       </FormField>
 
@@ -1192,6 +1292,9 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
   const isUni = form.educationLevel === "university";
+  const [mascotState, setMascotState] = useState("idle");
+  const hoverOn = () => setMascotState("hover");
+  const hoverOff = () => setMascotState("idle");
 
   // Unlimited multi-select (high-school "subjects to improve").
   const toggleImprove = (id) => setForm((f) => ({
@@ -1206,13 +1309,17 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── Step 0: education level gate ──
   if (step === 0) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
+      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} onBack={onBack} lang={lang} setLang={setLang}
         title={t(lang, "eduLevelTitle")} description={t(lang, "eduLevelDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
-          <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setStep(1); }} />
+          <div onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
+            <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
+              buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
+          </div>
+          <div onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
+            <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
+              buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setStep(1); }} />
+          </div>
         </div>
       </OnboardingLayout>
     );
@@ -1221,7 +1328,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── Step 1: account details (shared layout; grade/target only shown for high school) ──
   if (step === 1) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
+      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
         onBack={() => setStep(0)} lang={lang} setLang={setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
@@ -1257,7 +1364,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── University steps 2–4 ──
   if (isUni && step === 2) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={2} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={2} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
         onBack={() => setStep(1)} lang={lang} setLang={setLang}
         title={t(lang, "uniGoalsTitle")} description={t(lang, "uniGoalsDesc")}>
         <div className="flex flex-wrap gap-2">
@@ -1274,7 +1381,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   }
   if (isUni && step === 3) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={3} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={3} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
         onBack={() => setStep(2)} lang={lang} setLang={setLang}
         title={t(lang, "uniFieldTitle")} description={t(lang, "uniFieldDesc")}>
         <SelectField label={t(lang, "uniFieldTitle")} value={form.universityMajor} onChange={(e) => set("universityMajor", e.target.value)}
@@ -1288,7 +1395,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   }
   if (isUni && step === 4) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={4} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
+      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={4} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
         onBack={() => setStep(3)} lang={lang} setLang={setLang}
         title={t(lang, "uniYearTitle")} description={t(lang, "uniYearDesc")}>
         <SelectField label={t(lang, "uniYearTitle")} value={form.universityYear} onChange={(e) => set("universityYear", e.target.value)}
@@ -1304,7 +1411,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── High-school step 2: academic track ──
   if (step === 2) {
     return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
+      <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
         title={t(lang, "chooseTrackTitle")} description={t(lang, "chooseTrackDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
           {Object.entries(FIELD_META).map(([key, meta]) => (
@@ -1321,7 +1428,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 
   // ── High-school step 3: learning preferences ──
   return (
-    <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
+    <OnboardingLayout dark={dark} setDark={setDark} mascotState={mascotState} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
       title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}>
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
