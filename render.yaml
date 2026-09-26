@@ -76,6 +76,20 @@ services:
         value: groq,gemini
       - key: PRELOAD_KIRI
         value: "false"
+      # Surya 2 is installed in the image the same way: present, but off until
+      # "surya" is added to IMAGE_OCR_ENGINES above (e.g. groq,gemini,surya, so
+      # it only reads a photo when both hosted engines fail). Its model needs
+      # ~1.5 GB of memory beside the embedder's ~1.4 GB, so turning it on needs
+      # plan: pro (4 GB), and on this CPU a photo takes minutes -- raise
+      # IMAGE_OCR_TIMEOUT_SECONDS with it. It runs in its own venv because
+      # surya-ocr cannot share this project's dependencies; the Dockerfile
+      # builds that venv, llama-server and the model at these paths.
+      - key: SURYA_PYTHON
+        value: /opt/surya/bin/python
+      - key: SURYA_BACKEND
+        value: llamacpp
+      - key: SURYA_LLAMA_BINARY
+        value: /opt/llama.cpp/llama-server
       # The embedder holds ~1.4 GB of the instance's 2 GB for the whole life of
       # the process, so an upload has only ~400 MB to work in. The default of 4
       # rasterises four pages at once at 2x scale, which can spike past that and
@@ -100,9 +114,6 @@ services:
       #   OCR_ENGINE        "hybrid" and "kiri" load the Kiri model and torch,
       #                     which will not fit the free instance. Leave it
       #                     unset so it resolves to Gemini.
-      #   SURYA_*           Surya reads corpus pages while the index is built on
-      #                     the laptop; the server never reads a corpus page,
-      #                     and there is no Surya environment in the image.
       # Also optional, and worth adding in the dashboard if you have them: the
       # fallback chain silently gets shorter without them, so a Groq and Gemini
       # outage at once leaves the student with the retrieved passages only:

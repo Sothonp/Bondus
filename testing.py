@@ -1445,6 +1445,18 @@ def test_build_image_ocr_follows_settings(tmp_path):
         make_settings(tmp_path, image_ocr_engines="kiri,tesseract").image_ocr_engine_list
 
 
+def test_build_image_ocr_adds_surya_only_with_its_python(tmp_path):
+    from src.ingestion.image_ocr import GroqVisionOCR, build_image_ocr
+    from src.ingestion.surya_ocr import SuryaPageOCR
+
+    settings = make_settings(tmp_path, image_ocr_engines="groq,surya", groq_api_key="gsk_x",
+                             surya_python="/opt/surya/bin/python", surya_backend="llamacpp")
+    ocr = build_image_ocr(settings)
+    assert [type(engine) for engine in ocr.vision] == [GroqVisionOCR, SuryaPageOCR]
+    assert ocr.vision[1].python == "/opt/surya/bin/python"
+    assert build_image_ocr(make_settings(tmp_path, image_ocr_engines="surya")) is None  # no SURYA_PYTHON
+
+
 def _image_client(store_path, generator, **engines):
     ocr = _hybrid(
         engines.get("khmer", FakeImageEngine("kiri", "kiri", text="កំណត់ចំនួនពិត a និង b")),

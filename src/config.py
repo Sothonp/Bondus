@@ -274,7 +274,8 @@ class Settings(BaseSettings):
     # Engines read each photo in parallel: Kiri (local, free) for Khmer words and a
     # vision model for math/LaTeX. Vision models are tried in the listed order.
     # Groq is left out by default: its only vision model is Qwen (see
-    # hybrid_vision_engines).
+    # hybrid_vision_engines). surya is the local vision model (needs
+    # SURYA_PYTHON); it is slow on a CPU, so list it after the hosted ones.
     image_ocr_engines: str = "kiri,gemini"
     groq_vision_model: str = "qwen/qwen3.8-27b"
     groq_vision_reasoning_effort: str | None = None
@@ -378,7 +379,7 @@ class Settings(BaseSettings):
 
     @property
     def image_ocr_engine_list(self) -> list[str]:
-        known = ("kiri", "groq", "gemini")
+        known = ("kiri", "groq", "gemini", "surya")
         engines = [e.strip().lower() for e in self.image_ocr_engines.split(",") if e.strip()]
         unknown = sorted(set(engines) - set(known))
         if unknown:

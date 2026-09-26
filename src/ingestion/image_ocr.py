@@ -476,6 +476,19 @@ def build_image_ocr(settings: Settings) -> HybridImageOCR | None:
                     timeout=settings.image_ocr_timeout_seconds,
                 )
             )
+        elif name == "surya" and settings.surya_python:
+            from src.ingestion.surya_ocr import SuryaPageOCR
+
+            vision.append(
+                SuryaPageOCR(
+                    settings.surya_python,
+                    backend=settings.surya_backend,
+                    llama_binary=settings.surya_llama_binary,
+                    timeout=settings.surya_timeout_seconds,
+                    mode="always",
+                    cache_dir=cache_dir,
+                )
+            )
     if khmer is None and not vision:
         logger.info("No image OCR engine available; attached images cannot be read")
         return None
