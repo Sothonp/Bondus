@@ -1209,8 +1209,8 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
               onClick={onCreate}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
-              onMouseEnter={(e) => { e.target.style.background = "var(--primary-soft)"; setMascotState("hover"); }}
-              onMouseLeave={(e) => { e.target.style.background = "transparent"; setMascotState("idle"); }}
+              onMouseEnter={(e) => { e.target.style.background = "var(--primary-soft)"; }}
+              onMouseLeave={(e) => { e.target.style.background = "transparent"; }}
             >
               {t(lang, "createAccount")}
             </button>
@@ -1218,8 +1218,8 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
               onClick={handleLoginClick}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
-              onMouseEnter={(e) => { e.target.style.filter = "brightness(0.9)"; setMascotState("hover"); }}
-              onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; setMascotState((s) => (s === "celebration" ? s : "idle")); }}
+              onMouseEnter={(e) => { e.target.style.filter = "brightness(0.9)"; }}
+              onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; }}
             >
               {t(lang, "login")}
             </button>
