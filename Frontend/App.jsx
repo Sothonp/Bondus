@@ -623,9 +623,9 @@ input.eai-input::placeholder{ color:var(--muted); }
   background:var(--bg-soft); color:var(--ink); display:grid; place-items:center; z-index:20; transition:background-color .15s ease, transform .12s ease; }
 .eai-ob-toggle:hover{ background:var(--card); transform:translateY(-1px); }
 
-.eai-ob-card{ background:var(--card); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); padding:40px;
+.eai-ob-card{ background:var(--card); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); padding:40px; padding-top:24px;
   transition:background-color .25s ease, border-color .25s ease, box-shadow .25s ease; }
-@media (max-width:640px){ .eai-ob-card{ padding:22px; border-radius:20px; } }
+@media (max-width:640px){ .eai-ob-card{ padding:22px; padding-top:14px; border-radius:20px; } }
 
 .eai-ob-progress{ margin-bottom:18px; }
 .eai-ob-progress-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
