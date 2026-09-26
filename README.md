@@ -67,6 +67,159 @@ the top of `Frontend/App.jsx`.
 Profile data lives in the browser for the session. Coach questions and uploads go
 to the RAG server you run.
 
+## How it works
+
+Six small diagrams, from the whole system down to each step. GitHub draws them
+from the Mermaid source below.
+
+### 1. System overview
+
+```mermaid
+flowchart TB
+    Student(["Student"]) --> App["React app<br/>Frontend/App.jsx"]
+
+    subgraph Host["Netlify / Vercel"]
+        direction LR
+        Site["Static site<br/>dist/"]
+        Fn["Functions<br/>major-guidance, ielts-grade"]
+    end
+
+    subgraph Render["Render: bondus-api (Docker)"]
+        direction LR
+        API["FastAPI<br/>src/api.py"] --> OCR["Photo OCR"]
+        API --> RET["Retriever"] --> IDX[("index.npz")]
+        API --> LLM["Answer chain"]
+    end
+
+    subgraph AI["AI providers"]
+        direction LR
+        Gemini["Gemini"]
+        Groq["Groq"]
+        More["Cerebras, OpenRouter,<br/>Anthropic, SEA-LION"]
+    end
+
+    App --> Site
+    App -- "Major Guidance, IELTS" --> Fn
+    App -- "Study Help<br/>/api/query/stream" --> API
+    Fn --> AI
+    OCR --> AI
+    LLM --> AI
+    Laptop["Laptop: ingest_corpus.py<br/>builds the index"] -- "commit index.npz" --> IDX
+```
+
+The site and the API are hosted apart: the Python server (PyTorch and the
+embedding model) is too big for Netlify or Vercel functions. On Render the
+server is read-only (`ALLOW_WRITES=false`): the index is built on the laptop,
+committed, and baked into the Docker image. The functions call Gemini
+`flash-latest` first and Groq if it fails (`api/_ai.js`).
+
+### 2. In the app
+
+```mermaid
+flowchart LR
+    R["Register<br/>name + track"] --> D["Dashboard, Practice,<br/>Exams, Universities,<br/>Languages, Progress"]
+    D --> C{"AI Coach"}
+    C -- "Study Help" --> Q["Chat + up to 4 photos<br/>→ RAG server"]
+    C -- "Major Guidance" --> M["major-guidance<br/>function"]
+    D -- "Languages" --> I["IELTS writing / speaking<br/>→ ielts-grade function"]
+```
+
+### 3. Asking the AI Coach a question
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor S as Student
+    participant UI as React app
+    participant API as FastAPI
+    participant OCR as Photo OCR
+    participant IDX as Vector index
+    participant LLM as Answer model
+
+    S->>UI: question (+ up to 4 photos)
+    UI->>API: POST /api/query/stream
+    opt photos attached
+        API->>OCR: read each photo
+        OCR-->>API: text + formulas
+        API-->>UI: images event ("Text read from photo")
+    end
+    API->>IDX: search question + photo text (top-k, cosine)
+    IDX-->>API: curriculum passages
+    API-->>UI: meta event (language, sources)
+    API->>LLM: system prompt + passages + photo text + chat history
+    loop streaming
+        LLM-->>API: tokens
+        API-->>UI: delta events (Markdown + KaTeX)
+    end
+    API-->>UI: done (with repaired LaTeX if needed)
+```
+
+The answer comes back in Khmer or English, matching the question; the chat
+renders it with KaTeX formulas and GeoGebra graphs.
+
+### 4. Reading a photo
+
+```mermaid
+flowchart LR
+    P["Photo"] --> R["Shrink,<br/>turn upright"] --> E
+    subgraph E["First engine that works"]
+        direction LR
+        G["Gemini"] -. fails .-> Q["Groq Qwen"] -. fails .-> S["Surya<br/>off"]
+    end
+    E --> T["Text + LaTeX<br/>to the answer"]
+```
+
+Engines come from `IMAGE_OCR_ENGINES` (`gemini,groq` on Render); a reading
+in Chinese is dropped for the next engine, a looping one is trimmed, and
+readings are cached by image. Kiri (local Khmer OCR) and Surya are in the image
+but off on the 2 GB instance. Compare engines on a photo with
+`uv run python scripts/try_image_ocr.py photo.jpg --engines gemini,groq`.
+
+### 5. The answer chain
+
+```mermaid
+flowchart LR
+    F["FallbackGenerator"] --> G1["Groq<br/>gpt-oss-120b"]
+    G1 -. fails .-> G2["Gemini 3.6 → 3.8<br/>→ 3.5 → flash-latest"]
+    G2 -. fails .-> G3["Cerebras,<br/>OpenRouter"]
+    G3 -. "all fail" .-> X["Passages only +<br/>'unavailable' note"]
+    G1 & G2 & G3 --> O["OutputGuard<br/>stops floods and<br/>degenerate output"]
+    O --> Z["sanitize_answer<br/>fixes $$ and LaTeX"]
+```
+
+A model that fails before its first token is skipped silently; one that fails
+mid-answer sends a `reset` event and the next model starts over. Failing
+models cool down before they are tried again.
+
+### 6. Building the index
+
+```mermaid
+flowchart TB
+    subgraph In["1 · Read"]
+        direction LR
+        D[("data/<br/>+ catalog.json")] --> X["extract_file<br/>text, Markdown, PDF"]
+        X -. "scanned page" .-> O["OCR: gemini, kiri,<br/>surya or hybrid"]
+        O <--> C[("ocr_cache")]
+    end
+    subgraph Prep["2 · Prepare"]
+        direction LR
+        H["Sections +<br/>headings"] --> L["mask_latex<br/>formulas → tokens"]
+        L --> K["khmer_segment<br/>word boundaries"]
+        K --> CH["chunk_text<br/>500 chars, 50 overlap"]
+    end
+    subgraph Out["3 · Store"]
+        direction LR
+        E["embed<br/>multilingual-e5-small"] --> V[("index.npz")]
+    end
+    In --> Prep --> Out
+```
+
+Formulas are swapped for tokens before segmentation and chunking, so no chunk
+cuts a formula in half; they are restored before the prompt is built.
+Maintenance scripts: `reembed_index.py` (switch the embedding backend without
+OCR again), `backfill_ocr.py` (OCR one file page by page within a quota), `show_chunks.py` / `export_chunks.py` (inspect
+chunks).
+
 ## AI Coach RAG server (Python)
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.11.
@@ -120,18 +273,14 @@ passages with a "temporarily unavailable" note. Groq's free tier allows 8,000
 tokens per minute including the answer, so Groq answers are capped by
 `GROQ_MAX_TOKENS` / `GROQ_TOKENS_PER_MINUTE`, and a second question within the
 same minute usually goes to Gemini. Misplaced keys (e.g. a Gemini key in
-`GROQ_API_KEY`) are ignored and listed in `/health` → `config_warnings`.
+`GROQ_API_KEY`) are ignored and listed in `/health` → `config_warnings`. If
+Groq is short on its per-minute token budget, the prompt drops old chat turns
+and then the lowest-ranked passages before handing the question to the next
+model.
 
-**Photos in questions.** Each photo is shrunk and turned upright, then read by
-two kinds of engine at the same time: Kiri OCR (local and free, good at Khmer
-words) and a vision model (Gemini or Groq's Qwen, good at formulas; a reading
-that comes back in Chinese is dropped for the next engine). Both readings go to the answering model, which
-combines them, so merging needs no extra API call. Readings are cached by image,
-looping readings are trimmed, and the student can open "Text read from photo"
-to check what was read, including why an engine came back empty (a timeout or
-a rate limit) when a photo could not be read. If Groq is short on its
-per-minute token budget, the prompt drops old chat turns and then the
-lowest-ranked passages before handing the question to the next model.
+**Photos in questions.** See [Reading a photo](#reading-a-photo). The student
+can open "Text read from photo" to check what was read, and why an engine came
+back empty.
 
 **Scanned PDFs.** Most PDFs in `data/` are scans. Their pages are OCR'd once
 (Gemini by default, or `OCR_ENGINE=kiri` for the free local Khmer-only engine)
@@ -150,25 +299,41 @@ over their function size limits), so the site and the AI coach API are hosted
 separately.
 
 **Render — the AI coach API**
-New > Blueprint and pick this repo: `render.yaml` builds the `Dockerfile`. Set
-`GEMINI_API_KEY` (or another provider key) and `CORS_ORIGINS` to the site's
-origin. The blueprint uses the `free` plan, which the hashing backend fits (see
-below); the embedding model would need `standard`. Check
-`https://<service>.onrender.com/health` — it reports the backend, the chunk
-count and the retrieval threshold actually in use.
+New > Blueprint and pick this repo: `render.yaml` builds the `Dockerfile`. In
+the dashboard, set `CORS_ORIGINS` to the site's origin and add `GEMINI_API_KEY`
+and `GROQ_API_KEY` (optionally `CEREBRAS_API_KEY` and `OPENROUTER_API_KEY`, which
+lengthen the fallback chain). Check `https://<service>.onrender.com/health` — it
+reports the embedding backend, the chunk count, the retrieval threshold and the
+model chain actually in use.
+
+What the blueprint sets up:
+
+- **`plan: standard` (2 GB).** The `multilingual-e5-small` embedder is baked
+  into the image and loaded at boot; it holds about 1.4 GB, so the 512 MB free
+  and starter plans are killed on the first question.
+- **Read-only (`ALLOW_WRITES=false`).** The API has no accounts, so uploads and
+  deletes are off on the public URL. Build the index on the laptop and commit it.
+- **Answers:** Groq `gpt-oss-120b`, then the Gemini models (see
+  [the answer chain](#5-the-answer-chain)).
+- **Photos:** `IMAGE_OCR_ENGINES=gemini,groq`. Kiri and Surya are installed in
+  the image but off: turning Surya on needs `plan: pro` (4 GB),
+  `IMAGE_OCR_ENGINES=gemini,groq,surya`, `IMAGE_OCR_TIMEOUT_SECONDS=300` and
+  `SURYA_INFERENCE_PARALLEL=1` (see the comments in `render.yaml`).
 
 **Netlify — the site**
 `netlify.toml` sets the build (`npm run build` into `dist/`), routes
 `/api/major-guidance` to `netlify/functions/major-guidance.mjs`, and serves
 `index.html` for client-side routes. Add two environment variables:
-`GEMINI_API_KEY` for that function, and `VITE_RAG_API_URL` =
+`GEMINI_API_KEY` for that function (plus `GROQ_API_KEY`, used when Gemini
+fails), and `VITE_RAG_API_URL` =
 `https://<service>.onrender.com` for the chat. Then redeploy, since Vite reads
 `VITE_*` at build time. With the CLI: `npx netlify deploy --prod`.
 
 **Vercel — the site (alternative)**
 `api/major-guidance.js` is the same function for Vercel's runtime; both call
-`majorGuidance()` in `api/major-guidance-core.js`. Set the same two variables in
-the project's Environment Variables and redeploy.
+`majorGuidance()` in `api/major-guidance-core.js`. IELTS grading
+(`api/ielts-grade.js`) exists only for Vercel. Set the same variables in the
+project's Environment Variables and redeploy.
 
 Whichever host serves the site, its origin must be in `CORS_ORIGINS` on Render
 or the browser blocks the chat requests.
@@ -178,27 +343,23 @@ answers without the `data/` corpus. After changing `data/`, rebuild and commit
 it again:
 
 ```bash
-EMBEDDING_BACKEND=hashing uv run python scripts/ingest_corpus.py --reset
+uv run python scripts/ingest_corpus.py --reset
 ```
 
-If the index already exists and only the backend changed, convert it instead —
-this re-embeds the stored chunks, so it needs neither `data/` nor another OCR
-pass:
+The index must be built with the same embedding backend as the server uses —
+the server refuses a mismatched one rather than serving nonsense. If only the
+backend changed, convert the index instead: this re-embeds the stored chunks, so
+it needs neither `data/` nor another OCR pass:
 
 ```bash
-EMBEDDING_BACKEND=hashing uv run python scripts/reembed_index.py
+EMBEDDING_BACKEND=sentence-transformers uv run python scripts/reembed_index.py
 ```
 
-`render.yaml` sets `EMBEDDING_BACKEND=hashing` so the server needs no model and
-fits Render's free 512 MB instance, and reads photos with Gemini instead of the
-local Kiri model. The index must be built with the same backend as the server
-uses — the server refuses a mismatched index — hence the variable above. Leave
-`SCORE_THRESHOLD` unset with this backend: hashing similarities are lexical and
-peak near 0.4, so the embedding model's 0.75 cutoff would drop every passage and
-answers would quietly stop being grounded. For better Khmer retrieval, drop
-those variables, use `plan: standard` (2 GB), and re-index without
-`EMBEDDING_BACKEND`. Files uploaded in the chat on Render are lost when the
-service restarts, and free instances sleep after 15 minutes idle.
+Leave `SCORE_THRESHOLD` unset: the e5 default (0.75) is tuned for its scores,
+which sit high even for a loose match. To go back to the free plan, set
+`plan: free` and `EMBEDDING_BACKEND=hashing` and re-embed for it — but hashing
+matches shared tokens only, so an English question retrieves nothing from this
+Khmer corpus, and free instances sleep after 15 minutes idle.
 
 ## Push to your GitHub account
 
