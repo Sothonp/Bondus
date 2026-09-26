@@ -51,7 +51,7 @@ restartPolicyMaxRetries = 3
 #   EMBEDDING_MODEL=intfloat/multilingual-e5-small
 #   EMBEDDING_DEVICE=cpu
 #   PRELOAD_EMBEDDER=true
-#   IMAGE_OCR_ENGINES=groq,gemini
+#   IMAGE_OCR_ENGINES=gemini,groq
 #   PRELOAD_KIRI=false
 #   LOG_LEVEL=INFO
 #

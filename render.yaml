@@ -69,15 +69,19 @@ services:
       # Read photos with the hosted vision models only. PyTorch is now in
       # memory anyway for the embeddings, but Kiri would add its own model on
       # top, and OCR is not worth the headroom on a 2 GB instance.
-      # Groq is tried first and Gemini backs it up, so one
-      # engine being down or rate-limited no longer leaves the photo unread
-      # (that needs GROQ_API_KEY above; with no key the engine is skipped).
+      # Gemini is tried first and Groq's Qwen backs it up, so one engine being
+      # down or rate-limited (Gemini's 503s) does not leave the photo unread.
+      # Gemini goes first because it reads better: on a formula sheet page
+      # (scripts/try_image_ocr.py, 2026-09-26) it got the Khmer and every
+      # formula right, while Qwen misread the heading, renumbered the items
+      # and got L/0 wrong. Qwen needs GROQ_API_KEY above; with no key it is
+      # skipped.
       - key: IMAGE_OCR_ENGINES
-        value: groq,gemini
+        value: gemini,groq
       - key: PRELOAD_KIRI
         value: "false"
       # Surya 2 is installed in the image the same way: present, but off until
-      # "surya" is added to IMAGE_OCR_ENGINES above (e.g. groq,gemini,surya, so
+      # "surya" is added to IMAGE_OCR_ENGINES above (e.g. gemini,groq,surya, so
       # it only reads a photo when both hosted engines fail). Its model needs
       # ~1.5 GB of memory beside the embedder's ~1.4 GB, so turning it on needs
       # plan: pro (4 GB), and on this CPU a photo takes minutes -- raise
