@@ -634,15 +634,28 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ob-progress-track{ margin-top:8px; height:6px; border-radius:999px; background:var(--progress-track); overflow:hidden; }
 .eai-ob-progress-fill{ height:100%; border-radius:999px; background:var(--progress-fill); transition:width .3s ease; }
 
-.eai-ob-back-row{ min-height:28px; display:flex; align-items:center; margin-bottom:8px; }
-.eai-ob-back{ display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:600; color:var(--muted);
-  min-height:44px; padding:0 6px; border-radius:10px; transition:color .15s ease, background-color .15s ease; }
-.eai-ob-back:hover{ color:var(--primary); background:var(--primary-soft); }
+/* Duolingo-style top row: a bare chevron beside the progress bar, instead of a separate "Back" row. */
+.eai-ob-progress-row{ display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+.eai-ob-back-icon{ display:grid; place-items:center; width:32px; height:32px; border-radius:10px; flex-shrink:0;
+  color:var(--muted); transition:color .15s ease, background-color .15s ease; }
+.eai-ob-back-icon:hover{ color:var(--primary); background:var(--primary-soft); }
+.eai-ob-progress-row .eai-ob-progress{ flex:1; margin-bottom:0; }
 
 .eai-ob-heading{ margin-bottom:22px; }
 .eai-ob-title{ font-family:'Sora', system-ui, sans-serif; font-weight:700; font-size:28px; letter-spacing:-.02em; line-height:1.22; color:var(--ink); }
 .eai-ob-desc{ font-size:15px; color:var(--muted); margin-top:6px; max-width:620px; line-height:1.55; }
 @media (max-width:640px){ .eai-ob-title{ font-size:24px; } }
+
+/* "Mascot asks" question presentation — the owl beside a speech bubble holding the current
+   step's question, one at a time, instead of a plain heading. */
+.eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:14px; margin-bottom:22px; }
+.eai-ob-mascot-avatar{ width:52px; height:52px; border-radius:50%; overflow:hidden; flex-shrink:0; background:var(--primary-soft); }
+.eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; }
+.eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:16px; width:14px; height:14px; background:var(--card);
+  border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:rotate(45deg); border-radius:0 0 0 3px; }
+.eai-ob-bubble .eai-ob-title{ font-size:20px; margin:0; }
+.eai-ob-bubble .eai-ob-desc{ margin-top:4px; font-size:14px; }
+@media (max-width:640px){ .eai-ob-mascot-avatar{ width:44px; height:44px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
 
 .eai-ob-label{ font-size:13px; font-weight:600; color:var(--label); display:block; }
 .eai-ob-input{ height:48px; width:100%; border-radius:14px; border:1px solid var(--input-border); background:var(--bg-soft); color:var(--ink);
@@ -885,23 +898,24 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
           </div>
 
           <div className="eai-ob-card">
-            {step != null && <OnboardingProgress step={step} lang={lang} stepLabels={stepLabels} stepLabelsKm={stepLabelsKm} />}
-            <div className="eai-ob-back-row">
+            <div className="eai-ob-progress-row">
               {onBack ? (
-                <button onClick={onBack} className={`eai-ob-back eai-focus ${lang === "km" ? "eai-km" : ""}`}>
-                  <ChevronLeft size={16} /> {t(lang, "backWord")}
+                <button onClick={onBack} aria-label={t(lang, "backWord")} className="eai-ob-back-icon eai-focus">
+                  <ChevronLeft size={20} />
                 </button>
               ) : (
-                <span aria-hidden="true" className="eai-ob-back" style={{ visibility: "hidden" }}>
-                  <ChevronLeft size={16} /> {t(lang, "backWord")}
-                </span>
+                <span aria-hidden="true" className="eai-ob-back-icon" style={{ visibility: "hidden" }}><ChevronLeft size={20} /></span>
               )}
+              {step != null && <OnboardingProgress step={step} lang={lang} stepLabels={stepLabels} stepLabelsKm={stepLabelsKm} />}
             </div>
 
             {(title || description) && (
-              <div className="eai-ob-heading">
-                {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
-                {description && <p className={`eai-ob-desc ${lang === "km" ? "eai-km" : ""}`}>{description}</p>}
+              <div className="eai-ob-mascot-row">
+                <div className="eai-ob-mascot-avatar"><BondusLogo /></div>
+                <div className="eai-ob-bubble">
+                  {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
+                  {description && <p className={`eai-ob-desc ${lang === "km" ? "eai-km" : ""}`}>{description}</p>}
+                </div>
               </div>
             )}
 
