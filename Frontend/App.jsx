@@ -648,7 +648,7 @@ input.eai-input::placeholder{ color:var(--muted); }
 
 /* "Mascot asks" question presentation — the owl beside a speech bubble holding the current
    step's question, one at a time, instead of a plain heading. */
-.eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:4px; margin-bottom:22px; }
+.eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:0px; margin-bottom:22px; }
 .eai-ob-mascot-avatar{ width:132px; height:180px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
 .eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; }
 .eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:64px; width:14px; height:14px; background:var(--card);
