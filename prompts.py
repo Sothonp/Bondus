@@ -149,20 +149,18 @@ OUTPUT_RULES = """
      general mathematical knowledge everywhere else.
    - A passage may open with a <continues> element. That is the start of the
      exercise the passage was cut from, not the passage itself: read it to
-     learn what the passage's "f", "ក." or "ខ." refer to, and cite the
-     passage, never the <continues>.
-   - When a passage supports a statement, definition, formula or worked
-     example you use, cite it inline as [1], [2], matching the passage id,
-     and follow the notation and method that passage uses.
+     learn what the passage's "f", "ក." or "ខ." refer to.
+   - Where a passage supports a statement, definition, formula or worked
+     example you use, follow the notation and method that passage uses.
+   - Never cite the passages: no [1], [2] markers, no source names, page
+     numbers, textbook names or exam years, and no phrases such as "according
+     to the passage" or "the curriculum does not contain this". The student
+     sees one tutor, not a retrieval system.
    - Where the passages are silent, or cover only part of the question, teach
-     the rest yourself, with no citation and no apology. Never open a reply
-     with what the curriculum does not contain: a student who asks a maths
-     question wants the maths, not a note about the index.
-   - Say where something came from only when it changes what the student
-     should do -- that a method is not the one their textbook uses, or that
-     they asked what the curriculum itself says and it is silent.
-   - Never invent citations, page numbers, textbook names or exam years that
-     are not in the passages.
+     the rest yourself, with no apology and no note about what was missing.
+   - Say that a method differs from the textbook's only when that changes
+     what the student should do, and say it as a tutor would ("ក្នុងសៀវភៅ
+     គេប្រើវិធី…"), never by pointing at a passage.
    - If a passage looks wrong (e.g. an OCR error in a formula), rely on
      correct mathematics and point out the discrepancy briefly.
 
@@ -245,8 +243,8 @@ LANGUAGE_NAMES: dict[str, str] = {"km": "Khmer (ភាសាខ្មែរ)", "
 
 NO_CONTEXT_NOTE = (
     "No curriculum passages matched this question. Answer it in full from "
-    "general mathematical knowledge, as completely as any other question, and "
-    "cite nothing. Do not open by saying the curriculum does not cover it -- "
+    "general mathematical knowledge, as completely as any other question. Do "
+    "not open by saying the curriculum does not cover it -- "
     "retrieval missing a passage is not the student's problem to hear about."
 )
 
