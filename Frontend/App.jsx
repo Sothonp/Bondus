@@ -1167,13 +1167,6 @@ function BondusLogo() {
 }
 
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
-  const [mascotState, setMascotState] = useState("idle");
-  // A brief celebration beat before actually navigating away, so the animation has time to play —
-  // otherwise the screen unmounts the instant onLogin fires and nothing is ever seen.
-  const handleLoginClick = () => {
-    setMascotState("celebration");
-    setTimeout(onLogin, 900);
-  };
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
@@ -1219,7 +1212,7 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
               {t(lang, "createAccount")}
             </button>
             <button
-              onClick={handleLoginClick}
+              onClick={onLogin}
               className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
               style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
               onMouseEnter={(e) => { e.target.style.filter = "brightness(0.9)"; }}
@@ -1233,7 +1226,7 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
         {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flex: 1, marginTop: "24px" }}>
           <div style={{ width: "clamp(220px, 28vw, 420px)", maxWidth: "90vw" }}>
-            <Mascot src="/logos/Bondus_mascout_nobg.png" state={mascotState} alt="BONDUS mascot" />
+            <Mascot src="/logos/Bondus_mascout_nobg.png" alt="BONDUS mascot" />
           </div>
         </div>
       </div>
@@ -1255,12 +1248,7 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
     if (method === "phone" ? !creds.phone : !creds.email || !creds.password) {
       setError(t(lang, method === "phone" ? "errEnterPhone" : "errEnterEmailPassword")); shake(); return;
     }
-    setMascotState("celebration");
-    // A brief optimistic celebration before the real check — if the account genuinely isn't found,
-    // it flips to the sad state with the error instead, rather than staying stuck celebrating.
-    setTimeout(() => {
-      if (!onLogin(creds)) { setError(t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound")); shake(); }
-    }, 500);
+    if (!onLogin(creds)) { setError(t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound")); shake(); }
   };
   return (
     <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
