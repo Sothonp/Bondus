@@ -33,6 +33,7 @@ from src.ingestion.ocr import (
     OCRError,
     PageImage,
     clean_transcript,
+    has_chinese,
     kiri_available,
 )
 
@@ -364,6 +365,10 @@ class HybridImageOCR:
                 warnings.append(f"{_engine_name(engine)}: {exc}")
                 logger.warning("Image OCR with %s failed: %s", _engine_name(engine), exc)
                 continue
+            if has_chinese(text):
+                warnings.append(f"{_engine_name(engine)}: answered in Chinese")
+                logger.warning("Image OCR with %s rejected: Chinese text", _engine_name(engine))
+                continue
             text, looped = trim_repetition(text)
             if truncated or looped:
                 warnings.append(f"{_engine_name(engine)}: the reading may be incomplete")
@@ -474,6 +479,19 @@ def build_image_ocr(settings: Settings) -> HybridImageOCR | None:
                     max_retries=0,
                     thinking_level="minimal",
                     timeout=settings.image_ocr_timeout_seconds,
+                )
+            )
+        elif name == "surya" and settings.surya_python:
+            from src.ingestion.surya_ocr import SuryaPageOCR
+
+            vision.append(
+                SuryaPageOCR(
+                    settings.surya_python,
+                    backend=settings.surya_backend,
+                    llama_binary=settings.surya_llama_binary,
+                    timeout=settings.surya_timeout_seconds,
+                    mode="always",
+                    cache_dir=cache_dir,
                 )
             )
     if khmer is None and not vision:

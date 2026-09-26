@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     cerebras_api_key: SecretStr | None = None
     cerebras_model: str = "gpt-oss-120b"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
-    # No Chinese models (project rule); Cerebras has no other free model to fall back on.
+    # Cerebras has no other free model to fall back on.
     cerebras_fallback_models: str = ""
     cerebras_base_url: str = "https://api.cerebras.ai/v1"
     cerebras_temperature: float = Field(0.2, ge=0.0, le=2.0)
@@ -146,8 +146,9 @@ class Settings(BaseSettings):
     # its LaTeX and its answer on the second question, nemotron-3.5-lightning
     # took 193 s to answer wrongly. `GET {base_url}/models` lists what is free
     # now; retest before changing these, because one good answer proves nothing.
-    # Ling and DeepSeek were dropped on 2026-09-26: the project uses no Chinese
-    # models, which leaves the Nemotron of those three.
+    # Ling and DeepSeek were dropped on 2026-09-26, which leaves the Nemotron of
+    # those three. Chinese models are allowed again, as long as nothing they
+    # write reaches the student in Chinese.
     openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
     # Gemma has not been retested on Khmer answers; its free endpoint is often
@@ -250,8 +251,8 @@ class Settings(BaseSettings):
     # to a vision model, which transcribes the page with the formulas in LaTeX
     # and spells the Khmer the way Kiri read it. Vision engines are tried in the
     # listed order; one without a key is skipped.
-    # Groq is not a default: its only vision model is Qwen, and the project uses
-    # no Chinese models. surya is the local one (needs SURYA_PYTHON); it takes no
+    # Chinese models such as Groq's Qwen may be listed: a reading with Chinese
+    # text in it is rejected and the next engine is tried. surya is the local one (needs SURYA_PYTHON); it takes no
     # hint, so Kiri's reading does not reach it.
     hybrid_vision_engines: str = "gemini,openrouter"
     # By default a page whose vision engines all failed is still indexed from
@@ -262,7 +263,7 @@ class Settings(BaseSettings):
     # call per page); "ensemble" asks them all at once and keeps the reading that
     # agrees best with Kiri's Khmer and with the other engines' formulas.
     hybrid_combine: Literal["first", "ensemble"] = "first"
-    # Must accept images and must not be a Chinese model. Free endpoints are
+    # Must accept images. Free endpoints are
     # shared by all OpenRouter users and often rate limited upstream;
     # ling-3.0-flash-vl stopped being free on 2026-09-26.
     openrouter_vision_model: str = "google/gemma-4-31b-it:free"
@@ -273,8 +274,9 @@ class Settings(BaseSettings):
     # --- Images attached to questions ---
     # Engines read each photo in parallel: Kiri (local, free) for Khmer words and a
     # vision model for math/LaTeX. Vision models are tried in the listed order.
-    # Groq is left out by default: its only vision model is Qwen (see
-    # hybrid_vision_engines).
+    # A reading in Chinese is skipped for the next vision model (see
+    # hybrid_vision_engines). surya is the local vision model (needs
+    # SURYA_PYTHON); it is slow on a CPU, so list it after the hosted ones.
     image_ocr_engines: str = "kiri,gemini"
     groq_vision_model: str = "qwen/qwen3.8-27b"
     groq_vision_reasoning_effort: str | None = None
@@ -378,7 +380,7 @@ class Settings(BaseSettings):
 
     @property
     def image_ocr_engine_list(self) -> list[str]:
-        known = ("kiri", "groq", "gemini")
+        known = ("kiri", "groq", "gemini", "surya")
         engines = [e.strip().lower() for e in self.image_ocr_engines.split(",") if e.strip()]
         unknown = sorted(set(engines) - set(known))
         if unknown:

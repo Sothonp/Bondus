@@ -170,6 +170,15 @@ def _render_png(pdf_bytes: bytes, scale: float) -> bytes:
     return buffer.getvalue()
 
 
+# Han characters. Chinese models may read a page, but a reading that slipped
+# into Chinese is thrown out rather than shown to the student.
+_CHINESE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+def has_chinese(text: str) -> bool:
+    return _CHINESE.search(text) is not None
+
+
 def clean_transcript(text: str) -> str:
     match = _CODE_FENCE.match(text)
     if match:
