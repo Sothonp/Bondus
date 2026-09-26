@@ -6,12 +6,16 @@ services:
     name: bondus-api
     runtime: docker
     # EMBEDDING_BACKEND=sentence-transformers below loads the e5 model and
-    # PyTorch, which need roughly 1.5 GB -- the free instance has 512 MB and
-    # will be OOM-killed. Change this to `standard` (2 GB) before deploying.
-    # (Left as `free` deliberately: raising it costs money, so it is your call.)
-    # To go back to the free tier, set EMBEDDING_BACKEND=hashing and re-embed
-    # the index for it, as the note on that variable explains.
-    plan: free
+    # PyTorch. Measured peak is ~1.4 GB for the embedder alone and ~1.6 GB for
+    # the whole server, so the 512 MB free and starter instances are OOM-killed
+    # on the first question; `standard` (2 GB) is the smallest that fits, with
+    # roughly 400 MB to spare.
+    # To go back to the free tier, set plan: free AND EMBEDDING_BACKEND=hashing,
+    # then re-embed the index for it (see the note on that variable). Be aware
+    # that hashing cannot match across scripts: an English question scores ~0.11
+    # against this Khmer corpus, under any usable cutoff, so it retrieves
+    # nothing and the answer stops being grounded. Khmer questions still work.
+    plan: standard
     healthCheckPath: /health
     envVars:
       - key: CORS_ORIGINS
@@ -22,6 +26,22 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      # The answer chain the laptop runs: Groq's gpt-oss first, then Gemini's
+      # models in turn, then whatever optional keys below are set.
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_FALLBACK
+        value: "true"
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_FALLBACK_MODELS
+        value: gemini-3.8-flash,gemini-3.5-flash,gemini-flash-latest
+      - key: LLM_MAX_TOKENS
+        value: "16000"
+      - key: LLM_TIMEOUT_SECONDS
+        value: "300"
       # Multilingual e5 embeddings: Khmer and English land in one semantic
       # space, so an English question ("explain me limit") can retrieve Khmer
       # passages about លីមីត. Lexical hashing cannot -- it matches shared
@@ -49,12 +69,45 @@ services:
       # Read photos with the hosted vision models only. PyTorch is now in
       # memory anyway for the embeddings, but Kiri would add its own model on
       # top, and OCR is not worth the headroom on a 2 GB instance.
-      # Groq is tried first and Gemini backs it up, so one
-      # engine being down or rate-limited no longer leaves the photo unread
-      # (that needs GROQ_API_KEY above; with no key the engine is skipped).
+      # Gemini is tried first and Groq's Qwen backs it up, so one engine being
+      # down or rate-limited (Gemini's 503s) does not leave the photo unread.
+      # Gemini goes first because it reads better: on a formula sheet page
+      # (scripts/try_image_ocr.py, 2026-09-26) it got the Khmer and every
+      # formula right, while Qwen misread the heading, renumbered the items
+      # and got L/0 wrong. Qwen needs GROQ_API_KEY above; with no key it is
+      # skipped.
       - key: IMAGE_OCR_ENGINES
-        value: groq,gemini
+        value: gemini,groq
       - key: PRELOAD_KIRI
+        value: "false"
+      # Surya 2 is installed in the image the same way: present, but off until
+      # "surya" is added to IMAGE_OCR_ENGINES above (e.g. gemini,groq,surya, so
+      # it only reads a photo when both hosted engines fail). Its model needs
+      # ~1.5 GB of memory beside the embedder's ~1.4 GB, so turning it on needs
+      # plan: pro (4 GB), and on this CPU a photo takes minutes -- raise
+      # IMAGE_OCR_TIMEOUT_SECONDS with it. It runs in its own venv because
+      # surya-ocr cannot share this project's dependencies; the Dockerfile
+      # builds that venv, llama-server and the model at these paths.
+      - key: SURYA_PYTHON
+        value: /opt/surya/bin/python
+      - key: SURYA_BACKEND
+        value: llamacpp
+      - key: SURYA_LLAMA_BINARY
+        value: /opt/llama.cpp/llama-server
+      # The embedder holds ~1.4 GB of the instance's 2 GB for the whole life of
+      # the process, so an upload has only ~400 MB to work in. The default of 4
+      # rasterises four pages at once at 2x scale, which can spike past that and
+      # get the server OOM-killed mid-answer for everyone. Two is the safer
+      # trade: ingest takes about twice as long, queries keep serving.
+      - key: OCR_CONCURRENCY
+        value: "2"
+      # /api/ingest and DELETE /api/documents change the single index every
+      # student searches, and the API has no accounts -- so on a public URL
+      # anyone could add passages to everyone's answers, or delete the
+      # curriculum. CORS does not stop this: it only binds browsers, not curl.
+      # Read-only here; build the index locally and ship it in the image, which
+      # is what the Dockerfile already does.
+      - key: ALLOW_WRITES
         value: "false"
       - key: LOG_LEVEL
         value: INFO
@@ -65,6 +118,10 @@ services:
       #   OCR_ENGINE        "hybrid" and "kiri" load the Kiri model and torch,
       #                     which will not fit the free instance. Leave it
       #                     unset so it resolves to Gemini.
+      # Also optional, and worth adding in the dashboard if you have them: the
+      # fallback chain silently gets shorter without them, so a Groq and Gemini
+      # outage at once leaves the student with the retrieved passages only:
+      #   CEREBRAS_API_KEY, OPENROUTER_API_KEY
       # Optional, to answer with SEA-LION (open models for Southeast Asian
       # languages) instead of Groq. Both are required together; add them in the
       # dashboard, not here, so a deploy is not blocked when they are empty:

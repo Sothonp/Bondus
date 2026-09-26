@@ -18,7 +18,7 @@ LLMProvider = Literal[
 ]
 EmbeddingBackend = Literal["sentence-transformers", "hashing"]
 KhmerSegmenterBackend = Literal["auto", "crf", "regex"]
-OCREngineSetting = Literal["auto", "gemini", "kiri", "groq", "hybrid"]
+OCREngineSetting = Literal["auto", "gemini", "kiri", "groq", "surya", "hybrid"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
@@ -44,6 +44,12 @@ class Settings(BaseSettings):
         "http://localhost:8000,http://127.0.0.1:8000"
     )
     max_upload_mb: int = Field(25, ge=1, le=500)
+    # Ingesting and deleting documents change the one index every student
+    # searches, and the API has no accounts to tell them apart -- so on a public
+    # deployment anyone who finds the URL could add passages to everyone's
+    # answers, or delete the curriculum. Set ALLOW_WRITES=false there and build
+    # the index locally, where this stays true.
+    allow_writes: bool = True
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
@@ -114,7 +120,8 @@ class Settings(BaseSettings):
     cerebras_api_key: SecretStr | None = None
     cerebras_model: str = "gpt-oss-120b"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
-    cerebras_fallback_models: str = "qwen-3.8-27b"
+    # Cerebras has no other free model to fall back on.
+    cerebras_fallback_models: str = ""
     cerebras_base_url: str = "https://api.cerebras.ai/v1"
     cerebras_temperature: float = Field(0.2, ge=0.0, le=2.0)
     # The free tier caps the context at 8192 tokens, the same shape of limit Groq
@@ -139,13 +146,14 @@ class Settings(BaseSettings):
     # its LaTeX and its answer on the second question, nemotron-3.5-lightning
     # took 193 s to answer wrongly. `GET {base_url}/models` lists what is free
     # now; retest before changing these, because one good answer proves nothing.
-    openrouter_model: str = "inclusionai/ling-3.0-flash-vl:free"
+    # Ling and DeepSeek were dropped on 2026-09-26, which leaves the Nemotron of
+    # those three. Chinese models are allowed again, as long as nothing they
+    # write reaches the student in Chinese.
+    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
-    # DeepSeek writes the most Khmer of the three but takes about half as long
-    # again; the Nemotron is the least consistent in latency.
-    openrouter_fallback_models: str = (
-        "deepseek/deepseek-v4-flash-0731:free,nvidia/nemotron-3-ultra-550b-a55b:free"
-    )
+    # Gemma has not been retested on Khmer answers; its free endpoint is often
+    # rate limited upstream.
+    openrouter_fallback_models: str = "google/gemma-4-31b-it:free"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_temperature: float = Field(0.2, ge=0.0, le=2.0)
     # Nearly every free model here can think before answering, which spends the
@@ -189,6 +197,23 @@ class Settings(BaseSettings):
     frontend_dist_dir: Path = PROJECT_ROOT / "dist"
 
     # --- Ingestion ---
+    # A chunk cut from the middle of an exercise carries that exercise's
+    # opening statement (see ingestion.chunk.attach_stems). The model is always
+    # shown it, which costs retrieval nothing. Repeating it in the *embedded*
+    # text is a trade-off, measured on this corpus at recall@5 over 130
+    # continuation chunks:
+    #
+    #   chars |  question names the function  |  question gives only the task
+    #       0 |             32.3%             |            73.8%
+    #      80 |             46.9%             |            56.9%
+    #     200 |             62.3%             |            47.7%
+    #
+    # Longer helps a student who states the problem ("for f(x)=..., study the
+    # variation") and hurts one who asks the task alone -- though for that
+    # second kind any exercise on the topic is a fine answer, which the measure
+    # above does not credit. 0 keeps retrieval exactly as it was; raise it if
+    # your students tend to paste the whole question.
+    stem_embedding_chars: int = Field(0, ge=0, le=500)
     chunk_size: int = Field(500, ge=50, le=20000)
     chunk_overlap: int = Field(50, ge=0)
     khmer_segmenter: KhmerSegmenterBackend = "auto"
@@ -212,15 +237,36 @@ class Settings(BaseSettings):
     kiri_khmer_only: bool = True
     kiri_render_scale: float = Field(2.0, ge=0.5, le=6.0)
 
+    # Surya 2 (local, open source): whole pages with clean LaTeX and headings,
+    # weaker Khmer than Kiri (see src/ingestion/surya_ocr.py). surya-ocr cannot
+    # share this project's environment, so SURYA_PYTHON is the interpreter of a
+    # separate one with surya-ocr installed. It serves its model with llama.cpp
+    # (SURYA_LLAMA_BINARY, the llama-server binary) or vLLM (in Docker).
+    surya_python: str | None = None
+    surya_backend: Literal["llamacpp", "vllm"] | None = None
+    surya_llama_binary: str | None = None
+    surya_timeout_seconds: float = Field(600.0, gt=0)
+
     # OCR_ENGINE=hybrid: Kiri reads the Khmer of each page and hands its reading
     # to a vision model, which transcribes the page with the formulas in LaTeX
     # and spells the Khmer the way Kiri read it. Vision engines are tried in the
     # listed order; one without a key is skipped.
-    hybrid_vision_engines: str = "gemini,groq"
+    # Chinese models such as Groq's Qwen may be listed: a reading with Chinese
+    # text in it is rejected and the next engine is tried. surya is the local one (needs SURYA_PYTHON); it takes no
+    # hint, so Kiri's reading does not reach it.
+    hybrid_vision_engines: str = "gemini,openrouter"
     # By default a page whose vision engines all failed is still indexed from
     # Kiri's Khmer-only reading (prose, no formulas). Set this to fail the page
     # instead, so a re-run picks it up rather than indexing it without its maths.
     hybrid_require_vision: bool = False
+    # With several vision engines: "first" keeps the first usable reading (one
+    # call per page); "ensemble" asks them all at once and keeps the reading that
+    # agrees best with Kiri's Khmer and with the other engines' formulas.
+    hybrid_combine: Literal["first", "ensemble"] = "first"
+    # Must accept images. Free endpoints are
+    # shared by all OpenRouter users and often rate limited upstream;
+    # ling-3.0-flash-vl stopped being free on 2026-09-26.
+    openrouter_vision_model: str = "google/gemma-4-31b-it:free"
 
     # --- Background ingestion ---
     max_ingest_jobs: int = Field(100, ge=1, le=10000)
@@ -228,7 +274,10 @@ class Settings(BaseSettings):
     # --- Images attached to questions ---
     # Engines read each photo in parallel: Kiri (local, free) for Khmer words and a
     # vision model for math/LaTeX. Vision models are tried in the listed order.
-    image_ocr_engines: str = "kiri,groq,gemini"
+    # A reading in Chinese is skipped for the next vision model (see
+    # hybrid_vision_engines). surya is the local vision model (needs
+    # SURYA_PYTHON); it is slow on a CPU, so list it after the hosted ones.
+    image_ocr_engines: str = "kiri,gemini"
     groq_vision_model: str = "qwen/qwen3.8-27b"
     groq_vision_reasoning_effort: str | None = None
     # Groq's free tier allows 1000 output tokens per minute for Qwen; larger
@@ -331,7 +380,7 @@ class Settings(BaseSettings):
 
     @property
     def image_ocr_engine_list(self) -> list[str]:
-        known = ("kiri", "groq", "gemini")
+        known = ("kiri", "groq", "gemini", "surya")
         engines = [e.strip().lower() for e in self.image_ocr_engines.split(",") if e.strip()]
         unknown = sorted(set(engines) - set(known))
         if unknown:
@@ -340,7 +389,7 @@ class Settings(BaseSettings):
 
     @property
     def hybrid_vision_engine_list(self) -> list[str]:
-        known = ("gemini", "groq")
+        known = ("gemini", "groq", "openrouter", "surya")
         engines = [e.strip().lower() for e in self.hybrid_vision_engines.split(",") if e.strip()]
         unknown = sorted(set(engines) - set(known))
         if unknown:

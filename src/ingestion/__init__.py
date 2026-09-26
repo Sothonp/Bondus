@@ -9,7 +9,7 @@ from typing import Protocol
 
 import numpy as np
 
-from src.ingestion.chunk import Chunk, RecursiveCharacterTextSplitter, chunk_text
+from src.ingestion.chunk import Chunk, RecursiveCharacterTextSplitter, attach_stems, chunk_text
 from src.ingestion.extract import (
     SUPPORTED_EXTENSIONS,
     ExtractedDocument,
@@ -101,9 +101,24 @@ def context_header(title: str, heading: str) -> str:
     return header
 
 
-def embedding_text(title: str, chunk: Chunk) -> str:
+def embedding_text(title: str, chunk: Chunk, stem_chars: int = 0) -> str:
+    """The text embedded for this chunk.
+
+    ``stem_chars`` repeats that much of the exercise's opening statement, which
+    trades retrieval for a student who states the problem against one who asks
+    the task alone -- see ``Settings.stem_embedding_chars`` for the numbers. At
+    0 (the default) the embedded text is exactly what it was before chunks
+    carried a stem, so the model still gains the statement and retrieval does
+    not move.
+    """
     header = context_header(title, chunk.heading)
-    return f"{header}\n\n{chunk.restored_text}" if header else chunk.restored_text
+    # In the order a reader meets them: which paper, which exercise, what it
+    # asks, then this part of it. Skipped when the heading already carries the
+    # statement, which happens when the extractor kept it as the heading.
+    stem = chunk.stem[:stem_chars].strip() if stem_chars and chunk.stem else ""
+    if stem and stem in header:
+        stem = ""
+    return "\n\n".join(part for part in (header, stem, chunk.restored_text) if part)
 
 
 def prepare_document(
@@ -186,6 +201,7 @@ def index_document(
     segmenter: KhmerSegmenter,
     chunk_size: int,
     chunk_overlap: int,
+    stem_embedding_chars: int = 0,
     replace: bool = True,
     persist: bool = True,
 ) -> IndexResult:
@@ -201,7 +217,9 @@ def index_document(
         hint = " ".join(prepared.warnings)
         raise EmptyDocumentError(f"No extractable text in '{document.source}'. {hint}".strip())
 
-    vectors = embedder.embed_documents([embedding_text(prepared.title, chunk) for chunk in prepared.chunks])
+    vectors = embedder.embed_documents(
+        [embedding_text(prepared.title, chunk, stem_embedding_chars) for chunk in prepared.chunks]
+    )
     records = [
         ChunkRecord(
             id=chunk_id(prepared.source, chunk),
@@ -216,6 +234,7 @@ def index_document(
                 "ocr": chunk.page in prepared.ocr_page_numbers,
                 "title": prepared.title,
                 "heading": chunk.heading,
+                "stem": chunk.stem,
                 "page_end": chunk.last_page,
             },
         )
@@ -253,6 +272,7 @@ __all__ = [
     "LatexIntegrityError",
     "PreparedDocument",
     "RecursiveCharacterTextSplitter",
+    "attach_stems",
     "Section",
     "UnsupportedFileTypeError",
     "chunk_text",

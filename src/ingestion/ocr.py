@@ -108,7 +108,21 @@ class OCRError(RuntimeError):
         self.status = status
 
 
-OCREngine = Literal["gemini", "kiri", "groq", "hybrid"]
+OCREngine = Literal["gemini", "kiri", "groq", "openrouter", "surya", "hybrid"]
+
+# A vision model that thinks out loud writes its doubts into the transcript
+# ("It looks like $-\frac{x}{2}$ but wait, is it a 0 or a 2?"), often in a loop.
+# The pages are Khmer and LaTeX, so English sentences like these never belong.
+_REASONING_LEAK = re.compile(
+    r"\b(?:but wait|wait,|let'?s (?:look|check|re-?read)|it looks like|i think|"
+    r"hmm+|actually,|looking (?:at|closely)|the image (?:shows|says)|i'?ll |i will )",
+    re.IGNORECASE,
+)
+
+
+def leaked_reasoning(text: str) -> bool:
+    """True for a transcript that carries the model's own reasoning."""
+    return len(_REASONING_LEAK.findall(text)) >= 2
 
 
 def page_payload(page: Any, render_scale: float = 2.0) -> PageImage:
@@ -154,6 +168,15 @@ def _render_png(pdf_bytes: bytes, scale: float) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
+
+
+# Han characters. Chinese models may read a page, but a reading that slipped
+# into Chinese is thrown out rather than shown to the student.
+_CHINESE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+def has_chinese(text: str) -> bool:
+    return _CHINESE.search(text) is not None
 
 
 def clean_transcript(text: str) -> str:
@@ -257,10 +280,11 @@ class CachedPageOCR:
             candidates = (key, *self._legacy_cache_keys(payload))
         for candidate in candidates:
             cached = self._read_cache(candidate)
-            if cached is not None:
+            # A leaked reading cached before the check existed is read again.
+            if cached is not None and not leaked_reasoning(cached):
                 return cached, False
         text, truncated = self._transcribe_uncached(payload, hint)
-        if not truncated and self._cacheable(payload):
+        if not truncated and self._cacheable(payload) and not leaked_reasoning(text):
             self._write_cache(candidates[0], text)
         return text, truncated
 
@@ -463,13 +487,20 @@ def resolve_ocr_engine(settings: Settings) -> OCREngine | None:
         if not kiri_available():
             raise RuntimeError("OCR_ENGINE=kiri requires kiri-ocr (uv add kiri-ocr)")
         return "kiri"
+    if settings.ocr_engine == "surya":
+        if not settings.surya_python:
+            raise RuntimeError(
+                "OCR_ENGINE=surya requires SURYA_PYTHON, the python of an environment with surya-ocr"
+            )
+        return "surya"
     if settings.ocr_engine == "hybrid":
         if not kiri_available():
             raise RuntimeError("OCR_ENGINE=hybrid requires kiri-ocr (uv add kiri-ocr)")
         if not _hybrid_vision_engines(settings):
             raise RuntimeError(
                 "OCR_ENGINE=hybrid needs a vision engine for the mathematics: set "
-                "GEMINI_API_KEY or GROQ_API_KEY, and list them in HYBRID_VISION_ENGINES"
+                "GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY (or SURYA_PYTHON), and list them in "
+                "HYBRID_VISION_ENGINES"
             )
         return "hybrid"
     if settings.gemini_api_key is not None:
@@ -481,12 +512,30 @@ def resolve_ocr_engine(settings: Settings) -> OCREngine | None:
 
 def _hybrid_vision_engines(settings: Settings) -> list[str]:
     """The vision engines of HYBRID_VISION_ENGINES that have a key configured."""
-    keys = {"gemini": settings.gemini_api_key, "groq": settings.groq_api_key}
+    keys = {
+        "gemini": settings.gemini_api_key,
+        "groq": settings.groq_api_key,
+        "openrouter": settings.openrouter_api_key,
+        "surya": settings.surya_python,
+    }
     return [name for name in settings.hybrid_vision_engine_list if keys.get(name) is not None]
 
 
 def _build_vision_engine(name: str, settings: Settings) -> CachedPageOCR:
     """One vision engine configured for corpus pages, not for student photos."""
+    if name == "surya":
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        return SuryaPageOCR(
+            settings.surya_python,
+            backend=settings.surya_backend,
+            llama_binary=settings.surya_llama_binary,
+            timeout=settings.surya_timeout_seconds,
+            render_scale=settings.kiri_render_scale,
+            mode=settings.ocr_mode,
+            min_chars=settings.ocr_min_chars,
+            cache_dir=settings.ocr_cache_dir,
+        )
     if name == "groq":
         from src.ingestion.image_ocr import GroqVisionOCR
 
@@ -501,6 +550,25 @@ def _build_vision_engine(name: str, settings: Settings) -> CachedPageOCR:
             timeout=settings.llm_timeout_seconds,
             reasoning_effort=settings.groq_vision_reasoning_effort,
             # A whole textbook page needs far more room than a photo of one exercise.
+            max_output_tokens=settings.groq_page_max_tokens,
+            frequency_penalty=settings.groq_vision_frequency_penalty,
+            prompt=OCR_PROMPT,
+        )
+    if name == "openrouter":
+        from src.ingestion.image_ocr import OpenRouterVisionOCR
+
+        return OpenRouterVisionOCR(
+            settings.openrouter_api_key.get_secret_value(),
+            settings.openrouter_vision_model,
+            base_url=settings.openrouter_base_url,
+            default_headers={"X-Title": settings.openrouter_app_name},
+            disable_reasoning=settings.openrouter_disable_reasoning,
+            mode=settings.ocr_mode,
+            min_chars=settings.ocr_min_chars,
+            cache_dir=settings.ocr_cache_dir,
+            concurrency=settings.ocr_concurrency,
+            max_retries=settings.ocr_max_retries,
+            timeout=settings.llm_timeout_seconds,
             max_output_tokens=settings.groq_page_max_tokens,
             frequency_penalty=settings.groq_vision_frequency_penalty,
             prompt=OCR_PROMPT,
@@ -571,5 +639,6 @@ def build_ocr(settings: Settings) -> CachedPageOCR | None:
             cache_dir=settings.ocr_cache_dir,
             concurrency=settings.ocr_concurrency,
             require_vision=settings.hybrid_require_vision,
+            combine=settings.hybrid_combine,
         )
     return _build_vision_engine(engine, settings)

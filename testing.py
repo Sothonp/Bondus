@@ -1237,20 +1237,20 @@ def test_build_generator_orders_fallback_chain(tmp_path):
         "cerebras_api_key": SecretStr("csk-test"),
         "openrouter_api_key": SecretStr("sk-or-test"),
         "sea_lion_api_key": SecretStr("sk-test"),
-        "openrouter_fallback_models": "deepseek/deepseek-v4-flash-0731:free",
+        "openrouter_fallback_models": "google/gemma-4-31b-it:free",
     })
     assert build_generator(with_backstops).chain == [
         "groq:openai/gpt-oss-120b", "gemini:gemini-3.6-flash",
         "gemini:gemini-3.8-flash", "gemini:gemini-3.5-flash",
-        "cerebras:gpt-oss-120b", "cerebras:qwen-3.8-27b",
-        "openrouter:inclusionai/ling-3.0-flash-vl:free",
-        "openrouter:deepseek/deepseek-v4-flash-0731:free",
+        "cerebras:gpt-oss-120b",
+        "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "openrouter:google/gemma-4-31b-it:free",
         "sea-lion:aisingapore/Gemma-SEA-LION-v4-27B-IT",
     ]
     # A key alone is enough now that each backstop has a working default model.
     cerebras_only = make_settings(tmp_path, llm_provider="auto", cerebras_api_key="csk-test")
     assert cerebras_only.resolved_llm_provider == "cerebras"
-    assert build_generator(cerebras_only).chain == ["cerebras:gpt-oss-120b", "cerebras:qwen-3.8-27b"]
+    assert build_generator(cerebras_only).chain == ["cerebras:gpt-oss-120b"]
     chain = build_generator(settings)
     assert (chain.rotate, chain.cooldown_seconds) == (False, settings.llm_cooldown_seconds)
     assert build_generator(settings.model_copy(update={"llm_selection": "rotate"})).rotate is True
@@ -1443,6 +1443,29 @@ def test_build_image_ocr_follows_settings(tmp_path):
     assert build_image_ocr(make_settings(tmp_path, image_ocr_engines="groq")) is None  # no key
     with pytest.raises(ValueError):
         make_settings(tmp_path, image_ocr_engines="kiri,tesseract").image_ocr_engine_list
+
+
+def test_image_ocr_skips_a_reading_in_chinese():
+    from src.ingestion.ocr import PageImage
+
+    chinese = FakeImageEngine("groq", "qwen", text="求函数 $f(x)=x^2$ 的导数")
+    gemini = FakeImageEngine("gemini", "flash", text="គណនាដេរីវេនៃ $f(x)=x^2$")
+    [reading] = _hybrid(vision=[chinese, gemini]).read([PageImage(b"photo", "image/jpeg")])
+    assert reading.vision_engine == "gemini:flash"
+    assert "求" not in reading.search_text
+    assert any("Chinese" in warning for warning in reading.warnings)
+
+
+def test_build_image_ocr_adds_surya_only_with_its_python(tmp_path):
+    from src.ingestion.image_ocr import GroqVisionOCR, build_image_ocr
+    from src.ingestion.surya_ocr import SuryaPageOCR
+
+    settings = make_settings(tmp_path, image_ocr_engines="groq,surya", groq_api_key="gsk_x",
+                             surya_python="/opt/surya/bin/python", surya_backend="llamacpp")
+    ocr = build_image_ocr(settings)
+    assert [type(engine) for engine in ocr.vision] == [GroqVisionOCR, SuryaPageOCR]
+    assert ocr.vision[1].python == "/opt/surya/bin/python"
+    assert build_image_ocr(make_settings(tmp_path, image_ocr_engines="surya")) is None  # no SURYA_PYTHON
 
 
 def _image_client(store_path, generator, **engines):

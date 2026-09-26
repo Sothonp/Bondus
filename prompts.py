@@ -147,18 +147,20 @@ OUTPUT_RULES = """
      wording -- not to fence in what you are allowed to teach. Answer the
      question fully every time: from the passages where they help, and from
      general mathematical knowledge everywhere else.
-   - When a passage supports a statement, definition, formula or worked
-     example you use, cite it inline as [1], [2], matching the passage id,
-     and follow the notation and method that passage uses.
+   - A passage may open with a <continues> element. That is the start of the
+     exercise the passage was cut from, not the passage itself: read it to
+     learn what the passage's "f", "ក." or "ខ." refer to.
+   - Where a passage supports a statement, definition, formula or worked
+     example you use, follow the notation and method that passage uses.
+   - Never cite the passages: no [1], [2] markers, no source names, page
+     numbers, textbook names or exam years, and no phrases such as "according
+     to the passage" or "the curriculum does not contain this". The student
+     sees one tutor, not a retrieval system.
    - Where the passages are silent, or cover only part of the question, teach
-     the rest yourself, with no citation and no apology. Never open a reply
-     with what the curriculum does not contain: a student who asks a maths
-     question wants the maths, not a note about the index.
-   - Say where something came from only when it changes what the student
-     should do -- that a method is not the one their textbook uses, or that
-     they asked what the curriculum itself says and it is silent.
-   - Never invent citations, page numbers, textbook names or exam years that
-     are not in the passages.
+     the rest yourself, with no apology and no note about what was missing.
+   - Say that a method differs from the textbook's only when that changes
+     what the student should do, and say it as a tutor would ("ក្នុងសៀវភៅ
+     គេប្រើវិធី…"), never by pointing at a passage.
    - If a passage looks wrong (e.g. an OCR error in a formula), rely on
      correct mathematics and point out the discrepancy briefly.
 
@@ -241,8 +243,8 @@ LANGUAGE_NAMES: dict[str, str] = {"km": "Khmer (ភាសាខ្មែរ)", "
 
 NO_CONTEXT_NOTE = (
     "No curriculum passages matched this question. Answer it in full from "
-    "general mathematical knowledge, as completely as any other question, and "
-    "cite nothing. Do not open by saying the curriculum does not cover it -- "
+    "general mathematical knowledge, as completely as any other question. Do "
+    "not open by saying the curriculum does not cover it -- "
     "retrieval missing a passage is not the student's problem to hear about."
 )
 
@@ -252,10 +254,13 @@ class ContextChunk(Protocol):
     page: int | None
     score: float
     text: str
+    stem: str
 
 
 def _escape_passage(text: str) -> str:
-    return text.replace("</passage", "&lt;/passage").replace("</context", "&lt;/context")
+    for tag in ("</passage", "</context", "</continues"):
+        text = text.replace(tag, "&lt;" + tag[1:])
+    return text
 
 
 def _escape_attribute(value: str) -> str:
@@ -274,9 +279,15 @@ def build_context_block(chunks: Sequence[ContextChunk]) -> str:
             value = getattr(chunk, name, "")
             if value:
                 page += f' {"section" if name == "heading" else name}="{_escape_attribute(value)}"'
+        # A passage from the middle of an exercise is a part without its
+        # question. The stem is what the part refers to, so it is given first
+        # and marked as such, rather than run together with the passage as if
+        # the model had retrieved both.
+        stem = getattr(chunk, "stem", "")
+        opening = f"<continues>\n{_escape_passage(stem)}\n</continues>\n" if stem else ""
         passages.append(
             f'<passage id="{number}" source="{_escape_attribute(chunk.source)}"{page} '
-            f'score="{chunk.score:.3f}">\n{_escape_passage(chunk.text)}\n</passage>'
+            f'score="{chunk.score:.3f}">\n{opening}{_escape_passage(chunk.text)}\n</passage>'
         )
     return "<context>\n" + "\n".join(passages) + "\n</context>"
 

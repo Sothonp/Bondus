@@ -242,6 +242,9 @@ class HealthResponse(BaseModel):
     default_top_k: int
     default_score_threshold: float
     max_upload_mb: int
+    writes_enabled: bool = Field(
+        True, description="False when the server refuses ingest and delete (ALLOW_WRITES=false)"
+    )
     documents: int
     chunks: int
 

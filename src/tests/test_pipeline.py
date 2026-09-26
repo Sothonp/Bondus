@@ -1,6 +1,7 @@
 """Unit tests for the ingestion, embedding, vector store and retrieval layers."""
 from __future__ import annotations
 
+import json
 import os
 import random
 import unicodedata
@@ -20,9 +21,11 @@ from src.ingestion import (
 from src.ingestion.chunk import RecursiveCharacterTextSplitter, chunk_text, restored_length
 from src.ingestion.extract import (
     ExtractionError,
+    HeadingTracker,
     UnsupportedFileTypeError,
     clean_markdown,
     extract_document,
+    split_markdown_sections,
 )
 from src.ingestion.khmer_segment import (
     ZWSP,
@@ -349,6 +352,64 @@ class TestChunking:
 # ---------------------------------------------------------------------------
 
 class TestExtraction:
+    def test_plain_exercise_and_sitting_lines_open_headings(self):
+        tracker = HeadingTracker()
+        page_one = (
+            "### VI. (២០ពិន្ទុ)\nគេមានអនុគមន៍ $f(x)=x^2$ ។\n"
+            "សម័យប្រឡង៖ ២០ សីហា ២០១៨ លេខទំនាក់ទំនង៖០១៥៤៣៩៧៩០\n"
+            "I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។\n"
+            "១.គណនា $P(A)$ ។\n"
+        )
+        page_two = "ក. រកប្រូបាប។\nII. (១៥ពិន្ទុ) គេឲ្យ $Z = 1+i$ ។\n"
+        sections = split_markdown_sections(page_one, tracker, 1) + split_markdown_sections(
+            page_two, tracker, 2
+        )
+        assert [(s.page, s.heading, s.starts_heading) for s in sections] == [
+            (1, "VI. (២០ពិន្ទុ)", True),
+            (1, "សម័យប្រឡង៖ ២០ សីហា ២០១៨", True),
+            (1, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។", True),
+            (2, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › I. (១០ពិន្ទុ) ក្នុងថង់មួយមានប៊ូល ៥ ។", False),
+            (2, "សម័យប្រឡង៖ ២០ សីហា ២០១៨ › II. (១៥ពិន្ទុ) គេឲ្យ $Z = 1+i$ ។", True),
+        ]
+        # Numbered parts stay inside their exercise, and inside a fence nothing is a heading.
+        fenced = split_markdown_sections("```\nIII. (៥ពិន្ទុ)\n```", HeadingTracker())
+        assert [s.starts_heading for s in fenced] == [False]
+
+    def test_a_book_tracker_carries_headings_from_image_to_image(self):
+        class PageReader:
+            def transcribe_pages(self, pages):
+                return {1: pages[1].data.decode("utf-8")}, []
+
+        pages = [
+            "# ចំនួនកុំផ្លិច\n## ទម្រង់ត្រីកោណមាត្រ\n$z = r(\\cos\\theta + i\\sin\\theta)$",
+            "$z^n = r^n(\\cos n\\theta + i\\sin n\\theta)$\n## ឫសទី n\nរូបមន្ត",
+        ]
+        tracker = HeadingTracker()
+        second = [
+            extract_document(text.encode("utf-8"), f"sheet-{n}.jpg", PageReader(), tracker)
+            for n, text in enumerate(pages, start=1)
+        ][1]
+        assert [(s.heading, s.starts_heading) for s in second.sections] == [
+            ("ចំនួនកុំផ្លិច › ទម្រង់ត្រីកោណមាត្រ", False),
+            ("ចំនួនកុំផ្លិច › ឫសទី n", True),
+        ]
+        # Without the book's tracker, each image starts with no heading at all.
+        alone = extract_document(pages[1].encode("utf-8"), "sheet-2.jpg", PageReader())
+        assert alone.sections[0].heading == ""
+
+    def test_catalogued_pages_name_their_book(self):
+        import importlib.util
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "scripts" / "ingest_corpus.py"
+        spec = importlib.util.spec_from_file_location("ingest_corpus", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        book = "សង្ខេបរូបមន្តគណិតវិទ្យា ថ្នាក់ទី១២ (ខេង តេងហៀង និង គីម សេងហុង)"
+        assert module.book_of(f"{book} ទំព័រ 5 ជួរទី2") == book
+        assert module.book_of(f"{book} ទំព័រ 6") == book
+        assert module.book_of("វិញ្ញាសាប្រឡងបាក់ឌុបគណិតវិទ្យា ២០០២–២០២៣") == ""
+
     def test_clean_markdown_keeps_latex_intact(self):
         markdown = (
             "---\ntitle: Notes\n---\n# លីមីត\n\n"
@@ -981,6 +1042,85 @@ class TestKiriOCR:
             extract_document(b"img", "photo.gif", ocr=None)
 
 
+class TestSuryaOCR:
+    def test_blocks_become_markdown_with_headings_and_formulas(self):
+        from src.ingestion.surya_ocr import blocks_to_markdown
+
+        blocks = [
+            {"label": "SectionHeader", "html": "<h2><b>មេរៀនទី៣</b></h2>"},
+            {"label": "SectionHeader", "html": "<h2>ភាពជាប់នៃអនុគមន៍</h2>"},
+            {"label": "SectionHeader", "html": "<h1>២. អនុគមន៍បន្លាយតាមភាពជាប់</h1>"},
+            {"label": "Text", "html": "<p>បើ <math>k = 0</math> ហើយ <math>f(a) \\cdot f(b) &lt; 0</math> នោះមាន <math>c</math></p>"},
+            {"label": "ListGroup", "html": "<ul><li>• <math>f</math> កំណត់ចំពោះ <math>x = a</math></li><li>• ជាប់</li></ul>"},
+            {"label": "Equation", "html": "<p><math>\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1</math></p>"},
+            {"label": "Equation", "html": "១. <math>\\sin(-\\alpha) = -\\sin\\alpha</math>"},
+            {"label": "Table", "html": "<table><tr><th>ច្បាប់</th><th>រូបមន្ត</th></tr><tr><td>ផលបូក</td><td><math>a+b</math></td></tr></table>"},
+            {"label": "Figure", "html": "<img>"},
+            {"label": "PageFooter", "html": "<p>www.facebook.com/7khmer</p>"},
+        ]
+        assert blocks_to_markdown(blocks).split("\n\n") == [
+            # Levels come from the heading's wording, whatever h-tag Surya chose.
+            "# មេរៀនទី៣",
+            "## ភាពជាប់នៃអនុគមន៍",
+            "### ២. អនុគមន៍បន្លាយតាមភាពជាប់",
+            # The < inside a formula is not a tag: nothing after it is lost.
+            "បើ $k = 0$ ហើយ $f(a) \\cdot f(b) < 0$ នោះមាន $c$",
+            "- $f$ កំណត់ចំពោះ $x = a$\n- ជាប់",
+            "$$\n\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1\n$$",
+            "១. $\\sin(-\\alpha) = -\\sin\\alpha$",
+            "| ច្បាប់ | រូបមន្ត |\n| --- | --- |\n| ផលបូក | $a+b$ |",
+        ]
+
+    def test_pages_go_through_one_long_lived_worker(self, tmp_path):
+        import sys
+
+        from src.ingestion.ocr import PageImage
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        worker = tmp_path / "fake_worker.py"
+        worker.write_text(
+            "import json, sys\n"
+            "starts = open(sys.argv[1], 'a'); starts.write('x'); starts.close()\n"
+            "for line in sys.stdin:\n"
+            "    path = json.loads(line)['image']\n"
+            "    data = open(path, 'rb').read().decode()\n"
+            "    if data == 'broken':\n"
+            "        print(json.dumps({'error': 'ValueError: bad page'}), flush=True)\n"
+            "        continue\n"
+            "    html = '<h1>' + data + '</h1>'\n"
+            "    print(json.dumps({'blocks': [{'label': 'SectionHeader', 'html': html}]}), flush=True)\n",
+            encoding="utf-8",
+        )
+        starts = tmp_path / "starts"
+        ocr = SuryaPageOCR(
+            "unused", cache_dir=tmp_path / "cache",
+            worker_command=[sys.executable, str(worker), str(starts)],
+        )
+        try:
+            transcripts, warnings = ocr.transcribe_pages({
+                1: PageImage("ភាពជាប់".encode(), "image/png"),
+                2: PageImage(b"limits", "image/jpeg"),
+                3: PageImage(b"broken", "image/png"),
+            })
+            assert transcripts == {1: "## ភាពជាប់", 2: "## limits"}
+            assert any("Surya failed: ValueError: bad page" in warning for warning in warnings)
+            # Cached: a second read never reaches the worker.
+            assert ocr.transcribe_page(PageImage(b"limits", "image/jpeg")) == ("## limits", False)
+        finally:
+            ocr.close()
+        assert starts.read_text() == "x", "one worker served every page"
+
+    def test_surya_needs_its_own_python(self):
+        from src.config import Settings
+        from src.ingestion.ocr import build_ocr, resolve_ocr_engine
+        from src.ingestion.surya_ocr import SuryaPageOCR
+
+        with pytest.raises(RuntimeError, match="SURYA_PYTHON"):
+            resolve_ocr_engine(Settings(ocr_engine="surya", _env_file=None))
+        engine = build_ocr(Settings(ocr_engine="surya", surya_python="/opt/surya/bin/python", _env_file=None))
+        assert isinstance(engine, SuryaPageOCR) and engine.python == "/opt/surya/bin/python"
+
+
 class TestHybridOCR:
     """Kiri reads the Khmer, the vision model reads the mathematics."""
 
@@ -1098,3 +1238,261 @@ class TestHybridOCR:
 
         with pytest.raises(ValueError, match="needs a Khmer engine"):
             HybridPageOCR(khmer=None, vision=[])
+
+
+def _scripted(name, text, truncated=False):
+    """A vision engine that always gives the same reading."""
+    from src.ingestion.ocr import CachedPageOCR, OCRError
+
+    class Scripted(CachedPageOCR):
+        engine = name
+        model = "m"
+
+        def __init__(self):
+            super().__init__()
+            self.hints = []
+
+        def _cache_key(self, payload):
+            return name
+
+        def _transcribe_uncached(self, payload, hint=None):
+            self.hints.append(hint)
+            if isinstance(text, Exception):
+                raise text
+            return text, truncated
+
+    Scripted.OCRError = OCRError
+    return Scripted()
+
+
+LEAKED = (
+    "It looks like $-\\frac{x}{2}$ but wait, is it a 0 or a 2? "
+    "Let's look at question 3: $-\\frac{x}{2}$."
+)
+
+
+class TestEnsembleOCR:
+    """Kiri reads the Khmer; several vision engines read the maths, and the
+    reading that agrees best with Kiri and with the other engines is kept."""
+
+    KIRI = "គណនា លីមីត នៃ អនុគមន៍"
+    GOOD = "គណនា លីមីត នៃ អនុគមន៍ $\\lim_{x \\to 0} \\frac{\\sin 3x}{x}$ គេបាន $3$ ។"
+    # Same maths, Khmer garbled (the vision models' weak spot).
+    GARBLED = "គណណា លីមិត នៃ អនុគុមន៍ $\\lim_{x\\to 0}\\frac{\\sin 3x}{x}$ គេបាន $3$ ។"
+    # Good Khmer, but a formula no other engine saw and the answer missing.
+    INVENTED = "គណនា លីមីត នៃ អនុគមន៍ $\\lim_{x \\to 1} x^9$ ។"
+
+    def _ensemble(self, tmp_path, *engines, **kwargs):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+
+        khmer, _ = _kiri(tmp_path, [_region(self.KIRI, 10)])
+        return HybridPageOCR(
+            khmer=khmer, vision=list(engines), combine="ensemble",
+            cache_dir=tmp_path / "hybrid", **kwargs,
+        )
+
+    def test_every_engine_reads_with_the_khmer_hint_and_the_best_reading_wins(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        engines = [
+            _scripted("groq", self.GARBLED),
+            _scripted("gemini", self.GOOD),
+            _scripted("openrouter", self.INVENTED),
+        ]
+        text, truncated = self._ensemble(tmp_path, *engines).transcribe_page(PageImage(b"p", "image/png"))
+
+        assert text == self.GOOD and not truncated
+        assert all(engine.hints == [self.KIRI] for engine in engines), "each got Kiri's reading"
+
+    def test_readings_are_kept_whole_never_spliced(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        text, _ = self._ensemble(
+            tmp_path, _scripted("groq", self.GARBLED), _scripted("gemini", self.GOOD)
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text in (self.GOOD, self.GARBLED)
+
+    def test_a_reading_with_leaked_reasoning_is_rejected(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        text, _ = self._ensemble(
+            tmp_path, _scripted("groq", LEAKED), _scripted("gemini", self.GARBLED)
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text == self.GARBLED
+
+    def test_a_failed_engine_does_not_sink_the_page(self, tmp_path):
+        from src.ingestion.ocr import OCRError, PageImage
+
+        text, _ = self._ensemble(
+            tmp_path, _scripted("groq", OCRError("429", 429)), _scripted("gemini", self.GOOD)
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text == self.GOOD
+
+    def test_a_complete_reading_beats_a_cut_off_one(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        text, truncated = self._ensemble(
+            tmp_path,
+            _scripted("gemini", self.GOOD, truncated=True),
+            _scripted("groq", self.GARBLED),
+        ).transcribe_page(PageImage(b"p", "image/png"))
+        assert text == self.GARBLED and not truncated
+
+    def test_all_readings_unusable_falls_back_to_kiri_uncached(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        page = PageImage(b"p", "image/png")
+        hybrid = self._ensemble(tmp_path, _scripted("groq", LEAKED), _scripted("gemini", LEAKED))
+        text, _ = hybrid.transcribe_page(page)
+        assert text == self.KIRI
+        assert hybrid._read_cache(hybrid._cache_key(page)) is None
+
+    def test_ensemble_and_first_keep_separate_cache_entries(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        page = PageImage(b"p", "image/png")
+        ensemble = self._ensemble(tmp_path, _scripted("groq", self.GOOD), _scripted("gemini", self.GOOD))
+        first = self._ensemble(tmp_path, _scripted("groq", self.GOOD), _scripted("gemini", self.GOOD))
+        first.combine = "first"
+        assert ensemble._cache_key(page) != first._cache_key(page)
+
+    def test_first_mode_skips_a_leaked_reading(self, tmp_path):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+        from src.ingestion.ocr import PageImage
+
+        khmer, _ = _kiri(tmp_path, [_region(self.KIRI, 10)])
+        hybrid = HybridPageOCR(
+            khmer=khmer, vision=[_scripted("groq", LEAKED), _scripted("gemini", self.GOOD)],
+            cache_dir=tmp_path / "hybrid",
+        )
+        assert hybrid.transcribe_page(PageImage(b"p", "image/png"))[0] == self.GOOD
+
+
+class TestReadingChecks:
+    def test_reading_problems(self):
+        from src.ingestion.hybrid_ocr import reading_problems
+
+        assert reading_problems(TestEnsembleOCR.GOOD) == []
+        assert "reasoning leak" in reading_problems(LEAKED)
+        assert "unbalanced $" in reading_problems("គេបាន $x+1 = 2 ។")
+        assert "repeated lines" in reading_problems("បើ នោះ ឬ\n" * 5)
+        assert "Chinese text" in reading_problems("求极限 $\\lim_{x \\to 0} x$")
+
+    def test_a_leaked_reading_is_neither_cached_nor_served_from_the_cache(self, tmp_path):
+        from src.ingestion.ocr import PageImage
+
+        engine = _scripted("groq", LEAKED)
+        engine.cache_dir = tmp_path
+        page = PageImage(b"p", "image/png")
+        engine.transcribe_page(page)
+        assert not list(tmp_path.glob("*.md")), "a leaked reading is not cached"
+
+        (tmp_path / "groq.md").write_text(LEAKED, encoding="utf-8")  # cached before the check
+        engine.transcribe_page(page)
+        assert len(engine.hints) == 2, "the leaked cache entry is read again"
+
+    def test_openrouter_vision_sends_max_tokens_and_no_reasoning(self, tmp_path):
+        import httpx
+        import openai
+
+        from src.ingestion.image_ocr import OpenRouterVisionOCR
+        from src.ingestion.ocr import OCRError, PageImage
+
+        requests = []
+
+        def handler(request):
+            requests.append(json.loads(request.content))
+            if len(requests) > 1:
+                return httpx.Response(429, json={"error": {"message": "slow down"}})
+            return httpx.Response(200, json={
+                "id": "x", "object": "chat.completion", "created": 1, "model": "vl",
+                "choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": "$x^2$"}}],
+            })
+
+        client = openai.OpenAI(
+            api_key="k", base_url="https://openrouter.ai/api/v1", max_retries=0,
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        ocr = OpenRouterVisionOCR("k", "vl", client=client, cache_dir=tmp_path, max_output_tokens=900)
+        assert ocr.transcribe_page(PageImage(b"a", "image/png")) == ("$x^2$", False)
+        body = requests[0]
+        assert body["max_tokens"] == 900 and "max_completion_tokens" not in body
+        assert body["reasoning"] == {"enabled": False, "exclude": True}
+
+        with pytest.raises(OCRError) as error:
+            ocr.transcribe_page(PageImage(b"b", "image/png"))
+        assert error.value.status == 429 and "OpenRouter vision" in str(error.value)
+
+
+class TestExerciseStems:
+    """A past-paper exercise runs past one chunk. Its later parts refer to an
+    f(x) stated once at the top, so every chunk after the first carries it."""
+
+    @staticmethod
+    def _chunks(text, **kw):
+        from src.ingestion.chunk import chunk_text
+        return chunk_text(text, {}, chunk_size=kw.get("chunk_size", 120), chunk_overlap=10)
+
+    def test_later_chunks_carry_the_opening(self):
+        text = (
+            "គេមានអនុគមន៍ f ដែល f(x) = x^2 + 3x កំណត់លើ R។ "
+            "ក. គណនាលីមីតនៃ f នៅពេល x ខិតទៅរក ០។ "
+            "ខ. សិក្សាអថេរភាពនៃអនុគមន៍ f នៅលើចន្លោះកំណត់របស់វា។ "
+            "គ. គូសក្រាបតាងអនុគមន៍ f ក្នុងតម្រុយអរតូណរម៉ាល់។"
+        )
+        chunks = self._chunks(text)
+        assert len(chunks) > 1, "need a split for this test to mean anything"
+        assert chunks[0].stem == "", "the first chunk is the stem"
+        assert all(c.stem for c in chunks[1:]), "every later part needs the statement"
+        assert "f(x) = x^2 + 3x" in chunks[1].stem
+
+    def test_a_single_chunk_exercise_gets_no_stem(self):
+        """Nothing was cut off, so there is nothing to carry."""
+        chunks = self._chunks("គេមានអនុគមន៍ f(x) = x។", chunk_size=500)
+        assert len(chunks) == 1
+        assert chunks[0].stem == ""
+
+    def test_the_stem_stops_at_a_sentence_boundary(self):
+        from src.ingestion.chunk import STEM_CHARS, derive_stem
+        opening = "ដំបូង។ " + "ក" * (STEM_CHARS * 2)
+        stem = derive_stem(opening)
+        assert stem.endswith("។"), "a stem cut mid-word embeds a fragment"
+        assert len(stem) <= STEM_CHARS
+
+    def test_the_embedded_text_is_unchanged_by_default(self):
+        """stem_embedding_chars=0 keeps retrieval exactly as it was: the stem
+        is for the model to read, not for the embedder to match on."""
+        from src.ingestion import embedding_text
+        from src.ingestion.chunk import Chunk
+        chunk = Chunk(text="ខ. សិក្សាអថេរភាព", heading="VI. (២០ពិន្ទុ)", stem="គេមានអនុគមន៍ f(x) = x^2")
+        assert "f(x)" not in embedding_text("វិញ្ញាសា ២០២៣", chunk)
+
+    def test_the_stem_reaches_the_embedding_text_when_asked(self):
+        from src.ingestion import embedding_text
+        from src.ingestion.chunk import Chunk
+        chunk = Chunk(text="ខ. សិក្សាអថេរភាព", heading="VI. (២០ពិន្ទុ)", stem="គេមានអនុគមន៍ f(x) = x^2")
+        text = embedding_text("វិញ្ញាសា ២០២៣", chunk, stem_chars=200)
+        assert "f(x) = x^2" in text
+        assert text.index("f(x)") < text.index("សិក្សាអថេរភាព"), "statement comes before the part"
+
+    def test_a_stem_already_in_the_heading_is_not_repeated(self):
+        from src.ingestion import embedding_text
+        from src.ingestion.chunk import Chunk
+        stem = "គេមានអនុគមន៍ f(x) = x^2"
+        chunk = Chunk(text="ខ. សិក្សាអថេរភាព", heading=f"VI. {stem}", stem=stem)
+        assert embedding_text("", chunk, stem_chars=200).count(stem) == 1
+
+    def test_the_model_is_shown_the_stem(self):
+        """The half that costs nothing: whatever retrieval did, the model sees
+        the statement the retrieved part refers to."""
+        from prompts import build_context_block
+
+        class Hit:
+            source, page, score = "paper.pdf", 3, 0.81
+            text, stem = "ខ. សិក្សាអថេរភាព", "គេមានអនុគមន៍ f(x) = x^2 + 3x"
+
+        block = build_context_block([Hit()])
+        assert "<continues>" in block
+        assert "f(x) = x^2 + 3x" in block
+        assert block.index("f(x)") < block.index("សិក្សាអថេរភាព")

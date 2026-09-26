@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Protocol
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -1275,6 +1275,7 @@ async def _index(state: RAGState, document: ExtractedDocument, replace: bool) ->
                 segmenter=state.segmenter,
                 chunk_size=settings.chunk_size,
                 chunk_overlap=settings.chunk_overlap,
+                stem_embedding_chars=settings.stem_embedding_chars,
                 replace=replace,
             )
         except DuplicateSourceError as exc:
@@ -1464,6 +1465,8 @@ def _start_job(state: RAGState, source: str, work: Awaitable[IngestResponse]) ->
 ERROR_RESPONSES = {
     code: {"model": ErrorResponse} for code in (400, 404, 409, 413, 415, 422, 429, 502, 503, 504)
 }
+# For the routes that change the index; see Settings.allow_writes.
+WRITE_RESPONSES = {**ERROR_RESPONSES, 403: {"model": ErrorResponse}}
 
 
 def create_app(
@@ -1519,6 +1522,17 @@ def create_app(
         allow_headers=["*"],
     )
 
+    def require_writes() -> None:
+        """Refuse the routes that change the shared index when writes are off."""
+        if not settings.allow_writes:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "This server is read-only: documents are ingested where the index is built, "
+                "not through the public API.",
+            )
+
+    writes_only = [Depends(require_writes)]
+
     @app.exception_handler(LLMError)
     async def _llm_error(_: Request, exc: LLMError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
@@ -1551,6 +1565,7 @@ def create_app(
             default_top_k=settings.top_k,
             default_score_threshold=settings.score_threshold,
             max_upload_mb=settings.max_upload_mb,
+            writes_enabled=settings.allow_writes,
             documents=len(state.store.sources()),
             chunks=len(state.store),
         )
@@ -1718,8 +1733,9 @@ def create_app(
     @app.post(
         "/api/ingest",
         response_model=IngestResponse | IngestJob,
-        responses={**ERROR_RESPONSES, 202: {"model": IngestJob, "description": "Background job started"}},
+        responses={**WRITE_RESPONSES, 202: {"model": IngestJob, "description": "Background job started"}},
         tags=["ingest"],
+        dependencies=writes_only,
     )
     async def ingest(
         request: Request,
@@ -1776,7 +1792,11 @@ def create_app(
         return list(reversed(get_state(request).jobs.values()))
 
     @app.post(
-        "/api/ingest/text", response_model=IngestResponse, responses=ERROR_RESPONSES, tags=["ingest"]
+        "/api/ingest/text",
+        response_model=IngestResponse,
+        responses=WRITE_RESPONSES,
+        tags=["ingest"],
+        dependencies=writes_only,
     )
     async def ingest_text(payload: IngestTextRequest, request: Request) -> IngestResponse:
         state = get_state(request)
@@ -1799,8 +1819,9 @@ def create_app(
     @app.delete(
         "/api/documents/{source:path}",
         response_model=DeleteDocumentResponse,
-        responses=ERROR_RESPONSES,
+        responses=WRITE_RESPONSES,
         tags=["documents"],
+        dependencies=writes_only,
     )
     async def delete_document(source: str, request: Request) -> DeleteDocumentResponse:
         state = get_state(request)
