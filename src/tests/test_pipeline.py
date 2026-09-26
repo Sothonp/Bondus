@@ -1376,6 +1376,7 @@ class TestReadingChecks:
         assert "reasoning leak" in reading_problems(LEAKED)
         assert "unbalanced $" in reading_problems("គេបាន $x+1 = 2 ។")
         assert "repeated lines" in reading_problems("បើ នោះ ឬ\n" * 5)
+        assert "Chinese text" in reading_problems("求极限 $\\lim_{x \\to 0} x$")
 
     def test_a_leaked_reading_is_neither_cached_nor_served_from_the_cache(self, tmp_path):
         from src.ingestion.ocr import PageImage

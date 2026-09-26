@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Literal
 
 from src.ingestion.latex_guard import LATEX_PATTERN, PLACEHOLDER_PATTERN, mask_latex
-from src.ingestion.ocr import CachedPageOCR, OCRError, PageImage, leaked_reasoning
+from src.ingestion.ocr import CachedPageOCR, OCRError, PageImage, has_chinese, leaked_reasoning
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,8 @@ def reading_problems(text: str) -> list[str]:
     problems = []
     if leaked_reasoning(text):
         problems.append("reasoning leak")
+    if has_chinese(text):
+        problems.append("Chinese text")
     masked, _ = mask_latex(text)
     if PLACEHOLDER_PATTERN.sub("", masked).replace("\\$", "").count("$"):
         problems.append("unbalanced $")

@@ -33,6 +33,7 @@ from src.ingestion.ocr import (
     OCRError,
     PageImage,
     clean_transcript,
+    has_chinese,
     kiri_available,
 )
 
@@ -363,6 +364,10 @@ class HybridImageOCR:
             except OCRError as exc:
                 warnings.append(f"{_engine_name(engine)}: {exc}")
                 logger.warning("Image OCR with %s failed: %s", _engine_name(engine), exc)
+                continue
+            if has_chinese(text):
+                warnings.append(f"{_engine_name(engine)}: answered in Chinese")
+                logger.warning("Image OCR with %s rejected: Chinese text", _engine_name(engine))
                 continue
             text, looped = trim_repetition(text)
             if truncated or looped:
