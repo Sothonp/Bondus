@@ -19,7 +19,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { UNIS, UNI_MAJORS } from "../src/data/universities.js";
+import { UNIS, UNI_MAJORS, UNI_SCHOLARSHIPS, UNI_PROFILE_INFO } from "../src/data/universities.js";
+import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
+import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
 /* Field-specific subject priorities. Change these lists to extend the curriculum. */
@@ -93,6 +95,27 @@ const UNI_COURSES = {
       lessonsKm: ["Commit និង branch", "Merge និងជម្លោះ", "Pull request", "ធ្វើការជាក្រុម"] },
   ],
 };
+
+/* University-track "subject" taxonomy, derived the same way SUBJECT_TOPICS is derived from
+   RAW_EXERCISES below — one entry per major with quiz content, subject keys are
+   "{major}::{courseTitle}" (see src/data/universityQuizBank.js for why). A major with no
+   UNI_QUIZ_BANK entries simply has no keys here, which deriveUniInsights() treats as
+   "coming soon" rather than fabricating mastery data. */
+const UNI_MASTERY_SUBJECTS = Object.fromEntries(
+  Object.entries(UNI_COURSES).map(([major, courses]) => [major, courses.map((c) => `${major}::${c.title}`)])
+);
+const UNI_MASTERY_TOPICS = Object.fromEntries(
+  Object.entries(UNI_QUIZ_BANK).map(([subject, list]) => [subject, [...new Set(list.map((e) => e.topic))]])
+);
+// English-only, by design — see the comment atop UNI_QUIZ_BANK (src/data/universityQuizBank.js).
+// Unlike getExercises() below, this ignores `lang` entirely rather than falling back per-field.
+function getUniExercises(subjectKey) {
+  const list = UNI_QUIZ_BANK[subjectKey] || [];
+  return list.map((r, i) => ({
+    id: `uni:${subjectKey}:${i + 1}`, subject: subjectKey, topic: r.topic, difficulty: r.difficulty,
+    prompt: r.prompt, options: r.options, answer: r.answer, explanation: r.explanation,
+  }));
+}
 
 const EXAM_YEARS = [2026, 2027, 2028];
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
@@ -179,18 +202,71 @@ const estimateGradeRange = (avg) => {
   return "D–E";
 };
 
+const DAY_MS = 86400000;
+const dateKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const dateKeyToTime = (key) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d).getTime(); };
+
+/* Flattens every recorded attempt (from either track's topic-mastery store) into one list of
+   { ts, timeSec, ... } — the raw activity log the streak and weekly-hours stats below read from. */
+function collectAttempts(topicMastery = {}, uniTopicMastery = {}) {
+  const flatten = (store) => Object.values(store).flatMap((subj) => Object.values(subj).flatMap((topic) => topic.history || []));
+  return [...flatten(topicMastery), ...flatten(uniTopicMastery)];
+}
+
+/* Real day-streak: a day only counts if the student actually answered a practice/diagnostic
+   question that day (recordAttempt's ts). No baked-in starting streak — a fresh account is 0
+   until it's earned, and the streak breaks the first calendar day with no activity. */
+function computeStreakStats(topicMastery, uniTopicMastery) {
+  const days = [...new Set(collectAttempts(topicMastery, uniTopicMastery).map((a) => dateKey(new Date(a.ts))))].sort();
+  if (!days.length) return { streak: 0, longestStreak: 0 };
+  let longest = 1, run = 1;
+  for (let i = 1; i < days.length; i++) {
+    const gap = Math.round((dateKeyToTime(days[i]) - dateKeyToTime(days[i - 1])) / DAY_MS);
+    run = gap === 1 ? run + 1 : 1;
+    longest = Math.max(longest, run);
+  }
+  const today = dateKey(), yesterday = dateKey(new Date(Date.now() - DAY_MS));
+  const last = days[days.length - 1];
+  let streak = 0;
+  if (last === today || last === yesterday) {
+    streak = 1;
+    for (let i = days.length - 1; i > 0; i--) {
+      const gap = Math.round((dateKeyToTime(days[i]) - dateKeyToTime(days[i - 1])) / DAY_MS);
+      if (gap === 1) streak += 1; else break;
+    }
+  }
+  return { streak, longestStreak: Math.max(longest, streak) };
+}
+
+/* Real trailing-7-day study time in hours, built from the actual per-question timing
+   recordAttempt stores (timeSec) — replaces the old fixed WEEK_SEED placeholder. */
+function buildWeeklyStudyHours(topicMastery, uniTopicMastery) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    days.push({ key: dateKey(d), d: d.toLocaleDateString("en-US", { weekday: "short" }), seconds: 0 });
+  }
+  const byKey = Object.fromEntries(days.map((x) => [x.key, x]));
+  collectAttempts(topicMastery, uniTopicMastery).forEach((a) => {
+    const bucket = byKey[dateKey(new Date(a.ts))];
+    if (bucket && a.timeSec) bucket.seconds += a.timeSec;
+  });
+  return days.map((x) => ({ d: x.d, h: Math.round((x.seconds / 3600) * 10) / 10 }));
+}
+
 /* Build the static part of a student profile — registration answers + gamification state.
-   Subject mastery, weak/strong tags, predictions and recommendations are never baked in here;
-   they're derived live from real attempt history by deriveInsights() below. */
+   Subject mastery, weak/strong tags, predictions, recommendations and the day streak are never
+   baked in here; they're derived live from real attempt history by deriveInsights() and
+   computeStreakStats() below — a brand-new account starts at a 0 streak, not a freebie. */
 function buildProfile(reg) {
-  return { ...reg, level: 1, xp: 40, xpToNext: 500, streak: 1, longestStreak: 1 };
+  return { ...reg, level: 1, xp: 40, xpToNext: 500 };
 }
 
 /* Turns topic-mastery history into everything the UI shows: subject scores, weak/strong tags,
    a grade-range estimate, exam readiness, a recommended lesson, and AI recommendations. This is
    the "reassess" half of the assess → identify weakness → recommend → practice → reassess loop —
    call it fresh (useMemo) whenever topicMastery changes and the whole app updates with it. */
-function deriveInsights(p, topicMastery) {
+function deriveInsights(p, topicMastery, streak = 0) {
   // University profiles never had a BAC II track (p.field), so they skip the whole mastery
   // engine below and get empty-but-safe defaults instead — every consumer (Progress, Coach's
   // study/major fallbacks) can rely on subjects/weak/strong always being arrays.
@@ -252,7 +328,7 @@ function deriveInsights(p, topicMastery) {
   const allAttemptsEver = subjectNames.flatMap((s) => (SUBJECT_TOPICS[s] || []).flatMap((t) => topicMastery[s]?.[t]?.history || []));
   const avgTime = allAttemptsEver.length ? allAttemptsEver.reduce((a, h) => a + (h.timeSec || 45), 0) / allAttemptsEver.length : null;
   const speed = avgTime == null ? 60 : clamp(Math.round(100 - ((avgTime - 30) / 60) * 100), 10, 100);
-  const consistency = clamp(30 + p.streak * 10, 0, 100);
+  const consistency = clamp(30 + streak * 10, 0, 100);
   const readiness = { overall: Math.round((avg ?? 0) * 0.5 + coverage * 0.2 + consistency * 0.15 + speed * 0.15), mastery: avg ?? 0, coverage, consistency, speed };
 
   // Most common mistake type, for a targeted (not generic) recommendation.
@@ -289,6 +365,46 @@ function deriveInsights(p, topicMastery) {
   return { subjects, weak, strong, avg, prediction: { A, B, C, D, E }, gradeRange, readiness, priorityTopic, strongestTopic, plan, recommendedLesson, recs };
 }
 
+/* University-track twin of deriveInsights() above — deliberately simpler. It does not invent
+   BAC-II-only concepts (grade prediction, exam readiness composite, a daily study plan) that
+   have no university-track meaning yet. When the student's major has no UNI_QUIZ_BANK content
+   (every major except computer_science today), it returns contentAvailable:false so the UI can
+   show an honest "coming soon" state instead of fabricated numbers. */
+function deriveUniInsights(p, uniTopicMastery) {
+  const major = p.universityProfile?.major;
+  const subjectKeys = UNI_MASTERY_SUBJECTS[major] || [];
+  if (!subjectKeys.length) {
+    return { subjects: [], weak: [], strong: [], avg: null, recommendedLesson: null, contentAvailable: false };
+  }
+
+  const subjects = subjectKeys.map((key) => {
+    const topicNames = UNI_MASTERY_TOPICS[key] || [];
+    const topics = topicNames.map((t) => {
+      const rec = uniTopicMastery[key]?.[t];
+      return { t, score: rec?.score ?? null, attempts: rec?.history?.length ?? 0 };
+    });
+    const assessedTopics = topics.filter((x) => x.score != null);
+    const m = assessedTopics.length ? Math.round(assessedTopics.reduce((a, b) => a + b.score, 0) / assessedTopics.length) : null;
+    return { s: key, m, level: masteryLevel(m), tag: m == null ? "" : m < 60 ? "weak" : m >= 85 ? "strong" : "", topics, assessed: assessedTopics.length > 0 };
+  });
+
+  const known = subjects.filter((x) => x.m != null);
+  const weak = subjects.filter((x) => x.tag === "weak").sort((a, b) => a.m - b.m);
+  const strong = subjects.filter((x) => x.tag === "strong").sort((a, b) => b.m - a.m);
+  const avg = known.length ? Math.round(known.reduce((a, b) => a + b.m, 0) / known.length) : null;
+
+  const allTopics = subjects.flatMap((sub) => sub.topics.filter((x) => x.score != null).map((x) => ({ subject: sub.s, ...x })));
+  const priorityTopic = allTopics.length ? [...allTopics].sort((a, b) => a.score - b.score)[0] : null;
+
+  const recommendedLesson = priorityTopic
+    ? { subject: priorityTopic.subject, topic: priorityTopic.t }
+    : weak[0]
+      ? { subject: weak[0].s, topic: (UNI_MASTERY_TOPICS[weak[0].s] || [])[0] || weak[0].s }
+      : { subject: subjects[0].s, topic: (UNI_MASTERY_TOPICS[subjects[0].s] || [])[0] || subjects[0].s };
+
+  return { subjects, weak, strong, avg, recommendedLesson, contentAvailable: true };
+}
+
 /* Continuously-analyzed AI signals shown on the Progress tab. */
 function analyticsSignals(p, live = {}) {
   const lessons = live.completedLessons ?? 0;
@@ -308,10 +424,6 @@ function analyticsSignals(p, live = {}) {
   ];
 }
 
-const WEEK_SEED = [
-  { d: "Mon", h: 0.4 }, { d: "Tue", h: 0.6 }, { d: "Wed", h: 0.3 },
-  { d: "Thu", h: 0.8 }, { d: "Fri", h: 0.5 }, { d: "Sat", h: 1.1 }, { d: "Sun", h: 0.5 },
-];
 const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
 /* pct starts at 0 for all four — none of this is real progress until a student actually takes a
    diagnostic, so showing anything higher would be the same fabricated-baseline problem as the
@@ -415,20 +527,28 @@ const STYLES = `
 .eai-km{ font-family:'Kantumruy Pro', system-ui, sans-serif; }
 
 .theme-light{
-  --bg:#FFFFFF; --bg-soft:#F1EADB; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
-  --line:#ECE3D3; --primary:#403FB0; --primary-soft:#ECECFB; --gold:#E29A30; --gold-soft:#FBEFD7;
+  --bg:#FFFFFF; --bg-soft:#F2F1F7; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
+  --line:#E7E6EF; --glass-bg:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.8); --glass-shadow:0 1px 3px rgba(26,27,58,.08), inset 0 1px 0 rgba(255,255,255,.6);
+  --primary:#403FB0; --primary-soft:#ECECFB; --gold:#E29A30; --gold-soft:#FBEFD7;
   --ember:#D9543F; --ember-soft:#FAE2DB; --jade:#159A82; --jade-soft:#DBF1EC;
   --shadow:0 1px 2px rgba(26,27,58,.04), 0 10px 30px rgba(26,27,58,.07);
 }
 .theme-dark{
   --bg:#0C0D1E; --bg-soft:#14152C; --card:#191B33; --ink:#F2EFE6; --muted:#9A9BB6;
-  --line:#2A2C49; --primary:#8a89f5; --primary-soft:#23244A; --gold:#EEAB49; --gold-soft:#2B2417;
+  --line:#2A2C49; --glass-bg:rgba(255,255,255,.08); --glass-line:rgba(255,255,255,.16); --glass-shadow:0 1px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
+  --primary:#8a89f5; --primary-soft:#23244A; --gold:#EEAB49; --gold-soft:#2B2417;
   --ember:#E96E58; --ember-soft:#2E1B18; --jade:#2BB89C; --jade-soft:#13271F;
   --shadow:0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.4);
 }
 
 .eai-card{ background:var(--card); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); }
-.eai-soft{ background:var(--bg-soft); }
+/* --bg-soft stays a solid, de-yellowed neutral — used directly (not through a class) in ~30
+   places (SVG strokes, icon-badge fills, hover backgrounds) that need real visible contrast and
+   can't render a backdrop-filter. .eai-soft/.eai-input are the actual "liquid glass" material —
+   frosted, translucent, floating (blur + a soft shadow with a bright top rim) instead of a flat
+   fill — applied to every chip, tag, panel, progress track, button and filter input that already
+   uses these classes app-wide. */
+.eai-soft{ background:var(--glass-bg); backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); border:1px solid var(--glass-line); box-shadow:var(--glass-shadow); }
 .eai-muted{ color:var(--muted); }
 .eai-btn{ font-weight:600; border-radius:13px; transition:transform .12s ease, filter .12s ease; cursor:pointer; border:none; }
 .eai-btn:hover{ filter:brightness(1.05); }
@@ -438,7 +558,7 @@ const STYLES = `
 .eai-tile{ transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; cursor:pointer; }
 .eai-tile:hover{ transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--primary); }
 .eai-focus:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
-input.eai-input, select.eai-input{ background:var(--bg-soft); color:var(--ink); border:1px solid var(--line); border-radius:14px; }
+input.eai-input, select.eai-input{ background:var(--glass-bg); color:var(--ink); border:1px solid var(--glass-line); border-radius:14px; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow); }
 input.eai-input::placeholder{ color:var(--muted); }
 .eai-rise{ animation:rise .5s cubic-bezier(.2,.7,.3,1) both; }
 @keyframes rise{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:none;} }
@@ -603,6 +723,7 @@ input.eai-input::placeholder{ color:var(--muted); }
   --gold:#EE9A21; --gold-soft:#FFF0D4; --ember:#E76F61;
   --progress-track:#ECEBF5; --progress-fill:#5148D5;
   --shadow:0 18px 50px rgba(31,31,70,.08);
+  --glass-bg:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.8); --glass-shadow:0 1px 3px rgba(26,27,58,.08), inset 0 1px 0 rgba(255,255,255,.6);
 }
 .eai-onboarding.theme-dark{
   --bg:#090B1D; --card:#17192F; --surface-2:#1D203B; --bg-soft:#202238;
@@ -612,6 +733,7 @@ input.eai-input::placeholder{ color:var(--muted); }
   --gold:#EFA421; --gold-soft:#302716; --ember:#F17A70;
   --progress-track:#292C47; --progress-fill:#8179F2;
   --shadow:0 18px 50px rgba(0,0,0,.22);
+  --glass-bg:rgba(255,255,255,.08); --glass-line:rgba(255,255,255,.16); --glass-shadow:0 1px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
 }
 .eai-onboarding{ position:relative; transition:background-color .25s ease, color .25s ease; }
 .eai-onboarding::before{ content:""; position:fixed; inset:0; pointer-events:none; z-index:0; }
@@ -623,9 +745,9 @@ input.eai-input::placeholder{ color:var(--muted); }
   background:var(--bg-soft); color:var(--ink); display:grid; place-items:center; z-index:20; transition:background-color .15s ease, transform .12s ease; }
 .eai-ob-toggle:hover{ background:var(--card); transform:translateY(-1px); }
 
-.eai-ob-card{ background:var(--card); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); padding:40px; padding-top:24px;
+.eai-ob-card{ background:var(--card); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); padding:40px; padding-top:16px; padding-bottom:64px;
   transition:background-color .25s ease, border-color .25s ease, box-shadow .25s ease; }
-@media (max-width:640px){ .eai-ob-card{ padding:22px; padding-top:14px; border-radius:20px; } }
+@media (max-width:640px){ .eai-ob-card{ padding:22px; padding-top:8px; padding-bottom:40px; border-radius:20px; } }
 
 .eai-ob-progress{ margin-bottom:18px; }
 .eai-ob-progress-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
@@ -649,14 +771,14 @@ input.eai-input::placeholder{ color:var(--muted); }
 /* "Mascot asks" question presentation — the owl beside a speech bubble holding the current
    step's question, one at a time, instead of a plain heading. */
 .eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:0px; margin-bottom:22px; }
-.eai-ob-mascot-avatar{ width:132px; height:180px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
+.eai-ob-mascot-avatar{ width:152px; height:207px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
 .eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; animation:eai-ob-bubble-in .35s ease-out; }
 @keyframes eai-ob-bubble-in{ from{ opacity:0; transform:translateX(-8px) scale(.97); } to{ opacity:1; transform:none; } }
 .eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:64px; width:14px; height:14px; background:var(--card);
   border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:rotate(45deg); border-radius:0 0 0 3px; }
 .eai-ob-bubble .eai-ob-title{ font-size:20px; margin:0; }
 .eai-ob-bubble .eai-ob-desc{ margin-top:4px; font-size:14px; }
-@media (max-width:640px){ .eai-ob-mascot-avatar{ width:104px; height:142px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
+@media (max-width:640px){ .eai-ob-mascot-avatar{ width:120px; height:163px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
 
 /* ── Mascot: whole-image "acted" states (see Mascot component) ──
    idle = organic breathing/sway, feet planted, no floating. Other states are one-shot reactions
@@ -727,21 +849,27 @@ input.eai-input::placeholder{ color:var(--muted); }
 }
 
 .eai-ob-label{ font-size:13px; font-weight:600; color:var(--label); display:block; }
-.eai-ob-input{ height:48px; width:100%; border-radius:14px; border:1px solid var(--input-border); background:var(--bg-soft); color:var(--ink);
-  padding:0 16px; font-size:14px; transition:background-color .2s ease, border-color .2s ease, box-shadow .2s ease; }
+/* Liquid-glass onboarding material — frosted/translucent (blur + a soft shadow with a bright
+   top rim) instead of a flat fill, matching the same look used across the rest of the app.
+   Hover/selected states still layer their own (opaque, branded) background on top. */
+.eai-ob-input{ height:48px; width:100%; border-radius:14px; border:1px solid var(--glass-line); background:var(--glass-bg); color:var(--ink);
+  padding:0 16px; font-size:14px; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
+  transition:background-color .2s ease, border-color .2s ease, box-shadow .2s ease; }
 .eai-ob-input::placeholder{ color:var(--muted-2); }
 .eai-ob-input:hover{ border-color:var(--input-border-hover); }
 .eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
 .eai-ob-error{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ember); margin-top:6px; }
 
-.eai-ob-track-card{ width:100%; text-align:left; border-radius:18px; border:1px solid var(--line); background:var(--surface-2);
-  padding:20px; cursor:pointer; transition:background-color .18s ease, border-color .18s ease, transform .15s ease, box-shadow .18s ease; }
-.eai-ob-track-card:hover{ border-color:var(--primary); background:var(--bg-soft); transform:translateY(-1px); }
+.eai-ob-track-card{ width:100%; text-align:left; border-radius:18px; border:1px solid var(--glass-line); background:var(--glass-bg);
+  padding:20px; cursor:pointer; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
+  transition:background-color .18s ease, border-color .18s ease, transform .15s ease, box-shadow .18s ease; }
+.eai-ob-track-card:hover{ border-color:var(--primary); transform:translateY(-1px); }
 .eai-ob-track-card.is-selected{ background:var(--primary-soft); border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-ring); }
-.eai-ob-tag{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--bg-soft); color:var(--muted); }
+.eai-ob-tag{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--glass-bg); border:1px solid var(--glass-line); color:var(--muted); }
 
-.eai-ob-chip{ height:37px; padding:0 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink);
+.eai-ob-chip{ height:37px; padding:0 14px; border-radius:999px; border:1px solid var(--glass-line); background:var(--glass-bg); color:var(--ink);
   font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
   transition:background-color .15s ease, border-color .15s ease, color .15s ease; }
 .eai-ob-chip:hover{ border-color:var(--primary); }
 .eai-ob-chip.is-selected{ background:var(--primary-soft); border-color:var(--primary); }
@@ -757,11 +885,13 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ob-btn-primary:hover:not(:disabled){ background:var(--primary-hover); transform:translateY(-1px); }
 .eai-ob-btn-primary:active:not(:disabled){ transform:translateY(0); }
 .eai-ob-btn-primary:disabled{ background:var(--primary-soft); color:var(--muted-2); cursor:not-allowed; }
-.eai-ob-btn-secondary{ height:50px; width:100%; border-radius:14px; font-weight:600; font-size:14px; background:var(--bg-soft); color:var(--ink);
-  border:1px solid var(--line); transition:background-color .2s ease, border-color .2s ease, transform .12s ease; }
-.eai-ob-btn-secondary:hover{ background:var(--card); border-color:var(--primary); transform:translateY(-1px); }
+.eai-ob-btn-secondary{ height:50px; width:100%; border-radius:14px; font-weight:600; font-size:14px; background:var(--glass-bg); color:var(--ink);
+  border:1px solid var(--glass-line); backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
+  transition:background-color .2s ease, border-color .2s ease, transform .12s ease; }
+.eai-ob-btn-secondary:hover{ border-color:var(--primary); transform:translateY(-1px); }
 
-.eai-ob-option-card{ position:relative; border-radius:18px; padding:22px; border:1px solid var(--line); background:var(--surface-2);
+.eai-ob-option-card{ position:relative; border-radius:18px; padding:22px; border:1px solid var(--glass-line); background:var(--glass-bg);
+  backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
   transition:background-color .2s ease, border-color .2s ease; display:flex; flex-direction:column; height:100%; }
 .eai-ob-option-card.is-primary{ background:var(--primary-soft); border-color:var(--primary); }
 .eai-ob-badge{ position:absolute; top:16px; right:16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
@@ -915,8 +1045,9 @@ function LangToggle({ lang, setLang, style }) {
   return (
     <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
       style={{
-        height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--line)",
-        background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center",
+        height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--glass-line)",
+        background: "var(--glass-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)",
+        boxShadow: "var(--glass-shadow)", color: "var(--ink)", display: "grid", placeItems: "center",
         fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color .15s ease, transform .12s ease",
         ...style,
       }}
@@ -950,23 +1081,13 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 20, display: "flex", gap: 8 }}>
         {setLang && <LangToggle lang={lang} setLang={setLang} />}
         <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-soft)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
+          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--glass-line)", background: "var(--glass-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", boxShadow: "var(--glass-shadow)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
 
       <div className="flex items-start sm:items-center justify-center px-4 sm:px-6" style={{ minHeight: "100vh", paddingTop: 32, paddingBottom: 32 }}>
         <div className="w-full eai-rise" style={{ maxWidth: 820 }}>
-          <div className="flex items-center justify-center gap-2.5" style={{ marginBottom: 24 }}>
-            <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 44, height: 44 }}>
-              <BondusLogo />
-            </div>
-            <div>
-              <p className="eai-display font-extrabold text-lg leading-none">Bondus Cambodia</p>
-              <p className="eai-km text-xs eai-muted">រៀនពូកែ ប្រឡងជាប់</p>
-            </div>
-          </div>
-
           <div className="eai-ob-card">
             <div className="eai-ob-progress-row">
               {onBack ? (
@@ -1177,9 +1298,9 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
 
       {/* Theme + language toggles */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
-        <LangToggle lang={lang} setLang={setLang} style={{ border: "2px solid var(--primary)", background: "var(--card)" }} />
+        <LangToggle lang={lang} setLang={setLang} />
         <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "2px solid var(--primary)", background: "var(--card)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
+          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--glass-line)", background: "var(--glass-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", boxShadow: "var(--glass-shadow)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
@@ -1335,7 +1456,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
             buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
           <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setStep(1); }} />
+            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setLang?.("en"); setStep(1); }} />
         </div>
       </OnboardingLayout>
     );
@@ -1345,7 +1466,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   if (step === 1) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
-        onBack={() => setStep(0)} lang={lang} setLang={setLang}
+        onBack={() => setStep(0)} lang={lang} setLang={isUni ? undefined : setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}>
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
@@ -1389,13 +1510,14 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   if (isUni && step === 2) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={2} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
-        onBack={() => setStep(1)} lang={lang} setLang={setLang}
+        onBack={() => setStep(1)} lang={lang}
         title={t(lang, "uniGoalsTitle")} description={t(lang, "uniGoalsDesc")}>
         <div className="flex flex-wrap gap-2">
           {UNI_GOALS.map((g) => (
             <SubjectChip key={g.id} label={lang === "km" ? g.labelKm : g.label} selected={form.universityGoals.includes(g.id)} onToggle={() => toggleGoal(g.id)} lang={lang} />
           ))}
         </div>
+        <p className="text-xs eai-muted mt-3">{t(lang, "uniGoalsWhyWeAsk")}</p>
 
         <PrimaryButton onClick={() => setStep(3)} disabled={form.universityGoals.length === 0} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
           {t(lang, "continueWord")} <ChevronRight size={16} />
@@ -1406,7 +1528,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   if (isUni && step === 3) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={3} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
-        onBack={() => setStep(2)} lang={lang} setLang={setLang}
+        onBack={() => setStep(2)} lang={lang}
         title={t(lang, "uniFieldTitle")} description={t(lang, "uniFieldDesc")}>
         <SelectField label={t(lang, "uniFieldTitle")} value={form.universityMajor} onChange={(e) => set("universityMajor", e.target.value)}
           options={[{ value: "", label: t(lang, "notSureYet") }, ...UNI_FIELDS.map((f) => ({ value: f.id, label: lang === "km" ? f.labelKm : f.label }))]} />
@@ -1420,7 +1542,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   if (isUni && step === 4) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={4} stepLabels={UNI_ONBOARDING_STEPS} stepLabelsKm={UNI_ONBOARDING_STEPS_KM}
-        onBack={() => setStep(3)} lang={lang} setLang={setLang}
+        onBack={() => setStep(3)} lang={lang}
         title={t(lang, "uniYearTitle")} description={t(lang, "uniYearDesc")}>
         <SelectField label={t(lang, "uniYearTitle")} value={form.universityYear} onChange={(e) => set("universityYear", e.target.value)}
           options={UNI_YEARS.map((y) => ({ value: y.id, label: lang === "km" ? y.labelKm : y.label }))} />
@@ -1951,6 +2073,8 @@ const RAW_EXERCISES = {
    topic string; only rendered UI text goes through topicLabel(). */
 const TOPIC_LABEL_KM = {};
 Object.values(RAW_EXERCISES).flat().forEach((r) => { if (r.topicKm) TOPIC_LABEL_KM[r.topic] = r.topicKm; });
+// University quiz topics (UNI_QUIZ_BANK) are deliberately English-only — no topicKm to register
+// here — so topicLabel() falls through to returning the raw English topic even in Khmer mode.
 const topicLabel = (topic, lang) => (lang === "km" ? (TOPIC_LABEL_KM[topic] ?? topic) : topic);
 
 /* Same pattern as topicLabel(), one level up: the canonical (English) subject name is the key
@@ -2262,11 +2386,14 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
               <p className="text-sm leading-relaxed">{ex.explanation}</p>
             </div>
 
-            {/* Formula / approach */}
-            <div className="p-4 rounded-2xl" style={{ background: "var(--primary-soft)" }}>
-              <div className="flex items-center gap-2 mb-1.5"><Brain size={15} style={{ color: "var(--primary)" }} /><span className={`text-xs font-bold eai-display ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{t(lang, "formulaApproach")}</span></div>
-              <p className="text-sm font-semibold" style={{ color: "var(--primary)" }}>{ex.formula}</p>
-            </div>
+            {/* Formula / approach — only BAC-II exercises carry this field; university quiz
+                questions rely on the explanation above instead of a separate formula box. */}
+            {ex.formula && (
+              <div className="p-4 rounded-2xl" style={{ background: "var(--primary-soft)" }}>
+                <div className="flex items-center gap-2 mb-1.5"><Brain size={15} style={{ color: "var(--primary)" }} /><span className={`text-xs font-bold eai-display ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{t(lang, "formulaApproach")}</span></div>
+                <p className="text-sm font-semibold" style={{ color: "var(--primary)" }}>{ex.formula}</p>
+              </div>
+            )}
 
             {/* Recommendation */}
             <p className={`text-sm eai-muted leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
@@ -2288,6 +2415,127 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════ University Practice ════════════════════════
+   The university track's quiz UI — reuses ExercisePlayer/StatusControl/STATUS/getUniExercises
+   as-is (they're subject-shape-agnostic) rather than re-deriving the exercise-answering screen.
+   Deliberately skips PracticeSubject's session-only adaptive-difficulty stepping (tier/streak
+   banners) to keep this addition scoped — straightforward list-then-answer, same mastery
+   tracking underneath via onAnswer -> handleUniAnswer -> recordAttempt. */
+function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCourseId, onConsumeInitialCourse, lang = "en" }) {
+  const up = p.universityProfile || {};
+  const courses = UNI_COURSES[up.major] || [];
+  const [courseId, setCourseId] = useState(initialCourseId || null);
+  useEffect(() => { if (initialCourseId) onConsumeInitialCourse?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const course = courses.find((c) => c.id === courseId);
+
+  if (course) {
+    return <UniversityPracticeCourse course={course} major={up.major} uniPractice={uniPractice}
+      onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setCourseId(null)} lang={lang} />;
+  }
+
+  if (!courses.length) {
+    return (
+      <div className="space-y-5 eai-rise">
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "practiceTitle")}</h2>
+        <div className="eai-card p-6 text-center">
+          <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniHubCoursesComingSoon")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "practiceTitle")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "practiceDesc")}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {courses.map((c) => {
+          const key = `${up.major}::${c.title}`;
+          const list = getUniExercises(key);
+          const doneN = list.filter((ex) => uniPractice[ex.id]?.status === "completed").length;
+          const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
+          const isWeak = (p.universityInsights?.weak || []).some((w) => w.s === key);
+          return (
+            <button key={c.id} onClick={() => setCourseId(c.id)} className="eai-card eai-tile eai-focus p-5 text-left">
+              <div className="flex items-center justify-between">
+                <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
+                  <Target size={19} style={{ color: "var(--primary)" }} />
+                </div>
+                {isWeak && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
+              </div>
+              <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? c.titleKm : c.title}</h3>
+              <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesAutoGraded")}</p>
+              <div className="h-1.5 rounded-full eai-soft mt-3 overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--jade)" }} />
+              </div>
+              <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{doneN}/{list.length} {t(lang, "completedWord")}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetStatus, onBack, lang = "en" }) {
+  const key = `${major}::${course.title}`;
+  const list = getUniExercises(key);
+  const [idx, setIdx] = useState(null);
+  const courseTitle = lang === "km" ? course.titleKm : course.title;
+
+  if (idx != null && list[idx]) {
+    return (
+      <ExercisePlayer ex={list[idx]} entry={uniPractice[list[idx].id]} subject={courseTitle} index={idx} total={list.length} tier={null} banner={null}
+        onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setIdx(null)}
+        onNext={list.length > 1 ? () => setIdx((idx + 1) % list.length) : null} lang={lang} />
+    );
+  }
+
+  const doneN = list.filter((ex) => uniPractice[ex.id]?.status === "completed").length;
+  const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
+      <div className="eai-card p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="eai-display text-2xl font-extrabold">{courseTitle}</h2>
+            <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
+          </div>
+          <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {list.map((ex, i) => {
+          const entry = uniPractice[ex.id];
+          const st = STATUS[entry?.status || "pending"];
+          return (
+            <div key={ex.id} className="eai-card p-4 flex flex-wrap items-center gap-3">
+              <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{i + 1}</div>
+              <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
+                <p className="text-sm font-semibold truncate">{ex.prompt}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
+                  <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
+                  <span className={`text-xs font-semibold flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ color: st.color }}><st.icon size={12} /> {lang === "km" ? t(lang, `status_${entry?.status || "pending"}`) : st.label}</span>
+                </div>
+              </div>
+              <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
+              <button onClick={() => setIdx(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                {entry?.status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2610,14 +2858,44 @@ function UniLogo({ uni, size = 64 }) {
     );
   }
   return (
-    <div className="grid place-items-center rounded-xl flex-shrink-0 p-2 overflow-hidden" style={{ width: size, height: size, background: "var(--bg-soft)" }}>
+    <div className="grid place-items-center rounded-xl flex-shrink-0 p-2 overflow-hidden" style={{ width: size, height: size, background: "transparent" }}>
       <img src={uni.logo} alt={`${uni.abbr} logo`} className="max-w-full max-h-full w-auto h-auto min-w-0 min-h-0 object-contain" onError={() => setFailed(true)} />
     </div>
   );
 }
 
-function UniversityDetail({ uni, onBack, lang = "en" }) {
+/* Rule-based, weighted, fully explainable match score between a university and a university-track
+   student's onboarding profile — no ML, just transparent point values so every score comes with a
+   plain-language reason. Returns 0 with no reasons for a high-school profile or a university with
+   no UNI_PROFILE_INFO entry, so callers can render "no match data" instead of a fake 0% badge. */
+function scoreUniversityMatch(uni, up, info = UNI_PROFILE_INFO[uni.abbr]) {
+  if (!info || !up) return { score: 0, reasons: [] };
+  const goals = up.goals || [];
+  let score = 0;
+  const reasons = [];
+  if (up.major && info.tags.includes(up.major)) {
+    const majorLabel = UNI_FIELDS.find((f) => f.id === up.major);
+    score += 50;
+    reasons.push({ key: "major", label: `Offers ${majorLabel?.label || up.major}` });
+  }
+  if (goals.includes("study_abroad") && info.languageOfInstruction.includes("English")) {
+    score += 15;
+    reasons.push({ key: "english", label: "English-medium — fits study-abroad pathways" });
+  }
+  if (goals.includes("scholarship_prep") && UNI_SCHOLARSHIPS[uni.abbr]?.length) {
+    score += 15;
+    reasons.push({ key: "scholarship", label: "Has scholarships you may qualify for" });
+  }
+  if (goals.includes("find_university") || goals.includes("prepare_university")) score += 10;
+  return { score: Math.max(0, Math.min(100, score)), reasons };
+}
+
+function UniversityDetail({ uni, p, onBack, lang = "en" }) {
   const d = UNI_DETAIL[uni.abbr] || { exam: "Entrance Exam", examKm: "ការប្រឡងចូល", sets: [], common: [] };
+  const info = UNI_PROFILE_INFO[uni.abbr];
+  const isUni = p?.educationLevel === "university";
+  const up = p?.universityProfile;
+  const match = isUni && up ? scoreUniversityMatch(uni, up) : null;
   return (
     <div className="space-y-5 eai-rise">
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
@@ -2633,6 +2911,49 @@ function UniversityDetail({ uni, onBack, lang = "en" }) {
           <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? d.examKm : d.exam} · {t(lang, "readinessWord")} {uni.ready}%</p>
         </div>
       </div>
+
+      {/* Why this matches you */}
+      {match && match.reasons.length > 0 && (
+        <div className="eai-card p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={17} style={{ color: "var(--primary)" }} />
+            <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "whyMatchesYou")}</h3>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{match.score}% {t(lang, "matchWord")}</span>
+          </div>
+          <div className="space-y-2">
+            {match.reasons.map((r) => (
+              <div key={r.key} className="flex items-center gap-2">
+                <CheckCircle2 size={14} style={{ color: "var(--jade)", flexShrink: 0 }} />
+                <span className="text-sm">{r.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Admissions & cost — illustrative prototype data, not sourced from the university */}
+      {isUni && info && (
+        <div className="eai-card p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Compass size={17} style={{ color: "var(--gold)" }} />
+            <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "admissionsAndCost")}</h3>
+          </div>
+          <p className={`text-xs eai-muted mb-3 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "illustrativeDataNote")}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { l: t(lang, "locationWord"), v: info.location },
+              { l: t(lang, "tuitionPerYear"), v: `$${info.tuitionUSDPerYear.min}–${info.tuitionUSDPerYear.max}` },
+              { l: t(lang, "languageWord"), v: info.languageOfInstruction.join(" / ") },
+              { l: t(lang, "admissionsDeadlineWord"), v: info.admissionsDeadline },
+            ].map((f) => (
+              <div key={f.l} className="p-3 rounded-2xl eai-soft">
+                <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{f.l}</p>
+                <p className="text-sm font-semibold mt-0.5">{f.v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Majors offered */}
       <Majors abbr={uni.abbr} color={uni.c} lang={lang} />
@@ -2693,25 +3014,331 @@ function UniversityDetail({ uni, onBack, lang = "en" }) {
   );
 }
 
-function Universities({ lang = "en" }) {
-  const [selected, setSelected] = useState(null);
-  if (selected) return <UniversityDetail uni={selected} onBack={() => setSelected(null)} lang={lang} />;
+function Universities({ p, lang = "en" }) {
+  const [selected, setSelected] = useState(null); // { scope: "domestic" | "abroad", uni }
+  const isUni = p?.educationLevel === "university";
+  const up = p?.universityProfile;
+  const [search, setSearch] = useState("");
+  const [filterCountry, setFilterCountry] = useState("KH"); // "KH" = Cambodia, "ANY" = every country combined
+  const [filterMajor, setFilterMajor] = useState("all");
+  const [filterBudget, setFilterBudget] = useState("all");
+  const [filterLanguage, setFilterLanguage] = useState("all");
+
+  if (selected) {
+    return selected.scope === "abroad"
+      ? <AbroadUniversityDetail uni={selected.uni} p={p} onBack={() => setSelected(null)} lang={lang} />
+      : <UniversityDetail uni={selected.uni} p={p} onBack={() => setSelected(null)} lang={lang} />;
+  }
+
+  // Every entry is normalized to { scope, u } so "Any country" can mix domestic and abroad
+  // universities in one list without the rest of the component needing to branch per-scope.
+  // Domestic entries read UNI_PROFILE_INFO by abbr for filtering; abroad entries already carry
+  // those same fields (tags/budgetTier/languageOfInstruction) directly on themselves.
+  const domesticEntries = UNIS.map((u) => ({ scope: "domestic", u }));
+  const abroadEntries = (countryId) => (ABROAD_UNIVERSITIES[countryId] || []).map((u) => ({ scope: "abroad", u }));
+  const baseList = !isUni ? domesticEntries
+    : filterCountry === "KH" ? domesticEntries
+    : filterCountry === "ANY" ? [...domesticEntries, ...ABROAD_COUNTRIES.flatMap((c) => abroadEntries(c.id))]
+    : abroadEntries(filterCountry);
+
+  const filtered = !isUni ? baseList : baseList.filter(({ scope, u }) => {
+    const info = scope === "abroad" ? u : UNI_PROFILE_INFO[u.abbr];
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      if (!u.n.toLowerCase().includes(q) && !u.abbr.toLowerCase().includes(q)) return false;
+    }
+    if (!info) return true;
+    if (filterMajor !== "all" && !info.tags.includes(filterMajor)) return false;
+    if (filterBudget !== "all" && info.budgetTier !== filterBudget) return false;
+    if (filterLanguage !== "all" && !info.languageOfInstruction.includes(filterLanguage)) return false;
+    return true;
+  });
+  const scoreOf = ({ scope, u }) => scoreUniversityMatch(u, up, scope === "abroad" ? u : undefined).score;
+  const ranked = isUni && up ? [...filtered].sort((a, b) => scoreOf(b) - scoreOf(a)) : filtered;
+
   return (
     <div className="space-y-5 eai-rise">
       <div>
         <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "universitiesTitle")}</h2>
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "universitiesDesc")}</p>
       </div>
+
+      {isUni && (
+        <div className="eai-card p-4 flex flex-wrap gap-2">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t(lang, "searchUniversities")}
+            className={`eai-input eai-focus text-sm px-3 py-2 flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ minWidth: 160 }} />
+          <select value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className="eai-input eai-focus text-sm px-3 py-2">
+            <option value="KH">Cambodia</option>
+            <option value="ANY">Any country</option>
+            {ABROAD_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+          <select value={filterMajor} onChange={(e) => setFilterMajor(e.target.value)} className={`eai-input eai-focus text-sm px-3 py-2 ${lang === "km" ? "eai-km" : ""}`}>
+            <option value="all">{t(lang, "allMajorsFilter")}</option>
+            {UNI_FIELDS.map((f) => <option key={f.id} value={f.id}>{lang === "km" ? f.labelKm : f.label}</option>)}
+          </select>
+          <select value={filterBudget} onChange={(e) => setFilterBudget(e.target.value)} className={`eai-input eai-focus text-sm px-3 py-2 ${lang === "km" ? "eai-km" : ""}`}>
+            <option value="all">{t(lang, "anyBudget")}</option>
+            <option value="low">{t(lang, "budgetLow")}</option>
+            <option value="medium">{t(lang, "budgetMedium")}</option>
+            <option value="high">{t(lang, "budgetHigh")}</option>
+          </select>
+          <select value={filterLanguage} onChange={(e) => setFilterLanguage(e.target.value)} className={`eai-input eai-focus text-sm px-3 py-2 ${lang === "km" ? "eai-km" : ""}`}>
+            <option value="all">{t(lang, "anyLanguage")}</option>
+            <option value="Khmer">Khmer</option>
+            <option value="English">English</option>
+            <option value="French">French</option>
+          </select>
+        </div>
+      )}
+      {filterCountry === "ANY" && (
+        <p className="text-xs eai-muted">Cambodia's official university programs, plus a curated starting list of study-abroad options across the United States, Australia, Canada and New Zealand not an audited enrollment ranking. Abroad tuition figures are illustrative estimates.</p>
+      )}
+      {filterCountry !== "KH" && filterCountry !== "ANY" && (
+        <p className="text-xs eai-muted">A curated starting list of well-known universities Cambodian students commonly consider in {ABROAD_COUNTRIES.find((c) => c.id === filterCountry)?.label} — not an audited enrollment ranking. Tuition figures are illustrative estimates.</p>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {UNIS.map((u) => (
-          <button key={u.abbr} onClick={() => setSelected(u)} className="eai-card eai-tile eai-focus p-5 flex items-center gap-4 text-left w-full">
-            <UniLogo uni={u} size={64} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2"><GraduationCap size={16} style={{ color: u.c }} /><span className="eai-display font-bold">{u.abbr}</span></div>
-              <p className={`text-sm truncate mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? u.nKm : u.n}</p>
-              <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "viewPracticeSets")}</p>
+        {ranked.map(({ scope, u }) => {
+          const match = isUni && up ? scoreUniversityMatch(u, up, scope === "abroad" ? u : undefined) : null;
+          return (
+            <button key={`${scope}-${u.abbr}`} onClick={() => setSelected({ scope, uni: u })} className="eai-card eai-tile eai-focus p-5 flex items-center gap-4 text-left w-full">
+              <UniLogo uni={{ ...u, c: u.c || "var(--primary)" }} size={64} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2"><GraduationCap size={16} style={{ color: u.c || "var(--primary)" }} /><span className="eai-display font-bold">{u.abbr}</span></div>
+                <p className={`text-sm truncate mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (u.nKm ?? u.n) : u.n}</p>
+                <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{scope === "abroad" ? u.location : t(lang, "viewPracticeSets")}</p>
+                {match && match.reasons.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {match.reasons.slice(0, 2).map((r) => (
+                      <span key={r.key} className="text-xs px-2 py-0.5 rounded-full eai-soft">{r.label}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {match && match.score > 0 && (
+                <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{match.score}%</span>
+              )}
+              <ChevronRight size={18} className="eai-muted flex-shrink-0" />
+            </button>
+          );
+        })}
+      </div>
+      {isUni && !ranked.length && (
+        <div className="eai-card p-6 text-center">
+          <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "noUniversitiesMatch")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Study-abroad detail view — a simpler twin of UniversityDetail for ABROAD_UNIVERSITIES entries,
+   which have no UNI_MAJORS prose catalog or UNI_DETAIL entrance-exam practice sets (those are
+   Cambodia-domestic concepts). Shows the match panel, an admissions/cost block, majors as plain
+   tag chips, and the curator's note on why this school made the list. */
+function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
+  const up = p?.universityProfile;
+  const match = up ? scoreUniversityMatch(uni, up, uni) : null;
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <button onClick={onBack} className="eai-focus flex items-center gap-1 text-sm eai-muted">
+        <ChevronLeft size={16} /> {t(lang, "allUniversities")}
+      </button>
+
+      <div className="eai-card p-6 flex items-center gap-4">
+        <UniLogo uni={{ ...uni, c: uni.c || "var(--primary)" }} size={72} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: "var(--primary)" }} /><span className="eai-display text-xl font-extrabold">{uni.n}</span></div>
+          <p className="text-sm eai-muted mt-0.5">{uni.location}</p>
+        </div>
+      </div>
+
+      {match && match.reasons.length > 0 && (
+        <div className="eai-card p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={17} style={{ color: "var(--primary)" }} />
+            <h3 className="eai-display font-bold">{t(lang, "whyMatchesYou")}</h3>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{match.score}% {t(lang, "matchWord")}</span>
+          </div>
+          <div className="space-y-2">
+            {match.reasons.map((r) => (
+              <div key={r.key} className="flex items-center gap-2">
+                <CheckCircle2 size={14} style={{ color: "var(--jade)", flexShrink: 0 }} />
+                <span className="text-sm">{r.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="eai-card p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Compass size={17} style={{ color: "var(--gold)" }} />
+          <h3 className="eai-display font-bold">{t(lang, "admissionsAndCost")}</h3>
+        </div>
+        <p className="text-xs eai-muted mb-3">{t(lang, "illustrativeDataNote")}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { l: t(lang, "locationWord"), v: uni.location },
+            { l: t(lang, "tuitionPerYear"), v: `$${uni.tuitionUSDPerYear.min.toLocaleString()}–${uni.tuitionUSDPerYear.max.toLocaleString()}` },
+            { l: t(lang, "languageWord"), v: uni.languageOfInstruction.join(" / ") },
+            { l: "Degrees offered", v: uni.degreeLevels.join(", ") },
+          ].map((f) => (
+            <div key={f.l} className="p-3 rounded-2xl eai-soft">
+              <p className="text-xs eai-muted">{f.l}</p>
+              <p className="text-sm font-semibold mt-0.5">{f.v}</p>
             </div>
-            <ChevronRight size={18} className="eai-muted" />
+          ))}
+        </div>
+      </div>
+
+      <div className="eai-card p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <BookOpen size={17} style={{ color: "var(--jade)" }} />
+          <h3 className="eai-display font-bold">Majors & fields</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {uni.tags.map((tagId) => {
+            const f = UNI_FIELDS.find((x) => x.id === tagId);
+            return <span key={tagId} className="text-xs font-semibold px-2.5 py-1 rounded-full eai-soft">{f?.label || tagId}</span>;
+          })}
+        </div>
+      </div>
+
+      <div className="eai-card p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Lightbulb size={17} style={{ color: "var(--ember)" }} />
+          <h3 className="eai-display font-bold">Why it's on this list</h3>
+        </div>
+        <p className="text-sm eai-muted leading-relaxed">{uni.note}</p>
+      </div>
+    </div>
+  );
+}
+
+/* Same shape/spirit as scoreUniversityMatch, cross-referencing only major/goals — data Bondus
+   actually has about a student. The scholarship's own `requirements` (BAC II grade, IELTS score,
+   etc.) are deliberately NOT scored against, since no grade/IELTS data is tracked for university
+   profiles — scoring against data we don't have would misrepresent a match. Those render as a
+   plain unscored checklist instead (see Scholarships below). */
+function scoreScholarshipMatch(scholarship, up) {
+  if (!up) return { score: 0, reasons: [] };
+  const goals = up.goals || [];
+  let score = 0;
+  const reasons = [];
+  if (up.major && scholarship.tags?.includes(up.major)) {
+    const majorLabel = UNI_FIELDS.find((f) => f.id === up.major);
+    score += 60;
+    reasons.push({ key: "major", label: `For ${majorLabel?.label || up.major} students` });
+  }
+  if (goals.includes("scholarship_prep")) score += 20;
+  if (scholarship.needBased && goals.includes("scholarship_prep")) {
+    reasons.push({ key: "need", label: "Need-based — no entrance-exam ranking required" });
+  }
+  if (scholarship.meritBased) {
+    reasons.push({ key: "merit", label: "Merit-based — awarded by grades/exam rank" });
+  }
+  return { score: Math.max(0, Math.min(100, score)), reasons };
+}
+
+/* Scholarship Center — Module 5. Lists UNI_SCHOLARSHIPS (src/data/universities.js, explicitly
+   flagged there as illustrative/prototype data) grouped by university, each scored via
+   scoreScholarshipMatch above. Reachable from Explore's Discover tile (see UniversityExplore). */
+function Scholarships({ p, lang = "en" }) {
+  const up = p.universityProfile || {};
+  const [selected, setSelected] = useState(null); // { abbr, i } of the open scholarship, or null
+
+  const rows = useMemo(() => {
+    const list = [];
+    Object.entries(UNI_SCHOLARSHIPS).forEach(([abbr, scholarships]) => {
+      const uni = UNIS.find((u) => u.abbr === abbr);
+      scholarships.forEach((s, i) => list.push({ abbr, i, uni, s, match: scoreScholarshipMatch(s, up) }));
+    });
+    return list.sort((a, b) => b.match.score - a.match.score);
+  }, [up.major, up.goals]);
+
+  if (selected) {
+    const row = rows.find((r) => r.abbr === selected.abbr && r.i === selected.i);
+    if (row) {
+      const { uni, s, match } = row;
+      return (
+        <div className="space-y-5 eai-rise">
+          <button onClick={() => setSelected(null)} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
+            <ChevronLeft size={16} /> {t(lang, "scholarshipsWord")}
+          </button>
+          <div className="eai-card p-6 flex items-center gap-4">
+            <UniLogo uni={uni || { c: "var(--primary)" }} size={56} />
+            <div className="min-w-0">
+              <h2 className="eai-display text-xl font-extrabold">{s.name}</h2>
+              <p className={`text-sm eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{uni ? (lang === "km" ? uni.nKm : uni.n) : selected.abbr}</p>
+            </div>
+          </div>
+          {match.reasons.length > 0 && (
+            <div className="eai-card p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles size={17} style={{ color: "var(--primary)" }} />
+                <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "whyYouMatch")}</h3>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{match.score}% {t(lang, "matchWord")}</span>
+              </div>
+              <div className="space-y-2">
+                {match.reasons.map((r) => (
+                  <div key={r.key} className="flex items-center gap-2">
+                    <CheckCircle2 size={14} style={{ color: "var(--jade)", flexShrink: 0 }} />
+                    <span className="text-sm">{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="eai-card p-6">
+            <CardHead title={t(lang, "coverageWord")} />
+            <p className="text-sm font-semibold">{s.coverage}</p>
+          </div>
+          <div className="eai-card p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardCheck size={17} style={{ color: "var(--gold)" }} />
+              <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "requirementsWord")}</h3>
+            </div>
+            <p className={`text-xs eai-muted mb-3 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "unscoredChecklistNote")}</p>
+            <div className="space-y-2">
+              {s.requirements.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Circle size={6} style={{ fill: "var(--muted)", flexShrink: 0 }} />
+                  <span className="text-sm">{r}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="eai-card p-6">
+            <div className="flex items-center gap-2 mb-1"><CalendarCheck size={17} style={{ color: "var(--ember)" }} /><h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "admissionsDeadlineWord")}</h3></div>
+            <p className="text-sm">{s.examDate}</p>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "scholarshipsWord")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "scholarshipsDesc")}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {rows.map(({ abbr, i, uni, s, match }) => (
+          <button key={`${abbr}-${i}`} onClick={() => setSelected({ abbr, i })} className="eai-card eai-tile eai-focus p-5 text-left">
+            <div className="flex items-center gap-3">
+              <UniLogo uni={uni || { c: "var(--primary)" }} size={44} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold truncate">{s.name}</p>
+                <p className={`text-xs eai-muted truncate ${lang === "km" ? "eai-km" : ""}`}>{uni ? (lang === "km" ? uni.nKm : uni.n) : abbr}</p>
+              </div>
+              {match.score > 0 && (
+                <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{match.score}%</span>
+              )}
+            </div>
+            <p className="text-xs eai-muted mt-2.5">{s.coverage}</p>
           </button>
         ))}
       </div>
@@ -3101,9 +3728,10 @@ function Languages({ results = {}, onTakeDiagnostic, lang = "en" }) {
   );
 }
 
-function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
+function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours = [] }) {
   const xp = p.xp + bonusXp;
   const [openSubject, setOpenSubject] = useState(null);
+  const weeklyTotalHours = weeklyStudyHours.reduce((sum, x) => sum + x.h, 0);
 
   // ── Live data collected from the Practice section ───────────────
   const entries = Object.values(practice);
@@ -3185,10 +3813,10 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
         {/* Weekly hours */}
         <div className="eai-card p-6 lg:col-span-2">
           <CardHead title={t(lang, "weeklyStudyHours")}
-            action={<Pill icon={Clock} color="var(--primary)" soft="var(--primary-soft)" value="4.2h" label={t(lang, "thisWeek")} />} />
+            action={<Pill icon={Clock} color="var(--primary)" soft="var(--primary-soft)" value={`${weeklyTotalHours.toFixed(1)}h`} label={t(lang, "thisWeek")} />} />
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={WEEK_SEED} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
+              <AreaChart data={weeklyStudyHours} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
                 <defs>
                   <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--jade)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--jade)" stopOpacity={0} />
@@ -3366,7 +3994,57 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en" }) {
    Replaces Dashboard/Browse/Practice/Progress for university profiles — none of the BAC II
    mastery engine applies here (see deriveInsights' university branch above), so this section
    builds its own lightweight views straight off `p.universityProfile` instead. */
-function UniversityHub({ p, go, lang = "en" }) {
+/* Per-course mastery chips + a "recommended next" callout, shown above Continue Learning when
+   the student's major has real quiz content (today: computer_science only). Reads p.universityInsights
+   (deriveUniInsights' output) rather than recomputing anything itself. */
+function UniversityMasteryWidget({ p, up, onPracticeCourse, lang = "en" }) {
+  const ui = p.universityInsights;
+  if (!ui?.contentAvailable) return null;
+  const courses = UNI_COURSES[up.major] || [];
+  const rec = ui.recommendedLesson;
+  const recCourse = rec ? courses.find((c) => `${up.major}::${c.title}` === rec.subject) : null;
+
+  return (
+    <div className="eai-card p-6">
+      <CardHead title={t(lang, "uniHubYourProgress")} />
+      {rec && recCourse && (
+        <button onClick={() => onPracticeCourse(recCourse.id)}
+          className={`eai-focus w-full flex items-center justify-between gap-3 p-4 rounded-2xl text-left mb-4 ${lang === "km" ? "eai-km" : ""}`}
+          style={{ background: "var(--ember-soft)" }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Lightbulb size={18} style={{ color: "var(--ember)", flexShrink: 0 }} />
+            <div className="min-w-0">
+              <p className="text-sm font-bold truncate" style={{ color: "var(--ember)" }}>{t(lang, "uniHubRecommendedNext")}</p>
+              <p className="text-xs eai-muted truncate">{topicLabel(rec.topic, lang)} · {lang === "km" ? recCourse.titleKm : recCourse.title}</p>
+            </div>
+          </div>
+          <ChevronRight size={16} style={{ color: "var(--ember)", flexShrink: 0 }} />
+        </button>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {ui.subjects.map((sub) => {
+          const course = courses.find((c) => `${up.major}::${c.title}` === sub.s);
+          if (!course) return null;
+          return (
+            <button key={sub.s} onClick={() => onPracticeCourse(course.id)} className="eai-tile eai-focus p-4 rounded-2xl border text-left" style={{ borderColor: "var(--line)" }}>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-sm font-semibold truncate ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? course.titleKm : course.title}</span>
+                {sub.tag === "weak" && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
+                {sub.tag === "strong" && <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "var(--jade-soft)", color: "var(--jade)" }}>{sub.level}</span>}
+              </div>
+              <div className="h-1.5 rounded-full eai-soft mt-3 overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${sub.m ?? 0}%`, background: sub.tag === "weak" ? "var(--ember)" : "var(--jade)" }} />
+              </div>
+              <p className="text-xs eai-muted mt-1.5">{sub.m != null ? `${sub.m}% · ${sub.level}` : t(lang, "notAssessedYet")}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function UniversityHub({ p, go, onPracticeCourse, lang = "en" }) {
   const up = p.universityProfile || {};
   const major = UNI_FIELDS.find((f) => f.id === up.major);
   const year = UNI_YEARS.find((y) => y.id === up.year);
@@ -3397,6 +4075,8 @@ function UniversityHub({ p, go, lang = "en" }) {
         </div>
       )}
 
+      <UniversityMasteryWidget p={p} up={up} onPracticeCourse={onPracticeCourse} lang={lang} />
+
       {/* Continue Learning */}
       <div className="eai-card p-6">
         <CardHead title={t(lang, "uniHubContinueLearning")} />
@@ -3422,7 +4102,13 @@ function UniversityHub({ p, go, lang = "en" }) {
                           <span className={`text-sm ${lang === "km" ? "eai-km" : ""}`}>{l}</span>
                         </div>
                       ))}
-                      <p className={`text-xs eai-muted pt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniHubLessonsComingSoon")}</p>
+                      {UNI_QUIZ_BANK[`${up.major}::${c.title}`] ? (
+                        <button onClick={() => onPracticeCourse(c.id)} className={`eai-btn eai-focus text-xs font-semibold py-2 px-3 mt-1 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)", color: "white" }}>
+                          {t(lang, "practiceThisCourse")}
+                        </button>
+                      ) : (
+                        <p className={`text-xs eai-muted pt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniHubLessonsComingSoon")}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3455,9 +4141,13 @@ function UniversityHub({ p, go, lang = "en" }) {
 }
 
 /* Full-page "Explore" hub for university profiles — categorized links to what already exists
-   today, with honest "coming soon" tags for what Phase 2 (Scholarship Center, university filters,
-   subject quizzes) will add. Reachable from UNI_NAV and from the Hub's teaser row above. */
-function UniversityExplore({ go, lang = "en" }) {
+   today. Discover/Practice used to be hard-stubbed disabled tiles; both are now real, with
+   Practice conditionally enabled only for majors that have quiz content (today: computer_science)
+   so it never dead-ends into an empty screen for other majors. Reachable from UNI_NAV and from
+   the Hub's teaser row. */
+function UniversityExplore({ p, go, lang = "en" }) {
+  const up = p.universityProfile || {};
+  const hasQuizzes = Object.keys(UNI_QUIZ_BANK).some((key) => key.startsWith(`${up.major}::`));
   const categories = [
     { title: t(lang, "exploreLearnTitle"), items: [
       { icon: Sparkles, label: t(lang, "askAiCoach"), onClick: () => go("coach") },
@@ -3467,10 +4157,10 @@ function UniversityExplore({ go, lang = "en" }) {
     ] },
     { title: t(lang, "exploreDiscoverTitle"), items: [
       { icon: Landmark, label: t(lang, "navUniversities"), onClick: () => go("universities") },
-      { icon: DollarSign, label: t(lang, "scholarshipsWord"), disabled: true },
+      { icon: DollarSign, label: t(lang, "scholarshipsWord"), onClick: () => go("scholarships") },
     ] },
     { title: t(lang, "explorePracticeTitle"), items: [
-      { icon: Target, label: t(lang, "quizzesMockExams"), disabled: true },
+      { icon: Target, label: t(lang, "quizzesMockExams"), onClick: () => go("uniPractice"), disabled: !hasQuizzes },
     ] },
   ];
   return (
@@ -3500,10 +4190,11 @@ function UniversityExplore({ go, lang = "en" }) {
 }
 
 /* Lightweight Progress view for university profiles — the BAC II Progress component's "Exam
-   readiness"/"Subject mastery" framing doesn't apply here, so this only shows what's honestly
-   real for a university account right now (streak, XP, leaderboard) rather than fabricating
-   course-completion stats before real lesson tracking exists. */
+   readiness"/"Subject mastery" framing doesn't apply here, so this shows what's honestly real:
+   streak/XP/leaderboard always, plus real per-course mastery once the student's major has quiz
+   content (via p.universityInsights) — a "coming soon" note only for majors that don't yet. */
 function UniversityProgress({ p, lang = "en" }) {
+  const ui = p.universityInsights;
   const leaderboard = useMemo(() => {
     const entries = [...LEADERBOARD_SEED, { name: p.name, xp: p.xp, isYou: true }];
     return entries.sort((a, b) => b.xp - a.xp).map((e, i) => ({ ...e, rank: i + 1 }));
@@ -3561,9 +4252,26 @@ function UniversityProgress({ p, lang = "en" }) {
         )}
       </div>
 
-      <div className="eai-card p-6 text-center">
-        <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniProgressComingSoon")}</p>
-      </div>
+      {ui?.contentAvailable ? (
+        <div className="eai-card p-6">
+          <CardHead title={t(lang, "uniHubYourProgress")} />
+          <div className="space-y-2.5">
+            {ui.subjects.map((sub) => (
+              <div key={sub.s} className="flex items-center gap-3">
+                <span className="text-sm font-medium flex-1 min-w-0 truncate">{sub.s.split("::")[1] || sub.s}</span>
+                <div className="h-1.5 rounded-full eai-soft overflow-hidden flex-shrink-0" style={{ width: 100 }}>
+                  <div className="h-full rounded-full" style={{ width: `${sub.m ?? 0}%`, background: sub.tag === "weak" ? "var(--ember)" : "var(--jade)" }} />
+                </div>
+                <span className="text-xs eai-muted flex-shrink-0" style={{ width: 70, textAlign: "right" }}>{sub.m != null ? `${sub.m}% ${sub.level}` : t(lang, "notAssessedYet")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="eai-card p-6 text-center">
+          <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniProgressComingSoon")}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -3714,11 +4422,18 @@ function universityCoachReply(text, p) {
   const t = text.toLowerCase();
   const up = p.universityProfile || {};
   const major = UNI_FIELDS.find((f) => f.id === up.major)?.label || "your field";
+  const weakTopic = p.universityInsights?.weak?.[0];
 
-  if (/\bcourse|lesson|learn\b/.test(t))
-    return `Check the Continue Learning section on your University Hub for a ${major} course outline. Full interactive lessons are coming soon — for now, tell me a specific topic and I'll do my best to explain it.`;
+  if (/\bcourse|lesson|learn|quiz|practice\b/.test(t)) {
+    if (p.universityInsights?.contentAvailable) {
+      return weakTopic
+        ? `Head to Practice on your University Hub — your weakest spot right now is ${weakTopic.topics?.find((x) => x.score != null)?.t || weakTopic.s.split("::")[1]}, that's the fastest place to improve your average. Or tell me a specific topic and I'll explain it here.`
+        : `Head to Practice on your University Hub to work through ${major} quizzes — they track your mastery per topic as you go. Or tell me a specific topic and I'll explain it here.`;
+    }
+    return `Check the Continue Learning section on your University Hub for a ${major} course outline. Full interactive lessons and quizzes are coming soon for this field — for now, tell me a specific topic and I'll do my best to explain it.`;
+  }
   if (/\bscholarship|fund\w*\b/.test(t))
-    return `A dedicated Scholarship Center is coming soon. In the meantime, tell me what you're eligible for (grades, English score, target country) and I can point you toward the kind of scholarships to search for.`;
+    return `Check the Scholarships tab (under Explore → Discover) for scholarships tagged to ${major}. Tell me what you're eligible for (grades, English score, target country) and I can help you narrow it down further.`;
   if (/\bcareer|job\b/.test(t))
     return `For ${major}, the strongest early moves are usually a portfolio/projects, an internship, and networking in that field. Want a starter checklist for one of those?`;
   if (/\b(hello|hi|hey)\b|សួស្តី/.test(t))
@@ -3739,7 +4454,10 @@ async function universityMentorReply(t, p, history) {
       body: JSON.stringify({
         message: t,
         history: history.map((m) => ({ role: m.role, text: m.text })),
-        context: { name: p.name, major: up.major, year: up.year, goals: up.goals },
+        context: {
+          name: p.name, major: up.major, year: up.year, goals: up.goals,
+          subjects: p.universityInsights?.subjects, weak: p.universityInsights?.weak, strong: p.universityInsights?.strong,
+        },
       }),
     });
     const data = await res.json();
@@ -4829,7 +5547,51 @@ const SUPER_PLANS = [
   },
 ];
 
-function SuperBondus({ lang = "en" }) {
+/* University-track twin of SUPER_PLANS above — same shape, English-only (no *Km fields; the
+   render below falls back to English for any plan missing them, so this doesn't need to
+   duplicate strings into featuresKm just to avoid crashing in Khmer mode). Copy mirrors the
+   Free/Standard/Premium structure drafted for the University Hub pricing strategy review. */
+const UNI_SUPER_PLANS = [
+  {
+    id: "free", label: "Free", price: "$0", period: "",
+    tagline: "Free for every student — University Hub included",
+    button: "Start for Free",
+    features: [
+      "First lesson of every course in your major",
+      "Basic Discovery filters: major & location",
+      "Public scholarship list, no paywall",
+      "A few AI Mentor questions a day",
+      "Full user experience (XP, streaks, leaderboards)",
+    ],
+  },
+  {
+    id: "standard", label: "Standard", price: "$1.99", period: "/ month",
+    tagline: "Everything in Free, plus:",
+    button: "Get Standard",
+    features: [
+      "Every course, every year, fully unlocked",
+      "Quizzes with real mastery tracking, not just checkmarks",
+      "Advanced Discovery filters + \"why this matches you\"",
+      "Full Scholarship Center, matched to your profile",
+      "More AI Mentor time — aware of your weak spots",
+    ],
+  },
+  {
+    id: "premium", label: "Premium", price: "$3.99", period: "/ month", best: true,
+    tagline: "Everything in Standard, plus:",
+    button: "Get Premium",
+    features: [
+      "AI builds your Learn → Practice → Quiz path automatically",
+      "Unlimited AI Mentor access",
+      "Scholarship Gap Analysis — what's missing, how to fix it",
+      "Full mock exams, past papers, advanced IELTS/TOEFL prep",
+      "Application tracker + document checklist",
+    ],
+  },
+];
+
+function SuperBondus({ p, lang = "en" }) {
+  const plans = p?.educationLevel === "university" ? UNI_SUPER_PLANS : SUPER_PLANS;
   const [selected, setSelected] = useState("premium");
   const [upgraded, setUpgraded] = useState(null); // plan object once a CTA is clicked
 
@@ -4841,7 +5603,9 @@ function SuperBondus({ lang = "en" }) {
         </div>
         <div>
           <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "superBondusTitle")}</h2>
-          <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "superBondusDesc")}</p>
+          <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>
+            {p?.educationLevel === "university" ? "Unlock the full University Hub deeper AI mentorship, every test-prep engine, and application tools." : t(lang, "superBondusDesc")}
+          </p>
         </div>
       </div>
 
@@ -4850,7 +5614,7 @@ function SuperBondus({ lang = "en" }) {
           <CheckCircle2 size={20} style={{ color: "var(--jade)", flexShrink: 0, marginTop: 2 }} />
           <div>
             <p className={`font-semibold ${lang === "km" ? "eai-km" : ""}`}>
-              {upgraded.id === "free" ? t(lang, "allSet") : `${t(lang, "thanksUpgrade")} ${lang === "km" ? upgraded.labelKm : upgraded.label}!`}
+              {upgraded.id === "free" ? t(lang, "allSet") : `${t(lang, "thanksUpgrade")} ${lang === "km" ? (upgraded.labelKm ?? upgraded.label) : upgraded.label}!`}
             </p>
             <p className={`text-sm eai-muted mt-1 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
               {upgraded.id === "free" ? t(lang, "freeIncluded") : t(lang, "prototypeNoPayment")}
@@ -4861,7 +5625,7 @@ function SuperBondus({ lang = "en" }) {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
-            {SUPER_PLANS.map((plan) => {
+            {plans.map((plan) => {
               const on = selected === plan.id;
               return (
                 <div key={plan.id} onClick={() => setSelected(plan.id)}
@@ -4873,13 +5637,13 @@ function SuperBondus({ lang = "en" }) {
                     </span>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? plan.labelKm : plan.label}</span>
+                    <span className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.labelKm ?? plan.label) : plan.label}</span>
                     {on && <CheckCircle2 size={18} style={{ color: "var(--gold)" }} />}
                   </div>
                   <p className="mt-2"><span className="eai-display text-2xl font-extrabold">{plan.price}</span> <span className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.periodKm ?? plan.period) : plan.period}</span></p>
-                  <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? plan.taglineKm : plan.tagline}</p>
+                  <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.taglineKm ?? plan.tagline) : plan.tagline}</p>
                   <ul className="mt-4 space-y-2 flex-1">
-                    {(lang === "km" ? plan.featuresKm : plan.features).map((f) => (
+                    {(lang === "km" ? (plan.featuresKm ?? plan.features) : plan.features).map((f) => (
                       <li key={f} className={`flex items-start gap-2 text-xs eai-muted leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
                         <CheckCircle2 size={13} style={{ color: "var(--gold)", flexShrink: 0, marginTop: 1.5 }} /> {f}
                       </li>
@@ -4888,7 +5652,7 @@ function SuperBondus({ lang = "en" }) {
                   <button onClick={(e) => { e.stopPropagation(); setUpgraded(plan); }}
                     className={`eai-btn eai-focus w-full mt-5 py-2.5 text-sm flex items-center justify-center gap-2 ${lang === "km" ? "eai-km" : ""}`}
                     style={{ background: plan.best ? "var(--gold)" : "var(--card)", color: plan.best ? "#fff" : "var(--ink)", border: plan.best ? "none" : "1px solid var(--line)" }}>
-                    {lang === "km" ? plan.buttonKm : plan.button} <ArrowRight size={14} />
+                    {lang === "km" ? (plan.buttonKm ?? plan.button) : plan.button} <ArrowRight size={14} />
                   </button>
                 </div>
               );
@@ -4939,7 +5703,7 @@ const STRINGS = {
     createAccount: "Create an account", login: "Login",
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
-    navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress",
+    navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress", navExplore: "Explore",
     // Dashboard
     dashGreetingPrefix: "Welcome,",
     dashStartPlan: "Start today's plan", dashAskCoach: "Ask your AI coach",
@@ -4956,7 +5720,7 @@ const STRINGS = {
     exploreBrowsePast: "Official past exam papers by year",
     // Language hub
     langHubTitle: "International language hub",
-    langHubSubtitle: "Diagnostic-driven roadmaps and unlimited AI mock tests with skill-by-skill scoring.",
+    langHubSubtitle: "Diagnostic driven roadmaps and unlimited AI mock tests with skill-by-skill scoring.",
     takeDiagnostic: "Take diagnostic", retakeDiagnostic: "Retake diagnostic", comingSoon: "Coming soon",
     // Browse
     browseTitle: "Browse exams", universityEntrance: "University entrance", trackWord: "track", officialPapers: "official papers",
@@ -4973,8 +5737,8 @@ const STRINGS = {
     whyMissed: "Why do you think you missed this? (optional)", skipWord: "Skip",
     correctXp: "Correct! +30 XP", notQuite: "Not quite", correctAnswerIs: "Correct answer:",
     explanationWord: "Explanation", formulaApproach: "Formula / approach to use",
-    recCorrectMore: "Nice — you applied the right method. Keep the momentum and try the next one.",
-    recCorrectLast: "Nice — you applied the right method. That's the last exercise in this set!",
+    recCorrectMore: "Nice, you applied the right method. Keep the momentum and try the next one.",
+    recCorrectLast: "Nice, you applied the right method. That's the last exercise in this set!",
     recIncorrect: "Re-read the formula above and how it maps to the question, then tap Try again — you've got this.",
     tryAgain: "Try again", nextExercise: "Next exercise", backToList: "Back to list",
     // Universities
@@ -5028,17 +5792,29 @@ const STRINGS = {
     highSchoolOptTitle: "High School", highSchoolOptDesc: "Grade 11 or 12, preparing for the BAC II exam.",
     universityOptTitle: "University", universityOptDesc: "Already at university, a high school graduate, or preparing for university entrance.",
     uniGoalsTitle: "What are you looking for?", uniGoalsDesc: "Select everything that applies — you can change this later.",
+    uniGoalsWhyWeAsk: "These personalize your University Hub, Discovery matches, and AI Mentor — the more you pick, the sharper the recommendations.",
     uniFieldTitle: "What's your field?", uniFieldDesc: "Pick the closest match — you can change this later.",
     uniYearTitle: "Where are you now?", uniYearDesc: "So we can tailor what we show you.",
     // University Hub
     uniHubContinueLearning: "Continue learning",
     uniHubCoursesComingSoon: "Course content for this field is coming soon. In the meantime, explore Universities, IELTS prep, or ask your AI mentor.",
     uniHubLessonsComingSoon: "Full interactive lessons are coming soon — this is the course outline.",
-    uniExploreDesc: "Everything you need, organized in one place — instead of searching across the web.",
+    uniExploreDesc: "Everything you need, organized in one place instead of searching across the web.",
     exploreLearnTitle: "Learn", explorePrepareTitle: "Prepare", exploreDiscoverTitle: "Discover", explorePracticeTitle: "Practice",
     askAiCoach: "Ask your AI coach", scholarshipsWord: "Scholarships", quizzesMockExams: "Quizzes & mock exams",
     uniProgressDesc: "Your learning activity across Bondus.",
     uniProgressComingSoon: "Detailed course and quiz analytics are coming soon.",
+    uniHubYourProgress: "Your progress", uniHubRecommendedNext: "Recommended next", practiceThisCourse: "Practice this course",
+    notAssessedYet: "Not assessed yet",
+    whyMatchesYou: "Why this matches you", whyYouMatch: "Why you match", matchWord: "match",
+    admissionsAndCost: "Admissions & cost", illustrativeDataNote: "Illustrative figures for planning — always verify with the university directly.",
+    locationWord: "Location", tuitionPerYear: "Tuition / year", languageWord: "Language", admissionsDeadlineWord: "Admissions deadline",
+    searchUniversities: "Search universities…", allMajorsFilter: "All majors",
+    anyBudget: "Any budget", budgetLow: "Budget-friendly", budgetMedium: "Mid-range", budgetHigh: "Higher cost",
+    anyLanguage: "Any language", noUniversitiesMatch: "No universities match these filters — try widening your search.",
+    scholarshipsDesc: "Scholarships across every university, matched to your major and goals.",
+    coverageWord: "Coverage", requirementsWord: "Requirements",
+    unscoredChecklistNote: "These are listed as-is — we don't have your grades or test scores yet, so we can't check them off for you.",
     createAccountTitle: "Create your account", createAccountDesc: "A few details so your AI coach and study plan fit you.",
     fullNameLabel: "Full name", emailLabel: "Email", passwordLabel: "Password", ageLabel: "Age", gradeLevelLabel: "Grade level",
     grade11: "Grade 11", grade12: "Grade 12 (BAC II)", targetGradeLabel: "Target grade", gradeWord: "Grade",
@@ -5077,7 +5853,7 @@ const STRINGS = {
     createAccount: "បង្កើតគណនី", login: "ចូលគណនី",
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
-    navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព",
+    navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព", navExplore: "ស្វែងរក",
     // Dashboard
     dashGreetingPrefix: "សូមស្វាគមន៍,",
     dashStartPlan: "ចាប់ផ្តើមផែនការថ្ងៃនេះ", dashAskCoach: "សួរគ្រូបង្វឹក AI",
@@ -5233,10 +6009,27 @@ function WelcomeBackToast({ name, show }) {
   );
 }
 
+/* Same fixed-toast pattern as WelcomeBackToast above, fired off the level-up effect below. */
+function LevelUpToast({ level, show }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} transition={{ duration: 0.25 }}
+          className="eai-card flex items-center gap-2.5 px-4 py-2.5"
+          style={{ position: "fixed", top: 72, right: 16, zIndex: 50, boxShadow: "var(--shadow)", borderColor: "var(--gold)" }}>
+          <TrendingUp size={16} style={{ color: "var(--gold)" }} />
+          <span className="text-sm font-semibold">Level up! You're now Level {level}.</span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function App() {
   const saved = useRef(loadSaved()).current;
   const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
   const [showWelcomeBack, setShowWelcomeBack] = useState(isReturningUser);
+  const [levelUpToast, setLevelUpToast] = useState(null); // level number just reached, or null
   const [profile, setProfile] = useState(saved?.profile ?? null);
   const [entry, setEntry] = useState("welcome"); // "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
@@ -5244,11 +6037,14 @@ export default function App() {
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
+  const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
   const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
   const [dark, setDark] = useState(true);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
+  const [uniPractice, setUniPractice] = useState(saved?.uniPractice ?? {}); // same shape as practice, university-track quiz attempts (exercise ids prefixed "uni:" so they never collide with practice's ids)
+  const [uniPracticeTarget, setUniPracticeTarget] = useState(null); // course id to deep-link straight into when the Hub links to a specific course — consumed once by UniversityPractice
   const [plan, setPlan] = useState(saved?.plan ?? []);
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
   const [langResults, setLangResults] = useState(saved?.langResults ?? {}); // { [languageName]: { listening, reading, writing, speaking, overall, feedback, completedAt } }
@@ -5265,14 +6061,14 @@ export default function App() {
   // Persist everything so progress survives a page refresh — this prototype has no backend yet.
   useEffect(() => {
     if (!profile) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, practice, plan, bonusXp, langResults }));
-  }, [profile, topicMastery, practice, plan, bonusXp, langResults]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults }));
+  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults]);
 
   // Logging out clears the active session but deliberately leaves localStorage alone, so "Log in"
   // can restore the same account later by matching the phone number used at signup.
   const handleLogout = () => {
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
+    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
   };
 
   // Matches either a phone number or an email+password against whatever's currently saved in
@@ -5287,7 +6083,9 @@ export default function App() {
     if (!matched) return false;
     setProfile(data.profile);
     setTopicMastery(data.topicMastery ?? {});
+    setUniTopicMastery(data.uniTopicMastery ?? {});
     setPractice(data.practice ?? {});
+    setUniPractice(data.uniPractice ?? {});
     setPlan(data.plan ?? []);
     setBonusXp(data.bonusXp ?? 0);
     setShowWelcomeBack(true);
@@ -5344,10 +6142,22 @@ export default function App() {
   };
   const dismissBanner = () => setProfile((cur) => ({ ...cur, bannerDismissed: true }));
 
+  // Real day-streak and weekly study time, computed from actual answered-question timestamps
+  // (both tracks) — not static profile fields, so they're 0 until a student actually earns them.
+  const streakStats = useMemo(() => computeStreakStats(topicMastery, uniTopicMastery), [topicMastery, uniTopicMastery]);
+  const weeklyStudyHours = useMemo(() => buildWeeklyStudyHours(topicMastery, uniTopicMastery), [topicMastery, uniTopicMastery]);
+
   // Live insights recompute from topicMastery on every change — this is what makes weak/strong
   // subjects, the recommended lesson, and exam readiness actually update as the student practices.
-  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery) : null), [profile, topicMastery]);
-  const p = useMemo(() => (profile ? { ...profile, ...insights } : null), [profile, insights]);
+  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery, streakStats.streak) : null), [profile, topicMastery, streakStats.streak]);
+  const uniInsights = useMemo(
+    () => (profile?.educationLevel === "university" ? deriveUniInsights(profile, uniTopicMastery) : null),
+    [profile, uniTopicMastery]
+  );
+  const p = useMemo(
+    () => (profile ? { ...profile, ...insights, streak: streakStats.streak, longestStreak: streakStats.longestStreak, universityInsights: uniInsights } : null),
+    [profile, insights, uniInsights, streakStats]
+  );
 
   // Level up whenever XP crosses the next threshold (can chain multiple levels from one big award).
   useEffect(() => {
@@ -5357,10 +6167,23 @@ export default function App() {
       setProfile((cur) => {
         let level = cur.level, xpToNext = cur.xpToNext;
         while (cur.xp + bonusXp >= xpToNext) { level += 1; xpToNext = Math.round(xpToNext * 1.35); }
+        setLevelUpToast(level);
         return { ...cur, level, xpToNext };
       });
     }
   }, [profile, bonusXp]);
+  useEffect(() => {
+    if (!levelUpToast) return;
+    const timer = setTimeout(() => setLevelUpToast(null), 2600);
+    return () => clearTimeout(timer);
+  }, [levelUpToast]);
+  // University Hub content is English-only (see UNI_QUIZ_BANK / UNI_PROFILE_INFO) — the language
+  // toggle is hidden for this track (below), but if a student switched to Khmer on a previous
+  // high-school profile in this browser, force it back to English rather than stranding them in
+  // a language they now have no in-app way to change.
+  useEffect(() => {
+    if (profile?.educationLevel === "university" && lang !== "en") setLang("en");
+  }, [profile, lang]);
 
   const togglePlanTask = (id) => {
     const target = plan.find((x) => x.id === id);
@@ -5388,6 +6211,23 @@ export default function App() {
     setPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
     if (status === "completed" && !already) setBonusXp((x) => x + 30);
   };
+  // University-track twins of handleAnswer/handleSetStatus above — same logic, writing to the
+  // uniPractice/uniTopicMastery stores instead so BAC-II and university progress never collide.
+  const handleUniAnswer = (ex, result, meta = {}) => {
+    const already = uniPractice[ex.id]?.xpAwarded;
+    const xpAwarded = already || result === "correct";
+    setUniPractice((prev) => ({ ...prev, [ex.id]: { status: result === "correct" ? "completed" : "in_progress", result, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
+    if (result === "correct" && !already) setBonusXp((x) => x + 30);
+    setUniTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
+      correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
+    }));
+  };
+  const handleUniSetStatus = (ex, status) => {
+    const already = uniPractice[ex.id]?.xpAwarded;
+    const xpAwarded = already || status === "completed";
+    setUniPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
+    if (status === "completed" && !already) setBonusXp((x) => x + 30);
+  };
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
   if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
@@ -5409,17 +6249,21 @@ export default function App() {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} lang={lang} />,
     browse: <Browse p={p} lang={lang} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
-    universities: <Universities lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
-    progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} />,
-    universityHub: <UniversityHub p={p} go={go} lang={lang} />,
-    explore: <UniversityExplore go={go} lang={lang} />,
-    super: <SuperBondus lang={lang} />,
+    universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
+    progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
+    universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
+    explore: <UniversityExplore p={p} go={go} lang={lang} />,
+    scholarships: <Scholarships p={p} lang={lang} />,
+    uniPractice: <UniversityPractice p={p} uniPractice={uniPractice} onAnswer={handleUniAnswer} onSetStatus={handleUniSetStatus}
+      initialCourseId={uniPracticeTarget} onConsumeInitialCourse={() => setUniPracticeTarget(null)} lang={lang} />,
+    super: <SuperBondus p={p} lang={lang} />,
   }[tab];
 
   return (
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`}>
       <style>{STYLES}</style>
       <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
+      <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
       <div className="flex">
         {open && <div className="fixed inset-0 z-20 lg:hidden" style={{ background: "rgba(0,0,0,.4)" }} onClick={() => setOpen(false)} />}
         <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
@@ -5428,7 +6272,7 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus Cambodia</p><p className="eai-km text-xs eai-muted">កម្ពុជា · Cambodia</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus {isUniProfile ? "University" : "Highschool"}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
             {(isUniProfile ? UNI_NAV : NAV).map((n) => {
@@ -5452,7 +6296,7 @@ export default function App() {
           <div className="p-3 space-y-2">
             <div className="eai-soft rounded-2xl p-4 text-center">
               <Flame size={20} style={{ color: "var(--ember)", margin: "0 auto" }} />
-              <p className="text-xs font-semibold mt-2">{profile.streak}-day streak</p>
+              <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
               <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
             </div>
             <button onClick={handleLogout} className={`eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "logOut")}</button>
@@ -5464,12 +6308,12 @@ export default function App() {
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
               <button className="lg:hidden eai-focus" onClick={() => setOpen(true)}><Menu size={22} /></button>
               <div className="hidden sm:flex items-center gap-2">
-                <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={profile.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} />
+                <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} />
                 <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" />
                 <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" />
               </div>
               <div className="flex items-center gap-2 ml-auto">
-                <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />
+                {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
@@ -5477,7 +6321,13 @@ export default function App() {
               </div>
             </div>
           </header>
-          <main className="p-4 sm:p-6 max-w-6xl mx-auto">{view}</main>
+          <main className="p-4 sm:p-6 max-w-6xl mx-auto">
+            <AnimatePresence mode="wait">
+              <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
+                {view}
+              </motion.div>
+            </AnimatePresence>
+          </main>
         </div>
       </div>
     </div>

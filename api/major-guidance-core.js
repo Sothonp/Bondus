@@ -3,7 +3,7 @@
    helper (Gemini first, Groq fallback) rather than calling Gemini directly, so this stays in
    sync with how ielts-grade.js talks to the same providers. */
 import { generateText, hasAIProviderConfigured } from "./_ai.js";
-import { UNI_MAJORS } from "../Frontend/data/universities.js";
+import { UNI_MAJORS } from "../src/data/universities.js";
 
 // Condensed "university: major, major, ..." catalog built once at cold start — keeps every
 // request grounded in Bondus's real major data without re-sending full descriptions each time.

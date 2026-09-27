@@ -1,6 +1,9 @@
 /* Real Cambodian university & major data — sourced from each university's official site.
-   Shared between the frontend (Universities tab, AI Coach) and the /api/major-guidance
-   serverless function, so both stay grounded in the same real data. */
+   Shared between the frontend (Universities tab, AI Coach) and the /api/major-guidance and
+   /api/university-mentor serverless functions, so all three stay grounded in the same real
+   data. This is the single source of truth for university data — do not fork a copy elsewhere;
+   see UNI_SCHOLARSHIPS and UNI_PROFILE_INFO below for the (separately-flagged) illustrative
+   exports that build on it. */
 
 export const UNIS = [
   { n: "Royal University of Phnom Penh", nKm: "សាកលវិទ្យាល័យភូមិន្ទភ្នំពេញ", abbr: "RUPP", ready: 42, c: "var(--primary)", logo: "/logos/rupp.png" },
@@ -217,10 +220,11 @@ export const UNI_MAJORS = {
   ],
 };
 
-/* Placeholder scholarship data — NOT sourced from official pages. Names, coverage, requirements
-   and exam/deadline dates below are illustrative examples for prototyping the Scholarships UI.
-   Replace with each university's verified, current-year figures before treating this as real
-   guidance for students. */
+/* Placeholder scholarship data — NOT sourced from official pages. Names, coverage, requirements,
+   exam/deadline dates, subject tags and merit/need flags below are illustrative examples for
+   prototyping the Scholarships UI. Replace with each university's verified, current-year figures
+   before treating this as real guidance for students. `tags` uses the same UNI_FIELDS ids as
+   UNI_PROFILE_INFO below, so a student's onboarding major can be matched against it directly. */
 export const UNI_SCHOLARSHIPS = {
   RUPP: [
     {
@@ -228,12 +232,14 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Full tuition waiver + monthly stipend",
       requirements: ["BAC II grade A or B", "Top 10% of RUPP entrance exam applicants", "English proficiency (IELTS 5.5+ or equivalent)"],
       examDate: "Early September (entrance exam) — illustrative date, verify with RUPP",
+      tags: ["computer_science", "information_technology", "data_science", "engineering", "business", "education", "social_sciences"], meritBased: true, needBased: false,
     },
     {
       name: "Rural Student Support Grant",
       coverage: "50% tuition reduction",
       requirements: ["Household registered in a rural province", "BAC II grade B or above", "Recommendation letter from high school director"],
       examDate: "Rolling application, before intake deadline — illustrative date, verify with RUPP",
+      tags: ["computer_science", "information_technology", "data_science", "engineering", "business", "education", "social_sciences"], meritBased: false, needBased: true,
     },
   ],
   ITC: [
@@ -242,12 +248,14 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Full tuition + dormitory housing",
       requirements: ["BAC II grade A in Mathematics and Physics", "Pass ITC's Tronc Commun entrance exam", "Cambodian citizenship"],
       examDate: "Late August (entrance exam) — illustrative date, verify with ITC",
+      tags: ["engineering", "software_engineering", "information_technology", "cybersecurity", "data_science"], meritBased: true, needBased: false,
     },
     {
       name: "Women in Engineering Scholarship",
       coverage: "75% tuition reduction",
       requirements: ["Female applicant", "BAC II grade B or above in a science track", "Interview with the Faculty of Electrical Engineering"],
       examDate: "September, alongside general admissions — illustrative date, verify with ITC",
+      tags: ["engineering"], meritBased: true, needBased: false,
     },
   ],
   AUPP: [
@@ -256,12 +264,14 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Up to 100% tuition, renewable yearly with GPA requirement",
       requirements: ["BAC II grade A", "SAT/AUPP placement test in top bracket", "Personal statement + interview"],
       examDate: "Rolling — placement test scheduled after application, typically July–August (illustrative)",
+      tags: ["business", "information_technology", "computer_science", "software_engineering", "law", "social_sciences", "design"], meritBased: true, needBased: false,
     },
     {
       name: "Need-Based Financial Aid Grant",
       coverage: "25%–60% tuition, based on demonstrated need",
       requirements: ["Family income documentation", "BAC II grade C or above", "Completed financial aid application form"],
       examDate: "Reviewed on a rolling basis each semester — illustrative, verify with AUPP admissions",
+      tags: ["business", "information_technology", "computer_science", "software_engineering", "law", "social_sciences", "design"], meritBased: false, needBased: true,
     },
   ],
   NUM: [
@@ -270,12 +280,14 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Full tuition for Year 1, merit-renewable after",
       requirements: ["BAC II grade A", "Top scorer on NUM's own entrance assessment", "Enrollment in Management, Accounting, Finance or Law"],
       examDate: "Early September (entrance assessment) — illustrative date, verify with NUM",
+      tags: ["business", "finance", "accounting", "law"], meritBased: true, needBased: false,
     },
     {
       name: "Provincial Access Scholarship",
       coverage: "40% tuition reduction",
       requirements: ["Household outside Phnom Penh", "BAC II grade B or above", "Commitment letter to complete the full program"],
       examDate: "Rolling, before each semester intake — illustrative date, verify with NUM",
+      tags: ["business", "finance", "accounting", "information_technology", "law", "social_sciences"], meritBased: false, needBased: true,
     },
   ],
   RULE: [
@@ -284,12 +296,14 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Full tuition for the Trilingual (French) Law Program + study-exchange stipend",
       requirements: ["BAC II grade B or above", "French proficiency (DELF B1 or equivalent)", "Pass RULE's Trilingual Program entrance interview"],
       examDate: "Late August (entrance interview) — illustrative date, verify with RULE",
+      tags: ["law"], meritBased: true, needBased: false,
     },
     {
       name: "Public Service Merit Award",
       coverage: "50% tuition reduction",
       requirements: ["BAC II grade B or above", "Essay on public administration or legal reform in Cambodia", "Interview with the Faculty of Public Administration"],
       examDate: "September, alongside general admissions — illustrative date, verify with RULE",
+      tags: ["law", "social_sciences"], meritBased: true, needBased: false,
     },
   ],
   CADT: [
@@ -298,12 +312,14 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Full tuition + laptop stipend",
       requirements: ["BAC II grade A in Mathematics", "Pass CADT's own entrance exam in top applicants", "Basic coding assessment (no prior experience required)"],
       examDate: "Early September (entrance exam) — illustrative date, verify with CADT",
+      tags: ["computer_science", "software_engineering", "data_science", "cybersecurity", "information_technology"], meritBased: true, needBased: false,
     },
     {
       name: "Women in Tech Grant",
       coverage: "60% tuition reduction",
       requirements: ["Female applicant", "BAC II grade B or above", "Short motivation essay on digital technology in Cambodia"],
       examDate: "Rolling, before intake deadline — illustrative date, verify with CADT",
+      tags: ["computer_science", "software_engineering", "data_science", "cybersecurity", "information_technology", "business"], meritBased: false, needBased: true,
     },
   ],
   UHS: [
@@ -312,12 +328,80 @@ export const UNI_SCHOLARSHIPS = {
       coverage: "Full tuition for Medicine, Pharmacy or Dentistry programs",
       requirements: ["BAC II grade A in Biology and Chemistry", "Top scorer on UHS entrance exam", "Commitment to public-hospital service after graduation (per program terms)"],
       examDate: "Late August (entrance exam) — illustrative date, verify with UHS",
+      tags: ["medicine"], meritBased: true, needBased: false,
     },
     {
       name: "Provincial Health Workforce Grant",
       coverage: "50% tuition reduction for Nursing, Midwifery or Medical Laboratory Technology",
       requirements: ["Household outside Phnom Penh", "BAC II grade B or above in a science track", "Commitment letter to serve in a provincial health facility post-graduation"],
       examDate: "Rolling, before intake deadline — illustrative date, verify with UHS",
+      tags: ["medicine"], meritBased: false, needBased: true,
     },
   ],
+};
+
+/* Placeholder admissions/cost/format data — NOT sourced from official pages, same status as
+   UNI_SCHOLARSHIPS above (illustrative prototype values, not verified). `location` is the one
+   real field here (Cambodia's major universities are all based in Phnom Penh); tuition, budget
+   tier, language mix, deadline and subject tags are all invented for the Discovery Engine's
+   filters and "why this matches you" scoring until real figures replace them. `tags` uses the
+   same ids as UNI_FIELDS (see Frontend/App.jsx) so a student's onboarding major maps directly
+   onto a university's offerings with no separate vocabulary to keep in sync. */
+export const UNI_PROFILE_INFO = {
+  RUPP: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 300, max: 900 },
+    budgetTier: "low",
+    languageOfInstruction: ["Khmer", "English"],
+    admissionsDeadline: "Late August (illustrative — verify with RUPP)",
+    tags: ["computer_science", "information_technology", "data_science", "engineering", "business", "education", "social_sciences"],
+  },
+  ITC: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 350, max: 1000 },
+    budgetTier: "low",
+    languageOfInstruction: ["Khmer", "English"],
+    admissionsDeadline: "Late August (Tronc Commun entrance exam) — illustrative, verify with ITC",
+    tags: ["engineering", "software_engineering", "information_technology", "cybersecurity", "data_science", "business"],
+  },
+  AUPP: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 4000, max: 7000 },
+    budgetTier: "high",
+    languageOfInstruction: ["English"],
+    admissionsDeadline: "Rolling, placement test typically July–August — illustrative, verify with AUPP",
+    tags: ["business", "information_technology", "computer_science", "software_engineering", "law", "social_sciences", "design"],
+  },
+  NUM: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 300, max: 900 },
+    budgetTier: "low",
+    languageOfInstruction: ["Khmer", "English"],
+    admissionsDeadline: "Early September (entrance assessment) — illustrative, verify with NUM",
+    tags: ["business", "finance", "accounting", "information_technology", "law", "social_sciences"],
+  },
+  RULE: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 300, max: 800 },
+    budgetTier: "low",
+    languageOfInstruction: ["Khmer", "French", "English"],
+    admissionsDeadline: "Late August — illustrative, verify with RULE",
+    tags: ["law", "business", "finance", "accounting", "social_sciences"],
+  },
+  CADT: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 250, max: 700 },
+    budgetTier: "low",
+    languageOfInstruction: ["Khmer", "English"],
+    admissionsDeadline: "Early September (entrance exam) — illustrative, verify with CADT",
+    tags: ["computer_science", "software_engineering", "data_science", "cybersecurity", "information_technology", "business"],
+  },
+  UHS: {
+    location: "Phnom Penh",
+    tuitionUSDPerYear: { min: 500, max: 1500 },
+    budgetTier: "medium",
+    languageOfInstruction: ["Khmer"],
+    admissionsDeadline: "Late August (entrance exam) — illustrative, verify with UHS",
+    tags: ["medicine"],
+  },
 };

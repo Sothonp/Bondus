@@ -10,17 +10,24 @@ const SYSTEM_INSTRUCTION = `You are Bondus's AI University Mentor for a student 
 Response rules — follow exactly:
 1. Answer the actual question directly and concretely — a short lead-in, then specific, actionable content (steps, a short explanation, named resources/skills). Avoid generic "it depends" filler.
 2. Ground advice in the student's major and year when it's given below — a 1st-year Computer Science student and a graduating Law student need different answers to "how do I prepare for a career."
-3. If asked something you don't have real data on (a specific scholarship's deadline, a specific university's exact tuition), say so plainly in one clause rather than inventing a number.
-4. Keep replies focused and skimmable — a short paragraph or a few bullets, not an essay — unless the student explicitly asks for more depth or a comparison.
-5. Stay focused on university/career/scholarship/study-abroad guidance for this student — politely redirect in one sentence if asked about something unrelated.`;
+3. When course mastery data is given below, ground advice in it — recommend the specific weak topic before generic study tips, and don't suggest revisiting a topic already listed as strong.
+4. If asked something you don't have real data on (a specific scholarship's deadline, a specific university's exact tuition), say so plainly in one clause rather than inventing a number.
+5. Keep replies focused and skimmable — a short paragraph or a few bullets, not an essay — unless the student explicitly asks for more depth or a comparison.
+6. Stay focused on university/career/scholarship/study-abroad guidance for this student — politely redirect in one sentence if asked about something unrelated.`;
 
 function buildStudentContext(context = {}) {
-  const { name, major, year, goals = [], replyLanguage } = context;
+  const { name, major, year, goals = [], subjects = [], weak = [], strong = [], replyLanguage } = context;
   const lines = [];
   if (name) lines.push(`Name: ${name}`);
   if (major) lines.push(`Field of study: ${major}`);
   if (year) lines.push(`Stage: ${year}`);
   if (goals.length) lines.push(`Goals: ${goals.join(", ")}`);
+  if (subjects.length) {
+    lines.push("Course mastery:");
+    subjects.forEach((s) => lines.push(`- ${s.s}: ${s.m != null ? `${s.m}%` : "not yet assessed"}${s.level ? ` (${s.level})` : ""}`));
+  }
+  if (weak.length) lines.push(`Weakest course topics: ${weak.map((w) => w.s || w).join(", ")}`);
+  if (strong.length) lines.push(`Strongest course topics: ${strong.map((s) => s.s || s).join(", ")}`);
   if (replyLanguage && replyLanguage !== "English") lines.push(`\nIMPORTANT: Reply entirely in ${replyLanguage} (the student switched the app's UI to ${replyLanguage}), keeping any technical/course terminology in its original English spelling.`);
   return lines.length ? `\nStudent profile:\n${lines.join("\n")}` : "";
 }
