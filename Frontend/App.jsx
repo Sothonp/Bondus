@@ -1741,11 +1741,149 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
 }
 
 /* ════════════════════════ Browse (field-aware) ════════════════════════ */
-/* Scanned official exam papers, keyed by "Subject-Year". Only entries present here get a working
-   View button — everything else stays a no-op until its pages are added. */
-const EXAM_PAPER_IMAGES = {
-  "Mathematics-2025": ["/exams/science-math-2025.jpg", "/exams/science-math-2025-2.jpg", "/exams/science-math-2025-3.jpg"],
+/* Official exam papers, keyed by "Subject-Track-Year" (track = p.field: "science" or
+   "social_science") since the same subject differs by track — e.g. Mathematics is a 125-mark,
+   150-minute Science paper but a 75-mark Social Science one, so a Social Science student must
+   never be shown the Science paper under a plain "Mathematics-Year" key. Only entries present
+   in EXAM_PAPER_PDFS or EXAM_PAPER_IMAGES get a working View button — everything else stays a
+   no-op (shown as "Coming soon") until its pages are added.
+
+   EXAM_PAPER_PDFS holds the real source document itself (embedded via <iframe>, native browser
+   PDF viewer — full quality, zoomable, no re-rendering step). Prefer this format for anything
+   newly added. EXAM_PAPER_IMAGES is the older per-page-JPG format, kept only for entries that
+   predate the PDF-embed approach.
+
+   Every entry below is a real official paper (question paper + answer key where the source
+   provides one) — most of this set (2014–2019, 2021, 2022, both tracks, nearly every subject)
+   comes straight from HELMAB/bacii's own per-subject PDF archive on GitHub, already split one
+   file per subject/year/track so no page-extraction was needed. "Mathematics-science-2017" is
+   the one exception, extracted page-for-page from a compiled exam archive sourced from
+   document4khmer.wordpress.com's Bac-tagged posts, predating the bulk import. 2020 has no papers
+   in either source (Cambodia's national exam was cancelled that year), and 2023–2026 aren't
+   published yet anywhere either source could find — those stay "Coming soon" until sourced. */
+const EXAM_PAPER_PDFS = {
+  "Mathematics-science-2017": "/exams/science-math-2017.pdf",
+  "Biology-science-2014": "/exams/science-biology-2014.pdf",
+  "Biology-science-2015": "/exams/science-biology-2015.pdf",
+  "Biology-science-2016": "/exams/science-biology-2016.pdf",
+  "Biology-science-2017": "/exams/science-biology-2017.pdf",
+  "Biology-science-2018": "/exams/science-biology-2018.pdf",
+  "Biology-science-2019": "/exams/science-biology-2019.pdf",
+  "Biology-science-2021": "/exams/science-biology-2021.pdf",
+  "Biology-science-2022": "/exams/science-biology-2022.pdf",
+  "Chemistry-science-2014": "/exams/science-chemistry-2014.pdf",
+  "Chemistry-science-2015": "/exams/science-chemistry-2015.pdf",
+  "Chemistry-science-2016": "/exams/science-chemistry-2016.pdf",
+  "Chemistry-science-2017": "/exams/science-chemistry-2017.pdf",
+  "Chemistry-science-2018": "/exams/science-chemistry-2018.pdf",
+  "Chemistry-science-2019": "/exams/science-chemistry-2019.pdf",
+  "Chemistry-science-2021": "/exams/science-chemistry-2021.pdf",
+  "Chemistry-science-2022": "/exams/science-chemistry-2022.pdf",
+  "Earth Science-social_science-2016": "/exams/social-earth-science-2016.pdf",
+  "Earth Science-social_science-2017": "/exams/social-earth-science-2017.pdf",
+  "Earth Science-social_science-2018": "/exams/social-earth-science-2018.pdf",
+  "Earth Science-social_science-2019": "/exams/social-earth-science-2019.pdf",
+  "Earth Science-social_science-2021": "/exams/social-earth-science-2021.pdf",
+  "Earth Science-social_science-2022": "/exams/social-earth-science-2022.pdf",
+  "English-science-2014": "/exams/science-english-2014.pdf",
+  "English-science-2015": "/exams/science-english-2015.pdf",
+  "English-science-2016": "/exams/science-english-2016.pdf",
+  "English-science-2017": "/exams/science-english-2017.pdf",
+  "English-science-2018": "/exams/science-english-2018.pdf",
+  "English-science-2019": "/exams/science-english-2019.pdf",
+  "English-science-2021": "/exams/science-english-2021.pdf",
+  "English-science-2022": "/exams/science-english-2022.pdf",
+  "English-social_science-2014": "/exams/social-english-2014.pdf",
+  "English-social_science-2015": "/exams/social-english-2015.pdf",
+  "English-social_science-2016": "/exams/social-english-2016.pdf",
+  "English-social_science-2017": "/exams/social-english-2017.pdf",
+  "English-social_science-2018": "/exams/social-english-2018.pdf",
+  "English-social_science-2019": "/exams/social-english-2019.pdf",
+  "English-social_science-2021": "/exams/social-english-2021.pdf",
+  "English-social_science-2022": "/exams/social-english-2022.pdf",
+  "French-science-2014": "/exams/science-french-2014.pdf",
+  "French-science-2015": "/exams/science-french-2015.pdf",
+  "French-science-2016": "/exams/science-french-2016.pdf",
+  "French-science-2017": "/exams/science-french-2017.pdf",
+  "French-social_science-2014": "/exams/social-french-2014.pdf",
+  "French-social_science-2015": "/exams/social-french-2015.pdf",
+  "French-social_science-2016": "/exams/social-french-2016.pdf",
+  "French-social_science-2017": "/exams/social-french-2017.pdf",
+  "French-social_science-2018": "/exams/social-french-2018.pdf",
+  "French-social_science-2019": "/exams/social-french-2019.pdf",
+  "French-social_science-2021": "/exams/social-french-2021.pdf",
+  "Geography-social_science-2014": "/exams/social-geography-2014.pdf",
+  "Geography-social_science-2015": "/exams/social-geography-2015.pdf",
+  "Geography-social_science-2016": "/exams/social-geography-2016.pdf",
+  "Geography-social_science-2017": "/exams/social-geography-2017.pdf",
+  "Geography-social_science-2019": "/exams/social-geography-2019.pdf",
+  "Geography-social_science-2021": "/exams/social-geography-2021.pdf",
+  "Geography-social_science-2022": "/exams/social-geography-2022.pdf",
+  "History-science-2014": "/exams/science-history-2014.pdf",
+  "History-science-2015": "/exams/science-history-2015.pdf",
+  "History-science-2016": "/exams/science-history-2016.pdf",
+  "History-science-2017": "/exams/science-history-2017.pdf",
+  "History-science-2018": "/exams/science-history-2018.pdf",
+  "History-science-2019": "/exams/science-history-2019.pdf",
+  "History-science-2021": "/exams/science-history-2021.pdf",
+  "History-science-2022": "/exams/science-history-2022.pdf",
+  "History-social_science-2014": "/exams/social-history-2014.pdf",
+  "History-social_science-2015": "/exams/social-history-2015.pdf",
+  "History-social_science-2016": "/exams/social-history-2016.pdf",
+  "History-social_science-2017": "/exams/social-history-2017.pdf",
+  "History-social_science-2018": "/exams/social-history-2018.pdf",
+  "History-social_science-2019": "/exams/social-history-2019.pdf",
+  "History-social_science-2021": "/exams/social-history-2021.pdf",
+  "History-social_science-2022": "/exams/social-history-2022.pdf",
+  "Khmer Literature-science-2014": "/exams/science-literature-2014.pdf",
+  "Khmer Literature-science-2015": "/exams/science-literature-2015.pdf",
+  "Khmer Literature-science-2016": "/exams/science-literature-2016.pdf",
+  "Khmer Literature-science-2017": "/exams/science-literature-2017.pdf",
+  "Khmer Literature-science-2018": "/exams/science-literature-2018.pdf",
+  "Khmer Literature-science-2019": "/exams/science-literature-2019.pdf",
+  "Khmer Literature-science-2021": "/exams/science-literature-2021.pdf",
+  "Khmer Literature-science-2022": "/exams/science-literature-2022.pdf",
+  "Khmer Literature-social_science-2014": "/exams/social-literature-2014.pdf",
+  "Khmer Literature-social_science-2015": "/exams/social-literature-2015.pdf",
+  "Khmer Literature-social_science-2016": "/exams/social-literature-2016.pdf",
+  "Khmer Literature-social_science-2017": "/exams/social-literature-2017.pdf",
+  "Khmer Literature-social_science-2018": "/exams/social-literature-2018.pdf",
+  "Khmer Literature-social_science-2019": "/exams/social-literature-2019.pdf",
+  "Khmer Literature-social_science-2021": "/exams/social-literature-2021.pdf",
+  "Khmer Literature-social_science-2022": "/exams/social-literature-2022.pdf",
+  "Mathematics-science-2014": "/exams/science-math-2014.pdf",
+  "Mathematics-science-2015": "/exams/science-math-2015.pdf",
+  "Mathematics-science-2016": "/exams/science-math-2016.pdf",
+  "Mathematics-science-2018": "/exams/science-math-2018.pdf",
+  "Mathematics-science-2019": "/exams/science-math-2019.pdf",
+  "Mathematics-science-2021": "/exams/science-math-2021.pdf",
+  "Mathematics-science-2022": "/exams/science-math-2022.pdf",
+  "Mathematics-social_science-2014": "/exams/social-math-2014.pdf",
+  "Mathematics-social_science-2015": "/exams/social-math-2015.pdf",
+  "Mathematics-social_science-2016": "/exams/social-math-2016.pdf",
+  "Mathematics-social_science-2017": "/exams/social-math-2017.pdf",
+  "Mathematics-social_science-2018": "/exams/social-math-2018.pdf",
+  "Mathematics-social_science-2019": "/exams/social-math-2019.pdf",
+  "Mathematics-social_science-2021": "/exams/social-math-2021.pdf",
+  "Mathematics-social_science-2022": "/exams/social-math-2022.pdf",
+  "Morality-social_science-2014": "/exams/social-morality-2014.pdf",
+  "Morality-social_science-2015": "/exams/social-morality-2015.pdf",
+  "Morality-social_science-2016": "/exams/social-morality-2016.pdf",
+  "Morality-social_science-2017": "/exams/social-morality-2017.pdf",
+  "Morality-social_science-2018": "/exams/social-morality-2018.pdf",
+  "Morality-social_science-2019": "/exams/social-morality-2019.pdf",
+  "Morality-social_science-2021": "/exams/social-morality-2021.pdf",
+  "Morality-social_science-2022": "/exams/social-morality-2022.pdf",
+  "Physics-science-2014": "/exams/science-physics-2014.pdf",
+  "Physics-science-2015": "/exams/science-physics-2015.pdf",
+  "Physics-science-2016": "/exams/science-physics-2016.pdf",
+  "Physics-science-2017": "/exams/science-physics-2017.pdf",
+  "Physics-science-2018": "/exams/science-physics-2018.pdf",
+  "Physics-science-2019": "/exams/science-physics-2019.pdf",
+  "Physics-science-2021": "/exams/science-physics-2021.pdf",
+  "Physics-science-2022": "/exams/science-physics-2022.pdf",
 };
+const EXAM_PAPER_IMAGES = {};
 
 function ExamPaperPage({ paper, onBack }) {
   return (
@@ -1755,14 +1893,18 @@ function ExamPaperPage({ paper, onBack }) {
       </button>
       <div>
         <h2 className="eai-display text-2xl font-extrabold">{paper.title}</h2>
-        <p className="eai-muted text-sm mt-1">Scroll down to see every page of the official paper.</p>
+        <p className="eai-muted text-sm mt-1">{paper.pdf ? "The official paper, viewable and downloadable below." : "Scroll down to see every page of the official paper."}</p>
       </div>
       <div className="eai-card p-4 sm:p-6">
-        <div className="space-y-4">
-          {paper.images.map((src, i) => (
-            <img key={i} src={src} alt={`${paper.title} — page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", display: "block" }} />
-          ))}
-        </div>
+        {paper.pdf ? (
+          <iframe src={paper.pdf} title={paper.title} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", height: "80vh" }} />
+        ) : (
+          <div className="space-y-4">
+            {paper.images.map((src, i) => (
+              <img key={i} src={src} alt={`${paper.title} — page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", display: "block" }} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1816,6 +1958,10 @@ function Browse({ p, lang = "en" }) {
         {[...p.subjects].sort((a, b) => (a.tag === "weak" ? -1 : b.tag === "weak" ? 1 : 0)).map((sub) => {
           const diff = levelToDifficulty(sub.level);
           const dc = diff === "Hard" ? "var(--ember)" : diff === "Medium" ? "var(--gold)" : "var(--jade)";
+          const key = `${sub.s}-${p.field}-${year}`;
+          const pdf = EXAM_PAPER_PDFS[key];
+          const images = EXAM_PAPER_IMAGES[key];
+          const hasPaper = Boolean(pdf || images);
           return (
             <div key={sub.s} className="eai-card eai-tile p-5">
               <div className="flex items-start justify-between">
@@ -1833,15 +1979,24 @@ function Browse({ p, lang = "en" }) {
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
               </div>
               <div className="flex gap-2 mt-4">
-                <button
-                  onClick={() => {
-                    const images = EXAM_PAPER_IMAGES[`${sub.s}-${year}`];
-                    if (images) setViewingPaper({ title: `${sub.s} · BAC II ${year}`, images });
-                  }}
-                  className={`eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
-                  <Eye size={14} /> {t(lang, "viewWord")}
-                </button>
-                <button className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center" style={{ color: "var(--ink)" }}><Download size={14} /></button>
+                {hasPaper ? (
+                  <button
+                    onClick={() => setViewingPaper({ title: `${sub.s} · BAC II ${year}`, pdf, images })}
+                    className={`eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                    <Eye size={14} /> {t(lang, "viewWord")}
+                  </button>
+                ) : (
+                  <button disabled title={t(lang, "comingSoon")}
+                    className={`eai-btn flex-1 text-sm py-2 flex items-center justify-center gap-1.5 eai-soft cursor-not-allowed ${lang === "km" ? "eai-km" : ""}`}
+                    style={{ color: "var(--muted)" }}>
+                    <Eye size={14} /> {t(lang, "comingSoon")}
+                  </button>
+                )}
+                {pdf ? (
+                  <a href={pdf} download className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center" style={{ color: "var(--ink)" }}><Download size={14} /></a>
+                ) : (
+                  <button disabled={!images} className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50" style={{ color: "var(--ink)" }}><Download size={14} /></button>
+                )}
               </div>
             </div>
           );
