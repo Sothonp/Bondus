@@ -1618,7 +1618,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 /* ════════════════════════ Dashboard ════════════════════════ */
 const PERSONALIZATION_PERKS = {
   en: ["Personalized study roadmap", "AI recommendations", "Subject mastery analysis", "Adaptive practice questions", "BAC II paper recommendations", "Progress tracking"],
-  km: ["ផែនទីសិក្សាផ្ទាល់ខ្លួន", "អនុសាសន៍ AI", "ការវិភាគសមត្ថភាពមុខវិជ្ជា", "សំណួរអនុវត្តន៍សម្របតាមកម្រិត", "អនុសាសន៍ក្រដាសប្រឡង BAC II", "តាមដានវឌ្ឍនភាព"],
+  km: ["ផែនទីសិក្សាផ្ទាល់ខ្លួន", "អនុសាសន៍ AI", "ការវិភាគសមត្ថភាពមុខវិជ្ជា", "សំណួរអនុវត្តន៍សម្របតាមកម្រិត", "អនុសាសន៍ក្រដាសប្រឡង បាក់ឌុប", "តាមដានវឌ្ឍនភាព"],
 };
 
 function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, onDismissBanner, lang = "en" }) {
@@ -1885,27 +1885,31 @@ const EXAM_PAPER_PDFS = {
 };
 const EXAM_PAPER_IMAGES = {};
 
-function ExamPaperPage({ paper, onBack }) {
+function ExamPaperPage({ paper, onBack, lang = "en" }) {
+  // Localized on every render from the raw subject/year, not baked into a string at click-time —
+  // otherwise toggling language while already on this page would leave the title stuck in
+  // whichever language was active the moment "View" was clicked.
+  const title = `${subjectLabel(paper.subject, lang)} · ${bacIILabel(lang)} ${paper.year}`;
   return (
     <div className="space-y-5 eai-rise">
-      <button onClick={onBack} className="eai-focus flex items-center gap-1 text-sm eai-muted">
-        <ChevronLeft size={16} /> All exams
+      <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
+        <ChevronLeft size={16} /> {t(lang, "allExamsWord")}
       </button>
       <div>
-        <h2 className="eai-display text-2xl font-extrabold">{paper.title}</h2>
-        <p className="eai-muted text-sm mt-1">{paper.pdf ? "The official paper, viewable and downloadable below." : "Scroll down to see every page of the official paper."}</p>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{title}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{paper.pdf ? t(lang, "pdfPaperDesc") : t(lang, "imagePaperDesc")}</p>
       </div>
-      <div className="eai-card p-4 sm:p-6">
-        {paper.pdf ? (
-          <iframe src={paper.pdf} title={paper.title} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", height: "80vh" }} />
-        ) : (
+      {paper.pdf ? (
+        <iframe src={`${paper.pdf}#view=FitH`} title={title} className="w-full block" style={{ height: "88vh", border: "none" }} />
+      ) : (
+        <div className="eai-card p-4 sm:p-6">
           <div className="space-y-4">
             {paper.images.map((src, i) => (
-              <img key={i} src={src} alt={`${paper.title} — page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", display: "block" }} />
+              <img key={i} src={src} alt={`${title} — page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", display: "block" }} />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1936,14 +1940,14 @@ const SUBJECT_DURATION_MIN = {
 function Browse({ p, lang = "en" }) {
   const [year, setYear] = useState(2023);
   const [viewingPaper, setViewingPaper] = useState(null);
-  if (viewingPaper) return <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} />;
+  if (viewingPaper) return <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} lang={lang} />;
   const diffLabel = (d) => (lang === "km" ? { Easy: "ងាយ", Medium: "មធ្យម", Hard: "ពិបាក" }[d] : d);
   return (
     <div className="space-y-5 eai-rise">
       <div>
         <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "browseTitle")}</h2>
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>
-          {p.grade === "university" ? t(lang, "universityEntrance") : "BAC II"} · {lang === "km" ? FIELD_META[p.field].km : FIELD_META[p.field].label} {t(lang, "trackWord")} · {t(lang, "officialPapers")} 2010–2026
+          {p.grade === "university" ? t(lang, "universityEntrance") : bacIILabel(lang)} · {lang === "km" ? FIELD_META[p.field].km : FIELD_META[p.field].label} {t(lang, "trackWord")} · {t(lang, "officialPapers")} 2010–2026
         </p>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 eai-scroll">
@@ -1973,7 +1977,7 @@ function Browse({ p, lang = "en" }) {
                   : <Bookmark size={16} className="eai-muted" />}
               </div>
               <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sub.s, lang)}</h3>
-              <p className="text-xs eai-muted mt-0.5">BAC II {year} · {SUBJECT_DURATION_MIN[p.field]?.[sub.s] ?? 180} {t(lang, "minAbbrev")} · {SUBJECT_FULL_MARKS[p.field]?.[sub.s] ?? 100} {t(lang, "marksWord")}</p>
+              <p className="text-xs eai-muted mt-0.5">{bacIILabel(lang)} {year} · {SUBJECT_DURATION_MIN[p.field]?.[sub.s] ?? 180} {t(lang, "minAbbrev")} · {SUBJECT_FULL_MARKS[p.field]?.[sub.s] ?? 100} {t(lang, "marksWord")}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
@@ -1981,7 +1985,7 @@ function Browse({ p, lang = "en" }) {
               <div className="flex gap-2 mt-4">
                 {hasPaper ? (
                   <button
-                    onClick={() => setViewingPaper({ title: `${sub.s} · BAC II ${year}`, pdf, images })}
+                    onClick={() => setViewingPaper({ subject: sub.s, year, pdf, images })}
                     className={`eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
                     <Eye size={14} /> {t(lang, "viewWord")}
                   </button>
@@ -2241,6 +2245,9 @@ const SUBJECT_LABEL_KM = {
   Geography: "ភូមិវិទ្យា", Morality: "សីលធម៌ពលរដ្ឋវិទ្យា", "Earth Science": "ផែនដីវិទ្យា",
 };
 const subjectLabel = (subject, lang) => (lang === "km" ? (SUBJECT_LABEL_KM[subject] ?? subject) : subject);
+// "BAC II" is the official exam's Latin-script name — most Khmer education sites and documents
+// still write it that way, but Bondus's own Khmer copy uses the transliteration.
+const bacIILabel = (lang) => (lang === "km" ? "បាក់ឌុប" : "BAC II");
 
 const EXERCISE_BANK_RAW = RAW_EXERCISES;
 function getExercises(subject, lang = "en") {
@@ -5655,7 +5662,7 @@ const SUPER_PLANS = [
       "Full user experience (XP, streaks, leaderboards)",
     ],
     featuresKm: [
-      "ក្រដាសប្រឡង BAC II ចាស់ៗ",
+      "ក្រដាសប្រឡង បាក់ឌុប ចាស់ៗ",
       "ការដាក់ពិន្ទុសាមញ្ញ (ជម្រើសពហុ + ត្រូវ/ខុស តែប៉ុណ្ណោះ គ្មានការពន្យល់)",
       "៤ លំហាត់ក្នុងមួយថ្ងៃ ពីប្រភេទប្រឡងណាមួយ",
       "តេស្តវាយតម្លៃភាសាដោយ AI ១ដង (CEFR A1–C2)",
@@ -5881,6 +5888,8 @@ const STRINGS = {
     browseTitle: "Browse exams", universityEntrance: "University entrance", trackWord: "track", officialPapers: "official papers",
     recommendedForYou: "Recommended for you", minAbbrev: "min", marksWord: "marks",
     matchesLevel: "Matches your", answerSheetReady: "Answer sheet ✓", viewWord: "View",
+    allExamsWord: "All exams", pdfPaperDesc: "The official paper, viewable and downloadable below.",
+    imagePaperDesc: "Scroll down to see every page of the official paper.",
     // Practice
     practiceTitle: "Practice & mock exams",
     practiceDesc: "Pick a subject. Every exercise is auto-corrected with an explanation and the formula to use, and you can mark each one Pending, In progress, or Completed.",
@@ -6028,9 +6037,11 @@ const STRINGS = {
     langHubSubtitle: "ផែនទីបង្ហាញផ្លូវផ្អែកលើការធ្វើតេស្តវាយតម្លៃ និងតេស្តសាកល្បង AI មិនកំណត់ ជាមួយពិន្ទុសម្រាប់ជំនាញនីមួយៗ។",
     takeDiagnostic: "ធ្វើតេស្តវាយតម្លៃ", retakeDiagnostic: "ធ្វើតេស្តវាយតម្លៃម្តងទៀត", comingSoon: "មកដល់ឆាប់ៗនេះ",
     // Browse
-    browseTitle: "រកមើលកម្រងសំណួរប្រឡង", universityEntrance: "ប្រឡងចូលសាកលវិទ្យាល័យ", trackWord: "ផ្នែក", officialPapers: "ក្រដាសប្រឡងផ្លូវការ",
+    browseTitle: "រកមើលកម្រងសំណួរប្រឡងបាក់ឌុប", universityEntrance: "ប្រឡងចូលសាកលវិទ្យាល័យ", trackWord: "ផ្នែក", officialPapers: "ក្រដាសប្រឡងផ្លូវការ",
     recommendedForYou: "បានណែនាំសម្រាប់អ្នក", minAbbrev: "នាទី", marksWord: "ពិន្ទុ",
     matchesLevel: "ត្រូវនឹងកម្រិត", answerSheetReady: "សន្លឹកចម្លើយ ✓", viewWord: "មើល",
+    allExamsWord: "ការប្រឡងទាំងអស់", pdfPaperDesc: "ក្រដាសប្រឡងផ្លូវការ អាចមើល និងទាញយកបានខាងក្រោម។",
+    imagePaperDesc: "រំកិលចុះក្រោមដើម្បីមើលគ្រប់ទំព័រនៃក្រដាសប្រឡងផ្លូវការ។",
     // Practice
     practiceTitle: "លំហាត់អនុវត្ត និងតេស្តសាកល្បង",
     practiceDesc: "ជ្រើសរើសមុខវិជ្ជាមួយ។ លំហាត់នីមួយៗត្រូវបានកែដោយស្វ័យប្រវត្តិជាមួយការពន្យល់ និងរូបមន្តត្រូវប្រើ ហើយអ្នកអាចសម្គាល់វាថា កំពុងរង់ចាំ កំពុងធ្វើ ឬបានបញ្ចប់។",
@@ -6075,7 +6086,7 @@ const STRINGS = {
     mode_major_label: "ណែនាំជំនាញ", mode_major_subtitle: "ផ្គូផ្គងមុខវិជ្ជា និងចំណាប់អារម្មណ៍របស់អ្នកទៅនឹងជំនាញសាកលវិទ្យាល័យកម្ពុជាពិតប្រាកដ", mode_major_placeholder: "សួរអំពីជំនាញ សាកលវិទ្យាល័យ ឬអាជីព…",
     // Super Bondus
     superBondusTitle: "Super Bondus",
-    superBondusDesc: "ដោះសោឧបករណ៍ BAC II ពេញលេញ — ការណែនាំដោយ AI មិនកំណត់ ក្រដាសប្រឡងចាស់ៗទាំងអស់ និងការវិភាគស៊ីជម្រៅ។",
+    superBondusDesc: "ដោះសោឧបករណ៍ បាក់ឌុប ពេញលេញ — ការណែនាំដោយ AI មិនកំណត់ ក្រដាសប្រឡងចាស់ៗទាំងអស់ និងការវិភាគស៊ីជម្រៅ។",
     allSet: "អ្នករួចរាល់ហើយ!", thanksUpgrade: "សូមអរគុណដែលសាកល្បងអាប់ក្រេតទៅជា",
     freeIncluded: "គម្រោងឥតគិតថ្លៃត្រូវបានរួមបញ្ចូលរួចហើយជាមួយគណនីរបស់អ្នក — មិនចាំបាច់ចុះឈ្មោះទេ។",
     prototypeNoPayment: "នេះជាគំរូសាកល្បង ដូច្នេះការទូទាត់មិនទាន់ភ្ជាប់មែនទែននៅឡើយទេ — គ្មានកាតត្រូវបានគិតលុយទេ។ អេក្រង់នេះបង្ហាញពីរបៀបដែលការអាប់ក្រេត Super Bondus នឹងមើលទៅដូចនៅពេលប្រព័ន្ធទូទាត់ត្រូវបានតភ្ជាប់។",
@@ -6094,7 +6105,7 @@ const STRINGS = {
     // Register
     eduLevelTitle: "តើកម្រិតការសិក្សារបស់អ្នកគឺជាអ្វី?",
     eduLevelDesc: "នេះកំណត់នូវអ្វីដែល Bondus បង្ហាញអ្នកបន្ទាប់ — ថ្នាក់វិទ្យាល័យ និងសាកលវិទ្យាល័យមានខ្លឹមសារខុសគ្នាទាំងស្រុង។",
-    highSchoolOptTitle: "វិទ្យាល័យ", highSchoolOptDesc: "ថ្នាក់ទី១១ ឬទី១២ រៀបចំសម្រាប់ការប្រឡង BAC II។",
+    highSchoolOptTitle: "វិទ្យាល័យ", highSchoolOptDesc: "ថ្នាក់ទី១១ ឬទី១២ រៀបចំសម្រាប់ការប្រឡង បាក់ឌុប។",
     universityOptTitle: "សាកលវិទ្យាល័យ", universityOptDesc: "កំពុងសិក្សានៅសាកលវិទ្យាល័យ ជាអ្នកបញ្ចប់ការសិក្សាវិទ្យាល័យ ឬកំពុងរៀបចំចូលរៀន។",
     uniGoalsTitle: "តើអ្នកកំពុងស្វែងរកអ្វី?", uniGoalsDesc: "ជ្រើសរើសអ្វីៗគ្រប់យ៉ាងដែលពាក់ព័ន្ធ — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
     uniFieldTitle: "តើជំនាញរបស់អ្នកគឺជាអ្វី?", uniFieldDesc: "ជ្រើសរើសជម្រើសដែលនិងគ្នាបំផុត — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
@@ -6110,7 +6121,7 @@ const STRINGS = {
     uniProgressComingSoon: "ការវិភាគលម្អិតអំពីវគ្គសិក្សា និងកម្រងសំណួរនឹងមកដល់ឆាប់ៗនេះ។",
     createAccountTitle: "បង្កើតគណនីរបស់អ្នក", createAccountDesc: "ព័ត៌មានមួយចំនួនដើម្បីឲ្យគ្រូបង្វឹក AI និងផែនការសិក្សាសមស្របនឹងអ្នក។",
     fullNameLabel: "ឈ្មោះពេញ", emailLabel: "អ៊ីមែល", passwordLabel: "ពាក្យសម្ងាត់", ageLabel: "អាយុ", gradeLevelLabel: "កម្រិតថ្នាក់",
-    grade11: "ថ្នាក់ទី១១", grade12: "ថ្នាក់ទី១២ (BAC II)", targetGradeLabel: "និទ្ទេសគោលដៅ", gradeWord: "និទ្ទេស",
+    grade11: "ថ្នាក់ទី១១", grade12: "ថ្នាក់ទី១២ (បាក់ឌុប)", targetGradeLabel: "និទ្ទេសគោលដៅ", gradeWord: "និទ្ទេស",
     continueToTrack: "បន្តទៅផ្នែកសិក្សា", continueWord: "បន្ត",
     chooseTrackTitle: "ជ្រើសរើសផ្នែកសិក្សារបស់អ្នក",
     chooseTrackDesc: "នេះជួយ Bondus កំណត់អាទិភាពមុខវិជ្ជា និងខ្លឹមសារប្រឡងដែលបង្ហាញលើផ្ទាំងគ្រប់គ្រងរបស់អ្នក។",
@@ -6476,7 +6487,7 @@ export default function App() {
               </div>
             </div>
           </header>
-          <main className="p-4 sm:p-6 max-w-6xl mx-auto">
+          <main className={`p-4 sm:p-6 mx-auto ${tab === "browse" ? "max-w-full" : "max-w-6xl"}`}>
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
                 {view}
