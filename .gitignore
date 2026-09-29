@@ -21,5 +21,6 @@ __pycache__/
 storage/vector_index/*
 !storage/vector_index/index.npz
 storage/ocr_cache/
+storage/llama_chunk_cache/
 *.bak
 /data

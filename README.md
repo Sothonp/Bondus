@@ -205,7 +205,7 @@ flowchart TB
         direction LR
         H["Sections +<br/>headings"] --> L["mask_latex<br/>formulas → tokens"]
         L --> K["khmer_segment<br/>word boundaries"]
-        K --> CH["chunk_text<br/>500 chars, 50 overlap"]
+        K --> CH["chunk_text<br/>500 chars, 50 overlap,<br/>or Llama 3 boundaries"]
     end
     subgraph Out["3 · Store"]
         direction LR
@@ -216,6 +216,18 @@ flowchart TB
 
 Formulas are swapped for tokens before segmentation and chunking, so no chunk
 cuts a formula in half; they are restored before the prompt is built.
+
+With `CHUNKER=llama`, a local Llama 3 8B in Ollama (`ollama pull llama3:8b`)
+chooses where chunks start in any run longer than `LLAMA_CHUNK_MAX_CHARS`: it
+sees the run as numbered sentences and answers with the numbers that open a new
+exercise, theorem or topic (`src/ingestion/llm_chunk.py`). It never rewrites
+text, and its answers are cached in `storage/llama_chunk_cache`. Without
+Ollama the recursive splitter is used.
+
+`ingest_corpus.py` is incremental: each chunk records a key from its file's
+bytes, catalog title and chunking settings, so a re-run indexes only new or
+changed files and removes deleted ones (API uploads are kept). `--force`
+re-indexes everything and `--no-prune` keeps deleted files.
 Maintenance scripts: `reembed_index.py` (switch the embedding backend without
 OCR again), `backfill_ocr.py` (OCR one file page by page within a quota), `show_chunks.py` / `export_chunks.py` (inspect
 chunks).

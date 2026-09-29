@@ -217,6 +217,23 @@ class Settings(BaseSettings):
     chunk_size: int = Field(500, ge=50, le=20000)
     chunk_overlap: int = Field(50, ge=0)
     khmer_segmenter: KhmerSegmenterBackend = "auto"
+    # "llama": a local Llama model (Ollama) chooses where chunks start, so an
+    # exercise, a theorem and its proof, or a definition and its example stay in
+    # one chunk (see ingestion.llm_chunk). Falls back to "recursive" wherever
+    # Ollama is not running. Changing it re-chunks every file on the next
+    # ingest run.
+    chunker: Literal["recursive", "llama"] = "recursive"
+    ollama_base_url: str = "http://localhost:11434"
+    llama_chunk_model: str = "llama3:8b"
+    # A chunk the model groups is held under this many characters (e5 reads 512
+    # tokens; the corpus averages ~2.5 characters per token).
+    llama_chunk_max_chars: int = Field(1000, ge=100, le=20000)
+    # The units the model groups: sentences, or pieces of one this long.
+    llama_chunk_unit_chars: int = Field(160, ge=20, le=5000)
+    # Text shown to the model per request; llama3:8b's context is 8192 tokens.
+    llama_chunk_window_chars: int = Field(2500, ge=200, le=100000)
+    llama_chunk_timeout_seconds: float = Field(180.0, gt=0)
+    llama_chunk_cache_dir: Path = PROJECT_ROOT / "storage" / "llama_chunk_cache"
 
     # --- OCR for scanned PDFs and images ---
     ocr_mode: Literal["auto", "always", "never"] = "auto"
@@ -376,6 +393,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"CHUNK_OVERLAP ({self.chunk_overlap}) must be smaller than CHUNK_SIZE ({self.chunk_size})"
             )
+        if self.llama_chunk_unit_chars >= self.llama_chunk_max_chars:
+            raise ValueError("LLAMA_CHUNK_UNIT_CHARS must be smaller than LLAMA_CHUNK_MAX_CHARS")
+        if self.llama_chunk_window_chars < self.llama_chunk_max_chars:
+            raise ValueError("LLAMA_CHUNK_WINDOW_CHARS must be at least LLAMA_CHUNK_MAX_CHARS")
         return self
 
     @property

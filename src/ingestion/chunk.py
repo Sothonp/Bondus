@@ -229,32 +229,43 @@ def chunk_text(
     page_starts: Sequence[tuple[int, int | None]] | None = None,
     heading: str = "",
     start_index: int = 0,
+    spans: Sequence[tuple[int, int]] | None = None,
 ) -> list[Chunk]:
     """Split masked text into ``Chunk`` objects, each with its own sub-vault.
 
     ``page_starts`` lists ``(offset, page)`` pairs, in offset order, for text
     that runs across pages; each chunk then gets the page it starts on and
     the page it ends on. Without it every chunk is on ``page``.
+
+    ``spans`` are ``(start, end)`` offsets chosen elsewhere (by the Llama
+    chunker, see ``llm_chunk``); the recursive splitter then does not run.
     """
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        length_function=restored_length(vault),
-    )
     starts = list(page_starts) if page_starts else [(0, page)]
     offsets = [offset for offset, _ in starts]
 
     def page_at(position: int) -> int | None:
         return starts[max(0, bisect.bisect_right(offsets, position) - 1)][1]
 
+    if spans is None:
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            length_function=restored_length(vault),
+        )
+        located: list[tuple[int, str]] = []
+        cursor = 0
+        for piece in splitter.split_text(masked_text):
+            # Pieces are in order and are exact substrings of the input.
+            position = masked_text.find(piece, cursor)
+            if position < 0:
+                position = cursor
+            cursor = position + 1
+            located.append((position, piece))
+    else:
+        located = [(start, masked_text[start:end]) for start, end in spans]
+
     chunks: list[Chunk] = []
-    cursor = 0
-    for piece in splitter.split_text(masked_text):
-        # Pieces are in order and are exact substrings of the input.
-        position = masked_text.find(piece, cursor)
-        if position < 0:
-            position = cursor
-        cursor = position + 1
+    for position, piece in located:
         text = strip_word_boundaries(piece).strip()
         if not text:
             continue

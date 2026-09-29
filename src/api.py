@@ -62,6 +62,7 @@ from src.ingestion import (
 )
 from src.ingestion.extract import clean_markdown, detect_format
 from src.ingestion.khmer_segment import KhmerSegmenter, detect_language
+from src.ingestion.llm_chunk import LlamaChunker, build_chunker
 from src.ingestion.image_ocr import HybridImageOCR, ImageInputError, ImageReading, build_image_ocr, decode_image
 from src.ingestion.ocr import CachedPageOCR, PageImage, build_ocr
 from src.retrieval.retriever import RetrievedChunk, Retriever
@@ -1190,6 +1191,7 @@ class RAGState:
     ocr: CachedPageOCR | None
     write_lock: asyncio.Lock
     image_ocr: HybridImageOCR | None = None
+    chunker: LlamaChunker | None = None
     jobs: OrderedDict[str, IngestJob] = field(default_factory=OrderedDict)
     tasks: set[asyncio.Task] = field(default_factory=set)
 
@@ -1228,6 +1230,7 @@ def build_state(
         store=store,
         retriever=retriever,
         segmenter=KhmerSegmenter(settings.khmer_segmenter),
+        chunker=build_chunker(settings),
         generator=generator or build_generator(settings),
         ocr=ocr if ocr is not None else build_ocr(settings),
         write_lock=asyncio.Lock(),
@@ -1277,6 +1280,7 @@ async def _index(state: RAGState, document: ExtractedDocument, replace: bool) ->
                 chunk_overlap=settings.chunk_overlap,
                 stem_embedding_chars=settings.stem_embedding_chars,
                 replace=replace,
+                chunker=state.chunker,
             )
         except DuplicateSourceError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

@@ -4,6 +4,7 @@ node_modules
 dist
 data
 storage/ocr_cache
+storage/llama_chunk_cache
 **/__pycache__
 .pytest_cache
 .env
