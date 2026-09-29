@@ -3,9 +3,10 @@ chunk -> embed -> index."""
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -27,6 +28,7 @@ from src.ingestion.khmer_segment import (
     segment_khmer,
 )
 from src.ingestion.latex_guard import find_placeholders, mask_latex, unmask_latex
+from src.ingestion.llm_chunk import RECURSIVE, LlamaChunker
 from src.vectorstore import ChunkRecord, InMemoryVectorStore
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,10 @@ class PreparedDocument:
     title: str = ""
     warnings: list[str] = field(default_factory=list)
     ocr_page_numbers: frozenset[int] = frozenset()
+    # "recursive", or the Llama chunker's identity when it chunked every run
+    # of the document (one fallback marks the whole document recursive, so an
+    # incremental ingest tries it again).
+    chunker: str = RECURSIVE
 
 
 @dataclass
@@ -64,6 +70,7 @@ class IndexResult:
     pages: int | None
     warnings: list[str]
     ocr_pages: int = 0
+    chunker: str = RECURSIVE
 
 
 class DuplicateSourceError(ValueError):
@@ -127,11 +134,17 @@ def prepare_document(
     chunk_size: int,
     chunk_overlap: int,
     segmenter: KhmerSegmenter,
+    chunker: LlamaChunker | None = None,
 ) -> PreparedDocument:
-    """Run the LaTeX-guarded text pipeline over a document, one heading run at a time."""
+    """Run the LaTeX-guarded text pipeline over a document, one heading run at a time.
+
+    With ``chunker`` the chunk boundaries of each run are chosen by the Llama
+    model; without it (or where it fails) by the recursive splitter.
+    """
     chunks: list[Chunk] = []
     formulas = 0
     characters = 0
+    used = {chunker.identity} if chunker is not None else {RECURSIVE}
     for stream in _heading_streams(document.sections):
         parts: list[str] = []
         page_starts: list[tuple[int, int | None]] = []
@@ -155,14 +168,21 @@ def prepare_document(
             characters += len(unmask_latex(normalized, section_vault))
         if not parts:
             continue
+        stream_text = _STREAM_SEPARATOR.join(parts)
+        spans = None
+        if chunker is not None:
+            result = chunker.spans(stream_text, vault)
+            spans = result.spans
+            used.add(result.chunker)
         stream_chunks = chunk_text(
-            _STREAM_SEPARATOR.join(parts),
+            stream_text,
             vault,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             page_starts=page_starts,
             heading=stream[0].heading,
             start_index=len(chunks),
+            spans=spans,
         )
         covered = {token for chunk in stream_chunks for token in find_placeholders(chunk.text)}
         missing = expected - covered
@@ -183,7 +203,15 @@ def prepare_document(
         ocr_page_numbers=frozenset(
             section.page for section in document.sections if section.ocr and section.page is not None
         ),
+        chunker=RECURSIVE if RECURSIVE in used else used.pop(),
     )
+
+
+def ingest_key(file_sha256: str, **settings: Any) -> str:
+    """What an indexed file was built from: its bytes and every setting that
+    shapes its chunks. An incremental ingest skips a file whose key is unchanged."""
+    payload = json.dumps({"file": file_sha256, **settings}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
 
 
 def chunk_id(source: str, chunk: Chunk) -> str:
@@ -204,14 +232,26 @@ def index_document(
     stem_embedding_chars: int = 0,
     replace: bool = True,
     persist: bool = True,
+    chunker: LlamaChunker | None = None,
+    file_sha256: str | None = None,
+    ingest_settings: dict[str, Any] | None = None,
 ) -> IndexResult:
     """Prepare, embed and store a document. Existing chunks of the same source
-    are replaced when ``replace`` is set, otherwise ``DuplicateSourceError``."""
+    are replaced when ``replace`` is set, otherwise ``DuplicateSourceError``.
+
+    ``file_sha256`` marks the chunks as coming from a corpus file, and with
+    ``ingest_settings`` records the ``ingest_key`` an incremental ingest
+    compares against. The key names the chunker that actually ran, so a
+    document that fell back to the recursive splitter is re-chunked next time."""
     if not replace and store.has_source(document.source):
         raise DuplicateSourceError(f"'{document.source}' is already indexed")
 
     prepared = prepare_document(
-        document, chunk_size=chunk_size, chunk_overlap=chunk_overlap, segmenter=segmenter
+        document,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        segmenter=segmenter,
+        chunker=chunker,
     )
     if not prepared.chunks:
         hint = " ".join(prepared.warnings)
@@ -240,6 +280,10 @@ def index_document(
         )
         for chunk in prepared.chunks
     ]
+    if file_sha256 is not None:
+        key = ingest_key(file_sha256, **(ingest_settings or {}), chunker=prepared.chunker)
+        for record in records:
+            record.metadata.update(file_sha256=file_sha256, ingest_key=key, chunker=prepared.chunker)
     removed, added = store.replace_source(prepared.source, records, vectors)
     if persist:
         store.save()
@@ -257,6 +301,7 @@ def index_document(
         pages=prepared.pages,
         warnings=prepared.warnings,
         ocr_pages=len(prepared.ocr_page_numbers),
+        chunker=prepared.chunker,
     )
 
 
@@ -269,6 +314,7 @@ __all__ = [
     "ExtractionError",
     "IndexResult",
     "KhmerSegmenter",
+    "LlamaChunker",
     "LatexIntegrityError",
     "PreparedDocument",
     "RecursiveCharacterTextSplitter",
@@ -281,6 +327,7 @@ __all__ = [
     "extract_file",
     "get_segmenter",
     "index_document",
+    "ingest_key",
     "mask_latex",
     "normalize_khmer_text",
     "prepare_document",

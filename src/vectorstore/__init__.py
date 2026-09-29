@@ -177,6 +177,14 @@ class InMemoryVectorStore:
         with self._lock:
             return any(record.source == source for record in self._records)
 
+    def source_metadata(self) -> dict[str, dict[str, Any]]:
+        """Each source's metadata, as its first chunk holds it."""
+        with self._lock:
+            found: dict[str, dict[str, Any]] = {}
+            for record in self._records:
+                found.setdefault(record.source, record.metadata)
+            return {source: dict(metadata) for source, metadata in found.items()}
+
     def sources(self) -> list[SourceSummary]:
         with self._lock:
             grouped: dict[str, list[ChunkRecord]] = {}

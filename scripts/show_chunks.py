@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.config import get_settings  # noqa: E402
 from src.ingestion import KhmerSegmenter, extract_file, prepare_document  # noqa: E402
 from src.ingestion.khmer_segment import looks_garbled  # noqa: E402
+from src.ingestion.llm_chunk import build_chunker  # noqa: E402
 from src.ingestion.ocr import build_ocr  # noqa: E402
 
 
@@ -38,11 +39,12 @@ def main() -> int:
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
         segmenter=KhmerSegmenter(settings.khmer_segmenter),
+        chunker=build_chunker(settings),
     )
 
     print(f"file    : {args.path.name}")
     print(f"pages   : {document.pages}   OCR pages: {document.ocr_pages}")
-    print(f"chunks  : {len(prepared.chunks)}   formulas: {prepared.formulas}")
+    print(f"chunks  : {len(prepared.chunks)}   formulas: {prepared.formulas}   chunker: {prepared.chunker}")
     for warning in prepared.warnings:
         print(f"warning : {warning}")
 
