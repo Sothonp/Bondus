@@ -519,12 +519,17 @@ const LEADERBOARD_SEED = [
 
 /* ════════════════════════ Theme + base styles ════════════════════════ */
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700;800&display=swap');
 
 .eai-root{ font-family:'Plus Jakarta Sans', system-ui, sans-serif; color:var(--ink);
   background:var(--bg); min-height:100vh; -webkit-font-smoothing:antialiased; }
 .eai-display{ font-family:'Sora', system-ui, sans-serif; letter-spacing:-0.02em; }
 .eai-km{ font-family:'Kantumruy Pro', system-ui, sans-serif; }
+/* High School + Khmer language: force Kantumruy Pro on every element in the app shell, overriding
+   the Sora/Plus Jakarta Sans/inline font-family rules above — so switching to Khmer doesn't depend
+   on every new component remembering to tag itself with .eai-km. Never applied to the University
+   track (see isUniProfile guard at each .eai-root that adds this class). */
+.eai-km-root, .eai-km-root *{ font-family:'Kantumruy Pro', system-ui, sans-serif !important; }
 
 .theme-light{
   --bg:#FFFFFF; --bg-soft:#F2F1F7; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
@@ -1125,7 +1130,7 @@ function OnboardingProgress({ step, lang = "en", stepLabels, stepLabelsKm }) {
 
 function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, children, lang = "en", setLang, mascotState = "idle" }) {
   return (
-    <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+    <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 20, display: "flex", gap: 8 }}>
         {setLang && <LangToggle lang={lang} setLang={setLang} />}
@@ -1338,7 +1343,7 @@ function BondusLogo() {
 
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
       <style>{STYLES}</style>
 
       {/* Decorative corner accents */}
@@ -1951,12 +1956,28 @@ function ExamPaperPage({ paper, onBack, lang = "en" }) {
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
         <ChevronLeft size={16} /> {t(lang, "allExamsWord")}
       </button>
-      <div>
-        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{title}</h2>
-        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{paper.pdf ? t(lang, "pdfPaperDesc") : t(lang, "imagePaperDesc")}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{title}</h2>
+          <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{paper.pdf ? t(lang, "pdfPaperDesc") : t(lang, "imagePaperDesc")}</p>
+        </div>
+        {paper.pdf && (
+          <a href={paper.pdf} target="_blank" rel="noopener noreferrer"
+            className={`eai-btn eai-focus text-sm py-2.5 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
+            style={{ background: "var(--primary)" }}>
+            <Download size={15} /> {t(lang, "openPdfBtn")}
+          </a>
+        )}
       </div>
       {paper.pdf ? (
-        <iframe src={`${paper.pdf}#view=FitH`} title={title} className="w-full block" style={{ height: "88vh", border: "none" }} />
+        <>
+          {/* Inline preview: works on most desktop browsers via their native PDF plugin. Many mobile
+              browsers (Chrome for Android in particular) and in-app webviews (Facebook/Instagram/TikTok)
+              don't support rendering a PDF inside an <iframe> at all and just show a blank frame — the
+              "Open PDF" button above and the note below are the reliable path on those. */}
+          <p className={`text-xs eai-muted sm:hidden ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "openPdfMobileNote")}</p>
+          <iframe src={`${paper.pdf}#view=FitH`} title={title} className="w-full block" style={{ height: "88vh", border: "none" }} />
+        </>
       ) : (
         <div className="eai-card p-4 sm:p-6">
           <div className="space-y-4">
@@ -4061,7 +4082,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
   };
 
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
       <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
         <div className="w-full eai-rise" style={{ maxWidth: 640 }}>
@@ -4121,7 +4142,7 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
   const overallLevel = masteryLevel(overall);
 
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
       <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
         <div className="w-full eai-rise" style={{ maxWidth: 640 }}>
@@ -7026,6 +7047,7 @@ const STRINGS = {
     matchesLevel: "Matches your", answerSheetReady: "Answer sheet ✓", viewWord: "View",
     allExamsWord: "All exams", pdfPaperDesc: "The official paper, viewable and downloadable below.",
     imagePaperDesc: "Scroll down to see every page of the official paper.",
+    openPdfBtn: "Open PDF", openPdfMobileNote: "Preview not loading? Some phone browsers can't show PDFs inline — tap \"Open PDF\" above to view it directly.",
     // Practice
     practiceTitle: "Practice & mock exams",
     practiceDesc: "Pick a subject. Every exercise is auto-corrected with an explanation and the formula to use, and you can mark each one Pending, In progress, or Completed.",
@@ -7176,6 +7198,7 @@ const STRINGS = {
     matchesLevel: "ត្រូវនឹងកម្រិត", answerSheetReady: "សន្លឹកចម្លើយ ✓", viewWord: "មើល",
     allExamsWord: "ការប្រឡងទាំងអស់", pdfPaperDesc: "ក្រដាសប្រឡងផ្លូវការ អាចមើល និងទាញយកបានខាងក្រោម។",
     imagePaperDesc: "រំកិលចុះក្រោមដើម្បីមើលគ្រប់ទំព័រនៃក្រដាសប្រឡងផ្លូវការ។",
+    openPdfBtn: "បើកឯកសារ PDF", openPdfMobileNote: "មើលមិនឃើញមែនទេ? កម្មវិធីរុករកទូរស័ព្ទខ្លះមិនអាចបង្ហាញ PDF ដោយផ្ទាល់បានទេ សូមចុច \"បើកឯកសារ PDF\" ខាងលើ ដើម្បីមើលវាដោយផ្ទាល់។",
     // Practice
     practiceTitle: "លំហាត់អនុវត្ត និងតេស្តសាកល្បង",
     practiceDesc: "ជ្រើសរើសមុខវិជ្ជាមួយ។ លំហាត់នីមួយៗត្រូវបានកែដោយស្វ័យប្រវត្តិជាមួយការពន្យល់ និងរូបមន្តត្រូវប្រើ ហើយអ្នកអាចសម្គាល់វាថា កំពុងរង់ចាំ កំពុងធ្វើ ឬបានបញ្ចប់។",
@@ -7558,7 +7581,7 @@ export default function App() {
   }[tab];
 
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`}>
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" && !isUniProfile ? "eai-km-root" : ""}`}>
       <style>{STYLES}</style>
       <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
       <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
