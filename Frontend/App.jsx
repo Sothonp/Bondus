@@ -31,7 +31,7 @@ const FIELD_SUBJECTS = {
 };
 
 const FIELD_META = {
-  science: { label: "Science", km: "វិទ្យាសាស្ត្រ", icon: Atom, color: "var(--primary)", blurb: "Math, physics, chemistry and biology-focused track.", blurbKm: "ផ្នែកផ្តោតលើគណិតវិទ្យា រូបវិទ្យា គីមីវិទ្យា និងជីវវិទ្យា។" },
+  science: { label: "Science", km: "វិទ្យាសាស្រ្ត", icon: Atom, color: "var(--primary)", blurb: "Math, physics, chemistry and biology-focused track.", blurbKm: "ផ្នែកផ្តោតលើគណិតវិទ្យា រូបវិទ្យា គីមីវិទ្យា និងជីវវិទ្យា។" },
   social_science: { label: "Social Science", km: "វិទ្យាសាស្ត្រសង្គម", icon: Landmark, color: "var(--gold)", blurb: "Literature, history, geography and civics-focused track.", blurbKm: "ផ្នែកផ្តោតលើអក្សរសាស្ត្រ ប្រវត្តិវិទ្យា ភូមិវិទ្យា និងសីលធម៌។" },
 };
 
@@ -569,6 +569,55 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
 @media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
 
+/* ── Liquid glass button (High School track — trial rollout) ──
+   A frosted, refractive replacement for a flat-color button: translucent tinted glass at rest
+   (blur + saturation + a bright top-rim shadow), and on hover a diagonal sheen sweeps across the
+   surface — like light refracting through moving glass — while the blur deepens and the button
+   lifts. "--glass-tint" defaults to the brand primary; pass a different token inline
+   (style={{ "--glass-tint": "var(--jade)" }}) to tint an individual button. Drop "eai-glass" onto
+   any "eai-btn" in place of a solid background/text-white — it supplies its own surface, border
+   and text color, so no other button styling is needed alongside it. */
+.eai-glass{
+  --glass-tint: var(--primary);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate; /* contains the sheen's stacking to this button, not the page behind it */
+  color: var(--ink);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-tint) 24%, transparent), color-mix(in srgb, var(--glass-tint) 6%, transparent)),
+    var(--glass-bg);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  transition: transform .4s cubic-bezier(.22,1,.36,1), box-shadow .4s cubic-bezier(.22,1,.36,1),
+    backdrop-filter .4s cubic-bezier(.22,1,.36,1), border-color .4s cubic-bezier(.22,1,.36,1);
+}
+/* the sheen itself: an oversized diagonal highlight parked just off the left edge at rest, then
+   swept through to the right on hover — inset is larger than 100% so a rotated band never clips
+   at the corners as it travels */
+.eai-glass::before{
+  content: "";
+  position: absolute;
+  inset: -50% -60%;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.55) 50%, transparent 58%);
+  transform: translateX(-130%) rotate(8deg);
+  transition: transform .7s cubic-bezier(.22,1,.36,1);
+  pointer-events: none;
+}
+.theme-dark .eai-glass::before{ background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.2) 50%, transparent 58%); }
+.eai-glass:hover{
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--glass-tint) 45%, var(--glass-line));
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--glass-tint) 22%, transparent), inset 0 1px 0 rgba(255,255,255,.4);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+}
+.eai-glass:hover::before{ transform: translateX(130%) rotate(8deg); }
+.eai-glass:active{ transform: translateY(0) scale(.98); }
+.eai-glass:disabled, .eai-glass[disabled]{ opacity:.5; cursor:not-allowed; }
+@media (prefers-reduced-motion: reduce){ .eai-glass, .eai-glass::before{ transition:none; } .eai-glass:hover{ transform:none; } }
+
 /* AI Coach chat (Claude / ChatGPT style) */
 /* Fills what is left under the app header (64px) and main's padding (2x24px).
    dvh keeps the composer clear of a mobile browser's retracting URL bar, and the
@@ -987,10 +1036,10 @@ function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, o
         <h2 className={`eai-hero-title ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? `សូមស្វាគមន៍, ${firstName}។` : `Welcome, ${firstName}.`}</h2>
         {message && <p className={`eai-hero-message ${lang === "km" ? "eai-km" : ""}`}>{message}</p>}
         <div className="eai-hero-actions">
-          <button onClick={onStartPlan} className={`eai-btn eai-focus text-white px-4 py-2.5 text-sm flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+          <button onClick={onStartPlan} className={`eai-btn eai-glass eai-focus px-4 py-2.5 text-sm flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`}>
             <Target size={16} /> {t(lang, "dashStartPlan")}
           </button>
-          <button onClick={onAskCoach} className={`eai-btn eai-focus px-4 py-2.5 text-sm flex items-center gap-2 eai-soft ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>
+          <button onClick={onAskCoach} className={`eai-btn eai-glass eai-focus px-4 py-2.5 text-sm flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`} style={{ "--glass-tint": "var(--jade)" }}>
             <Sparkles size={16} /> {t(lang, "dashAskCoach")}
           </button>
         </div>
@@ -1650,7 +1699,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
                   </span>
                 ))}
               </div>
-              <button onClick={onStartAssessment} className={`eai-btn eai-focus mt-3.5 px-4 py-2 text-xs text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+              <button onClick={onStartAssessment} className={`eai-btn eai-glass eai-focus mt-3.5 px-4 py-2 text-xs ${lang === "km" ? "eai-km" : ""}`}>
                 {t(lang, "startAssessment")}
               </button>
             </div>
@@ -1757,12 +1806,19 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
    provides one) — most of this set (2014–2019, 2021, 2022, both tracks, nearly every subject)
    comes straight from HELMAB/bacii's own per-subject PDF archive on GitHub, already split one
    file per subject/year/track so no page-extraction was needed. "Mathematics-science-2017" is
-   the one exception, extracted page-for-page from a compiled exam archive sourced from
-   document4khmer.wordpress.com's Bac-tagged posts, predating the bulk import. 2020 has no papers
-   in either source (Cambodia's national exam was cancelled that year), and 2023–2026 aren't
-   published yet anywhere either source could find — those stay "Coming soon" until sourced. */
+   an exception, extracted page-for-page from a compiled exam archive sourced from
+   document4khmer.wordpress.com's Bac-tagged posts, predating the bulk import.
+   "Mathematics-science-2023/2024/2025" are likewise extracted page-for-page (question paper +
+   full worked solutions), from a 2014–2025 compiled Math (Science track) booklet by ស៊ុន ពន្លឺ
+   supplied directly by the user. 2020 has no papers in either source (Cambodia's national exam
+   was cancelled that year), and 2026 isn't published yet anywhere either source could find —
+   that one stays "Coming soon" until sourced. Every other subject/track still has no papers for
+   2023–2026 for the same reason. */
 const EXAM_PAPER_PDFS = {
   "Mathematics-science-2017": "/exams/science-math-2017.pdf",
+  "Mathematics-science-2023": "/exams/science-math-2023.pdf",
+  "Mathematics-science-2024": "/exams/science-math-2024.pdf",
+  "Mathematics-science-2025": "/exams/science-math-2025.pdf",
   "Biology-science-2014": "/exams/science-biology-2014.pdf",
   "Biology-science-2015": "/exams/science-biology-2015.pdf",
   "Biology-science-2016": "/exams/science-biology-2016.pdf",
@@ -1889,7 +1945,7 @@ function ExamPaperPage({ paper, onBack, lang = "en" }) {
   // Localized on every render from the raw subject/year, not baked into a string at click-time —
   // otherwise toggling language while already on this page would leave the title stuck in
   // whichever language was active the moment "View" was clicked.
-  const title = `${subjectLabel(paper.subject, lang)} · ${bacIILabel(lang)} ${paper.year}`;
+  const title = `${subjectLabel(paper.subject, lang)} · ${bacIILabel(lang)} ${localizeNum(paper.year, lang)}`;
   return (
     <div className="space-y-5 eai-rise">
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
@@ -1931,6 +1987,10 @@ const SUBJECT_FULL_MARKS = {
 /* Official BAC II exam duration (minutes) per subject — also track-specific. Any subject/track
    combo not listed here (e.g. French, or Science-track subjects not yet given) falls back to 180. */
 const SUBJECT_DURATION_MIN = {
+  science: {
+    Mathematics: 150, Physics: 90, Chemistry: 90, Biology: 90,
+    "Khmer Literature": 90, History: 60, English: 60,
+  },
   social_science: {
     "Khmer Literature": 150, Mathematics: 90, "Earth Science": 60,
     History: 90, Geography: 90, Morality: 90, English: 60,
@@ -1947,14 +2007,14 @@ function Browse({ p, lang = "en" }) {
       <div>
         <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "browseTitle")}</h2>
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>
-          {p.grade === "university" ? t(lang, "universityEntrance") : bacIILabel(lang)} · {lang === "km" ? FIELD_META[p.field].km : FIELD_META[p.field].label} {t(lang, "trackWord")} · {t(lang, "officialPapers")} 2010–2026
+          {p.grade === "university" ? t(lang, "universityEntrance") : bacIILabel(lang)} · {lang === "km" ? `${t(lang, "trackWord")}${FIELD_META[p.field].km}` : `${FIELD_META[p.field].label} ${t(lang, "trackWord")}`} · {t(lang, "officialPapers")} {localizeNum(2010, lang)}–{localizeNum(2026, lang)}
         </p>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 eai-scroll">
         {YEARS.map((y) => (
           <button key={y} onClick={() => setYear(y)} className="eai-btn eai-focus px-4 py-2 text-sm flex-shrink-0"
             style={{ background: y === year ? "var(--primary)" : "var(--card)", color: y === year ? "#fff" : "var(--ink)", border: y === year ? "none" : "1px solid var(--line)" }}>
-            {y}
+            {localizeNum(y, lang)}
           </button>
         ))}
       </div>
@@ -1977,7 +2037,7 @@ function Browse({ p, lang = "en" }) {
                   : <Bookmark size={16} className="eai-muted" />}
               </div>
               <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sub.s, lang)}</h3>
-              <p className="text-xs eai-muted mt-0.5">{bacIILabel(lang)} {year} · {SUBJECT_DURATION_MIN[p.field]?.[sub.s] ?? 180} {t(lang, "minAbbrev")} · {SUBJECT_FULL_MARKS[p.field]?.[sub.s] ?? 100} {t(lang, "marksWord")}</p>
+              <p className="text-xs eai-muted mt-0.5">{bacIILabel(lang)} {localizeNum(year, lang)} · {localizeNum(SUBJECT_DURATION_MIN[p.field]?.[sub.s] ?? 180, lang)} {t(lang, "minAbbrev")} · {localizeNum(SUBJECT_FULL_MARKS[p.field]?.[sub.s] ?? 100, lang)} {t(lang, "marksWord")}</p>
               <div className="flex items-center gap-2 mt-3">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
@@ -1986,7 +2046,7 @@ function Browse({ p, lang = "en" }) {
                 {hasPaper ? (
                   <button
                     onClick={() => setViewingPaper({ subject: sub.s, year, pdf, images })}
-                    className={`eai-btn eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                    className={`eai-btn eai-glass eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}>
                     <Eye size={14} /> {t(lang, "viewWord")}
                   </button>
                 ) : (
@@ -2096,24 +2156,614 @@ const RAW_EXERCISES = {
       formula: "Conserve atoms of each element on both sides", formulaKm: "រក្សាចំនួនអាតូមនីមួយៗឲ្យស្មើគ្នាទាំងសងខាង" },
   ],
   Biology: [
-    { topic: "Cell biology", topicKm: "ជីវវិទ្យាកោសិកា", difficulty: "Easy",
-      prompt: "Which organelle is the 'powerhouse of the cell'?", promptKm: "តើសរីរាង្គណាមួយត្រូវបានហៅថា 'រោងចក្រថាមពលនៃកោសិកា'?",
-      options: ["Mitochondria", "Nucleus", "Ribosome", "Golgi body"], answer: "Mitochondria",
-      optionsKm: ["មីតូខនឌ្រី", "នុយក្លេអ៊ុស", "រីបូសូម", "ហ្គោលហ្ស៊ីបូឌី"], answerKm: "មីតូខនឌ្រី",
-      explanation: "Mitochondria generate most of the cell's ATP through respiration.", explanationKm: "មីតូខនឌ្រី(Mitochondria) បង្កើត ATP ភាគច្រើនរបស់កោសិកាតាមរយៈការដកដង្ហើមកោសិកា។",
-      formula: "Key concept: respiration produces ATP in the mitochondria", formulaKm: "គោលគំនិតសំខាន់៖ ការដកដង្ហើមកោសិកាបង្កើត ATP នៅក្នុងមីតូខនឌ្រី" },
-    { topic: "Genetics", topicKm: "សន្ដតិវិទ្យា", difficulty: "Medium",
-      prompt: "Crossing Aa × Aa gives what dominant : recessive ratio?", promptKm: "ការបំពាល់ Aa × Aa ផ្តល់សមាមាត្រលក្ខណៈលេចធ្លោ : លក្ខណៈកប់កំបាំង ជាប៉ុន្មាន?",
-      options: ["3 : 1", "1 : 1", "9 : 3 : 3 : 1", "1 : 2 : 1"], answer: "3 : 1",
-      explanation: "The Punnett square gives genotypes 1 AA : 2 Aa : 1 aa, so phenotypes are 3 dominant : 1 recessive.",
-      explanationKm: "តារាង Punnett ផ្តល់ហ្សែនកូន 1 AA : 2 Aa : 1 aa ដូច្នេះលក្ខណៈខាងក្រៅគឺ 3 លេចធ្លោ : 1 កប់កំបាំង។",
-      formula: "Use a Punnett square for a monohybrid cross", formulaKm: "ប្រើតារាង Punnett សម្រាប់ការបំពាល់ឯកកូនកាត់" },
-    { topic: "Photosynthesis", topicKm: "ការសំយោគពន្លឺ", difficulty: "Easy",
-      prompt: "Which gas is released during photosynthesis?", promptKm: "តើឧស្ម័នអ្វីត្រូវបានបញ្ចេញកំឡុងពេលសំយោគពន្លឺ?",
-      options: ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"], answer: "Oxygen",
-      optionsKm: ["អុកសីសែន", "កាបូនឌីអុកស៊ីត", "អាសូត", "អ៊ីដ្រូសែន"], answerKm: "អុកសីសែន",
-      explanation: "Plants take in CO₂ and release O₂: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂.", explanationKm: "រុក្ខជាតិស្រូបយក CO₂ ហើយបញ្ចេញ O₂៖ 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂។",
-      formula: "Equation: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂", formulaKm: "សមីការ៖ 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂" },
+    { topic: "Root and stem function", topicKm: "តួនាទីឬស និងដើម", difficulty: "Easy",
+      prompt: "In a flowering plant, what is the main function of the roots?", promptKm: "តើឬសរបស់រុក្ខជាតិមានផ្កាមានតួនាទីចម្បងអ្វី?",
+      options: ["Anchor the plant and absorb water and minerals from the soil", "Carry out photosynthesis", "Produce pollen", "Store flowers"], answer: "Anchor the plant and absorb water and minerals from the soil",
+      optionsKm: ["ចងភ្ជាប់រុក្ខជាតិទៅនឹងដី និងស្រូបយកទឹក និងអំបិលខនិជពីដី", "ធ្វើសំយោគពន្លឺ", "ផលិតលំអង", "ផ្ទុកផ្កា"], answerKm: "ចងភ្ជាប់រុក្ខជាតិទៅនឹងដី និងស្រូបយកទឹក និងអំបិលខនិជពីដី",
+      explanation: "Roots anchor the plant in the soil and absorb water and dissolved minerals, which travel up through the stem to the leaves.", explanationKm: "ឬសចងភ្ជាប់រុក្ខជាតិទៅនឹងដី និងស្រូបយកទឹក និងអំបិលខនិជរលាយ ដែលឡើងតាមដើមទៅដល់សន្លឹក។",
+      formula: "Root = anchor + absorb; stem = transport + support", formulaKm: "ឬស = ចងភ្ជាប់ + ស្រូប; ដើម = ដឹកជញ្ជូន + ទ្រទ្រង់",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Xylem and phloem", topicKm: "សរសៃឈើ និងសរសៃស្បែក", difficulty: "Medium",
+      prompt: "Which plant tissue carries water and dissolved minerals from the roots up to the leaves?", promptKm: "តើជាលិការុក្ខជាតិមួយណាដឹកនាំទឹក និងអំបិលខនិជពីឬសឡើងទៅសន្លឹក?",
+      options: ["Xylem", "Phloem", "Epidermis", "Cortex"], answer: "Xylem",
+      optionsKm: ["សរសៃឈើ (Xylem)", "សរសៃស្បែក (Phloem)", "ស្បែកក្រៅ", "ស្រទាប់ចំបើង"], answerKm: "សរសៃឈើ (Xylem)",
+      explanation: "Xylem carries water and minerals upward from the roots, while phloem carries food made by photosynthesis to cells that don't photosynthesize.", explanationKm: "សរសៃឈើដឹកនាំទឹក និងអំបិលខនិជពីឬសឡើងលើ ចំណែកឯសរសៃស្បែកដឹកនាំអាហារដែលផលិតដោយសំយោគពន្លឺទៅកោសិកាដែលមិនធ្វើសំយោគពន្លឺ។",
+      formula: "Xylem: water up; Phloem: food to all cells", formulaKm: "សរសៃឈើ៖ ទឹកឡើងលើ; សរសៃស្បែក៖ អាហារទៅគ្រប់កោសិកា",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Leaf cross-section", topicKm: "ផ្នែកទទឹងសន្លឹក", difficulty: "Hard",
+      prompt: "Which layer of a leaf's cross-section contains chloroplast-rich cells specialized for photosynthesis?", promptKm: "តើស្រទាប់ណាមួយនៃផ្នែកទទឹងសន្លឹក មានកោសិកាសម្បូរក្លរ៉ូភីលសម្រាប់ធ្វើសំយោគពន្លឺ?",
+      options: ["Palisade layer", "Upper epidermis", "Lower epidermis", "Vascular bundle sheath only"], answer: "Palisade layer",
+      optionsKm: ["ស្រទាប់បាលីសាទ", "ស្បែកខាងលើ", "ស្បែកខាងក្រោម", "ស្រទាបគ្រែបស្រសៃប្រដាប់ដឹកនាំតែម្យ៉ាង"], answerKm: "ស្រទាប់បាលីសាទ",
+      explanation: "The palisade layer, just under the upper epidermis, is packed with chloroplasts and is the main site of photosynthesis; the spongy layer below has air spaces for gas exchange.", explanationKm: "ស្រទាប់បាលីសាទ ដែលនៅក្រោមស្បែកខាងលើ សម្បូរទៅដោយក្លរ៉ូភីល ជាកន្លែងសំខាន់សម្រាប់ធ្វើសំយោគពន្លឺ រីឯស្រទាប់ស្ពឹងខាងក្រោមមានរន្ធខ្យល់សម្រាប់ផ្លាស់ប្តូរឧស្ម័ន។",
+      formula: "Leaf layers: epidermis → palisade (photosynthesis) → spongy (gas exchange) → epidermis", formulaKm: "ស្រទាប់សន្លឹក៖ ស្បែក → បាលីសាទ (សំយោគពន្លឺ) → ស្ពឹង (ផ្លាស់ប្តូរឧស្ម័ន) → ស្បែក",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Flower parts", topicKm: "ផ្នែកនៃផ្កា", difficulty: "Medium",
+      prompt: "A flower is the reproductive organ of a plant. How many main parts does it have?", promptKm: "ផ្កាជាសរីរាង្គបន្តពូជរបស់រុក្ខជាតិ។ តើវាមានផ្នែកចម្បងប៉ុន្មាន?",
+      options: ["4: sepals, petals, stamens, pistil", "2: petals and stem only", "3: root, stem, leaf", "5: sepal, petal, stamen, pistil, seed"], answer: "4: sepals, petals, stamens, pistil",
+      optionsKm: ["៤៖ ក្លៀប, ក្លិប, កម្រាលភ្នែក, ស្ទីល", "២៖ ក្លិប និងដើមតែប៉ុណ្ណោះ", "៣៖ ឬស ដើម សន្លឹក", "៥៖ ក្លៀប ក្លិប កម្រាលភ្នែក ស្ទីល គ្រាប់"], answerKm: "៤៖ ក្លៀប, ក្លិប, កម្រាលភ្នែក, ស្ទីល",
+      explanation: "A typical flower has a calyx (sepals), corolla (petals), androecium (stamens, the male part) and gynoecium (pistil, the female part).", explanationKm: "ផ្កាធម្មតាមួយមានក្លៀប (សេប៉ាល់) ក្លិប (ក្រូឡា) កម្រាលភ្នែកញី (អង់ដ្រូស៊ែម) និងស្ទីល/ស្រទាប់ភ្នែកញី (ហ្សីណូស៊ែម)។",
+      formula: "Flower = calyx + corolla + stamens (male) + pistil (female)", formulaKm: "ផ្កា = ក្លៀប + ក្លិប + កម្រាលភ្នែកឈ្មោល + ស្ទីលភ្នែកញី",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "The stigma", topicKm: "ស្ទីចម៉ា", difficulty: "Easy",
+      prompt: "Which part of the flower's female organ receives pollen grains?", promptKm: "តើផ្នែកណាមួយនៃសរីរាង្គភ្នែកញីទទួលយកគ្រាប់លំអង?",
+      options: ["Stigma", "Ovary", "Sepal", "Filament"], answer: "Stigma",
+      optionsKm: ["ស្ទីចម៉ា", "អូវុល (អូវែរ)", "ក្លៀប", "កតែងលំអង"], answerKm: "ស្ទីចម៉ា",
+      explanation: "The stigma is the tip of the pistil, often sticky, designed to catch and hold pollen grains that land on it.", explanationKm: "ស្ទីចម៉ាជាផ្នែកកំពូលនៃស្ទីល ច្រើនតែស្អិត ត្រូវបានរចនាឡើងដើម្បីចាប់ និងទប់ស្កាត់គ្រាប់លំអងដែលធ្លាក់មកលើ។",
+      formula: "Stigma catches pollen → pollen tube grows down style to the ovary", formulaKm: "ស្ទីចម៉ាចាប់លំអង → បំពង់លំអងដុះចុះតាមស្ទីលទៅអូវែរ",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Types of pollination", topicKm: "ប្រភេទដំណើរលំអង", difficulty: "Medium",
+      prompt: "What are the two natural types of pollination in flowering plants?", promptKm: "តើដំណើរលំអងធម្មជាតិមានពីរប្រភេទអ្វីខ្លះ?",
+      options: ["Self-pollination and cross-pollination", "Wind and water only", "Natural and artificial only", "Insect and animal only"], answer: "Self-pollination and cross-pollination",
+      optionsKm: ["ដំណើរលំអងខ្លួនឯង និងដំណើរលំអងកាត់", "ខ្យល់ និងទឹកតែប៉ុណ្ណោះ", "ធម្មជាតិ និងសិប្បនិម្មិតតែប៉ុណ្ណោះ", "សត្វល្អិត និងសត្វតែប៉ុណ្ណោះ"], answerKm: "ដំណើរលំអងខ្លួនឯង និងដំណើរលំអងកាត់",
+      explanation: "Self-pollination transfers pollen from the anther to the stigma of the same flower or another flower on the same plant; cross-pollination transfers pollen between flowers on two different plants.", explanationKm: "ដំណើរលំអងខ្លួនឯង គឺការផ្ទេរលំអងពីកម្រាលភ្នែកទៅស្ទីចម៉ានៃផ្កាតែមួយ ឬផ្កាមួយទៀតលើដើមដដែល ចំណែកឯដំណើរលំអងកាត់ គឺការផ្ទេររវាងផ្កានៃដើមពីរផ្សេងគ្នា។",
+      formula: "Self-pollination: same plant; Cross-pollination: two different plants", formulaKm: "ដំណើរលំអងខ្លួនឯង៖ ដើមតែមួយ; ដំណើរលំអងកាត់៖ ដើមពីរផ្សេងគ្នា",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Cross-pollination agents", topicKm: "ភ្នាក់ងារដំណើរលំអងកាត់", difficulty: "Easy",
+      prompt: "Which of the following commonly carries pollen for cross-pollination?", promptKm: "តើមួយណាខាងក្រោមជាទូទៅជួយដឹកនាំលំអងសម្រាប់ដំណើរលំអងកាត់?",
+      options: ["Wind, water and insects", "Only sunlight", "Only soil bacteria", "Only the plant's own roots"], answer: "Wind, water and insects",
+      optionsKm: ["ខ្យល់ ទឹក និងសត្វល្អិត", "ពន្លឺថ្ងៃតែប៉ុណ្ណោះ", "បាក់តេរីនៅក្នុងដីតែប៉ុណ្ណោះ", "ឬសរបស់រុក្ខជាតិខ្លួនឯងតែប៉ុណ្ណោះ"], answerKm: "ខ្យល់ ទឹក និងសត្វល្អិត",
+      explanation: "Cross-pollination is carried out by agents such as wind, water, insects (bees, butterflies) and other animals that move pollen from one plant to another.", explanationKm: "ដំណើរលំអងកាត់ត្រូវបានអនុវត្តដោយភ្នាក់ងារដូចជាខ្យល់ ទឹក សត្វល្អិត (ឃ្មុំ មេអំបៅ) និងសត្វដទៃទៀត ដែលដឹកលំអងពីដើមមួយទៅដើមមួយទៀត។",
+      formula: "Cross-pollination agents: wind + water + insects/animals", formulaKm: "ភ្នាក់ងារដំណើរលំអងកាត់៖ ខ្យល់ + ទឹក + សត្វល្អិត/សត្វ",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Monocot vs dicot", topicKm: "ម៉ូណូកូទីលេដុង ធៀបនឹងឌីកូទីលេដុង", difficulty: "Medium",
+      prompt: "Which feature distinguishes a monocot from a dicot plant?", promptKm: "តើលក្ខណៈណាមួយបែងចែកដូងម៉ូណូកូទីលេដុងចេញពីឌីកូទីលេដុង?",
+      options: ["Monocots have one cotyledon and parallel leaf veins; dicots have two cotyledons and net-veined leaves", "Monocots always have red flowers", "Dicots never have roots", "Monocots have no seeds"], answer: "Monocots have one cotyledon and parallel leaf veins; dicots have two cotyledons and net-veined leaves",
+      optionsKm: ["ម៉ូណូកូទីលេដុងមានកូទីលេដុង១ និងសរសៃស្លឹករាង​ប៉ារ៉ាឡែល; ឌីកូទីលេដុងមានកូទីលេដុង២ និងសរសៃសន្លឹករាងសំណាញ់", "ម៉ូណូកូទីលេដុងតែងតែមានផ្កាពណ៌ក្រហម", "ឌីកូទីលេដុងគ្មានឬសទេ", "ម៉ូណូកូទីលេដុងគ្មានគ្រាប់ទេ"], answerKm: "ម៉ូណូកូទីលេដុងមានកូទីលេដុង១ និងសរសៃស្លឹករាង​ប៉ារ៉ាឡែល; ឌីកូទីលេដុងមានកូទីលេដុង២ និងសរសៃសន្លឹករាងសំណាញ់",
+      explanation: "Monocots (e.g. coconut palm) have one cotyledon, parallel leaf veins, flower parts in multiples of 3, and fibrous roots; dicots (e.g. mango) have two cotyledons, net-veined leaves, flower parts in multiples of 4 or 5, and a taproot.", explanationKm: "ម៉ូណូកូទីលេដុង (ឧ. ដូង) មានកូទីលេដុង១ សរសៃសន្លឹករាងប៉ារ៉ាឡែល ផ្កាមានចំនួនផ្នែកគុណនឹង៣ និងឬសជាបាច់ ចំណែកឯឌីកូទីលេដុង (ឧ. ស្វាយ) មានកូទីលេដុង២ សរសៃសន្លឹករាងសំណាញ់ ផ្កាមានចំនួនផ្នែកគុណនឹង៤ ឬ៥ និងឬសចេញ។",
+      formula: "Monocot: 1 cotyledon, parallel veins; Dicot: 2 cotyledons, net veins", formulaKm: "ម៉ូណូកូទីលេដុង៖ កូទីលេដុង១ សរសៃប៉ារ៉ាឡែល; ឌីកូទីលេដុង៖ កូទីលេដុង២ សរសៃសំណាញ់",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Double fertilization", topicKm: "ការបងកកំណើតទវ", difficulty: "Hard",
+      prompt: "What is unique about fertilization in flowering plants, known as \"double fertilization\"?", promptKm: "តើអ្វីជាលក្ខណៈពិសេសនៃការបងកកំណើតរបស់រុក្ខជាតិមានផ្កា ដែលហៅថា \"ការបងកកំណើតទវ\"?",
+      options: ["One sperm cell fertilizes the egg to form the embryo, and another fuses with the polar nuclei to form the endosperm", "Two sperm cells fertilize two separate eggs", "The egg fertilizes itself without any sperm", "Two eggs are fertilized by one sperm cell"], answer: "One sperm cell fertilizes the egg to form the embryo, and another fuses with the polar nuclei to form the endosperm",
+      optionsKm: ["ស្ដែមាឯកតម្ភ១ភ្ជាប់ជាមួយអូអូស្វែរបង្កើតជាអំព្រីយុង ហើយស្ដែមាឯកតម្ភមួយទៀតរលាយជាមួយស្នូលប៉ូផលបង្កើតជាអង់ដូស្ពែម", "ស្ដែមាឯកតម្ភពីរផ្ដល់កំណើតដល់អូអូស្វែរពីរផ្សេងគ្នា", "អូអូស្វែរបង្កកំណើតដោយខ្លួនឯងដោយគ្មានស្ដែមាឯកតម្ភ", "អូអូស្វែរពីរត្រូវបានបង្កកំណើតដោយស្ដែមាឯកតម្ភមួយ"], answerKm: "ស្ដែមាឯកតម្ភ១ភ្ជាប់ជាមួយអូអូស្វែរបង្កើតជាអំព្រីយុង ហើយស្ដែមាឯកតម្ភមួយទៀតរលាយជាមួយស្នូលប៉ូផលបង្កើតជាអង់ដូស្ពែម",
+      explanation: "In double fertilization, the pollen tube delivers two sperm nuclei: one fertilizes the egg cell to form the diploid zygote (which grows into the embryo), and the other fuses with the two polar nuclei to form a triploid (3n) cell that becomes the nutrient-storing endosperm.", explanationKm: "ក្នុងការបងកកំណើតទវ បំពង់លំអងបញ្ជូនស្ដែមាឯកតម្ភពីរ៖ មួយបង្កកំណើតជាមួយអូអូស្វែរបង្កើតជាស៊ីកូតឌីបលូអ៊ីត (ដែលនឹងលូតលាស់ទៅជាអំព្រីយុង) ហើយមួយទៀតរលាយជាមួយស្នូលប៉ូផលទាំងពីរបង្កើតជាកោសិកាទ្រីបលូអ៊ីត (3n) ដែលនឹងក្លាយជាអង់ដូស្ពែមផ្ទុកអាហារបំរុង។",
+      formula: "Sperm + egg → embryo (2n); Sperm + polar nuclei → endosperm (3n)", formulaKm: "ស្ដែមា + អូអូស្វែរ → អំព្រីយុង (2n); ស្ដែមា + ស្នូលប៉ូផល → អង់ដូស្ពែម (3n)",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Fruit and seed formation", topicKm: "ការបង្កើតផ្លែ និងគ្រាប់", difficulty: "Medium",
+      prompt: "After fertilization in a flowering plant, what typically becomes the fruit?", promptKm: "ក្រោយការបងកកំណើតក្នុងរុក្ខជាតិមានផ្កា តើផ្នែកណាដែលក្លាយទៅជាផ្លែជាទូទៅ?",
+      options: ["The ovary wall", "The petals", "The sepals", "The stamen"], answer: "The ovary wall",
+      optionsKm: ["ជញ្ជាំងអូវែរ", "ក្លិប", "ក្លៀប", "កម្រាលភ្នែក"], answerKm: "ជញ្ជាំងអូវែរ",
+      explanation: "After fertilization, the ovule develops into the seed while the ovary wall develops into the fruit (pericarp), which protects the seed and often aids in its dispersal.", explanationKm: "ក្រោយការបងកកំណើត អូវុលលូតលាស់ទៅជាគ្រាប់ ចំណែកឯជញ្ជាំងអូវែរលូតលាស់ទៅជាផ្លែ (pericarp) ដែលការពារគ្រាប់ និងជួយផ្សព្វផ្សាយគ្រាប់ជាញឹកញាប់។",
+      formula: "Ovule → seed; Ovary wall → fruit", formulaKm: "អូវុល → គ្រាប់; ជញ្ជាំងអូវែរ → ផ្លែ",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Germination stages", topicKm: "ដំណាក់កាលដំណុះគ្រាប់", difficulty: "Medium",
+      prompt: "How many main stages does the life cycle of a flowering plant have, and what are they?", promptKm: "តើវដ្តជីវិតរបស់រុក្ខជាតិមានផ្កា មានដំណាក់កាលចម្បងប៉ុន្មាន និងអ្វីខ្លះ?",
+      options: ["Two: the flower stage and the seed stage", "Four: root, stem, leaf and flower", "One: the seed stage only", "Three: flower, fruit and root"], answer: "Two: the flower stage and the seed stage",
+      optionsKm: ["ពីរ៖ ដំណាក់កាលផ្កា និងដំណាក់កាលគ្រាប់", "បួន៖ ឬស ដើម សន្លឹក និងផ្កា", "មួយ៖ ដំណាក់កាលគ្រាប់តែប៉ុណ្ណោះ", "បី៖ ផ្កា ផ្លែ និងឬស"], answerKm: "ពីរ៖ ដំណាក់កាលផ្កា និងដំណាក់កាលគ្រាប់",
+      explanation: "The life cycle of an angiosperm has two main stages — the flower stage (pollination and fertilization) and the seed stage (the seed develops, is dispersed, and germinates into a new plant).", explanationKm: "វដ្តជីវិតរបស់រុក្ខជាតិអង់ស៊ីយូស្សែម មានដំណាក់កាលចម្បងពីរ គឺដំណាក់កាលផ្កា (ដំណើរលំអង និងការបងកកំណើត) និងដំណាក់កាលគ្រាប់ (គ្រាប់លូតលាស់ រីករាលដាល និងដុះទៅជារុក្ខជាតិថ្មី)។",
+      formula: "Angiosperm life cycle: flower stage → seed stage", formulaKm: "វដ្តជីវិតរុក្ខជាតិមានផ្កា៖ ដំណាក់កាលផ្កា → ដំណាក់កាលគ្រាប់",
+      chapter: "Flowering Plant Reproduction", chapterKm: "ការបន្តពូជរុក្ខជាតិមានផ្កា" },
+    { topic: "Invertebrate nervous system", topicKm: "ប្រព័ន្ធប្រសាទសត្វអនឹដ្ឋឆ្អឹងខ្នង", difficulty: "Medium",
+      prompt: "Compared to vertebrates, an earthworm's nervous system is best described as ___.", promptKm: "បើប្រៀបធៀបទៅនឹងសត្វមានឆ្អឹងខ្នង តើប្រព័ន្ធប្រសាទរបស់ជនលនគួរពិពណ៌នាថាជា ___?",
+      options: ["Simple, with a nerve cord and segmental ganglia instead of a brain and spinal cord", "Identical to a human's nervous system", "Completely absent", "More complex than a mammal's"], answer: "Simple, with a nerve cord and segmental ganglia instead of a brain and spinal cord",
+      optionsKm: ["សាមញ្ញ មានខួរក្បាលតូច និងកង់គ្លីយុងតាមប្រចេះជំនួសខួរក្បាល និងខួរឆ្អឹងខ្នង", "ដូចគ្នាបេះបិទនឹងប្រព័ន្ធប្រសាទមនុស្ស", "អវត្តមានទាំងស្រុង", "ស្មុគស្មាញជាងសត្វមានទឹកដោះ"], answerKm: "សាមញ្ញ មានខួរក្បាលតូច និងកង់គ្លីយុងតាមប្រចេះជំនួសខួរក្បាល និងខួរឆ្អឹងខ្នង",
+      explanation: "Invertebrates like earthworms have a simpler nervous system built from a small \"brain\" (cerebral ganglion) and a chain of ganglia connected by a nerve cord running along the body, rather than a true brain and spinal cord.", explanationKm: "សត្វអនឹដ្ឋឆ្អឹងខ្នងដូចជាជនលនមានប្រព័ន្ធប្រសាទសាមញ្ញជាង បង្កើតឡើងពីខួរក្បាលតូច (កង់គ្លីយុងខួរក្បាល) និងខ្សែកង់គ្លីយុងភ្ជាប់ដោយប្រសាទចង្កោមតាមបណ្តោយខ្លួន ជំនួសខួរក្បាល និងខួរឆ្អឹងខ្នងពិតប្រាកដ។",
+      formula: "Invertebrate: ganglia + nerve cord; Vertebrate: brain + spinal cord", formulaKm: "សត្វអនឹដ្ឋឆ្អឹងខ្នង៖ កង់គ្លីយុង + ប្រសាទចង្កោម; សត្វឆ្អឹងខ្នង៖ ខួរក្បាល + ខួរឆ្អឹងខ្នង",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Neuron structure", topicKm: "រចនាសម្ព័ន្ធណឺរូន", difficulty: "Medium",
+      prompt: "A neuron is divided into three main parts. What are they?", promptKm: "ណឺរូនមួយបែងចែកជាបីផ្នែកសំខាន់។ តើអ្វីខ្លះ?",
+      options: ["Dendrites, cell body, and axon", "Nucleus, cytoplasm, and membrane only", "Root, stem, and leaf", "Synapse, myelin, and node only"], answer: "Dendrites, cell body, and axon",
+      optionsKm: ["ដង់ស្រ្តើ (dendrite) តួកោសិកា និងអាក់សូន", "ស្នូល ស៊ីតូប្លាស និងភ្នាសតែប៉ុណ្ណោះ", "ឬស ដើម និងសន្លឹក", "ស៊ីណាប់ មីអេលីន និងថ្នាំងតែប៉ុណ្ណោះ"], answerKm: "ដង់ស្រ្តើ (dendrite) តួកោសិកា និងអាក់សូន",
+      explanation: "Dendrites are short branching fibers that receive information; the cell body contains the nucleus and organelles; the axon is a single long fiber that carries the nerve impulse away toward the next neuron.", explanationKm: "ដង់ស្រ្តើជាសរសៃខ្លីៗមែកធាងទទួលព័ត៌មាន តួកោសិកាផ្ទុកស្នូល និងធាតុកោសិកា ចំណែកឯអាក់សូនជាសរសៃវែងតែមួយ ដឹកនាំសញ្ញាប្រសាទចេញទៅណឺរូនបន្ទាប់។",
+      formula: "Neuron: dendrites (in) → cell body → axon (out)", formulaKm: "ណឺរូន៖ ដង់ស្រ្តើ (ចូល) → តួកោសិកា → អាក់សូន (ចេញ)",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Types of neurons", topicKm: "ប្រភេទណឺរូន", difficulty: "Medium",
+      prompt: "Based on the number of prolongations, neurons are classified into how many types?", promptKm: "ផ្អែកលើភាពពន្លយស៊ីតូប្លាស តើគេចែកណឺរូនជាប៉ុន្មានប្រភេទ?",
+      options: ["3: unipolar, bipolar, and multipolar", "2: sensory and motor only", "4: brain, spinal, cranial, and peripheral", "1: only one universal type"], answer: "3: unipolar, bipolar, and multipolar",
+      optionsKm: ["៣៖ ណឺរូនឯកប៉ូល ណឺរូនទ្វេប៉ូល និងណឺរូនពហុប៉ូល", "២៖ ណឺរូនវិញ្ញាណនាំ និងណឺរូនចលករតែប៉ុណ្ណោះ", "៤៖ ខួរក្បាល ខួរឆ្អឹងខ្នង ក្បាល និងគ្រឿងកាយតែប៉ុណ្ណោះ", "១៖ មានតែប្រភេទតែមួយសកល"], answerKm: "៣៖ ណឺរូនឯកប៉ូល ណឺរូនទ្វេប៉ូល និងណឺរូនពហុប៉ូល",
+      explanation: "A unipolar neuron has one prolongation from the cell body; a bipolar neuron has two (a dendrite and an axon); a multipolar neuron has many dendrites plus one axon.", explanationKm: "ណឺរូនឯកប៉ូលមានពន្លយមួយចេញពីតួកោសិកា ណឺរូនទ្វេប៉ូលមានពីរ (ដង់ស្រ្តើ និងអាក់សូន) ចំណែកឯណឺរូនពហុប៉ូលមានដង់ស្រ្តើច្រើន បូករួមអាក់សូនមួយ។",
+      formula: "Unipolar: 1; Bipolar: 2; Multipolar: many + 1 axon", formulaKm: "ឯកប៉ូល៖ ១; ទ្វេប៉ូល៖ ២; ពហុប៉ូល៖ ច្រើន + អាក់សូន១",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Three neurons in a reflex", topicKm: "ណឺរូនបីប្រភេទក្នុងចលនាឆ្លើយតប", difficulty: "Hard",
+      prompt: "When you hear your phone ring and reach to pick it up, which three types of neurons are involved?", promptKm: "ពេលឮទូរស័ព្ទរោទិ៍ ហើយអ្នកលើកទូរស័ព្ទឡើងដើម្បីឆ្លើយតប តើមានណឺរូនបីប្រភេទអ្វីខ្លះចូលរួម?",
+      options: ["Sensory (afferent), connector (interneuron), and motor (efferent) neurons", "Only sensory neurons", "Only motor neurons", "Bipolar, unipolar, and multipolar neurons only"], answer: "Sensory (afferent), connector (interneuron), and motor (efferent) neurons",
+      optionsKm: ["ណឺរូនវិញ្ញាណនាំ ណឺរូនភ្ជាប់ និងណឺរូនចលករ", "ណឺរូនវិញ្ញាណនាំតែប៉ុណ្ណោះ", "ណឺរូនចលករតែប៉ុណ្ណោះ", "ណឺរូនទ្វេប៉ូល ឯកប៉ូល និងពហុប៉ូលតែប៉ុណ្ណោះ"], answerKm: "ណឺរូនវិញ្ញាណនាំ ណឺរូនភ្ជាប់ និងណឺរូនចលករ",
+      explanation: "The sensory neuron carries information from the ear to the central nervous system; the connector (relay/interneuron) neuron in the brain passes it on after interpretation; the motor neuron carries the command from the brain to the muscles that lift the phone.", explanationKm: "ណឺរូនវិញ្ញាណនាំដឹកនាំព័ត៌មានពីត្រចៀកទៅមជ្ឈមណ្ឌលប្រសាទ ណឺរូនភ្ជាប់ (ណឺរូនចង្កោម) នៅក្នុងខួរក្បាលបញ្ជូនបន្តក្រោយបកស្រាយ ណឺរូនចលករដឹកនាំបញ្ជាពីខួរក្បាលទៅសាច់ដុំដែលលើកទូរស័ព្ទ។",
+      formula: "Reflex path: sensory → connector → motor neuron", formulaKm: "ផ្លូវឆ្លើយតប៖ ណឺរូនវិញ្ញាណនាំ → ណឺរូនភ្ជាប់ → ណឺរូនចលករ",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "The synapse", topicKm: "ស៊ីណាប់", difficulty: "Medium",
+      prompt: "What is a synapse?", promptKm: "តើស៊ីណាប់ជាអ្វី?",
+      options: ["The small gap between the end of one neuron's axon and the next neuron", "The center of the cell body", "A type of muscle", "A blood vessel in the brain"], answer: "The small gap between the end of one neuron's axon and the next neuron",
+      optionsKm: ["ចន្លោះតូចមួយរវាងចុងអាក់សូននៃណឺរូនមួយ និងណឺរូនបន្ទាប់", "ចំណុចកណ្តាលនៃតួកោសិកា", "ប្រភេទសាច់ដុំមួយ", "សរសៃឈាមក្នុងខួរក្បាល"], answerKm: "ចន្លោះតូចមួយរវាងចុងអាក់សូននៃណឺរូនមួយ និងណឺរូនបន្ទាប់",
+      explanation: "The synapse is the junction between the end of one neuron's axon and the dendrite or cell body of the next neuron, where a chemical neurotransmitter carries the signal across the gap.", explanationKm: "ស៊ីណាប់ជាចំណុចប្រសព្វរវាងចុងអាក់សូននៃណឺរូនមួយ និងដង់ស្រ្តើ ឬតួកោសិកានៃណឺរូនបន្ទាប់ ដែលសារធាតុគីមីណឺរូនបញ្ជូនសារឆ្លងកាត់ចន្លោះនេះ។",
+      formula: "Nerve impulse → synapse (neurotransmitter) → next neuron", formulaKm: "សញ្ញាប្រសាទ → ស៊ីណាប់ (សារធាតុបញ្ជូនសារ) → ណឺរូនបន្ទាប់",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Three main parts of the brain", topicKm: "ផ្នែកសំខាន់បីរបស់ខួរក្បាល", difficulty: "Medium",
+      prompt: "The brain has three main parts. What are they and what does each control?", promptKm: "ខួរក្បាលមានផ្នែកសំខាន់បី។ តើអ្វីខ្លះ និងនីមួយៗត្រួតពិនិត្យអ្វី?",
+      options: ["Cerebrum (thinking, senses), cerebellum (balance, voluntary movement), and medulla oblongata (breathing, heartbeat)", "Cerebrum, spinal cord, and nerve only", "Only the cerebrum, which does everything", "Skull, meninges, and cerebrospinal fluid"], answer: "Cerebrum (thinking, senses), cerebellum (balance, voluntary movement), and medulla oblongata (breathing, heartbeat)",
+      optionsKm: ["ខួរធំ (គិត វិញ្ញាណ) ខួរតូច (លំនឹង ចលនាឆន្ទៈ) និងខួរកញ្ឹងក (ដង្ហើម ចង្វាក់បេះដូង)", "ខួរធំ ខួរឆ្អឹងខ្នង និងប្រសាទតែប៉ុណ្ណោះ", "ខួរធំតែមួយប៉ុណ្ណោះដែលធ្វើអ្វីៗគ្រប់យ៉ាង", "ឆ្អឹងលលាដ៍ក្បាល ស្រោមខួរ និងទឹកខួរ"], answerKm: "ខួរធំ (គិត វិញ្ញាណ) ខួរតូច (លំនឹង ចលនាឆន្ទៈ) និងខួរកញ្ឹងក (ដង្ហើម ចង្វាក់បេះដូង)",
+      explanation: "The cerebrum handles thinking, judgment and the five senses; the cerebellum coordinates voluntary movement and body balance; the medulla oblongata (part of the brainstem) controls involuntary actions like breathing and heartbeat.", explanationKm: "ខួរធំគ្រប់គ្រងការគិត ការវិនិច្ឆ័យ និងវិញ្ញាណទាំង៥ ខួរតូចសម្របសម្រួលចលនាឆន្ទៈ និងលំនឹងរាងកាយ ចំណែកឯខួរកញ្ឹងក (ផ្នែកនៃដងខួរក្បាល) គ្រប់គ្រងសកម្មភាពអឆន្ទៈដូចជាដង្ហើម និងចង្វាក់បេះដូង។",
+      formula: "Cerebrum: thought; Cerebellum: balance; Medulla: breathing/heartbeat", formulaKm: "ខួរធំ៖ គិត; ខួរតូច៖ លំនឹង; ខួរកញ្ឹងក៖ ដង្ហើម/បេះដូង",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Spinal cord protection", topicKm: "ការការពារខួរឆ្អឹងខ្នង", difficulty: "Easy",
+      prompt: "What protects the spinal cord?", promptKm: "តើអ្វីជាអ្នកការពារខួរឆ្អឹងខ្នង?",
+      options: ["The vertebral column, meninges, and cerebrospinal fluid", "The skull only", "The ribs only", "Skin only"], answer: "The vertebral column, meninges, and cerebrospinal fluid",
+      optionsKm: ["ឆ្អឹងខ្នង ស្រោមខួរ និងទឹកខួរ", "ឆ្អឹងលលាដ៍ក្បាលតែប៉ុណ្ណោះ", "ឆ្អឹងជំនីរតែប៉ុណ្ណោះ", "ស្បែកតែប៉ុណ្ណោះ"], answerKm: "ឆ្អឹងខ្នង ស្រោមខួរ និងទឹកខួរ",
+      explanation: "Just as the skull protects the brain, the vertebral column (spine), meninges, and cerebrospinal fluid together protect the delicate spinal cord from injury.", explanationKm: "ដូចឆ្អឹងលលាដ៍ក្បាលការពារខួរក្បាល ឆ្អឹងខ្នង ស្រោមខួរ និងទឹកខួររួមគ្នាការពារខួរឆ្អឹងខ្នងដ៏ងាយរងគ្រោះពីរបួស។",
+      formula: "Spinal cord protection: vertebrae + meninges + CSF", formulaKm: "ការការពារខួរឆ្អឹងខ្នង៖ ឆ្អឹងខ្នង + ស្រោមខួរ + ទឹកខួរ",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Central vs peripheral nervous system", topicKm: "ប្រព័ន្ធប្រសាទកណ្តាល ធៀបនឹងគ្រឿងប្រព័ន្ធប្រសាទ", difficulty: "Medium",
+      prompt: "What makes up the central nervous system, as opposed to the peripheral nervous system?", promptKm: "តើអ្វីជាធាតុផ្សំនៃប្រព័ន្ធប្រសាទកណ្តាល ផ្ទុយពីគ្រឿងប្រព័ន្ធប្រសាទ?",
+      options: ["The brain and spinal cord", "The sensory and motor nerves only", "The muscles and glands only", "The eyes and ears only"], answer: "The brain and spinal cord",
+      optionsKm: ["ខួរក្បាល និងខួរឆ្អឹងខ្នង", "សរសៃប្រសាទវិញ្ញាណនាំ និងចលករតែប៉ុណ្ណោះ", "សាច់ដុំ និងក្រពេញតែប៉ុណ្ណោះ", "ភ្នែក និងត្រចៀកតែប៉ុណ្ណោះ"], answerKm: "ខួរក្បាល និងខួរឆ្អឹងខ្នង",
+      explanation: "The central nervous system consists of the brain and spinal cord, which receive, interpret and send out information; the peripheral nervous system consists of the sensory and motor nerves that carry information to and from the central nervous system.", explanationKm: "ប្រព័ន្ធប្រសាទកណ្តាលមានខួរក្បាល និងខួរឆ្អឹងខ្នង ដែលទទួល បកស្រាយ និងបញ្ជូនព័ត៌មានចេញ ចំណែកឯគ្រឿងប្រព័ន្ធប្រសាទមានសរសៃប្រសាទវិញ្ញាណនាំ និងចលករ ដែលដឹកព័ត៌មានចូល និងចេញពីប្រព័ន្ធប្រសាទកណ្តាល។",
+      formula: "CNS = brain + spinal cord; PNS = nerves in/out", formulaKm: "ប្រព័ន្ធកណ្តាល = ខួរក្បាល + ខួរឆ្អឹងខ្នង; គ្រឿងប្រព័ន្ធ = សរសៃប្រសាទចូល/ចេញ",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Somatic vs autonomic nervous system", topicKm: "ប្រព័ន្ធប្រសាទសូម៉ាទិច ធៀបនឹងស្វ័យប្រវត្តិ", difficulty: "Medium",
+      prompt: "Which nervous system controls involuntary activities like heartbeat and digestion?", promptKm: "តើប្រព័ន្ធប្រសាទមួយណាគ្រប់គ្រងសកម្មភាពអឆន្ទៈដូចជាចង្វាក់បេះដូង និងការរំលាយអាហារ?",
+      options: ["The autonomic nervous system", "The somatic nervous system", "The sensory nervous system only", "The skeletal nervous system"], answer: "The autonomic nervous system",
+      optionsKm: ["ប្រព័ន្ធប្រសាទស្វ័យប្រវត្តិ", "ប្រព័ន្ធប្រសាទសូម៉ាទិច", "ប្រព័ន្ធប្រសាទវិញ្ញាណនាំតែប៉ុណ្ណោះ", "ប្រព័ន្ធប្រសាទឆ្អឹង"], answerKm: "ប្រព័ន្ធប្រសាទស្វ័យប្រវត្តិ",
+      explanation: "The somatic nervous system connects the central nervous system to skeletal muscles for voluntary actions like walking or writing; the autonomic nervous system connects it to glands, smooth muscle, and heart muscle to control involuntary functions.", explanationKm: "ប្រព័ន្ធប្រសាទសូម៉ាទិចភ្ជាប់ប្រព័ន្ធប្រសាទកណ្តាលទៅសាច់ដុំឆ្អឹងសម្រាប់សកម្មភាពឆន្ទៈដូចជាដើរ ឬសរសេរ ចំណែកឯប្រព័ន្ធប្រសាទស្វ័យប្រវត្តិភ្ជាប់ទៅក្រពេញ សាច់ដុំរលើង និងសាច់ដុំបេះដូង ដើម្បីគ្រប់គ្រងមុខងារអឆន្ទៈ។",
+      formula: "Somatic: skeletal muscle (voluntary); Autonomic: glands/heart/smooth muscle (involuntary)", formulaKm: "សូម៉ាទិច៖ សាច់ដុំឆ្អឹង (ឆន្ទៈ); ស្វ័យប្រវត្តិ៖ ក្រពេញ/បេះដូង/សាច់ដុំរលើង (អឆន្ទៈ)",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Sympathetic vs parasympathetic", topicKm: "សាំប៉ាទិច ធៀបនឹងប៉ារ៉ាសាំប៉ាទិច", difficulty: "Hard",
+      prompt: "When facing a sudden danger, which part of the autonomic nervous system speeds up the heart rate to help you react or flee?", promptKm: "នៅពេលជួបគ្រោះថ្នាក់ភ្លាមៗ តើផ្នែកណានៃប្រព័ន្ធប្រសាទស្វ័យប្រវត្តិបង្កើនល្បឿនចង្វាក់បេះដូងជួយឲ្យអ្នកឆ្លើយតប ឬរត់គេច?", options: ["The sympathetic nervous system", "The parasympathetic nervous system", "The somatic nervous system", "The peripheral sensory system only"], answer: "The sympathetic nervous system",
+      optionsKm: ["ប្រព័ន្ធប្រសាទសាំប៉ាទិច", "ប្រព័ន្ធប្រសាទប៉ារ៉ាសាំប៉ាទិច", "ប្រព័ន្ធប្រសាទសូម៉ាទិច", "ប្រព័ន្ធប្រសាទវិញ្ញាណនាំគ្រឿងតែប៉ុណ្ណោះ"], answerKm: "ប្រព័ន្ធប្រសាទសាំប៉ាទិច",
+      explanation: "The sympathetic system activates when the body is under tension or danger — e.g. speeding up the heart and boosting alertness, as when fleeing a dog. The parasympathetic system has the opposite effect, calming the body back to a normal resting state afterward.", explanationKm: "ប្រព័ន្ធសាំប៉ាទិចធ្វើសកម្មភាពនៅពេលរាងកាយស្ថិតក្នុងភាពតានតឹង ឬគ្រោះថ្នាក់ ដូចជាបង្កើនល្បឿនបេះដូង និងភាពដឹងខ្លួន ដូចនៅពេលរត់គេចពីឆ្កែ។ ប្រព័ន្ធប៉ារ៉ាសាំប៉ាទិចមានឥទ្ធិពលផ្ទុយ ធ្វើឲ្យរាងកាយស្ងប់មកសភាពធម្មតាវិញក្រោយមក។",
+      formula: "Sympathetic: fight/flight (speeds up); Parasympathetic: rest (calms down)", formulaKm: "សាំប៉ាទិច៖ ប្រយុទ្ធ/រត់គេច (បង្កើន); ប៉ារ៉ាសាំប៉ាទិច៖ សម្រាក (ស្ងប់)",
+      chapter: "Nervous System", chapterKm: "ប្រព័ន្ធប្រសាទ" },
+    { topic: "Layers of the eyeball", topicKm: "ស្រទាប់នៃគ្រាប់ភ្នែក", difficulty: "Medium",
+      prompt: "The choroid is the middle layer of the eyeball. What is its main role?", promptKm: "ក្រូអ៊ីតជាស្រទាប់កណ្តាលនៃគ្រាប់ភ្នែក។ តើវាមានតួនាទីចម្បងអ្វី?",
+      options: ["Nourish the eye and absorb stray light with its dark pigment", "Focus light onto the retina", "Produce tears", "Control the size of the pupil"], answer: "Nourish the eye and absorb stray light with its dark pigment",
+      optionsKm: ["ចិញ្ចឹមភ្នែក និងស្រូបយកពន្លឺបំបែកដោយពណ៌ខ្មៅរបស់វា", "ផ្តោតពន្លឺទៅលើតម្រុយ", "ផលិតទឹកភ្នែក", "គ្រប់គ្រងទំហំប្រហោងសិចផ្កា"], answerKm: "ចិញ្ចឹមភ្នែក និងស្រូបយកពន្លឺបំបែកដោយពណ៌ខ្មៅរបស់វា",
+      explanation: "The choroid, rich in blood vessels, delivers nutrients and oxygen to the retina and cornea and helps maintain eye temperature. Its dark pigment absorbs scattered light so it doesn't blur the image.", explanationKm: "ក្រូអ៊ីតសម្បូរសរសៃឈាម ជួយបញ្ជូនសារធាតុចិញ្ចឹម និងអុកសីសែនទៅតម្រុយ និងកញ្ចក់ភ្នែក ព្រមទាំងរក្សាសីតុណ្ហភាពក្នុងភ្នែក។ ពណ៌ខ្មៅរបស់វាស្រូបយកពន្លឺបំបែកកុំឲ្យធ្វើឲ្យរូបភាពព្រិល។",
+      formula: "Choroid: nourish + absorb stray light (dark pigment)", formulaKm: "ក្រូអ៊ីត៖ ចិញ្ចឹម + ស្រូបពន្លឺបំបែក (ពណ៌ខ្មៅ)",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "The iris and pupil", topicKm: "ប្រស្រីភ្នែក និងរន្ធប្រស្រី", difficulty: "Easy",
+      prompt: "What happens to the pupil in bright light?", promptKm: "តើមានអ្វីកើតឡើងចំពោះរន្ធប្រស្រីភ្នែកនៅពេលមានពន្លឺខ្លាំង?",
+      options: ["It constricts (becomes smaller) to let in less light", "It dilates (becomes larger) to let in more light", "It closes completely", "It changes color"], answer: "It constricts (becomes smaller) to let in less light",
+      optionsKm: ["រួមតូច ដើម្បីឲ្យពន្លឺចូលតិច", "រីកធំ ដើម្បីឲ្យពន្លឺចូលច្រើន", "បិទជិតទាំងស្រុង", "ប្តូរពណ៌"], answerKm: "រួមតូច ដើម្បីឲ្យពន្លឺចូលតិច",
+      explanation: "The iris, made of smooth muscle, controls pupil size: the pupil constricts in strong light to limit how much enters, and dilates in dim light to let in more.", explanationKm: "ប្រស្រីភ្នែក (Iris) ដែលបង្កើតឡើងពីសាច់ដុំរលើង គ្រប់គ្រងទំហំរន្ធប្រស្រី៖ រន្ធប្រស្រីរួមតូចនៅពេលមានពន្លឺខ្លាំង ដើម្បីកំណត់បរិមាណពន្លឺចូល និងរីកធំនៅពេលពន្លឺស្រទន់ ដើម្បីឲ្យពន្លឺចូលបានច្រើន។",
+      formula: "Bright light → pupil constricts; Dim light → pupil dilates", formulaKm: "ពន្លឺខ្លាំង → រន្ធប្រស្រីរួម; ពន្លឺស្រទន់ → រន្ធប្រស្រីរីក",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Rods and cones", topicKm: "កោសិកាដំបង និងកោសិកាកោន", difficulty: "Medium",
+      prompt: "The retina contains two kinds of light-sensitive cells. Which one lets us perceive color, and requires strong light to do so clearly?", promptKm: "តម្រុយមានកោសិការសួនឹងពន្លឺពីរប្រភេទ។ តើកោសិកាមួយណាដែលអាចឲ្យយើងមើលឃើញពណ៌ ហើយត្រូវការពន្លឺខ្លាំងទើបអាចញែកពណ៌បានច្បាស់?",
+      options: ["Cone cells", "Rod cells", "Ganglion cells", "Bipolar cells"], answer: "Cone cells",
+      optionsKm: ["កោសិកាកោន", "កោសិកាដំបង", "កោសិកាកង់គ្លីយុង", "កោសិកាទ្វេប៉ូល"], answerKm: "កោសិកាកោន",
+      explanation: "Cone cells are sensitive to color but need strong light to distinguish colors clearly, while rod cells are sensitive to dim light but only produce black-and-white vision.", explanationKm: "កោសិកាកោនរសួនឹងពណ៌ ប៉ុន្តែត្រូវការពន្លឺខ្លាំងទើបអាចញែកពណ៌បានច្បាស់ ចំណែកឯកោសិកាដំបងរសួនឹងពន្លឺទន់ ប៉ុន្តែឲ្យតែគំនិតពណ៌សខ្មៅប៉ុណ្ណោះ។",
+      formula: "Cones: color (needs bright light); Rods: dim light (black & white)", formulaKm: "កោន៖ ពណ៌ (ត្រូវការពន្លឺខ្លាំង); ដំបង៖ ពន្លឺទន់ (សខ្មៅ)",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Fovea and blind spot", topicKm: "សាមមទឿង និងចំណុចខ្វាក់", difficulty: "Medium",
+      prompt: "Why can't we see anything at the \"blind spot\" of the retina?", promptKm: "ហេតុអ្វីបានជាយើងមើលមិនឃើញអ្វីនៅ \"ចំណុចខ្វាក់\" នៃតម្រុយ?",
+      options: ["It's where the optic nerve and blood vessels attach to the eyeball, with no photoreceptor cells there", "It's the sharpest area for color vision", "It only works in the dark", "It is covered by the eyebrow"], answer: "It's where the optic nerve and blood vessels attach to the eyeball, with no photoreceptor cells there",
+      optionsKm: ["ជាកន្លែងដែលសរសៃប្រសាទអុបទិច និងសរសៃឈាមភ្ជាប់នឹងគ្រាប់ភ្នែក គ្មានកោសិការសួនឹងពន្លឺនៅទីនោះទេ", "ជាតំបន់ច្បាស់បំផុតសម្រាប់មើលពណ៌", "ដំណើរការតែក្នុងទីងងឹតប៉ុណ្ណោះ", "ត្រូវបានបិទដោយចិញ្ចើម"], answerKm: "ជាកន្លែងដែលសរសៃប្រសាទអុបទិច និងសរសៃឈាមភ្ជាប់នឹងគ្រាប់ភ្នែក គ្មានកោសិការសួនឹងពន្លឺនៅទីនោះទេ",
+      explanation: "The blind spot is where the optic nerve and blood vessels exit the retina; since there are no rods or cones there, no light is detected. The fovea, by contrast, is the sharpest spot on the retina and lets us see color clearly.", explanationKm: "ចំណុចខ្វាក់ជាកន្លែងដែលសរសៃប្រសាទអុបទិច និងសរសៃឈាមចេញពីតម្រុយ ដោយសារគ្មានកោសិកាដំបង ឬកោនទីនោះ ទើបគ្មានការទទួលពន្លឺ។ ចំណែកឯសាមមទឿង ជាចំណុចច្បាស់បំផុតនៃតម្រុយ ដែលឲ្យយើងមើលឃើញពណ៌ច្បាស់។",
+      formula: "Blind spot: optic nerve exit, no photoreceptors; Fovea: sharpest color vision", formulaKm: "ចំណុចខ្វាក់៖ ចេញនៃសរសៃប្រសាទអុបទិច គ្មានកោសិការសួន; សាមមទឿង៖ ច្បាស់បំផុតសម្រាប់ពណ៌",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Accommodation of the lens", topicKm: "ការសម្របសម្រួលកែវភ្នែក", difficulty: "Hard",
+      prompt: "How does the eye's lens change shape to focus on a nearby object?", promptKm: "តើកែវភ្នែកផ្លាស់ប្តូររាងយ៉ាងដូចម្តេច ដើម្បីផ្តោតលើវត្ថុនៅជិត?",
+      options: ["The ciliary muscle contracts, the suspensory ligaments loosen, and the lens becomes more rounded", "The lens becomes completely flat", "The pupil closes entirely", "The retina moves closer to the lens"], answer: "The ciliary muscle contracts, the suspensory ligaments loosen, and the lens becomes more rounded",
+      optionsKm: ["សាច់ដុំស៊ីលីអែរកន្ត្រាក់ សរសៃចំណងរបូង ហើយកែវភ្នែកកាន់តែមូល", "កែវភ្នែកទៅជារាបស្មើទាំងស្រុង", "រន្ធប្រស្រីបិទជិតទាំងស្រុង", "តម្រុយផ្លាស់មកជិតកែវភ្នែក"], answerKm: "សាច់ដុំស៊ីលីអែរកន្ត្រាក់ សរសៃចំណងរបូង ហើយកែវភ្នែកកាន់តែមូល",
+      explanation: "To see a near object clearly, the ciliary muscle contracts, the suspensory ligaments (zonule fibers) slacken, and the lens's own elasticity lets it become thicker and more curved. To see a distant object, the muscle relaxes, the ligaments pull taut, and the lens flattens.", explanationKm: "ដើម្បីមើលឃើញវត្ថុនៅជិតបានច្បាស់ សាច់ដុំស៊ីលីអែរកន្ត្រាក់ សរសៃចំណងរបូង ហើយកែវភ្នែកនឹងក្រាស់ និងកោងជាងដោយសារភាពយឺតរបស់វាផ្ទាល់។ ដើម្បីមើលវត្ថុនៅឆ្ងាយ សាច់ដុំបន្ធូរ សរសៃចំណងតឹង ហើយកែវភ្នែកសំប៉ែត។",
+      formula: "Near object: muscle contracts → lens rounder; Far object: muscle relaxes → lens flatter", formulaKm: "វត្ថុជិត៖ សាច់ដុំកន្ត្រាក់ → កែវមូល; វត្ថុឆ្ងាយ៖ សាច់ដុំបន្ធូរ → កែវសំប៉ែត",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Path of hearing", topicKm: "ផ្លូវនៃការស្តាប់", difficulty: "Medium",
+      prompt: "In which structure of the inner ear is hearing actually generated from sound-wave vibrations?", promptKm: "តើសំណុំណាមួយនៃត្រចៀកខាងក្នុង ដែលការស្តាប់ត្រូវបានបង្កើតឡើងជាក់ស្តែងពីរំញ័ររលកសំឡេង?",
+      options: ["The cochlea (spiral tube)", "The semicircular canals", "The eardrum", "The outer ear flap"], answer: "The cochlea (spiral tube)",
+      optionsKm: ["បំពង់រាងគូទខ្យង (កូគីលេអា)", "បំពង់រាងពាក់កណ្តាលរង្វង់", "ភ្នាសត្រចៀក", "សន្លឹកត្រចៀកខាងក្រៅ"], answerKm: "បំពង់រាងគូទខ្យង (កូគីលេអា)",
+      explanation: "Sound waves make the eardrum vibrate; the three tiny middle-ear bones pass this vibration to the oval window, which makes fluid in the cochlea vibrate. Hair cells lining the cochlea convert this vibration into nerve impulses sent to the brain, where hearing is generated.", explanationKm: "រលកសំឡេងធ្វើឲ្យភ្នាសត្រចៀកញ័រ ឆ្អឹងតូចៗទាំងបីរបស់ត្រចៀកកណ្តាលបញ្ជូនញ័រនេះទៅបង្អួចរាងពងក្រពើ ធ្វើឲ្យសារធាតុរាវក្នុងបំពង់គូទខ្យងញ័រ។ កោសិកាមានរោមតាមបណ្តោយបំពង់គូទខ្យង បំលែងញ័រនេះទៅជាសញ្ញាប្រសាទបញ្ជូនទៅខួរក្បាល ជាកន្លែងដែលការស្តាប់ត្រូវបានបង្កើតឡើងជាក់ស្តែង។",
+      formula: "Eardrum → middle-ear bones → cochlea (fluid vibrates) → hair cells → brain", formulaKm: "ភ្នាសត្រចៀក → ឆ្អឹងត្រចៀកកណ្តាល → គូទខ្យង (រាវញ័រ) → កោសិការោម → ខួរក្បាល",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Balance and the semicircular canals", topicKm: "លំនឹង និងបំពង់រាងពាក់កណ្តាលរង្វង់", difficulty: "Medium",
+      prompt: "Which structure of the inner ear helps the body maintain balance?", promptKm: "តើសំណុំណាមួយនៃត្រចៀកខាងក្នុងជួយឲ្យរាងកាយរក្សាលំនឹង?",
+      options: ["The semicircular canals", "The cochlea", "The eardrum", "The ear canal"], answer: "The semicircular canals",
+      optionsKm: ["បំពង់រាងពាក់កណ្តាលរង្វង់", "បំពង់គូទខ្យង", "ភ្នាសត្រចៀក", "រន្ធត្រចៀក"], answerKm: "បំពង់រាងពាក់កណ្តាលរង្វង់",
+      explanation: "The three fluid-filled semicircular canals, oriented in different planes, detect rotation and movement of the head; combined with input from the cerebellum, this keeps the body balanced.", explanationKm: "បំពង់រាងពាក់កណ្តាលរង្វង់ទាំងបី ដែលពោរពេញដោយសារធាតុរាវ និងតម្រង់ទិសផ្សេងគ្នា ចាប់យកចលនាបង្វិល និងចលនាក្បាល រួមជាមួយព័ត៌មានពីខួរតូច ជួយរក្សាលំនឹងរាងកាយ។",
+      formula: "Semicircular canals + cerebellum → body balance", formulaKm: "បំពង់ពាក់កណ្តាលរង្វង់ + ខួរតូច → លំនឹងរាងកាយ",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "The five basic tastes", topicKm: "រសជាតិមូលដ្ឋានទាំងប្រាំ", difficulty: "Easy",
+      prompt: "Taste buds on the tongue detect different tastes in different regions. Which area typically detects sweetness?", promptKm: "ក្រពេញរសជាតិនៅលើអណ្តាតញែកចាប់រសជាតិផ្សេងៗគ្នាតាមតំបន់។ តើតំបន់ណាជាទូទៅចាប់រសជាតិផ្អែម?",
+      options: ["The tip of the tongue", "The base of the tongue", "The sides of the tongue", "Nowhere on the tongue"], answer: "The tip of the tongue",
+      optionsKm: ["ចុងអណ្តាត", "គល់អណ្តាត", "ចំហៀងអណ្តាតទាំងសងខាង", "គ្មាននៅត្រង់ណានៅលើអណ្តាតទេ"], answerKm: "ចុងអណ្តាត",
+      explanation: "Different regions of the tongue are most sensitive to different tastes: the tip detects sweet, the back detects bitter, and the sides detect salty (front) and sour (back).", explanationKm: "តំបន់ផ្សេងគ្នានៃអណ្តាតរសួនឹងរសជាតិផ្សេងគ្នា៖ ចុងអណ្តាតចាប់រសផ្អែម គល់អណ្តាតចាប់រសល្វីង ចំហៀងខាងមុខចាប់រសប្រៃ និងចំហៀងខាងក្រោយចាប់រសជូរ។",
+      formula: "Tip: sweet; sides: salty/sour; back: bitter", formulaKm: "ចុង៖ ផ្អែម; ចំហៀង៖ ប្រៃ/ជូរ; គល់៖ ល្វីង",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Smell and taste linked", topicKm: "ទំនាក់ទំនងរវាងក្លិន និងរសជាតិ", difficulty: "Medium",
+      prompt: "Why does food taste bland when you have a cold and a stuffy nose?", promptKm: "ហេតុអ្វីបានជាអាហារមានរសជាតិសាបនៅពេលអ្នកផ្តាសាយ និងច្រមុះស្ទះ?",
+      options: ["Mucus blocks the olfactory receptor cells in the nose, so smell can't function properly to combine with taste", "The tongue stops working completely", "The stomach stops digesting food", "The ears become blocked"], answer: "Mucus blocks the olfactory receptor cells in the nose, so smell can't function properly to combine with taste",
+      optionsKm: ["សំបូរស្លសមស្ទះកោសិកាឃានវិញ្ញាណក្នុងច្រមុះ ធ្វើឲ្យក្លិនមិនអាចបំពេញនាទីរួមជាមួយរសជាតិបានត្រឹមត្រូវ", "អណ្តាតឈប់ដំណើរការទាំងស្រុង", "ក្រពះឈប់រំលាយអាហារ", "ត្រចៀកស្ទះ"], answerKm: "សំបូរស្លសមស្ទះកោសិកាឃានវិញ្ញាណក្នុងច្រមុះ ធ្វើឲ្យក្លិនមិនអាចបំពេញនាទីរួមជាមួយរសជាតិបានត្រឹមត្រូវ",
+      explanation: "The flavor of food depends on both the taste sense (tongue) and the smell sense (nose) working together. When a cold clogs the nasal mucus layer, the olfactory receptor cells can't detect food's aroma properly, so eating feels bland.", explanationKm: "រសជាតិនៃអាហារពឹងផ្អែកលើទាំងវិញ្ញាណរសជាតិ (អណ្តាត) និងវិញ្ញាណក្លិន (ច្រមុះ) ដែលធ្វើការរួមគ្នា។ ពេលផ្តាសាយស្ទះស្រទាប់ស្លសក្នុងច្រមុះ កោសិកាឃានវិញ្ញាណមិនអាចចាប់ក្លិនអាហារបានត្រឹមត្រូវ ធ្វើឲ្យញ៉ាំមានអារម្មណ៍សាប។",
+      formula: "Flavor = taste (tongue) + smell (nose) combined", formulaKm: "រសជាតិ = រស (អណ្តាត) + ក្លិន (ច្រមុះ) រួមគ្នា",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Skin sensory receptors", topicKm: "អង្គជាវិញ្ញាណនៃស្បែក", difficulty: "Medium",
+      prompt: "The skin contains five main types of sensory receptors. What do they detect?", promptKm: "ស្បែកមានអង្គជាវិញ្ញាណចម្បងប្រាំប្រភេទ។ តើពួកវាចាប់អ្វីខ្លះ?",
+      options: ["Touch/pressure, contact, cold, heat, and pain", "Only pain", "Only temperature", "Sound waves"], answer: "Touch/pressure, contact, cold, heat, and pain",
+      optionsKm: ["ការប៉ះទង្គិច សម្ពាធ ត្រជាក់ កំដៅ និងឈឺចាប់", "ឈឺចាប់តែប៉ុណ្ណោះ", "សីតុណ្ហភាពតែប៉ុណ្ណោះ", "រលកសំឡេង"], answerKm: "ការប៉ះទង្គិច សម្ពាធ ត្រជាក់ កំដៅ និងឈឺចាប់",
+      explanation: "The skin's five types of sensory corpuscles each respond to a specific stimulus: light touch/contact, pressure, cold, heat, and pain — together giving the skin its full sense of touch.", explanationKm: "អង្គជាវិញ្ញាណប្រាំប្រភេទរបស់ស្បែក នីមួយៗឆ្លើយតបនឹងកម្លាំងជំរុញជាក់លាក់៖ ការប៉ះស្រាល ការប៉ះទង្គិច សម្ពាធ ត្រជាក់ កំដៅ និងឈឺចាប់ ដែលរួមគ្នាផ្តល់ស្បែកនូវអារម្មណ៍ប៉ះពេញលេញ។",
+      formula: "Skin receptors: touch + pressure + cold + heat + pain", formulaKm: "អង្គជាវិញ្ញាណស្បែក៖ ប៉ះ + សម្ពាធ + ត្រជាក់ + កំដៅ + ឈឺចាប់",
+      chapter: "Sensory Physiology", chapterKm: "សរីរាង្គវិញ្ញាណ" },
+    { topic: "Exocrine vs endocrine glands", topicKm: "ក្រពេញអិចសូគ្រីន ធៀបនឹងអង់ដូគ្រីន", difficulty: "Medium",
+      prompt: "What is the key difference between an exocrine gland and an endocrine gland?", promptKm: "តើភាពខុសគ្នាសំខាន់រវាងក្រពេញអិចសូគ្រីន និងក្រពេញអង់ដូគ្រីនជាអ្វី?",
+      options: ["Exocrine glands release their product through a duct; endocrine glands release hormones directly into the bloodstream with no duct", "Exocrine glands only exist in plants", "Endocrine glands only produce sweat", "There is no real difference"], answer: "Exocrine glands release their product through a duct; endocrine glands release hormones directly into the bloodstream with no duct",
+      optionsKm: ["ក្រពេញអិចសូគ្រីនបញ្ចេញផលិតផលតាមបំពង់នាំ; ក្រពេញអង់ដូគ្រីនបញ្ចេញអរម៉ូនផ្ទាល់ទៅក្នុងចរន្តឈាមដោយគ្មានបំពង់នាំ", "ក្រពេញអិចសូគ្រីនមានតែក្នុងរុក្ខជាតិប៉ុណ្ណោះ", "ក្រពេញអង់ដូគ្រីនផលិតតែញើសប៉ុណ្ណោះ", "គ្មានភាពខុសគ្នាពិតប្រាកដទេ"], answerKm: "ក្រពេញអិចសូគ្រីនបញ្ចេញផលិតផលតាមបំពង់នាំ; ក្រពេញអង់ដូគ្រីនបញ្ចេញអរម៉ូនផ្ទាល់ទៅក្នុងចរន្តឈាមដោយគ្មានបំពង់នាំ",
+      explanation: "Exocrine glands (like sweat and salivary glands) secrete substances outside the body or into a cavity through a duct. Endocrine glands (like the thyroid and pituitary) have no duct and release hormones directly into the blood.", explanationKm: "ក្រពេញអិចសូគ្រីន (ដូចជាក្រពេញញើស និងទឹកមាត់) បញ្ចេញសារធាតុទៅក្រៅរាងកាយ ឬចូលក្នុងប្រហោងតាមបំពង់នាំ។ ក្រពេញអង់ដូគ្រីន (ដូចជាក្រពេញទីរ៉ូអ៊ីត និងអុីបូភីស) គ្មានបំពង់នាំទេ ហើយបញ្ចេញអរម៉ូនផ្ទាល់ទៅក្នុងឈាម។",
+      formula: "Exocrine: duct → outside; Endocrine: no duct → bloodstream", formulaKm: "អិចសូគ្រីន៖ បំពង់នាំ → ក្រៅ; អង់ដូគ្រីន៖ គ្មានបំពង់ → ចរន្តឈាម",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "The hypothalamus and pituitary", topicKm: "អុីបូតាឡាមុស និងអុីបូភីស", difficulty: "Medium",
+      prompt: "Which gland is often called the \"master gland\" because the hypothalamus uses it to control the release of hormones from other endocrine glands?", promptKm: "តើក្រពេញមួយណាត្រូវបានហៅថា \"ក្រពេញមេ\" ព្រោះអុីបូតាឡាមុសប្រើវាដើម្បីគ្រប់គ្រងការបញ្ចេញអរម៉ូនរបស់ក្រពេញអង់ដូគ្រីនផ្សេងទៀត?",
+      options: ["The pituitary gland", "The pancreas", "The adrenal gland", "The thymus"], answer: "The pituitary gland",
+      optionsKm: ["ក្រពេញអុីបូភីស", "លំពែង", "ក្រពេញលើតម្រងនោម", "ក្រពេញទីមុស"], answerKm: "ក្រពេញអុីបូភីស",
+      explanation: "The hypothalamus controls the anterior pituitary's hormone release (e.g. TSH controls the thyroid, ACTH controls the adrenal cortex), and stores/releases two hormones made by the hypothalamus (ADH and oxytocin) from its posterior lobe — making the pituitary the body's central hormonal relay.", explanationKm: "អុីបូតាឡាមុសគ្រប់គ្រងការបញ្ចេញអរម៉ូនរបស់អុីបូភីសមុខ (ឧ. TSH គ្រប់គ្រងក្រពេញទីរ៉ូអ៊ីត ACTH គ្រប់គ្រងក្រពេញលើតម្រងនោម) ហើយសន្សំ/បញ្ចេញអរម៉ូនពីរដែលផលិតដោយអុីបូតាឡាមុស (ADH និងអុកស៊ីតូស៊ីន) ពីអុីបូភីសក្រោយ ធ្វើឲ្យអុីបូភីសជាចំណុចផ្ទេរអរម៉ូនកណ្តាលរបស់រាងកាយ។",
+      formula: "Hypothalamus → controls → pituitary → controls → other glands", formulaKm: "អុីបូតាឡាមុស → គ្រប់គ្រង → អុីបូភីស → គ្រប់គ្រង → ក្រពេញផ្សេងទៀត",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Growth hormone", topicKm: "អរម៉ូនលូតលាស់", difficulty: "Medium",
+      prompt: "What happens if the anterior pituitary secretes too much growth hormone (GH) during childhood?", promptKm: "តើមានអ្វីកើតឡើង បើអុីបូភីសមុខបញ្ចេញអរម៉ូនលូតលាស់ (GH) ច្រើនពេកក្នុងវ័យកុមារភាព?",
+      options: ["The child grows abnormally tall (gigantism)", "The child stops growing entirely", "The child's bones become soft", "The child loses their sense of taste"], answer: "The child grows abnormally tall (gigantism)",
+      optionsKm: ["កុមារកាលយទៅជាមនុស្សដំឡោក (ខ្ពស់ពិសេស)", "កុមារឈប់លូតលាស់ទាំងស្រុង", "ឆ្អឹងកុមារទៅជាទន់", "កុមារបាត់បង់ការញ៉ាំរសជាតិ"], answerKm: "កុមារកាលយទៅជាមនុស្សដំឡោក (ខ្ពស់ពិសេស)",
+      explanation: "Growth hormone (GH) affects bone and cartilage growth as well as protein, glucose and lipid metabolism. Too little GH in childhood causes dwarfism (a person of unusually short stature), while too much causes gigantism (unusually tall stature).", explanationKm: "អរម៉ូនលូតលាស់ (GH) ជះឥទ្ធិពលលើការលូតលាស់ឆ្អឹង និងខ្សែឆ្អឹងខ្ចី ព្រមទាំងតំណរនីតិកម្មប្រូតេអ៊ីន គ្លុយកូស និងលីពីត។ GH តិចពេកក្នុងវ័យកុមារភាព ធ្វើឲ្យក្លាយជាមនុស្សក្រិន (តូចពិសេស) ចំណែកឯច្រើនពេកធ្វើឲ្យក្លាយជាមនុស្សដំឡោក (ខ្ពស់ពិសេស)។",
+      formula: "Too little GH → dwarfism; Too much GH → gigantism", formulaKm: "GH តិចពេក → មនុស្សក្រិន; GH ច្រើនពេក → មនុស្សដំឡោក",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "ADH and water balance", topicKm: "ADH និងតុល្យភាពទឹក", difficulty: "Hard",
+      prompt: "What does antidiuretic hormone (ADH), released by the posterior pituitary, do when the blood becomes too concentrated?", promptKm: "តើអរម៉ូន ADH ដែលបញ្ចេញដោយអុីបូភីសក្រោយ ធ្វើអ្វី ពេលឈាមកាន់តែខាប់?",
+      options: ["It makes the kidneys reabsorb more water, concentrating the urine", "It makes the kidneys release more water, diluting the urine", "It stops kidney function entirely", "It has no effect on the kidneys"], answer: "It makes the kidneys reabsorb more water, concentrating the urine",
+      optionsKm: ["ធ្វើឲ្យតម្រងនោមស្រូបទឹកមកវិញច្រើន ធ្វើឲ្យទឹកនោមខាប់ជាង", "ធ្វើឲ្យតម្រងនោមបញ្ចេញទឹកច្រើន ធ្វើឲ្យទឹកនោមស្ដើងជាង", "បញ្ឈប់មុខងារតម្រងនោមទាំងស្រុង", "គ្មានឥទ្ធិពលលើតម្រងនោមទេ"], answerKm: "ធ្វើឲ្យតម្រងនោមស្រូបទឹកមកវិញច្រើន ធ្វើឲ្យទឹកនោមខាប់ជាង",
+      explanation: "When blood becomes concentrated (too little water), osmoreceptor neurons trigger the release of ADH, which makes the kidneys reabsorb more water from the collecting ducts back into the blood — concentrating the urine. Once the blood is diluted again, ADH release stops. This is a classic example of negative-feedback control.", explanationKm: "ពេលឈាមកាន់តែខាប់ (ទឹកតិចពេក) ណឺរូនរសួនឹងសម្ពាធអូស្មូសជំរុញឲ្យបញ្ចេញ ADH ដែលធ្វើឲ្យតម្រងនោមស្រូបទឹកមកវិញច្រើនពីបំពង់ប្រមូលទៅឈាម ធ្វើឲ្យទឹកនោមខាប់ជាង។ ពេលឈាមស្ដើងវិញ ការបញ្ចេញ ADH ឈប់។ នេះជាឧទាហរណ៍បុរាណនៃការត្រួតពិនិត្យតាមមតិត្រឡប់អវិជ្ជមាន។",
+      formula: "Blood too concentrated → ADH released → kidneys reabsorb water", formulaKm: "ឈាមខាប់ → បញ្ចេញ ADH → តម្រងនោមស្រូបទឹកមកវិញ",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Oxytocin's roles", topicKm: "តួនាទីអុកស៊ីតូស៊ីន", difficulty: "Medium",
+      prompt: "Which hormone triggers uterine muscle contractions during childbirth and also causes milk to be released during breastfeeding?", promptKm: "តើអរម៉ូនមួយណាបណ្តាលឲ្យសាច់ដុំស្បូនកន្ត្រាក់ពេលសម្រាលកូន ហើយក៏បណ្តាលឲ្យបញ្ចេញទឹកដោះពេលបំបៅកូនផងដែរ?",
+      options: ["Oxytocin", "Prolactin", "Growth hormone", "Thyroxine"], answer: "Oxytocin",
+      optionsKm: ["អុកស៊ីតូស៊ីន", "ប្រូឡាក់ទីន", "អរម៉ូនលូតលាស់", "ទីរុកស៊ីន"], answerKm: "អុកស៊ីតូស៊ីន",
+      explanation: "Oxytocin, released by the posterior pituitary, triggers strong uterine contractions to push the baby out during delivery, and also causes the smooth muscle around milk-producing cells to contract, releasing milk through small ducts at the nipple during breastfeeding.", explanationKm: "អុកស៊ីតូស៊ីន ដែលបញ្ចេញដោយអុីបូភីសក្រោយ បណ្តាលឲ្យស្បូនកន្ត្រាក់ខ្លាំងជំរុញទារកចេញពេលសម្រាល ហើយក៏បណ្តាលឲ្យសាច់ដុំរលើងជុំវិញកោសិកាផលិតទឹកដោះកន្ត្រាក់ បញ្ចេញទឹកដោះតាមរន្ធតូចៗនៅចុងដោះពេលបំបៅកូន។",
+      formula: "Oxytocin: uterine contraction (birth) + milk release (breastfeeding)", formulaKm: "អុកស៊ីតូស៊ីន៖ ស្បូនកន្ត្រាក់ (សម្រាល) + បញ្ចេញទឹកដោះ (បំបៅ)",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Thyroid hormones", topicKm: "អរម៉ូនក្រពេញទីរ៉ូអ៊ីត", difficulty: "Medium",
+      prompt: "Which thyroid hormone raises the metabolic rate of proteins, glucose, and fats?", promptKm: "តើអរម៉ូនក្រពេញទីរ៉ូអ៊ីតមួយណាបង្កើនអត្រានីតិកម្មប្រូតេអ៊ីន គ្លុយកូស និងខ្លាញ់?",
+      options: ["Thyroxine", "Calcitonin", "Parathyroid hormone", "Insulin"], answer: "Thyroxine",
+      optionsKm: ["ទីរុកស៊ីន", "កាល់ស៊ីតូនីន", "អរម៉ូនប៉ារ៉ាទីរ៉ូអ៊ីត", "អាំងស៊ុយលីន"], answerKm: "ទីរុកស៊ីន",
+      explanation: "The thyroid gland releases two hormones: thyroxine, which increases the metabolic rate of proteins, glucose and fats, and calcitonin, which regulates blood calcium by directing excess calcium to be stored in bone.", explanationKm: "ក្រពេញទីរ៉ូអ៊ីតបញ្ចេញអរម៉ូនពីរ៖ ទីរុកស៊ីន ដែលបង្កើនអត្រានីតិកម្មប្រូតេអ៊ីន គ្លុយកូស និងខ្លាញ់ និងកាល់ស៊ីតូនីន ដែលគ្រប់គ្រងកាល់ស្យូមក្នុងឈាមដោយចាប់យកកាល់ស្យូមលើសទៅសន្សំក្នុងឆ្អឹង។",
+      formula: "Thyroxine: raises metabolism; Calcitonin: lowers blood calcium", formulaKm: "ទីរុកស៊ីន៖ បង្កើននីតិកម្ម; កាល់ស៊ីតូនីន៖ បន្ថយកាល់ស្យូមក្នុងឈាម",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Iodine deficiency", topicKm: "កង្វះជាតិអុីយ៉ូត", difficulty: "Hard",
+      prompt: "Why does a diet lacking iodine cause the thyroid gland to swell, a condition known as goiter?", promptKm: "ហេតុអ្វីបានជាការទទួលទានអាហារខ្វះជាតិអុីយ៉ូត ធ្វើឲ្យក្រពេញទីរ៉ូអ៊ីតរីកធំ ជំងឺដែលហៅថាពកក?",
+      options: ["Low thyroxine keeps triggering TSH release, which keeps stimulating the thyroid to grow even though it still can't produce thyroxine without iodine", "Iodine makes the thyroid shrink", "The pituitary stops working completely without iodine", "Excess iodine always causes goiter, never a deficiency"], answer: "Low thyroxine keeps triggering TSH release, which keeps stimulating the thyroid to grow even though it still can't produce thyroxine without iodine",
+      optionsKm: ["ទីរុកស៊ីនទាបបន្តជំរុញឲ្យបញ្ចេញ TSH ដែលបន្តជំរុញក្រពេញទីរ៉ូអ៊ីតឲ្យរីកធំ ទោះបីជានៅតែមិនអាចផលិតទីរុកស៊ីនដោយគ្មានអុីយ៉ូត", "អុីយ៉ូតធ្វើឲ្យក្រពេញទីរ៉ូអ៊ីតរួមតូច", "អុីបូភីសឈប់ដំណើរការទាំងស្រុងដោយគ្មានអុីយ៉ូត", "អុីយ៉ូតលើសតែងតែបណ្តាលឲ្យពកកជានិច្ច មិនមែនកង្វះទេ"], answerKm: "ទីរុកស៊ីនទាបបន្តជំរុញឲ្យបញ្ចេញ TSH ដែលបន្តជំរុញក្រពេញទីរ៉ូអ៊ីតឲ្យរីកធំ ទោះបីជានៅតែមិនអាចផលិតទីរុកស៊ីនដោយគ្មានអុីយ៉ូត",
+      explanation: "Low blood thyroxine causes the hypothalamus and pituitary to keep releasing TRH and TSH to stimulate the thyroid. But without iodine, the thyroid still can't make thyroxine, so it keeps enlarging under the constant stimulation — producing a goiter.", explanationKm: "ទីរុកស៊ីនទាបក្នុងឈាម ធ្វើឲ្យអុីបូតាឡាមុស និងអុីបូភីសបន្តបញ្ចេញ TRH និង TSH ដើម្បីជំរុញក្រពេញទីរ៉ូអ៊ីត។ ប៉ុន្តែដោយគ្មានអុីយ៉ូត ក្រពេញទីរ៉ូអ៊ីតនៅតែមិនអាចផលិតទីរុកស៊ីនបាន ទើបវារីកធំឡើងៗក្រោមការជំរុញជាប់លាប់ បណ្តាលឲ្យកើតជំងឺពកក។",
+      formula: "No iodine → no thyroxine → TSH keeps rising → thyroid enlarges (goiter)", formulaKm: "គ្មានអុីយ៉ូត → គ្មានទីរុកស៊ីន → TSH កើនឡើងជានិច្ច → ក្រពេញទីរ៉ូអ៊ីតរីកធំ (ពកក)",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Adrenaline (epinephrine)", topicKm: "អរម៉ូនអេពីណេហ្វ្រីន", difficulty: "Medium",
+      prompt: "Which adrenal hormone is released in response to sudden danger, causing a racing heartbeat and a rush of energy (the \"fight or flight\" response)?", promptKm: "តើអរម៉ូនក្រពេញលើតម្រងនោមមួយណាបញ្ចេញនៅពេលប្រឈមគ្រោះថ្នាក់ភ្លាមៗ ធ្វើឲ្យបេះដូងលោតលឿន និងមានថាមពលភ្លាមៗ (ឆ្លើយតបប្រយុទ្ធ ឬរត់គេច)?",
+      options: ["Adrenaline (epinephrine)", "Cortisol", "Aldosterone", "Insulin"], answer: "Adrenaline (epinephrine)",
+      optionsKm: ["អាដ្រេណាលីន (អេពីណេហ្វ្រីន)", "កត់ទីសូល", "អាល់ដូស្តេរូន", "អាំងស៊ុយលីន"], answerKm: "អាដ្រេណាលីន (អេពីណេហ្វ្រីន)",
+      explanation: "The adrenal medulla releases adrenaline (epinephrine) in response to fear or a sudden threat — such as an angry dog chasing you — producing a faster heartbeat and quick energy so the body can respond or flee.", explanationKm: "ខួរក្រពេញលើតម្រងនោមបញ្ចេញអាដ្រេណាលីន (អេពីណេហ្វ្រីន) ឆ្លើយតបនឹងការភ័យខ្លាច ឬការគំរាមកំហែងភ្លាមៗ ដូចជាឆ្កែខឹងដេញ ធ្វើឲ្យបេះដូងលោតលឿន និងផ្តល់ថាមពលភ្លាមៗ ដើម្បីរាងកាយអាចឆ្លើយតប ឬរត់គេច។",
+      formula: "Sudden danger → adrenal medulla → adrenaline → fast heartbeat + energy", formulaKm: "គ្រោះថ្នាក់ភ្លាមៗ → ខួរក្រពេញលើតម្រងនោម → អាដ្រេណាលីន → បេះដូងលឿន + ថាមពល",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Insulin and glucagon", topicKm: "អាំងស៊ុយលីន និងគ្លុយកាកុង", difficulty: "Medium",
+      prompt: "The pancreas releases two opposing hormones to control blood glucose. Which one lowers blood glucose after a meal?", promptKm: "លំពែងបញ្ចេញអរម៉ូនពីរដែលផ្ទុយគ្នាដើម្បីគ្រប់គ្រងគ្លុយកូសក្នុងឈាម។ តើមួយណាបន្ថយគ្លុយកូសក្នុងឈាមក្រោយពេលបរិភោគ?",
+      options: ["Insulin, released by beta cells", "Glucagon, released by alpha cells", "Thyroxine", "Adrenaline"], answer: "Insulin, released by beta cells",
+      optionsKm: ["អាំងស៊ុយលីន បញ្ចេញដោយកោសិកាបេតា", "គ្លុយកាកុង បញ្ចេញដោយកោសិកាអាល់ហ្វា", "ទីរុកស៊ីន", "អាដ្រេណាលីន"], answerKm: "អាំងស៊ុយលីន បញ្ចេញដោយកោសិកាបេតា",
+      explanation: "When blood glucose rises, beta cells in the pancreas's islets of Langerhans release insulin, which makes target cells (liver, muscle, fat) take up glucose for use or storage, lowering blood glucose. When glucose falls too low, alpha cells release glucagon, which raises it back up.", explanationKm: "ពេលគ្លុយកូសក្នុងឈាមឡើងខ្ពស់ កោសិកាបេតានៅក្នុងអុីឡូតដឺឡង់ហែរង់របស់លំពែង បញ្ចេញអាំងស៊ុយលីន ដែលធ្វើឲ្យកោសិកាគោលដៅ (ថ្លើម សាច់ដុំ ខ្លាញ់) ស្រូបយកគ្លុយកូសទៅប្រើ ឬសន្សំ ធ្វើឲ្យគ្លុយកូសក្នុងឈាមធ្លាក់ចុះ។ ពេលគ្លុយកូសទាបពេក កោសិកាអាល់ហ្វាបញ្ចេញគ្លុយកាកុង ធ្វើឲ្យវាឡើងវិញ។",
+      formula: "High glucose → insulin (lowers); Low glucose → glucagon (raises)", formulaKm: "គ្លុយកូសខ្ពស់ → អាំងស៊ុយលីន (បន្ថយ); គ្លុយកូសទាប → គ្លុយកាកុង (បង្កើន)",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Diabetes and insulin deficiency", topicKm: "ជំងឺទឹកនោមផ្អែម និងកង្វះអាំងស៊ុយលីន", difficulty: "Hard",
+      prompt: "What condition results from a deficiency of insulin?", promptKm: "តើកង្វះអាំងស៊ុយលីនបណ្តាលឲ្យកើតជំងឺអ្វី?",
+      options: ["Diabetes mellitus, where excess glucose is excreted in the urine", "Gigantism", "Goiter", "Osteoporosis only"], answer: "Diabetes mellitus, where excess glucose is excreted in the urine",
+      optionsKm: ["ជំងឺទឹកនោមផ្អែម ដែលគ្លុយកូសលើសបញ្ចេញតាមទឹកនោម", "ជំងឺមនុស្សដំឡោក", "ជំងឺពកក", "ជំងឺឆ្អឹងស្តើងតែប៉ុណ្ណោះ"], answerKm: "ជំងឺទឹកនោមផ្អែម ដែលគ្លុយកូសលើសបញ្ចេញតាមទឹកនោម",
+      explanation: "Without enough insulin, blood glucose rises too high for the kidneys to reabsorb it all, so glucose is excreted in the urine — a hallmark of diabetes mellitus.", explanationKm: "ដោយគ្មានអាំងស៊ុយលីនគ្រប់គ្រាន់ គ្លុយកូសក្នុងឈាមឡើងខ្ពស់ពេក ធ្វើឲ្យតម្រងនោមមិនអាចស្រូបយកមកវិញបានទាំងអស់ ទើបបញ្ចេញគ្លុយកូសតាមទឹកនោម ដែលជាសញ្ញាចម្បងនៃជំងឺទឹកនោមផ្អែម។",
+      formula: "Insulin deficiency → high blood glucose → glucose in urine (diabetes)", formulaKm: "កង្វះអាំងស៊ុយលីន → គ្លុយកូសឈាមខ្ពស់ → គ្លុយកូសក្នុងទឹកនោម (ទឹកនោមផ្អែម)",
+      chapter: "Endocrine System", chapterKm: "ប្រព័ន្ធអង់ដូគ្រីន" },
+    { topic: "Amino acid structure", topicKm: "រចនាសម្ព័ន្ធអាស៊ីតអាមីណេ", difficulty: "Medium",
+      prompt: "Every amino acid molecule is built from a carboxyl group, an amine group, and one other part. What is that third part?", promptKm: "គ្រប់ម៉ូលេគុលអាស៊ីតអាមីណេសុទ្ធតែផ្សំពីបណ្តុំកាបុកស៊ីល បណ្តុំអាមីន និងផ្នែកមួយទៀត។ តើផ្នែកទីបីនោះជាអ្វី?",
+      options: ["A variable side chain (R group)", "A second carboxyl group always", "A sugar molecule", "A phosphate group"], answer: "A variable side chain (R group)",
+      optionsKm: ["រ៉ាឌីកាល R ដែលប្រែប្រួល", "បណ្តុំកាបុកស៊ីលទីពីរជានិច្ច", "ម៉ូលេគុលសករ", "បណ្តុំផូស្វាត"], answerKm: "រ៉ាឌីកាល R ដែលប្រែប្រួល",
+      explanation: "Every amino acid has a carboxyl group (-COOH), an amine group (-NH2), and a variable side chain called the R group (radical), which is what makes the 20 amino acids different from one another.", explanationKm: "អាស៊ីតអាមីណេនីមួយៗមានបណ្តុំកាបុកស៊ីល (-COOH) បណ្តុំអាមីន (-NH2) និងរ៉ាឌីកាល R ដែលប្រែប្រួល ជាអ្វីដែលធ្វើឲ្យអាស៊ីតអាមីណេទាំង២០ខុសគ្នា។",
+      formula: "Amino acid = -COOH + -NH2 + R group", formulaKm: "អាស៊ីតអាមីណេ = -COOH + -NH2 + រ៉ាឌីកាល R",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "20 amino acids", topicKm: "អាស៊ីតអាមីណេ ២០ប្រភេទ", difficulty: "Easy",
+      prompt: "How many different types of amino acids are found in the cells of living organisms?", promptKm: "តើមានអាស៊ីតអាមីណេប៉ុន្មានប្រភេទផ្សេងគ្នាដែលមាននៅក្នុងកោសិការបស់សារពាង្គកាយរស់?",
+      options: ["20", "4", "64", "100"], answer: "20",
+      optionsKm: ["២០", "៤", "៦៤", "១០០"], answerKm: "២០",
+      explanation: "There are 20 standard amino acids in living cells, each distinguished only by the structure of its R group (radical).", explanationKm: "មានអាស៊ីតអាមីណេស្តង់ដារចំនួន២០ក្នុងកោសិការស់ ដែលនីមួយៗខុសគ្នាដោយសារតែរ៉ាឌីកាល R តែប៉ុណ្ណោះ។",
+      formula: "20 standard amino acids, distinguished by R group", formulaKm: "អាស៊ីតអាមីណេស្តង់ដារ ២០ប្រភេទ ខុសគ្នាដោយ R",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "Peptide bonds", topicKm: "ចំណងពិបទីត", difficulty: "Medium",
+      prompt: "A peptide bond forms between two amino acids by releasing what byproduct?", promptKm: "ចំណងពិបទីតបង្កើតឡើងរវាងអាស៊ីតអាមីណេពីរ ដោយបញ្ចេញផលិតផលរងអ្វី?",
+      options: ["A water molecule", "A carbon dioxide molecule", "An oxygen molecule", "A glucose molecule"], answer: "A water molecule",
+      optionsKm: ["ម៉ូលេគុលទឹក", "ម៉ូលេគុលកាបូនឌីអុកស៊ីត", "ម៉ូលេគុលអុកសីសែន", "ម៉ូលេគុលគ្លុយកូស"], answerKm: "ម៉ូលេគុលទឹក",
+      explanation: "A peptide bond is a covalent bond formed between the carboxyl group of one amino acid and the amine group of another, releasing one water molecule — a dehydration (condensation) reaction.", explanationKm: "ចំណងពិបទីតជាសម្ព័ន្ធកូវ៉ាឡង់ដែលបង្កើតឡើងរវាងបណ្តុំកាបុកស៊ីលនៃអាស៊ីតអាមីណេមួយ និងបណ្តុំអាមីននៃអាស៊ីតអាមីណេមួយទៀត ដោយបញ្ចេញម៉ូលេគុលទឹកមួយ ជាប្រតិកម្មដេអ៊ីស្ដ្រាតកម្ម (ការផ្សំដោយបំបាត់ទឹក)។",
+      formula: "Amino acid + Amino acid → dipeptide + H2O", formulaKm: "អាស៊ីតអាមីណេ + អាស៊ីតអាមីណេ → ឌីពិបទីត + H2O",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "Protein primary structure", topicKm: "រចនាសម្ព័ន្ធទី១របស់ប្រូតេអ៊ីន", difficulty: "Medium",
+      prompt: "What determines a protein's primary structure?", promptKm: "តើអ្វីកំណត់រចនាសម្ព័ន្ធទី១របស់ប្រូតេអ៊ីន?",
+      options: ["The specific sequence of amino acids linked by peptide bonds", "The coiling of the chain into a helix", "The folding into a 3D globular shape", "The joining of several separate protein subunits"], answer: "The specific sequence of amino acids linked by peptide bonds",
+      optionsKm: ["លំដាប់ជាក់លាក់នៃអាស៊ីតអាមីណេភ្ជាប់ដោយចំណងពិបទីត", "ការវេចខ្សែច្រវាក់ទៅជារាងស្ពៀល", "ការបត់ទៅជារាងបីវិមាត្ររាងមូល", "ការភ្ជាប់ឯកតារងប្រូតេអ៊ីនដាច់ដោយឡែកជាច្រើន"], answerKm: "លំដាប់ជាក់លាក់នៃអាស៊ីតអាមីណេភ្ជាប់ដោយចំណងពិបទីត",
+      explanation: "A protein's primary structure is simply the specific sequence of amino acids joined by peptide bonds; this sequence determines the protein's identity and ultimately its final 3D shape and function.", explanationKm: "រចនាសម្ព័ន្ធទី១របស់ប្រូតេអ៊ីន គឺគ្រាន់តែជាលំដាប់ជាក់លាក់នៃអាស៊ីតអាមីណេភ្ជាប់ដោយចំណងពិបទីត លំដាប់នេះកំណត់អត្តសញ្ញាណប្រូតេអ៊ីន និងទីបំផុតរូបរាងបីវិមាត្រចុងក្រោយ និងនាទីរបស់វា។",
+      formula: "Primary structure = amino acid sequence", formulaKm: "រចនាសម្ព័ន្ធទី១ = លំដាប់អាស៊ីតអាមីណេ",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "Protein functions: catalyst", topicKm: "តួនាទីប្រូតេអ៊ីន៖ កាតាលីករ", difficulty: "Medium",
+      prompt: "Why are proteins described as acting as catalysts in the body?", promptKm: "ហេតុអ្វីបានជាប្រូតេអ៊ីនត្រូវបានពិពណ៌នាថាដើរតួជាកាតាលីករក្នុងរាងកាយ?",
+      options: ["Because enzymes, which are proteins, speed up chemical reactions in digestion and metabolism", "Because they only provide structure to bones", "Because they only transport oxygen", "Because they only store energy"], answer: "Because enzymes, which are proteins, speed up chemical reactions in digestion and metabolism",
+      optionsKm: ["ពីព្រោះអង់ស៊ីម ដែលជាប្រូតេអ៊ីន បង្កើនល្បឿនប្រតិកម្មគីមីក្នុងការរំលាយអាហារ និងតំណរនីតិកម្ម", "ពីព្រោះពួកវាផ្តល់តែរចនាសម្ព័ន្ធដល់ឆ្អឹង", "ពីព្រោះពួកវាដឹកនាំតែអុកសីសែន", "ពីព្រោះពួកវាសន្សំតែថាមពល"], answerKm: "ពីព្រោះអង់ស៊ីម ដែលជាប្រូតេអ៊ីន បង្កើនល្បឿនប្រតិកម្មគីមីក្នុងការរំលាយអាហារ និងតំណរនីតិកម្ម",
+      explanation: "Enzymes are a class of proteins that act as biological catalysts, speeding up chemical reactions such as digestion (e.g. amylase) or metabolic pathways (e.g. respiratory enzymes) without being consumed themselves.", explanationKm: "អង់ស៊ីមជាប្រភេទប្រូតេអ៊ីនមួយដែលដើរតួជាកាតាលីករជីវសាស្ត្រ បង្កើនល្បឿនប្រតិកម្មគីមីដូចជាការរំលាយអាហារ (ឧ. អាមីឡាស) ឬដំណើរការតំណរនីតិកម្ម (ឧ. អង់ស៊ីមដកដង្ហើម) ដោយមិនត្រូវបានប្រើប្រាស់អស់ទៅផ្ទាល់ខ្លួន។",
+      formula: "Protein function: enzyme = biological catalyst", formulaKm: "តួនាទីប្រូតេអ៊ីន៖ អង់ស៊ីម = កាតាលីករជីវសាស្ត្រ",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "Protein functions: transport and defense", topicKm: "តួនាទីប្រូតេអ៊ីន៖ ដឹកនាំ និងការពារ", difficulty: "Medium",
+      prompt: "Hemoglobin and antibodies are both proteins. What functions do they represent, respectively?", promptKm: "អេម៉ូក្លូប៊ីន និងអង់ទីករសុទ្ធតែជាប្រូតេអ៊ីន។ តើពួកវាតំណាងឲ្យតួនាទីអ្វីរៀងគ្នា?",
+      options: ["Transport (carrying oxygen) and defense (fighting pathogens)", "Both are only structural proteins", "Both are only enzymes", "Both are only hormones"], answer: "Transport (carrying oxygen) and defense (fighting pathogens)",
+      optionsKm: ["ដឹកនាំ (ដឹកអុកសីសែន) និងការពារ (ប្រយុទ្ធនឹងភ្នាក់ងារបង្កជំងឺ)", "ទាំងពីរជាប្រូតេអ៊ីនរចនាសម្ព័ន្ធតែប៉ុណ្ណោះ", "ទាំងពីរជាអង់ស៊ីមតែប៉ុណ្ណោះ", "ទាំងពីរជាអរម៉ូនតែប៉ុណ្ណោះ"], answerKm: "ដឹកនាំ (ដឹកអុកសីសែន) និងការពារ (ប្រយុទ្ធនឹងភ្នាក់ងារបង្កជំងឺ)",
+      explanation: "Hemoglobin is a transport protein that carries oxygen from the lungs to tissues throughout the body. Antibodies (immunoglobulins) are defense proteins that protect the body against invading pathogens.", explanationKm: "អេម៉ូក្លូប៊ីនជាប្រូតេអ៊ីនដឹកនាំ ដែលដឹកអុកសីសែនពីសួតទៅជាលិកាទូទាំងរាងកាយ។ អង់ទីករ (អ៊ីមុយណូក្លូប៊ូលីន) ជាប្រូតេអ៊ីនការពារ ដែលការពាររាងកាយពីភ្នាក់ងារបង្កជំងឺឈ្លានពាន។",
+      formula: "Protein roles: hemoglobin = transport; antibody = defense", formulaKm: "តួនាទីប្រូតេអ៊ីន៖ អេម៉ូក្លូប៊ីន = ដឹកនាំ; អង់ទីករ = ការពារ",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "Factors that denature proteins", topicKm: "កត្តាបំផ្លាញរចនាសម្ព័ន្ធប្រូតេអ៊ីន", difficulty: "Medium",
+      prompt: "Which of the following can cause a protein to lose its shape and function (denature)?", promptKm: "តើមួយណាខាងក្រោមអាចធ្វើឲ្យប្រូតេអ៊ីនបាត់បង់រូបរាង និងមុខងារ (denature)?",
+      options: ["High temperature, strong acid or base, and heavy metals", "Cold water only", "Vitamin C only", "Sunlight only, never heat"], answer: "High temperature, strong acid or base, and heavy metals",
+      optionsKm: ["សីតុណ្ហភាពខ្ពស់ អាស៊ីត ឬបាសខ្លាំង និងលោហធាតុធ្ងន់", "ទឹកត្រជាក់តែប៉ុណ្ណោះ", "វីតាមីន C តែប៉ុណ្ណោះ", "ពន្លឺថ្ងៃតែប៉ុណ្ណោះ មិនមែនកំដៅទេ"], answerKm: "សីតុណ្ហភាពខ្ពស់ អាស៊ីត ឬបាសខ្លាំង និងលោហធាតុធ្ងន់",
+      explanation: "Factors such as high temperature, strong acids or bases, heavy metals, organic solvents, high salt concentration, and mechanical agitation can break the bonds holding a protein's shape, denaturing it and destroying its function.", explanationKm: "កត្តាដូចជាសីតុណ្ហភាពខ្ពស់ អាស៊ីត ឬបាសខ្លាំង លោហធាតុធ្ងន់ អង្គធាតុរំលាយសរីរាង្គ កំហាប់អំបិលខ្ពស់ និងចលនាមេកានិច អាចបំបែកចំណងដែលកាន់រូបរាងប្រូតេអ៊ីន ធ្វើឲ្យវាបាត់បង់រូបរាង និងមុខងារ។",
+      formula: "Denaturation causes: heat + acid/base + heavy metals + agitation", formulaKm: "កត្តាបំផ្លាញប្រូតេអ៊ីន៖ កំដៅ + អាស៊ីត/បាស + លោហធាតុធ្ងន់ + ចលនា",
+      chapter: "Amino Acids & Proteins", chapterKm: "អាស៊ីតអាមីណេ និងប្រូតេអ៊ីន" },
+    { topic: "What enzymes do", topicKm: "តួនាទីអង់ស៊ីម", difficulty: "Easy",
+      prompt: "What is an enzyme?", promptKm: "តើអង់ស៊ីមជាអ្វី?",
+      options: ["A catalyst that speeds up a specific biochemical reaction", "A type of sugar", "A structural bone protein only", "A hormone that only the pancreas makes"], answer: "A catalyst that speeds up a specific biochemical reaction",
+      optionsKm: ["កាតាលីករដែលបង្កើនល្បឿនប្រតិកម្មជីវគីមីជាក់លាក់មួយ", "ប្រភេទសករមួយ", "ប្រូតេអ៊ីនរចនាសម្ព័ន្ធឆ្អឹងតែប៉ុណ្ណោះ", "អរម៉ូនដែលមានតែលំពែងផលិត"], answerKm: "កាតាលីករដែលបង្កើនល្បឿនប្រតិកម្មជីវគីមីជាក់លាក់មួយ",
+      explanation: "An enzyme is a catalyst — nearly always a protein — that speeds up the rate of a specific biochemical reaction without itself being used up.", explanationKm: "អង់ស៊ីមជាកាតាលីករ ស្ទើរតែតែងជាប្រូតេអ៊ីន ដែលបង្កើនល្បឿននៃប្រតិកម្មជីវគីមីជាក់លាក់មួយ ដោយមិនត្រូវបានប្រើប្រាស់អស់ទៅផ្ទាល់ខ្លួន។",
+      formula: "Enzyme = biological catalyst (protein)", formulaKm: "អង់ស៊ីម = កាតាលីករជីវសាស្ត្រ (ប្រូតេអ៊ីន)",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "Enzyme specificity", topicKm: "ភាពជាក់លាក់របស់អង់ស៊ីម", difficulty: "Medium",
+      prompt: "Why does a single cell need so many different kinds of enzymes?", promptKm: "ហេតុអ្វីបានជាកោសិកាមួយត្រូវការអង់ស៊ីមច្រើនប្រភេទផ្សេងគ្នា?",
+      options: ["Because each enzyme acts on only one specific type of chemical reaction (its substrate)", "Because enzymes wear out after one use", "Because the cell has no other proteins", "Because only one enzyme exists in nature"], answer: "Because each enzyme acts on only one specific type of chemical reaction (its substrate)",
+      optionsKm: ["ពីព្រោះអង់ស៊ីមនីមួយៗធ្វើសកម្មភាពលើប្រតិកម្មគីមីតែមួយប្រភេទជាក់លាក់ (សុបស្ត្រាត់របស់វា)", "ពីព្រោះអង់ស៊ីមប្រើតែម្តងហើយបាត់", "ពីព្រោះកោសិកាគ្មានប្រូតេអ៊ីនផ្សេងទៀត", "ពីព្រោះមានអង់ស៊ីមតែមួយប្រភេទប៉ុណ្ណោះនៅក្នុងធម្មជាតិ"], answerKm: "ពីព្រោះអង់ស៊ីមនីមួយៗធ្វើសកម្មភាពលើប្រតិកម្មគីមីតែមួយប្រភេទជាក់លាក់ (សុបស្ត្រាត់របស់វា)",
+      explanation: "Cells carry out thousands of different chemical reactions, and each enzyme is specific to just one type of reaction (its substrate), so many different enzymes are needed to catalyze them all.", explanationKm: "កោសិកាធ្វើប្រតិកម្មគីមីរាប់ពាន់ប្រភេទផ្សេងគ្នា ហើយអង់ស៊ីមនីមួយៗជាក់លាក់ចំពោះប្រតិកម្មតែមួយប្រភេទ (សុបស្ត្រាត់របស់វា) ទើបត្រូវការអង់ស៊ីមច្រើនប្រភេទដើម្បីជំរុញពួកវាទាំងអស់។",
+      formula: "One enzyme = one specific substrate reaction", formulaKm: "អង់ស៊ីមមួយ = ប្រតិកម្មសុបស្ត្រាត់ជាក់លាក់មួយ",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "Enzyme naming", topicKm: "ការដាក់ឈ្មោះអង់ស៊ីម", difficulty: "Easy",
+      prompt: "Enzyme names are typically formed by combining the substrate name with which suffix?", promptKm: "ឈ្មោះអង់ស៊ីមជាទូទៅត្រូវបានបង្កើតឡើងដោយផ្សំឈ្មោះសុបស្ត្រាត់ជាមួយបច្ច័យអ្វី?",
+      options: ["-ase", "-ose", "-ine", "-ol"], answer: "-ase",
+      optionsKm: ["-ase", "-ose", "-ine", "-ol"], answerKm: "-ase",
+      explanation: "Enzymes are typically named after their substrate plus the suffix \"-ase\" — for example, an enzyme that breaks down lactose is called lactase.", explanationKm: "អង់ស៊ីមជាទូទៅត្រូវបានដាក់ឈ្មោះតាមសុបស្ត្រាត់របស់វា បូកបច្ច័យ \"-ase\" ឧទាហរណ៍ អង់ស៊ីមដែលបំបែកឡាក់តូស ត្រូវបានហៅថាឡាក់តាស។",
+      formula: "Enzyme name = substrate + \"-ase\"", formulaKm: "ឈ្មោះអង់ស៊ីម = សុបស្ត្រាត់ + \"-ase\"",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "Enzyme categories", topicKm: "ក្រុមអង់ស៊ីម", difficulty: "Hard",
+      prompt: "Which enzyme category catalyzes reactions that break large molecules into smaller ones using water?", promptKm: "តើក្រុមអង់ស៊ីមមួយណាជំរុញប្រតិកម្មបំបែកម៉ូលេគុលធំទៅជាតូចៗដោយប្រើទឹក?",
+      options: ["Hydrolases", "Oxidoreductases", "Ligases", "Isomerases"], answer: "Hydrolases",
+      optionsKm: ["អុីស្ដ្រូឡាស", "អុកស៊ីដូរេដុកតាស", "លីហ្គាស", "អុីសូមេរ៉ាស"], answerKm: "អុីស្ដ្រូឡាស",
+      explanation: "Enzymes fall into 6 major categories: oxidoreductases, transferases, hydrolases, lyases, isomerases and ligases. Hydrolases specifically catalyze hydrolysis — breaking a large molecule apart using water, such as amylase breaking down starch.", explanationKm: "អង់ស៊ីមមានក្រុមសំខាន់៦៖ អុកស៊ីដូរេដុកតាស ត្រង់ស្វេរ៉ាស អុីស្ដ្រូឡាស លីអ៉ាស អុីសូមេរ៉ាស និងលីហ្គាស។ អុីស្ដ្រូឡាសជំរុញប្រតិកម្មអុីស្ដ្រូលីស ដោយបំបែកម៉ូលេគុលធំដោយប្រើទឹក ដូចជាអាមីឡាសបំបែកម្សៅ។",
+      formula: "6 enzyme groups: oxidoreductase, transferase, hydrolase, lyase, isomerase, ligase", formulaKm: "ក្រុមអង់ស៊ីម៦៖ អុកស៊ីដូរេដុកតាស ត្រង់ស្វេរ៉ាស អុីស្ដ្រូឡាស លីអ៉ាស អុីសូមេរ៉ាស លីហ្គាស",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "Coenzymes", topicKm: "កូអង់ស៊ីម", difficulty: "Medium",
+      prompt: "What is a coenzyme?", promptKm: "តើកូអង់ស៊ីមជាអ្វី?",
+      options: ["A non-protein molecule that helps an enzyme carry out its reaction, such as vitamin B", "A second copy of the same enzyme", "A protein that destroys enzymes", "The name for a denatured enzyme"], answer: "A non-protein molecule that helps an enzyme carry out its reaction, such as vitamin B",
+      optionsKm: ["ម៉ូលេគុលដែលមិនមែនជាប្រូតេអ៊ីន ដែលជួយអង់ស៊ីមអនុវត្តប្រតិកម្មរបស់វា ដូចជាវីតាមីន B", "ច្បាប់ចម្លងទីពីរនៃអង់ស៊ីមតែមួយ", "ប្រូតេអ៊ីនដែលបំផ្លាញអង់ស៊ីម", "ឈ្មោះសម្រាប់អង់ស៊ីមដែលបាត់បង់រូបរាង"], answerKm: "ម៉ូលេគុលដែលមិនមែនជាប្រូតេអ៊ីន ដែលជួយអង់ស៊ីមអនុវត្តប្រតិកម្មរបស់វា ដូចជាវីតាមីន B",
+      explanation: "A coenzyme is a non-protein molecule, such as vitamin B, that joins with an enzyme to help speed up its chemical reaction.", explanationKm: "កូអង់ស៊ីមជាម៉ូលេគុលដែលមិនមែនជាប្រូតេអ៊ីន ដូចជាវីតាមីន B ដែលចូលរួមជាមួយអង់ស៊ីមដើម្បីជួយបង្កើនល្បឿនប្រតិកម្មគីមីរបស់វា។",
+      formula: "Enzyme + coenzyme (e.g. vitamin B) → active reaction", formulaKm: "អង់ស៊ីម + កូអង់ស៊ីម (ឧ. វីតាមីន B) → ប្រតិកម្មសកម្ម",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "Temperature and enzyme activity", topicKm: "សីតុណ្ហភាព និងសកម្មភាពអង់ស៊ីម", difficulty: "Hard",
+      prompt: "Why does enzyme activity sharply decrease when temperature rises above about 45°C?", promptKm: "ហេតុអ្វីបានជាសកម្មភាពអង់ស៊ីមថយចុះខ្លាំង នៅពេលសីតុណ្ហភាពលើសពី ៤៥ អង្សាសេ?",
+      options: ["Because the enzyme, being a protein, denatures and loses its functional shape at high temperature", "Because the enzyme freezes at that temperature", "Because water boils at 45°C", "Because the substrate disappears"], answer: "Because the enzyme, being a protein, denatures and loses its functional shape at high temperature",
+      optionsKm: ["ពីព្រោះអង់ស៊ីម ដែលជាប្រូតេអ៊ីន បាត់បង់រូបរាងមុខងារនៅសីតុណ្ហភាពខ្ពស់ (denature)", "ពីព្រោះអង់ស៊ីមកកនៅសីតុណ្ហភាពនោះ", "ពីព្រោះទឹកពុះនៅ ៤៥ អង្សាសេ", "ពីព្រោះសុបស្ត្រាត់បាត់ទៅវិញ"], answerKm: "ពីព្រោះអង់ស៊ីម ដែលជាប្រូតេអ៊ីន បាត់បង់រូបរាងមុខងារនៅសីតុណ្ហភាពខ្ពស់ (denature)",
+      explanation: "Since an enzyme is a protein, excessively high temperature breaks the bonds holding its 3D shape, denaturing it — the enzyme's active site becomes distorted and it can no longer catalyze its reaction efficiently.", explanationKm: "ដោយសារអង់ស៊ីមជាប្រូតេអ៊ីន សីតុណ្ហភាពខ្ពស់ពេកបំបែកចំណងដែលកាន់រូបរាងបីវិមាត្ររបស់វា ធ្វើឲ្យ denature តំបន់សកម្មរបស់វាខូចទ្រង់ទ្រាយ ហើយវាលែងអាចជំរុញប្រតិកម្មបានប្រកបដោយប្រសិទ្ធភាព។",
+      formula: "Too much heat → protein denatures → enzyme activity drops", formulaKm: "កំដៅច្រើនពេក → ប្រូតេអ៊ីនបាត់រូបរាង → សកម្មភាពអង់ស៊ីមធ្លាក់ចុះ",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "pH and enzyme activity", topicKm: "pH និងសកម្មភាពអង់ស៊ីម", difficulty: "Medium",
+      prompt: "What happens to an enzyme's activity in a very acidic or very basic environment (extreme pH)?", promptKm: "តើមានអ្វីកើតឡើងចំពោះសកម្មភាពអង់ស៊ីម នៅក្នុងបរិយាកាសអាស៊ីតខ្លាំង ឬបាសខ្លាំង (pH ជ្រុលបំផុត)?",
+      options: ["It decreases because extreme pH breaks the enzyme's structural bonds, denaturing it", "It always increases without limit", "It stays exactly the same at any pH", "Only water-based enzymes are affected"], answer: "It decreases because extreme pH breaks the enzyme's structural bonds, denaturing it",
+      optionsKm: ["ថយចុះ ពីព្រោះ pH ជ្រុលបំបែកចំណងរចនាសម្ព័ន្ធអង់ស៊ីម ធ្វើឲ្យ denature", "កើនឡើងជានិច្ចដោយគ្មានដែនកំណត់", "ដដែលមិនប្រែប្រួលនៅ pH ណាមួយ", "មានតែអង់ស៊ីមផ្អែកលើទឹកទេដែលរងឥទ្ធិពល"], answerKm: "ថយចុះ ពីព្រោះ pH ជ្រុលបំបែកចំណងរចនាសម្ព័ន្ធអង់ស៊ីម ធ្វើឲ្យ denature",
+      explanation: "Each enzyme works best at a specific optimal pH. A very acidic or very basic environment breaks the bonds holding the enzyme's shape, denaturing it and reducing its activity — as happens with amylase outside its optimal range.", explanationKm: "អង់ស៊ីមនីមួយៗដំណើរការល្អបំផុតត្រង់ pH ល្អប្រសើរជាក់លាក់មួយ។ បរិយាកាសអាស៊ីត ឬបាសខ្លាំងបំបែកចំណងកាន់រូបរាងអង់ស៊ីម ធ្វើឲ្យ denature និងបន្ថយសកម្មភាព ដូចករណីអាមីឡាសនៅក្រៅចន្លោះ pH ល្អប្រសើររបស់វា។",
+      formula: "Extreme pH → breaks enzyme structure → activity falls", formulaKm: "pH ជ្រុល → បំបែករចនាសម្ព័ន្ធអង់ស៊ីម → សកម្មភាពធ្លាក់ចុះ",
+      chapter: "Enzymes", chapterKm: "អង់ស៊ីម" },
+    { topic: "Griffith's experiment", topicKm: "ការពិសោធន៍របស់លោកគ្រីភីធ", difficulty: "Hard",
+      prompt: "In Griffith's 1928 experiment, live harmless bacteria mixed with heat-killed deadly bacteria caused mice to die. What did he conclude?", promptKm: "ក្នុងការពិសោធន៍ឆ្នាំ១៩២៨របស់លោកគ្រីភីធ បាក់តេរីមិនបង្កគ្រោះថ្នាក់រស់ លាយជាមួយបាក់តេរីបង្កគ្រោះថ្នាក់ដែលស្លាប់ដោយកម្តៅ ធ្វើឲ្យសត្វកណ្តុរស្លាប់។ តើគាត់សន្និដ្ឋានអ្វី?",
+      options: ["A \"transforming substance\" from the dead bacteria had transferred genetic traits to the living bacteria", "Heat always kills every trait permanently", "Bacteria cannot transfer traits to each other", "Mice are immune to all bacteria"], answer: "A \"transforming substance\" from the dead bacteria had transferred genetic traits to the living bacteria",
+      optionsKm: ["សារធាតុ \"បំប្លែង\" ពីបាក់តេរីដែលស្លាប់ បានផ្ទេរលក្ខណៈតំណពូជទៅបាក់តេរីរស់", "កម្តៅតែងតែសម្លាប់លក្ខណៈទាំងអស់ជារៀងរហូត", "បាក់តេរីមិនអាចផ្ទេរលក្ខណៈគ្នាទៅវិញទៅមកបានទេ", "សត្វកណ្តុរមានភាពស៊ាំចំពោះបាក់តេរីទាំងអស់"], answerKm: "សារធាតុ \"បំប្លែង\" ពីបាក់តេរីដែលស្លាប់ បានផ្ទេរលក្ខណៈតំណពូជទៅបាក់តេរីរស់",
+      explanation: "Griffith mixed live harmless R-strain bacteria with heat-killed deadly S-strain bacteria and injected the mix into mice, which died and were found to carry live S-strain bacteria. He concluded that some \"transforming substance\" from the dead S bacteria had permanently changed the R bacteria into disease-causing S bacteria — though he did not yet know that substance was DNA.", explanationKm: "លោកគ្រីភីធបានលាយបាក់តេរីមិនបង្កគ្រោះថ្នាក់ពូជ R ដែលរស់ ជាមួយបាក់តេរីបង្កគ្រោះថ្នាក់ពូជ S ដែលស្លាប់ដោយកម្តៅ ហើយចាក់លាយចូលក្នុងកណ្តុរ ដែលស្លាប់ និងមានបាក់តេរីពូជ S រស់នៅក្នុងឈាម។ គាត់សន្និដ្ឋានថា សារធាតុ \"បំប្លែង\" ពីបាក់តេរី S ដែលស្លាប់ បានប្តូរបាក់តេរី R ទៅជាបាក់តេរី S បង្កជំងឺជារៀងរហូត ទោះបីជាគាត់មិនទាន់ដឹងថាសារធាតុនោះជា DNA។",
+      formula: "Griffith: dead S + live R → live S found (transforming substance)", formulaKm: "គ្រីភីធ៖ S ស្លាប់ + R រស់ → រកឃើញ S រស់ (សារធាតុបំប្លែង)",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "Avery's experiment", topicKm: "ការពិសោធន៍របស់លោកអាវើរី", difficulty: "Hard",
+      prompt: "Avery's follow-up experiment extracted purified DNA from dead S-strain bacteria and mixed it with live R-strain bacteria. What did this prove?", promptKm: "ការពិសោធន៍តម្រូតរបស់លោកអាវើរី បានដកយក DNA សុទ្ធពីបាក់តេរីពូជ S ដែលស្លាប់ លាយជាមួយបាក់តេរីពូជ R រស់។ តើវាបញ្ជាក់អ្វី?",
+      options: ["DNA itself is the genetic material responsible for transformation", "Proteins are the genetic material", "Sugar is the genetic material", "Bacteria don't need genetic material at all"], answer: "DNA itself is the genetic material responsible for transformation",
+      optionsKm: ["ADN ខ្លួនឯងជាសារធាតុតំណពូជទទួលខុសត្រូវការបំប្លែង", "ប្រូតេអ៊ីនជាសារធាតុតំណពូជ", "សករជាសារធាតុតំណពូជ", "បាក់តេរីមិនត្រូវការសារធាតុតំណពូជទាល់តែសោះ"], answerKm: "ADN ខ្លួនឯងជាសារធាតុតំណពូជទទួលខុសត្រូវការបំប្លែង",
+      explanation: "By purifying DNA specifically from the dead S-strain bacteria and showing it alone could transform live R-strain bacteria into disease-causing S-strain bacteria, Avery proved that DNA — not protein — is the genetic material.", explanationKm: "តាមរយៈការដកយក DNA សុទ្ធពីបាក់តេរីពូជ S ដែលស្លាប់ ហើយបង្ហាញថាវាតែម្នាក់ឯងអាចបំប្លែងបាក់តេរីពូជ R រស់ទៅជាបាក់តេរីពូជ S បង្កជំងឺបាន លោកអាវើរីបានបញ្ជាក់ថា DNA មិនមែនប្រូតេអ៊ីនទេ ជាសារធាតុតំណពូជ។",
+      formula: "Avery: purified DNA alone transforms bacteria → DNA is genetic material", formulaKm: "អាវើរី៖ DNA សុទ្ធតែម្នាក់ឯងបំប្លែងបាក់តេរី → DNA ជាសារធាតុតំណពូជ",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "Hershey and Chase experiment", topicKm: "ការពិសោធន៍របស់លោកហឺស៊ី និងឆេស", difficulty: "Hard",
+      prompt: "Hershey and Chase labeled a virus's protein coat with radioactive sulfur-35 and its DNA with radioactive phosphorus-32. Which label ended up inside the infected bacteria?", promptKm: "លោកហឺស៊ី និងឆេសបានដាក់ស្លាកសំបកប្រូតេអ៊ីនរបស់វីរុសដោយស័ន្ធសាំង៣៥ ធាតុវិទ្យុសកម្ម និង DNA របស់វាដោយផូស្វាត៣២ ធាតុវិទ្យុសកម្ម។ តើស្លាកណាដែលបញ្ចប់នៅខាងក្នុងបាក់តេរីដែលឆ្លង?",
+      options: ["The phosphorus-32 label (DNA), proving DNA enters the bacteria and carries genetic information", "The sulfur-35 label (protein) only", "Both labels equally", "Neither label entered the bacteria"], answer: "The phosphorus-32 label (DNA), proving DNA enters the bacteria and carries genetic information",
+      optionsKm: ["ស្លាកផូស្វាត៣២ (DNA) ដែលបញ្ជាក់ថា DNA ចូលទៅក្នុងបាក់តេរី និងផ្ទុកព័ត៌មានតំណពូជ", "ស្លាកស័ន្ធសាំង៣៥ (ប្រូតេអ៊ីន) តែប៉ុណ្ណោះ", "ស្លាកទាំងពីរស្មើគ្នា", "ស្លាកទាំងពីរមិនបានចូលទៅក្នុងបាក់តេរីទេ"], answerKm: "ស្លាកផូស្វាត៣២ (DNA) ដែលបញ្ជាក់ថា DNA ចូលទៅក្នុងបាក់តេរី និងផ្ទុកព័ត៌មានតំណពូជ",
+      explanation: "Only the phosphorus-32-labeled DNA was found inside the bacteria after infection, while the sulfur-35-labeled protein coat stayed outside. This confirmed that DNA, not protein, is the genetic material that viruses inject into bacteria to reproduce.", explanationKm: "មានតែ DNA ដែលដាក់ស្លាកផូស្វាត៣២ប៉ុណ្ណោះដែលរកឃើញនៅខាងក្នុងបាក់តេរីក្រោយឆ្លង ចំណែកឯសំបកប្រូតេអ៊ីនដែលដាក់ស្លាកស័ន្ធសាំង៣៥ នៅតែខាងក្រៅ។ នេះបញ្ជាក់ថា DNA មិនមែនប្រូតេអ៊ីនទេ ជាសារធាតុតំណពូជដែលវីរុសចាក់ចូលទៅបាក់តេរីដើម្បីបន្តពូជ។",
+      formula: "Hershey-Chase: only P-32 (DNA) enters bacteria → DNA is genetic material", formulaKm: "ហឺស៊ី-ឆេស៖ មានតែ P-32 (DNA) ចូលបាក់តេរី → DNA ជាសារធាតុតំណពូជ",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "The nucleotide", topicKm: "នុយក្លេអូទីត", difficulty: "Medium",
+      prompt: "A DNA nucleotide is made up of which three parts?", promptKm: "នុយក្លេអូទីតរបស់ ADN មួយផ្សំឡើងពីផ្នែកបីអ្វីខ្លះ?",
+      options: ["A phosphate group, a deoxyribose sugar, and a nitrogenous base", "Only a sugar and a base", "Two phosphate groups and a base", "A protein, a lipid, and a sugar"], answer: "A phosphate group, a deoxyribose sugar, and a nitrogenous base",
+      optionsKm: ["បណ្តុំផូស្វាត សករដេអុកស៊ីរីបូស និងបាសអាហ្សូត", "សករ និងបាសតែប៉ុណ្ណោះ", "បណ្តុំផូស្វាតពីរ និងបាស", "ប្រូតេអ៊ីន លីពីត និងសករ"], answerKm: "បណ្តុំផូស្វាត សករដេអុកស៊ីរីបូស និងបាសអាហ្សូត",
+      explanation: "Each DNA nucleotide has one phosphate group, one deoxyribose sugar molecule, and one of four nitrogenous bases (A, T, C, or G) — giving 4 possible types of nucleotide.", explanationKm: "នុយក្លេអូទីត ADN នីមួយៗមានបណ្តុំផូស្វាតមួយ ម៉ូលេគុលសករដេអុកស៊ីរីបូសមួយ និងបាសអាហ្សូតមួយក្នុងចំណោមបួន (A T C ឬ G) ដែលផ្តល់ឲ្យមាននុយក្លេអូទីតបួនប្រភេទ។",
+      formula: "Nucleotide = phosphate + deoxyribose sugar + base (A/T/C/G)", formulaKm: "នុយក្លេអូទីត = ផូស្វាត + សករដេអុកស៊ីរីបូស + បាស (A/T/C/G)",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "Watson and Crick's model", topicKm: "គំរូរបស់វ៉ាសុន និងគ្រិក", difficulty: "Hard",
+      prompt: "According to Watson and Crick's model, what holds the two strands of the DNA double helix together?", promptKm: "តាមគំរូរបស់វ៉ាសុន និងគ្រិក តើអ្វីភ្ជាប់ខ្សែច្រវាក់ទាំងពីររបស់ ADN ទ្វេស្ពៀល?",
+      options: ["Hydrogen bonds between complementary base pairs (A-T and C-G)", "Covalent bonds between the two sugar backbones directly", "Ionic bonds between phosphate groups", "There is no bond; the strands just sit next to each other"], answer: "Hydrogen bonds between complementary base pairs (A-T and C-G)",
+      optionsKm: ["ចំណងអ៊ីដ្រូសែនរវាងគូបាសបំពេញគ្នា (A-T និង C-G)", "ចំណងកូវ៉ាឡង់ផ្ទាល់រវាងជួរឆ្អឹងខ្នងសករទាំងពីរ", "ចំណងអ៊ីយ៉ុងរវាងបណ្តុំផូស្វាត", "គ្មានចំណងអ្វីទេ ខ្សែច្រវាក់គ្រាន់តែនៅជាប់គ្នា"], answerKm: "ចំណងអ៊ីដ្រូសែនរវាងគូបាសបំពេញគ្នា (A-T និង C-G)",
+      explanation: "In the double helix, the two nucleotide strands are held together by hydrogen bonds between complementary base pairs: adenine (A) always pairs with thymine (T) via 2 hydrogen bonds, and cytosine (C) always pairs with guanine (G) via 3 hydrogen bonds.", explanationKm: "ក្នុងទ្វេស្ពៀល ខ្សែច្រវាក់នុយក្លេអូទីតទាំងពីរភ្ជាប់គ្នាដោយចំណងអ៊ីដ្រូសែនរវាងគូបាសបំពេញគ្នា៖ អាដេនីន (A) តែងតែផ្គូជាមួយធីមីន (T) ដោយចំណងអ៊ីដ្រូសែន២ ហើយស៊ីតូស៊ីន (C) តែងតែផ្គូជាមួយហ្គានីន (G) ដោយចំណងអ៊ីដ្រូសែន៣។",
+      formula: "Base pairing: A=T (2 H-bonds); C≡G (3 H-bonds)", formulaKm: "ការបំពេញបាស៖ A=T (អ៊ីដ្រូសែន២); C≡G (អ៊ីដ្រូសែន៣)",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "DNA replication", topicKm: "ការចម្លងខ្លួនឯង ADN", difficulty: "Hard",
+      prompt: "During DNA replication, why do the two resulting daughter DNA molecules each end up identical to the original?", promptKm: "ក្នុងអំឡុងពេលចម្លងខ្លួនឯង ADN ហេតុអ្វីបានជា ADN កូនទាំងពីរនីមួយៗដូចនឹង ADN ដើមបេះបិទ?",
+      options: ["Each daughter molecule keeps one original strand as a template and builds a new complementary strand following the base-pairing rule", "The whole molecule is copied twice by chance", "Only one daughter molecule is produced", "New nucleotides are added randomly without any rule"], answer: "Each daughter molecule keeps one original strand as a template and builds a new complementary strand following the base-pairing rule",
+      optionsKm: ["ADN កូននីមួយៗរក្សាខ្សែច្រវាក់ដើមមួយជាពុម្ព ហើយសាងសង់ខ្សែថ្មីបំពេញគ្នាតាមច្បាប់បំពេញបាស", "ម៉ូលេគុលទាំងមូលត្រូវបានចម្លងពីរដងដោយចៃដន្យ", "មានតែ ADN កូនមួយប៉ុណ្ណោះដែលបង្កើតឡើង", "នុយក្លេអូទីតថ្មីត្រូវបានបន្ថែមដោយចៃដន្យដោយគ្មានច្បាប់"], answerKm: "ADN កូននីមួយៗរក្សាខ្សែច្រវាក់ដើមមួយជាពុម្ព ហើយសាងសង់ខ្សែថ្មីបំពេញគ្នាតាមច្បាប់បំពេញបាស",
+      explanation: "This is called semi-conservative replication: the two original strands separate, and free nucleotides pair up with each original strand following the base-pairing rule (A-T, C-G), under the action of DNA polymerase. Each daughter DNA molecule ends up with one original (template) strand and one newly built strand, identical to the parent DNA.", explanationKm: "ដំណើរការនេះហៅថាការចម្លងខ្លួនឯងបែបពាក់កណ្តាលរក្សាទុក៖ ខ្សែច្រវាក់ដើមទាំងពីរញែកគ្នា ហើយនុយក្លេអូទីតសេរីភ្ជាប់ជាមួយខ្សែច្រវាក់ដើមនីមួយៗតាមច្បាប់បំពេញបាស (A-T, C-G) ក្រោមសកម្មភាពរបស់អង់ស៊ីម ADN ប៉ូលីមេរ៉ាស។ ADN កូននីមួយៗបានខ្សែច្រវាក់ដើម (ពុម្ព) មួយ និងខ្សែថ្មីមួយ ដូចនឹង ADN ដើមបេះបិទ។",
+      formula: "Semi-conservative replication: 1 old strand + 1 new strand per daughter", formulaKm: "ការចម្លងបែបពាក់កណ្តាលរក្សាទុក៖ ខ្សែចាស់១ + ខ្សែថ្មី១ ក្នុងកូននីមួយៗ",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "DNA vs protein", topicKm: "ADN ធៀបនឹងប្រូតេអ៊ីន", difficulty: "Medium",
+      prompt: "Both DNA and proteins are macromolecules made of repeating monomer units. What is DNA's monomer, and what is a protein's monomer?", promptKm: "ទាំង ADN និងប្រូតេអ៊ីនជាម៉ាក្រូម៉ូលេគុលផ្សំពីឯកតារង។ តើ ADN មានឯកតារងអ្វី ហើយប្រូតេអ៊ីនមានឯកតារងអ្វី?",
+      options: ["DNA's monomer is the nucleotide; a protein's monomer is the amino acid", "Both use amino acids as their monomer", "Both use nucleotides as their monomer", "DNA's monomer is glucose; a protein's monomer is fatty acid"], answer: "DNA's monomer is the nucleotide; a protein's monomer is the amino acid",
+      optionsKm: ["ឯកតារងរបស់ ADN ជានុយក្លេអូទីត; ឯកតារងរបស់ប្រូតេអ៊ីនជាអាស៊ីតអាមីណេ", "ទាំងពីរប្រើអាស៊ីតអាមីណេជាឯកតារង", "ទាំងពីរប្រើនុយក្លេអូទីតជាឯកតារង", "ឯកតារងរបស់ ADN ជាគ្លុយកូស; ឯកតារងរបស់ប្រូតេអ៊ីនជាអាស៊ីតខ្លាញ់"], answerKm: "ឯកតារងរបស់ ADN ជានុយក្លេអូទីត; ឯកតារងរបស់ប្រូតេអ៊ីនជាអាស៊ីតអាមីណេ",
+      explanation: "DNA is a polymer built from a specific sequence of 4 types of nucleotides, while a protein is a polymer built from a specific sequence of 20 types of amino acids. Both are macromolecules, but DNA is far larger and encodes the information that determines a protein's amino acid sequence.", explanationKm: "ADN ជាបូលីមែរផ្សំពីលំដាប់ជាក់លាក់នៃនុយក្លេអូទីត៤ប្រភេទ ចំណែកឯប្រូតេអ៊ីនជាបូលីមែរផ្សំពីលំដាប់ជាក់លាក់នៃអាស៊ីតអាមីណេ២០ប្រភេទ។ ទាំងពីរជាម៉ាក្រូម៉ូលេគុល ប៉ុន្តែ ADN ធំជាងច្រើន និងផ្ទុកព័ត៌មានដែលកំណត់លំដាប់អាស៊ីតអាមីណេរបស់ប្រូតេអ៊ីន។",
+      formula: "DNA monomer: nucleotide (4 types); Protein monomer: amino acid (20 types)", formulaKm: "ឯកតារង ADN៖ នុយក្លេអូទីត (៤ប្រភេទ); ឯកតារងប្រូតេអ៊ីន៖ អាស៊ីតអាមីណេ (២០ប្រភេទ)",
+      chapter: "DNA & Genetic Information", chapterKm: "ADN ជាទម្រង់ព័ត៌មានេសនេទិច" },
+    { topic: "What is a gene", topicKm: "ហ្សែនជាអ្វី", difficulty: "Easy",
+      prompt: "What is a gene?", promptKm: "តើហ្សែនជាអ្វី?",
+      options: ["A segment of DNA that holds the genetic information for building one specific protein", "An entire chromosome", "A single nucleotide", "A type of enzyme"], answer: "A segment of DNA that holds the genetic information for building one specific protein",
+      optionsKm: ["អង្គធាតុមួយកម្រិតរបស់ ADN ដែលផ្ទុកព័ត៌មានតំណពូជសម្រាប់សំយោគប្រូតេអ៊ីនជាក់លាក់មួយ", "ក្រូម៉ូសូមទាំងមូល", "នុយក្លេអូទីតតែមួយ", "ប្រភេទអង់ស៊ីមមួយ"], answerKm: "អង្គធាតុមួយកម្រិតរបស់ ADN ដែលផ្ទុកព័ត៌មានតំណពូជសម្រាប់សំយោគប្រូតេអ៊ីនជាក់លាក់មួយ",
+      explanation: "A gene is a segment of a DNA molecule that carries the genetic information needed to specify the synthesis of one particular protein.", explanationKm: "ហ្សែនជាអង្គធាតុមួយកម្រិតរបស់ម៉ូលេគុល ADN ដែលផ្ទុកព័ត៌មានតំណពូជចាំបាច់សម្រាប់កំណត់ការសំយោគប្រូតេអ៊ីនជាក់លាក់មួយ។",
+      formula: "Gene = DNA segment coding for one protein", formulaKm: "ហ្សែន = អង្គធាតុ ADN កំណត់សំយោគប្រូតេអ៊ីនមួយ",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "Why transcription is needed", topicKm: "ហេតុអ្វីត្រូវការចម្លងសម្រង", difficulty: "Hard",
+      prompt: "Why is it necessary to synthesize mRNA (transcription) before a protein can be made?", promptKm: "ហេតុអ្វីបានជាចាំបាច់ត្រូវសំយោគ ARNm (ចម្លងសម្រង) មុននឹងអាចផលិតប្រូតេអ៊ីនបាន?",
+      options: ["Because the genetic information is in the nucleus but protein synthesis happens in the cytoplasm, so mRNA must carry the message out", "Because DNA cannot be read at all", "Because mRNA is the only molecule that can enter the nucleus", "Because proteins are made directly from DNA without any intermediate"], answer: "Because the genetic information is in the nucleus but protein synthesis happens in the cytoplasm, so mRNA must carry the message out",
+      optionsKm: ["ពីព្រោះព័ត៌មានតំណពូជនៅក្នុងស្នូល ប៉ុន្តែការសំយោគប្រូតេអ៊ីនកើតឡើងក្នុងស៊ីតូប្លាស ទើប ARNm ត្រូវចម្លងសារនោះចេញ", "ពីព្រោះ ADN មិនអាចអានបានទាល់តែសោះ", "ពីព្រោះ ARNm ជាម៉ូលេគុលតែមួយគត់ដែលអាចចូលស្នូលបាន", "ពីព្រោះប្រូតេអ៊ីនផលិតដោយផ្ទាល់ពី ADN ដោយគ្មានអន្តរការីទេ"], answerKm: "ពីព្រោះព័ត៌មានតំណពូជនៅក្នុងស្នូល ប៉ុន្តែការសំយោគប្រូតេអ៊ីនកើតឡើងក្នុងស៊ីតូប្លាស ទើប ARNm ត្រូវចម្លងសារនោះចេញ",
+      explanation: "The genetic information sits in the DNA inside the nucleus, but ribosomes that build proteins are located in the cytoplasm. mRNA copies (transcribes) the nucleotide sequence of one strand of a gene and carries that message out to the ribosomes.", explanationKm: "ព័ត៌មានតំណពូជស្ថិតនៅក្នុង ADN ខាងក្នុងស្នូល ប៉ុន្តែរីបូសូមដែលសាងសង់ប្រូតេអ៊ីនស្ថិតនៅក្នុងស៊ីតូប្លាស។ ARNm ចម្លង (ត្រង់ស្គ្រីប) លំដាប់នុយក្លេអូទីតនៃខ្សែច្រវាក់មួយរបស់ហ្សែន ហើយបញ្ជូនសារនោះទៅរីបូសូម។",
+      formula: "DNA (nucleus) → mRNA copies → ribosome (cytoplasm) builds protein", formulaKm: "ADN (ស្នូល) → ARNm ចម្លង → រីបូសូម (ស៊ីតូប្លាស) សាងសង់ប្រូតេអ៊ីន",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "mRNA vs DNA", topicKm: "ARNm ធៀបនឹង ADN", difficulty: "Medium",
+      prompt: "Which base does mRNA use in place of thymine (T), which is found in DNA?", promptKm: "តើ ARNm ប្រើបាសអ្វីជំនួសធីមីន (T) ដែលមាននៅក្នុង ADN?",
+      options: ["Uracil (U)", "Guanine (G)", "Cytosine (C)", "Adenine (A)"], answer: "Uracil (U)",
+      optionsKm: ["អ៊ុយរ៉ាស៊ីល (U)", "ហ្គានីន (G)", "ស៊ីតូស៊ីន (C)", "អាដេនីន (A)"], answerKm: "អ៊ុយរ៉ាស៊ីល (U)",
+      explanation: "mRNA is single-stranded, made of ribose sugar instead of deoxyribose, and uses uracil (U) instead of thymine (T) as one of its four bases (A, U, C, G).", explanationKm: "ARNm ជាខ្សែច្រវាក់តែមួយ ផ្សំពីសករ​រីបូសជំនួសដេអុកស៊ីរីបូស ហើយប្រើអ៊ុយរ៉ាស៊ីល (U) ជំនួសធីមីន (T) ជាបាសមួយក្នុងចំណោមបាសទាំង៤ (A, U, C, G)។",
+      formula: "DNA base T → RNA base U", formulaKm: "បាស ADN T → បាស ARN U",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "Transcription steps", topicKm: "ជំហាននៃការចម្លងសម្រង", difficulty: "Hard",
+      prompt: "Which enzyme unwinds the DNA double helix and builds the new mRNA strand during transcription?", promptKm: "តើអង់ស៊ីមមួយណាបើកទ្វេស្ពៀល ADN និងសាងសង់ខ្សែ ARNm ថ្មី ក្នុងអំឡុងពេលចម្លងសម្រង?",
+      options: ["RNA polymerase", "DNA polymerase", "ATP synthase", "Lactase"], answer: "RNA polymerase",
+      optionsKm: ["ARN ប៉ូលីមេរ៉ាស", "ADN ប៉ូលីមេរ៉ាស", "ATP សាំងតេស", "ឡាក់តាស"], answerKm: "ARN ប៉ូលីមេរ៉ាស",
+      explanation: "RNA polymerase recognizes the start signal on a gene, unwinds the DNA double helix by breaking the weak hydrogen bonds, and builds a new complementary mRNA strand by pairing free nucleotides to the template strand following the base-pairing rule (with U pairing with A instead of T).", explanationKm: "ARN ប៉ូលីមេរ៉ាសសម្គាល់សញ្ញាចាប់ផ្តើមលើហ្សែន បើកទ្វេស្ពៀល ADN ដោយកាត់ផ្តាច់ចំណងអ៊ីដ្រូសែនទន់ ហើយសាងសង់ខ្សែ ARNm ថ្មីបំពេញគ្នា ដោយភ្ជាប់នុយក្លេអូទីតសេរីទៅខ្សែពុម្ព តាមច្បាប់បំពេញបាស (U ផ្គូជាមួយ A ជំនួស T)។",
+      formula: "RNA polymerase: unwinds DNA + builds mRNA (A-U, T-A, C-G, G-C)", formulaKm: "ARN ប៉ូលីមេរ៉ាស៖ បើក ADN + សាងសង់ ARNm (A-U, T-A, C-G, G-C)",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "The genetic code and codons", topicKm: "កូដតំណពូជ និងកូដុង", difficulty: "Hard",
+      prompt: "A codon is a sequence of how many mRNA nucleotides, and what does it specify?", promptKm: "កូដុងមួយជាបន្តនុយក្លេអូទីត ARNm ប៉ុន្មាន ហើយវាកំណត់អ្វី?",
+      options: ["3 nucleotides, specifying one amino acid", "1 nucleotide, specifying one protein", "4 nucleotides, specifying one gene", "10 nucleotides, specifying one chromosome"], answer: "3 nucleotides, specifying one amino acid",
+      optionsKm: ["នុយក្លេអូទីត៣ កំណត់អាស៊ីតអាមីណេមួយ", "នុយក្លេអូទីត១ កំណត់ប្រូតេអ៊ីនមួយ", "នុយក្លេអូទីត៤ កំណត់ហ្សែនមួយ", "នុយក្លេអូទីត១០ កំណត់ក្រូម៉ូសូមមួយ"], answerKm: "នុយក្លេអូទីត៣ កំណត់អាស៊ីតអាមីណេមួយ",
+      explanation: "A codon is a group of 3 consecutive mRNA nucleotides that specifies one particular amino acid. Since 4³ = 64 possible codons exist for only 20 amino acids, most amino acids are specified by more than one codon.", explanationKm: "កូដុងជាក្រុមនុយក្លេអូទីត ARNm ជាប់គ្នាចំនួន៣ ដែលកំណត់អាស៊ីតអាមីណេជាក់លាក់មួយ។ ដោយសារ 4³ = 64 កូដុងអាចមានសម្រាប់អាស៊ីតអាមីណេត្រឹមតែ២០ប្រភេទ អាស៊ីតអាមីណេភាគច្រើនត្រូវបានកំណត់ដោយកូដុងច្រើនជាងមួយ។",
+      formula: "Codon = 3 mRNA nucleotides → 1 amino acid; 64 codons for 20 amino acids", formulaKm: "កូដុង = នុយក្លេអូទីត ARNm ៣ → អាស៊ីតអាមីណេ១; កូដុង៦៤ សម្រាប់អាស៊ីតអាមីណេ២០",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "Stop codons", topicKm: "កូដុងបញ្ឈប់", difficulty: "Medium",
+      prompt: "How many mRNA codons do not code for any amino acid, and what is their function?", promptKm: "តើមាន ARNm កូដុងប៉ុន្មានដែលមិនកំណត់អាស៊ីតអាមីណេណាមួយ ហើយវាមានតួនាទីអ្វី?",
+      options: ["3 stop codons (UAA, UAG, UGA) that signal the end of protein synthesis", "None; every codon codes for an amino acid", "All 64 codons are stop codons", "1 stop codon that starts protein synthesis"], answer: "3 stop codons (UAA, UAG, UGA) that signal the end of protein synthesis",
+      optionsKm: ["កូដុងបញ្ឈប់៣ (UAA, UAG, UGA) ដែលបញ្ជាក់ការបញ្ចប់ការសំយោគប្រូតេអ៊ីន", "គ្មានទេ គ្រប់កូដុងកំណត់អាស៊ីតអាមីណេទាំងអស់", "កូដុងទាំង៦៤សុទ្ធតែជាកូដុងបញ្ឈប់", "កូដុងបញ្ឈប់មួយដែលចាប់ផ្តើមការសំយោគប្រូតេអ៊ីន"], answerKm: "កូដុងបញ្ឈប់៣ (UAA, UAG, UGA) ដែលបញ្ជាក់ការបញ្ចប់ការសំយោគប្រូតេអ៊ីន",
+      explanation: "Three codons — UAA, UAG and UGA — do not code for any amino acid. They are called stop codons because they signal the ribosome to stop protein synthesis. AUG, by contrast, is the start codon and codes for methionine.", explanationKm: "កូដុងចំនួន៣ គឺ UAA UAG និង UGA មិនកំណត់អាស៊ីតអាមីណេណាមួយទេ។ ពួកវាត្រូវបានហៅថាកូដុងបញ្ឈប់ ព្រោះបញ្ជាក់ឲ្យរីបូសូមឈប់ការសំយោគប្រូតេអ៊ីន។ ចំណែកឯ AUG ជាកូដុងចាប់ផ្តើម និងកំណត់មេទីយូនីន។",
+      formula: "Stop codons: UAA, UAG, UGA; Start codon: AUG (methionine)", formulaKm: "កូដុងបញ្ឈប់៖ UAA, UAG, UGA; កូដុងចាប់ផ្តើម៖ AUG (មេទីយូនីន)",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "The role of tRNA", topicKm: "តួនាទីរបស់ ARNt", difficulty: "Medium",
+      prompt: "What is the main role of tRNA (transfer RNA) in protein synthesis?", promptKm: "តើតួនាទីចម្បងរបស់ ARNt (ARN ដឹកនាំ) ក្នុងការសំយោគប្រូតេអ៊ីនជាអ្វី?",
+      options: ["It carries a specific amino acid to the ribosome and matches its anticodon to the mRNA codon", "It copies DNA into mRNA", "It builds the ribosome itself", "It stores the cell's genetic information"], answer: "It carries a specific amino acid to the ribosome and matches its anticodon to the mRNA codon",
+      optionsKm: ["វាដឹកនាំអាស៊ីតអាមីណេជាក់លាក់ទៅរីបូសូម ហើយផ្គូអង់ទីកូដុងរបស់វាជាមួយកូដុង ARNm", "វាចម្លង ADN ទៅជា ARNm", "វាសាងសង់រីបូសូមខ្លួនឯង", "វាផ្ទុកព័ត៌មានតំណពូជរបស់កោសិកា"], answerKm: "វាដឹកនាំអាស៊ីតអាមីណេជាក់លាក់ទៅរីបូសូម ហើយផ្គូអង់ទីកូដុងរបស់វាជាមួយកូដុង ARNm",
+      explanation: "Each tRNA molecule picks up one specific amino acid from the cytoplasm and carries it to the ribosome, where its three-nucleotide anticodon pairs with the matching mRNA codon — ensuring amino acids are added in the correct order to build the protein.", explanationKm: "ARNt នីមួយៗចាប់យកអាស៊ីតអាមីណេជាក់លាក់មួយពីស៊ីតូប្លាស ហើយដឹកនាំវាទៅរីបូសូម ជាកន្លែងដែលអង់ទីកូដុងនុយក្លេអូទីតបីរបស់វាផ្គូជាមួយកូដុង ARNm ដែលត្រូវគ្នា ធានាថាអាស៊ីតអាមីណេត្រូវបានបន្ថែមតាមលំដាប់ត្រឹមត្រូវដើម្បីសាងសង់ប្រូតេអ៊ីន។",
+      formula: "tRNA: carries amino acid + anticodon matches mRNA codon", formulaKm: "ARNt៖ ដឹកនាំអាស៊ីតអាមីណេ + អង់ទីកូដុងផ្គូនឹងកូដុង ARNm",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "Two stages of protein synthesis", topicKm: "ដំណាក់កាលពីរនៃការសំយោគប្រូតេអ៊ីន", difficulty: "Medium",
+      prompt: "Protein synthesis (gene expression) happens in two main stages. What are they, and where does each occur?", promptKm: "ការសំយោគប្រូតេអ៊ីន (ការសម្តែងចេញនៃហ្សែន) កើតឡើងជាពីរដំណាក់កាលចម្បង។ តើអ្វីខ្លះ និងនីមួយៗកើតឡើងនៅឯណា?",
+      options: ["Transcription (in the nucleus) and translation (in the cytoplasm, at the ribosome)", "Digestion and absorption, both in the stomach", "Replication and mutation, both in the mitochondria", "Fertilization and cleavage, both in the ovary"], answer: "Transcription (in the nucleus) and translation (in the cytoplasm, at the ribosome)",
+      optionsKm: ["ចម្លងសម្រង (ក្នុងស្នូល) និងបកប្រែសម្រង (ក្នុងស៊ីតូប្លាស នៅរីបូសូម)", "ការរំលាយអាហារ និងការស្រូប ទាំងពីរនៅក្នុងក្រពះ", "ការចម្លងខ្លួនឯង និងការផ្លាស់ប្តូរហ្សែន ទាំងពីរនៅមីតូខនឌ្រី", "ការបង្កកំណើត និងការបែងចែកកោសិកា ទាំងពីរនៅអូវែរ"], answerKm: "ចម្លងសម្រង (ក្នុងស្នូល) និងបកប្រែសម្រង (ក្នុងស៊ីតូប្លាស នៅរីបូសូម)",
+      explanation: "Stage 1, transcription, copies the DNA gene sequence into mRNA inside the nucleus. Stage 2, translation, reads the mRNA codons at the ribosome in the cytoplasm and assembles the corresponding amino acids into a protein.", explanationKm: "ដំណាក់កាលទី១ ចម្លងសម្រង ចម្លងលំដាប់ហ្សែន ADN ទៅជា ARNm ខាងក្នុងស្នូល។ ដំណាក់កាលទី២ បកប្រែសម្រង អានកូដុង ARNm នៅរីបូសូមក្នុងស៊ីតូប្លាស ហើយផ្គុំអាស៊ីតអាមីណេដែលត្រូវគ្នាទៅជាប្រូតេអ៊ីន។",
+      formula: "Transcription (nucleus) → mRNA → Translation (ribosome) → protein", formulaKm: "ចម្លងសម្រង (ស្នូល) → ARNm → បកប្រែសម្រង (រីបូសូម) → ប្រូតេអ៊ីន",
+      chapter: "Gene Expression", chapterKm: "ការសម្តែងចេញនៃហ្សែន" },
+    { topic: "Selective breeding", topicKm: "ជំរើសពូជ", difficulty: "Easy",
+      prompt: "What is selective breeding?", promptKm: "តើជំរើសពូជជាអ្វី?",
+      options: ["A farming practice that selects good breeding stock and eliminates weak stock to improve future generations", "A method of cloning that requires no reproduction", "A way to directly edit an organism's DNA sequence", "A type of vaccine production"], answer: "A farming practice that selects good breeding stock and eliminates weak stock to improve future generations",
+      optionsKm: ["ការអនុវត្តកសិកម្មដែលជ្រើសរើសពូជល្អ និងលុបបំបាត់ពូជអន់ ដើម្បីធ្វើឲ្យសន្តានក្រោយប្រសើរឡើង", "វិធីសាស្ត្រក្លូនដែលមិនត្រូវការបន្តពូជទេ", "វិធីកែសម្រួលលំដាប់ ADN របស់សារពាង្គកាយដោយផ្ទាល់", "ប្រភេទផលិតវ៉ាក់សាំងមួយ"], answerKm: "ការអនុវត្តកសិកម្មដែលជ្រើសរើសពូជល្អ និងលុបបំបាត់ពូជអន់ ដើម្បីធ្វើឲ្យសន្តានក្រោយប្រសើរឡើង",
+      explanation: "Selective breeding is a traditional agricultural practice in which good stock is chosen and poor stock is eliminated over generations, gradually improving desirable traits in crops or livestock — distinct from modern genetic engineering.", explanationKm: "ជំរើសពូជជាការអនុវត្តកសិកម្មបែបប្រពៃណីមួយ ដែលពូជល្អត្រូវបានជ្រើសរើស និងពូជអន់ត្រូវបានលុបបំបាត់ឆ្លងកាត់ជំនាន់ជាច្រើន ធ្វើឲ្យលក្ខណៈចង់បានប្រសើរឡើងបន្តិចម្តងៗនៅក្នុងដំណាំ ឬសត្វចិញ្ចឹម ខុសពីវិស្វកម្មតំណពូជទំនើប។",
+      formula: "Selective breeding: choose best stock over generations", formulaKm: "ជំរើសពូជ៖ ជ្រើសរើសពូជល្អបំផុតឆ្លងកាត់ជំនាន់",
+      chapter: "Biotechnology", chapterKm: "បច្ចេកទេសជីវវិទ្យា" },
+    { topic: "Inbreeding vs outcrossing", topicKm: "ការបង្កាត់ជិត ធៀបនឹងការបង្កាត់ឆ្ងាយ", difficulty: "Medium",
+      prompt: "What is a major risk of inbreeding (breeding between close relatives)?", promptKm: "តើហានិភ័យសំខាន់នៃការបង្កាត់ជិត (ការបង្កាត់រវាងញាតិសន្តានជិតស្និទ្ធ) ជាអ្វី?",
+      options: ["Weakened offspring vitality and reduced fertility over generations", "Immediate improvement of all traits", "Complete elimination of all genetic disease", "No risk at all compared to outcrossing"], answer: "Weakened offspring vitality and reduced fertility over generations",
+      optionsKm: ["កម្លាំងជីវិតកូនចៅចុះខ្សោយ និងលទ្ធភាពបន្តពូជថយចុះឆ្លងកាត់ជំនាន់", "ភាពប្រសើរឡើងភ្លាមៗលើលក្ខណៈទាំងអស់", "លុបបំបាត់ជំងឺតំណពូជទាំងអស់ទាំងស្រុង", "គ្មានហានិភ័យអ្វីទាល់តែសោះបើប្រៀបនឹងការបង្កាត់ឆ្ងាយ"], answerKm: "កម្លាំងជីវិតកូនចៅចុះខ្សោយ និងលទ្ធភាពបន្តពូជថយចុះឆ្លងកាត់ជំនាន់",
+      explanation: "Inbreeding (mating between close relatives) tends to weaken offspring vitality and fertility over generations, and increases the chance that harmful recessive traits appear, since it raises chromosome homozygosity. Outcrossing (mating between different breeds/species) generally produces hybrids with better vigor, higher yield, and greater disease resistance, but animals from very different species often cannot produce offspring together.", explanationKm: "ការបង្កាត់ជិត (ការបង្កាត់រវាងញាតិសន្តានជិតស្និទ្ធ) មានទំនោរធ្វើឲ្យកម្លាំងជីវិត និងលទ្ធភាពបន្តពូជរបស់កូនចៅចុះខ្សោយឆ្លងកាត់ជំនាន់ និងបង្កើនឱកាសលេចធ្លោលក្ខណៈកប់កំបាំងបង្កគ្រោះថ្នាក់ ព្រោះវាបង្កើនភាពដូចគ្នានៃក្រូម៉ូសូម។ ការបង្កាត់ឆ្ងាយ (រវាងពូជ/ប្រភេទខុសគ្នា) ជាទូទៅផលិតកូនកាត់មានកម្លាំងជីវិតល្អ ទិន្នផលខ្ពស់ និងធន់នឹងជំងឺ ប៉ុន្តែសត្វមកពីប្រភេទខុសគ្នាឆ្ងាយពេក ជារឿយៗមិនអាចបង្កកំណើតបានជាមួយគ្នា។",
+      formula: "Inbreeding: weaker vigor; Outcrossing: hybrid vigor", formulaKm: "បង្កាត់ជិត៖ កម្លាំងជីវិតចុះខ្សោយ; បង្កាត់ឆ្ងាយ៖ កម្លាំងជីវិតកូនកាត់ល្អ",
+      chapter: "Biotechnology", chapterKm: "បច្ចេកទេសជីវវិទ្យា" },
+    { topic: "Steps of genetic engineering", topicKm: "ជំហាននៃវិស្វកម្មតំណពូជ", difficulty: "Hard",
+      prompt: "Genetic engineering to produce a substance like human insulin in bacteria involves 4 main steps. What is the first step?", promptKm: "វិស្វកម្មតំណពូជសម្រាប់ផលិតសារធាតុដូចជាអាំងស៊ុយលីនមនុស្សក្នុងបាក់តេរី ពាក់ព័ន្ធនឹងជំហានចម្បង៤។ តើជំហានទីមួយជាអ្វី?",
+      options: ["Cutting the desired DNA molecule into small fragments using restriction enzymes", "Injecting bacteria directly into a human", "Growing the plant in soil", "Harvesting the final product immediately"], answer: "Cutting the desired DNA molecule into small fragments using restriction enzymes",
+      optionsKm: ["កាត់ម៉ូលេគុល ADN ចង់បានទៅជាបំណែកតូចៗដោយប្រើអង់ស៊ីមកំណាត់", "ចាក់បាក់តេរីដោយផ្ទាល់ចូលទៅក្នុងមនុស្ស", "ដាំរុក្ខជាតិក្នុងដី", "ប្រមូលផលិតផលចុងក្រោយភ្លាមៗ"], answerKm: "កាត់ម៉ូលេគុល ADN ចង់បានទៅជាបំណែកតូចៗដោយប្រើអង់ស៊ីមកំណាត់",
+      explanation: "The 4 steps of genetic engineering are: (1) cutting the DNA molecule into fragments using a restriction enzyme, (2) inserting the desired DNA fragment into a bacterial plasmid using a ligase enzyme, (3) cloning the recombinant bacteria so it multiplies, and (4) expressing the inserted gene so the bacteria produce the desired substance (e.g. insulin).", explanationKm: "ជំហាន៤ របស់វិស្វកម្មតំណពូជគឺ៖ (១) កាត់ម៉ូលេគុល ADN ទៅជាបំណែកដោយប្រើអង់ស៊ីមកំណាត់ (២) បញ្ចូលបំណែក ADN ចង់បានទៅក្នុងប្លាស្មីតបាក់តេរីដោយប្រើអង់ស៊ីមភ្ជាប់ (៣) ក្លូនបាក់តេរីកំចាត់ថ្មីដើម្បីឲ្យវាបន្តពូជ និង (៤) បង្ហាញហ្សែនដែលបានបញ្ចូល ដើម្បីឲ្យបាក់តេរីផលិតសារធាតុចង់បាន (ឧ. អាំងស៊ុយលីន)។",
+      formula: "4 steps: cut DNA → insert into plasmid → clone bacteria → express gene", formulaKm: "ជំហាន៤៖ កាត់ ADN → បញ្ចូលប្លាស្មីត → ក្លូនបាក់តេរី → បង្ហាញហ្សែន",
+      chapter: "Biotechnology", chapterKm: "បច្ចេកទេសជីវវិទ្យា" },
+    { topic: "Benefits of genetic engineering", topicKm: "អត្ថប្រយោជន៍នៃវិស្វកម្មតំណពូជ", difficulty: "Medium",
+      prompt: "In the field of healthcare, what does genetic engineering allow scientists to produce?", promptKm: "ក្នុងវិស័យសុខាភិបាល តើវិស្វកម្មតំណពូជអនុញ្ញាតឲ្យអ្នកវិទ្យាសាស្ត្រផលិតអ្វី?",
+      options: ["Insulin, vaccines, antibodies and growth hormone", "Only fruit juice", "Only cooking oil", "Only clothing fibers"], answer: "Insulin, vaccines, antibodies and growth hormone",
+      optionsKm: ["អាំងស៊ុយលីន វ៉ាក់សាំង អង់ទីករ និងអរម៉ូនលូតលាស់", "ទឹកផ្លែឈើតែប៉ុណ្ណោះ", "ប្រេងចម្អិនតែប៉ុណ្ណោះ", "សរសៃសំពត់តែប៉ុណ្ណោះ"], answerKm: "អាំងស៊ុយលីន វ៉ាក់សាំង អង់ទីករ និងអរម៉ូនលូតលាស់",
+      explanation: "Genetic engineering benefits healthcare by enabling mass production of substances such as human insulin (for diabetes), vaccines, antibodies, and growth hormone, using genetically modified bacteria as living factories.", explanationKm: "វិស្វកម្មតំណពូជផ្តល់អត្ថប្រយោជន៍ដល់សុខាភិបាល ដោយអនុញ្ញាតឲ្យផលិតសារធាតុដូចជាអាំងស៊ុយលីនមនុស្ស (សម្រាប់ជំងឺទឹកនោមផ្អែម) វ៉ាក់សាំង អង់ទីករ និងអរម៉ូនលូតលាស់ជាចំនួនច្រើន ដោយប្រើបាក់តេរីកែប្រែហ្សែនជារោងចក្ររស់។",
+      formula: "Genetic engineering in health: insulin + vaccines + antibodies + hormones", formulaKm: "វិស្វកម្មតំណពូជក្នុងសុខាភិបាល៖ អាំងស៊ុយលីន + វ៉ាក់សាំង + អង់ទីករ + អរម៉ូន",
+      chapter: "Biotechnology", chapterKm: "បច្ចេកទេសជីវវិទ្យា" },
+    { topic: "Risks of genetic engineering", topicKm: "ហានិភ័យនៃវិស្វកម្មតំណពូជ", difficulty: "Hard",
+      prompt: "Which of these is a recognized environmental risk of genetically modified (GM) crops?", promptKm: "តើមួយណាខាងក្រោមជាហានិភ័យបរិស្ថានដែលទទួលស្គាល់នៃដំណាំកែប្រែហ្សែន (GM)?",
+      options: ["It can kill insects living on GM plants, disrupting biodiversity", "It always improves biodiversity", "It has zero effect on any other organism", "It only affects the taste of the crop"], answer: "It can kill insects living on GM plants, disrupting biodiversity",
+      optionsKm: ["អាចសម្លាប់សត្វល្អិតដែលរស់នៅលើរុក្ខជាតិ GM រំខានដល់ជីវចម្រុះ", "តែងតែកែលម្អជីវចម្រុះជានិច្ច", "គ្មានឥទ្ធិពលអ្វីទាល់តែសោះលើសារពាង្គកាយផ្សេងទៀត", "ជះឥទ្ធិពលតែលើរសជាតិនៃដំណាំប៉ុណ្ណោះ"], answerKm: "អាចសម្លាប់សត្វល្អិតដែលរស់នៅលើរុក្ខជាតិ GM រំខានដល់ជីវចម្រុះ",
+      explanation: "Recognized risks of GM crops include environmental effects (such as killing insects that live on GM plants, disrupting biodiversity, and increasing pest resistance to toxins), economic effects (farmers becoming dependent on seed companies), health effects (possible immune reactions, antibiotic resistance genes), and social/ethical concerns.", explanationKm: "ហានិភ័យដែលទទួលស្គាល់នៃដំណាំ GM រួមមានផលប៉ះពាល់បរិស្ថាន (ដូចជាសម្លាប់សត្វល្អិតដែលរស់នៅលើរុក្ខជាតិ GM រំខានដល់ជីវចម្រុះ និងបង្កើនភាពធន់សត្វល្អិតនឹងសារធាតុពុល) ផលប៉ះពាល់សេដ្ឋកិច្ច (កសិករពឹងផ្អែកលើក្រុមហ៊ុនគ្រាប់ពូជ) ផលប៉ះពាល់សុខភាព (ប្រតិកម្មប្រព័ន្ធភាពស៊ាំ ហ្សែនធន់នឹងថ្នាំអង់ទីប្យូទិច) និងកង្វល់សង្គម/សីលធម៌។",
+      formula: "GM crop risks: environment + economy + health + ethics", formulaKm: "ហានិភ័យដំណាំ GM៖ បរិស្ថាន + សេដ្ឋកិច្ច + សុខភាព + សីលធម៌",
+      chapter: "Biotechnology", chapterKm: "បច្ចេកទេសជីវវិទ្យា" },
+    { topic: "Cloning", topicKm: "ក្លូន", difficulty: "Medium",
+      prompt: "What is a clone?", promptKm: "តើក្លូនជាអ្វី?",
+      options: ["A group of organisms produced from a single original cell, all with identical genetic information", "A hybrid between two different species", "Any organism produced through normal sexual reproduction", "A mutated organism with new traits"], answer: "A group of organisms produced from a single original cell, all with identical genetic information",
+      optionsKm: ["ក្រុមសារពាង្គកាយដែលបានផលិតចេញពីកោសិកាដើមតែមួយ ដែលទាំងអស់មានព័ត៌មានតំណពូជដូចគ្នា", "កូនកាត់រវាងប្រភេទពីរផ្សេងគ្នា", "សារពាង្គកាយណាមួយដែលផលិតតាមរយៈការបន្តពូជផ្លូវភេទធម្មតា", "សារពាង្គកាយផ្លាស់ប្តូរហ្សែនដែលមានលក្ខណៈថ្មី"], answerKm: "ក្រុមសារពាង្គកាយដែលបានផលិតចេញពីកោសិកាដើមតែមួយ ដែលទាំងអស់មានព័ត៌មានតំណពូជដូចគ្នា",
+      explanation: "A clone is a group of organisms that all originate from the same single cell and share identical genetic information — as demonstrated by cloning experiments like producing 10 genetically identical calves from a single high-quality cow's embryo.", explanationKm: "ក្លូនជាក្រុមសារពាង្គកាយដែលទាំងអស់មានប្រភពចេញពីកោសិកាតែមួយ និងមានព័ត៌មានតំណពូជដូចគ្នាបេះបិទ ដូចបានបង្ហាញក្នុងការពិសោធន៍ក្លូនដូចជាការផលិតកូនគោ១០ក្បាលមានលក្ខណៈដូចគ្នាបេះបិទ ចេញពីអំព្រីយុងគោគុណភាពខ្ពស់តែមួយ។",
+      formula: "Clone = same original cell → identical genetic information", formulaKm: "ក្លូន = កោសិកាដើមតែមួយ → ព័ត៌មានតំណពូជដូចគ្នា",
+      chapter: "Biotechnology", chapterKm: "បច្ចេកទេសជីវវិទ្យា" },
+    { topic: "Lamarck's theory", topicKm: "ទ្រឹស្តីរបស់ឡាម៉ាក់", difficulty: "Medium",
+      prompt: "What was Lamarck's view on the origin of life on Earth?", promptKm: "តើមតិរបស់ឡាម៉ាក់អំពីដើមកំណើតនៃជីវិតលើផែនដីជាអ្វី?",
+      options: ["Simple early life forms gradually transformed over a very long time into today's diverse species", "All species were created instantly in their current form", "Life came from a single event with no further change", "Species only ever get simpler, never more complex"], answer: "Simple early life forms gradually transformed over a very long time into today's diverse species",
+      optionsKm: ["ភាវៈរស់ដំបូងសាមញ្ញបានផ្លាស់ប្តូរបន្តិចម្តងៗអស់រយៈពេលដ៏វែង ក្លាយទៅជាប្រភេទចម្រុះសព្វថ្ងៃ", "ប្រភេទទាំងអស់ត្រូវបានបង្កើតភ្លាមៗក្នុងទម្រង់បច្ចុប្បន្នរបស់វា", "ជីវិតកើតចេញពីព្រឹត្តិការណ៍តែមួយដោយគ្មានការផ្លាស់ប្តូរបន្ថែម", "ប្រភេទតែងតែទៅជាសាមញ្ញជាងមុន មិនដែលស្មុគស្មាញជាងទេ"], answerKm: "ភាវៈរស់ដំបូងសាមញ្ញបានផ្លាស់ប្តូរបន្តិចម្តងៗអស់រយៈពេលដ៏វែង ក្លាយទៅជាប្រភេទចម្រុះសព្វថ្ងៃ",
+      explanation: "Lamarck proposed that the earliest living things to appear on Earth were simple organisms, which then gradually transformed over a very long period of time into the diverse species of living things found on Earth today.", explanationKm: "ឡាម៉ាក់បានស្នើថា ភាវៈរស់ដំបូងបំផុតដែលកកើតឡើងលើផែនដី ជាសារពាង្គកាយសាមញ្ញ ដែលក្រោយមកបានផ្លាស់ប្តូរបន្តិចម្តងៗអស់រយៈពេលដ៏វែង ក្លាយទៅជាប្រភេទភាវៈរស់ចម្រុះដែលរកឃើញលើផែនដីសព្វថ្ងៃ។",
+      formula: "Lamarck: simple organisms → gradual change → diverse species", formulaKm: "ឡាម៉ាក់៖ សារពាង្គកាយសាមញ្ញ → ផ្លាស់ប្តូរបន្តិចម្តងៗ → ប្រភេទចម្រុះ",
+      chapter: "Evolution Theory (Darwin)", chapterKm: "ទ្រឹស្តីវិវត្តន៍ដាវីន" },
+    { topic: "Darwin's voyage", topicKm: "ដំណើររបស់ដាវីន", difficulty: "Medium",
+      prompt: "Darwin's famous voyage on the HMS Beagle visited which islands, whose unique wildlife strongly influenced his theory of evolution?", promptKm: "ដំណើររបស់ដាវីនតាមកប៉ាល់ HMS Beagle បានទស្សនាកោះមួយណា ដែលសត្វព្រៃពិសេសរបស់វាជះឥទ្ធិពលយ៉ាងខ្លាំងដល់ទ្រឹស្តីវិវត្តន៍របស់គាត់?",
+      options: ["The Galápagos Islands", "The Hawaiian Islands", "The Philippine Islands", "The islands of Japan"], answer: "The Galápagos Islands",
+      optionsKm: ["កោះកាឡាបាក់ុស", "កោះហាវ៉ៃ", "កោះហ្វីលីពីន", "កោះជប៉ុន"], answerKm: "កោះកាឡាបាក់ុស",
+      explanation: "Darwin's voyage went from England, to South America, to the Galápagos Islands, to Australia, around Africa, and back to England. Observing how species differed between the Galápagos Islands and the South American mainland was key to developing his theory of evolution.", explanationKm: "ដំណើររបស់ដាវីនចេញពីប្រទេសអង់គ្លេស ទៅអាមេរិកខាងត្បូង ទៅកោះកាឡាបាក់ុស ទៅទ្វីបអូស្ត្រាលី ជុំវិញទ្វីបអាហ្វ្រិក ហើយត្រឡប់ចូលអង់គ្លេសវិញ។ ការសង្កេតមើលរបៀបដែលប្រភេទសត្វខុសគ្នារវាងកោះកាឡាបាក់ុស និងទ្វីបអាមេរិកខាងត្បូង ជាគន្លឹះក្នុងការបង្កើតទ្រឹស្តីវិវត្តន៍របស់គាត់។",
+      formula: "Darwin's voyage: England → S. America → Galápagos → Australia → England", formulaKm: "ដំណើរដាវីន៖ អង់គ្លេស → អាមេរិកខាងត្បូង → កាឡាបាក់ុស → អូស្ត្រាលី → អង់គ្លេស",
+      chapter: "Evolution Theory (Darwin)", chapterKm: "ទ្រឹស្តីវិវត្តន៍ដាវីន" },
+    { topic: "Tortoises on different islands", topicKm: "អណ្តើកលើកោះផ្សេងគ្នា", difficulty: "Medium",
+      prompt: "Darwin observed that giant tortoises differed between islands of the Galápagos. What explains this, according to his theory?", promptKm: "ដាវីនបានសង្កេតឃើញថាអណ្តើកយក្សខុសគ្នារវាងកោះនានារបស់កាឡាបាក់ុស។ តើអ្វីពន្យល់រឿងនេះ តាមទ្រឹស្តីរបស់គាត់?",
+      options: ["Tortoises on different islands adapted differently to each island's own food sources and conditions", "All tortoises are always genetically identical everywhere", "Tortoises cannot adapt to their environment at all", "Only humans caused the tortoises to look different"], answer: "Tortoises on different islands adapted differently to each island's own food sources and conditions",
+      optionsKm: ["អណ្តើកលើកោះនីមួយៗសម្របខ្លួនខុសគ្នាតាមប្រភពអាហារ និងលក្ខខណ្ឌនៃកោះនោះៗ", "អណ្តើកទាំងអស់តែងតែដូចគ្នាតាមតំណពូជគ្រប់ទីកន្លែង", "អណ្តើកមិនអាចសម្របខ្លួនទៅនឹងបរិស្ថានទាល់តែសោះ", "មានតែមនុស្សប៉ុណ្ណោះដែលធ្វើឲ្យអណ្តើកមើលទៅខុសគ្នា"], answerKm: "អណ្តើកលើកោះនីមួយៗសម្របខ្លួនខុសគ្នាតាមប្រភពអាហារ និងលក្ខខណ្ឌនៃកោះនោះៗ",
+      explanation: "According to Darwin's theory of adaptation, tortoise populations that became isolated on different islands adapted to their own island's specific food sources and environment over generations, gradually developing different shell shapes and features suited to local conditions.", explanationKm: "តាមទ្រឹស្តីនៃការសម្របខ្លួនរបស់ដាវីន ប្រជាសត្វអណ្តើកដែលដាច់ដោយឡែកនៅលើកោះនីមួយៗ បានសម្របខ្លួនទៅនឹងប្រភពអាហារ និងបរិស្ថានជាក់លាក់នៃកោះនោះឆ្លងកាត់ជំនាន់ ធ្វើឲ្យវិវត្តទម្រង់សំបក និងលក្ខណៈខុសគ្នា សមស្របនឹងលក្ខខណ្ឌមូលដ្ឋាន។",
+      formula: "Isolated populations → adapt to local island conditions → different traits", formulaKm: "ប្រជាសត្វដាច់ដោយឡែក → សម្របតាមលក្ខខណ្ឌកោះ → លក្ខណៈខុសគ្នា",
+      chapter: "Evolution Theory (Darwin)", chapterKm: "ទ្រឹស្តីវិវត្តន៍ដាវីន" },
+    { topic: "Overproduction of offspring", topicKm: "ការបង្កើតកូនច្រើនហួសប្រមាណ", difficulty: "Medium",
+      prompt: "According to Darwin, why is it important for evolution that organisms produce far more offspring than can survive?", promptKm: "តាមទ្រឹស្តីដាវីន ហេតុអ្វីបានជាការបង្កើតកូនច្រើនហួសប្រមាណជាងអ្វីដែលអាចរស់រានមានសារៈសំខាន់ចំពោះការវិវត្ត?",
+      options: ["It creates competition, so only the best-adapted individuals survive and pass on their traits", "It guarantees every offspring survives equally", "It has no relationship to natural selection", "It only matters for plants, not animals"], answer: "It creates competition, so only the best-adapted individuals survive and pass on their traits",
+      optionsKm: ["វាបង្កើតការប្រកួតប្រជែង ដូច្នេះមានតែឯកត្តាសម្របបានល្អបំផុតទេដែលរស់រាន និងបន្តលក្ខណៈរបស់វា", "វាធានាថាកូនរបស់ចៅរស់រានស្មើគ្នាទាំងអស់", "វាគ្មានទំនាក់ទំនងអ្វីនឹងជំរើសធម្មជាតិទេ", "វាសំខាន់តែចំពោះរុក្ខជាតិប៉ុណ្ណោះ មិនមែនសត្វទេ"], answerKm: "វាបង្កើតការប្រកួតប្រជែង ដូច្នេះមានតែឯកត្តាសម្របបានល្អបំផុតទេដែលរស់រាន និងបន្តលក្ខណៈរបស់វា",
+      explanation: "Since food and space are limited, producing far more offspring than can survive creates a struggle for existence. Individuals whose traits are best adapted to the environment survive and reproduce, passing those advantageous traits to the next generation — the mechanism of natural selection.", explanationKm: "ដោយសារអាហារ និងកន្លែងមានកម្រិត ការបង្កើតកូនច្រើនហួសប្រមាណជាងអ្វីដែលអាចរស់រាន បង្កើតការប្រយុទ្ធដើម្បីរស់។ ឯកត្តាដែលមានលក្ខណៈសម្របនឹងបរិស្ថានបានល្អបំផុត នឹងរស់រាន និងបន្តពូជ ផ្ទេរលក្ខណៈដ៏មានប្រយោជន៍ទាំងនោះទៅសន្តានក្រោយ ជាយន្តការនៃជំរើសធម្មជាតិ។",
+      formula: "Overproduction → competition → natural selection → survival of the fittest", formulaKm: "កូនច្រើនហួស → ប្រកួតប្រជែង → ជំរើសធម្មជាតិ → រស់រានអ្នកសមស្របបំផុត",
+      chapter: "Evolution Theory (Darwin)", chapterKm: "ទ្រឹស្តីវិវត្តន៍ដាវីន" },
+    { topic: "Variation", topicKm: "បម្រែបម្រួល", difficulty: "Easy",
+      prompt: "What is \"variation\" in the context of evolution?", promptKm: "តើ \"បម្រែបម្រួល\" ក្នុងបរិបទវិវត្តន៍ជាអ្វី?",
+      options: ["Differences that exist between individuals of the same species", "The complete absence of any difference within a species", "A change that only happens to a whole species at once", "A type of disease"], answer: "Differences that exist between individuals of the same species",
+      optionsKm: ["ភាពខុសគ្នាដែលមាននៅចំណោមឯកត្តាក្នុងប្រភេទតែមួយ", "អវត្តមានពេញលេញនៃភាពខុសគ្នាណាមួយក្នុងប្រភេទមួយ", "ការផ្លាស់ប្តូរដែលកើតឡើងតែចំពោះប្រភេទទាំងមូលក្នុងពេលតែមួយ", "ប្រភេទជំងឺមួយ"], answerKm: "ភាពខុសគ្នាដែលមាននៅចំណោមឯកត្តាក្នុងប្រភេទតែមួយ",
+      explanation: "Variation is the natural difference between individuals of the same species — for example, puppies from the same litter may differ in color and shape, with some being hairless or having more fur than usual.", explanationKm: "បម្រែបម្រួលជាភាពខុសគ្នាធម្មជាតិរវាងឯកត្តាក្នុងប្រភេទតែមួយ ឧទាហរណ៍ កូនឆ្កែពីមេតែមួយអាចមានពណ៌ និងរូបរាងខុសគ្នា ខ្លះគ្មានរោម ឬមានរោមច្រើនជាងធម្មតា។",
+      formula: "Variation: differences within the same species", formulaKm: "បម្រែបម្រួល៖ ភាពខុសគ្នាក្នុងប្រភេទតែមួយ",
+      chapter: "Evolution Theory (Darwin)", chapterKm: "ទ្រឹស្តីវិវត្តន៍ដាវីន" },
+    { topic: "Comparative anatomy", topicKm: "កាយវិភាគប្រៀបធៀប", difficulty: "Hard",
+      prompt: "The forelimbs of vertebrates such as humans, whales, and bats have very similar bone structures despite different functions. What is this evidence for?", promptKm: "ជើងមុខរបស់សត្វឆ្អឹងខ្នងដូចជាមនុស្ស ត្រី និងសត្វប្រចៀវ មានរចនាសម្ព័ន្ធឆ្អឹងស្រដៀងគ្នាខ្លាំង ទោះបីជាមុខងារខុសគ្នា។ តើនេះជាភស្តុតាងសម្រាប់អ្វី?",
+      options: ["Evolution from a common ancestor", "That these species have no relation to one another", "That bones can change shape within one animal's lifetime", "That all vertebrates eat the same food"], answer: "Evolution from a common ancestor",
+      optionsKm: ["ការវិវត្តពីបុព្វបុរសរួមមួយ", "ថាប្រភេទទាំងនេះគ្មានទំនាក់ទំនងអ្វីនឹងគ្នាឡើយ", "ថាឆ្អឹងអាចប្តូររាងក្នុងអំឡុងជីវិតសត្វតែមួយ", "ថាសត្វឆ្អឹងខ្នងទាំងអស់ញ៉ាំអាហារដូចគ្នា"], answerKm: "ការវិវត្តពីបុព្វបុរសរួមមួយ",
+      explanation: "Structures that have a similar bone arrangement and originate from the same structure in a common ancestor, even though they now serve different functions (grasping, swimming, flying), are called homologous structures — strong evidence that these species evolved from a common ancestor.", explanationKm: "រចនាសម្ព័ន្ធដែលមានការរៀបចំឆ្អឹងស្រដៀងគ្នា និងមានប្រភពពីរចនាសម្ព័ន្ធតែមួយក្នុងបុព្វបុរសរួម ទោះបីជាឥឡូវនេះបម្រើមុខងារផ្សេងគ្នា (ចាប់ កាត់ហែល ហោះ) ត្រូវបានហៅថារចនាសម្ព័ន្ធអូម៉ូឡូក ជាភស្តុតាងខ្លាំងថាប្រភេទទាំងនេះវិវត្តពីបុព្វបុរសរួមមួយ។",
+      formula: "Homologous structures (same origin, different function) = evidence of common ancestry", formulaKm: "រចនាសម្ព័ន្ធអូម៉ូឡូក (ប្រភពដូច មុខងារខុស) = ភស្តុតាងបុព្វបុរសរួម",
+      chapter: "Evolution Theory (Darwin)", chapterKm: "ទ្រឹស្តីវិវត្តន៍ដាវីន" },
+    { topic: "What is a fossil", topicKm: "ហ្វូស៊ីលជាអ្វី", difficulty: "Easy",
+      prompt: "What is a fossil?", promptKm: "តើហ្វូស៊ីលជាអ្វី?",
+      options: ["A trace or remains left behind by an ancient organism, preserved in rock", "A living organism found only today", "A type of modern mineral with no biological origin", "A man-made sculpture of an animal"], answer: "A trace or remains left behind by an ancient organism, preserved in rock",
+      optionsKm: ["ស្នាម ឬសំណល់ដែលបន្សល់ទុកដោយភាវៈរស់សម័យបុរាណ ដែលរក្សាទុកនៅក្នុងថ្ម", "ភាវៈរស់ដែលរកឃើញតែសព្វថ្ងៃប៉ុណ្ណោះ", "ប្រភេទរ៉ែទំនើបគ្មានប្រភពជីវសាស្ត្រ", "ចម្លាក់សត្វធ្វើដោយមនុស្ស"], answerKm: "ស្នាម ឬសំណល់ដែលបន្សល់ទុកដោយភាវៈរស់សម័យបុរាណ ដែលរក្សាទុកនៅក្នុងថ្ម",
+      explanation: "A fossil is a trace or remnant left behind by an ancient organism preserved in rock, such as bone, a shell imprint, or in rare cases (frozen in ice or trapped in amber) the entire body.", explanationKm: "ហ្វូស៊ីលជាស្នាម ឬសំណល់ដែលបន្សល់ទុកដោយភាវៈរស់សម័យបុរាណ រក្សាទុកនៅក្នុងថ្ម ដូចជាឆ្អឹង ស្នាមសំបក ឬក្នុងករណីកម្រ (កកនៅក្នុងទឹកកក ឬជាប់នៅក្នុងជ័រអំពៅ) រាងកាយទាំងមូល។",
+      formula: "Fossil = ancient remains/traces preserved in rock", formulaKm: "ហ្វូស៊ីល = សំណល់/ស្នាមបុរាណរក្សាទុកក្នុងថ្ម",
+      chapter: "Fossils & Evidence of Evolution", chapterKm: "កំណត់ត្រាផូស៊ីល" },
+    { topic: "Three ways fossils form", topicKm: "របៀបបង្កើតហ្វូស៊ីលបីរបៀប", difficulty: "Medium",
+      prompt: "Fossils can form in three main ways. What are they?", promptKm: "ហ្វូស៊ីលអាចបង្កើតឡើងបានបីរបៀបចម្បង។ តើអ្វីខ្លះ?",
+      options: ["Petrification (turning to stone), mold/cast impressions, and preservation of the whole body", "Only petrification", "Only freezing in ice", "Only through human excavation"], answer: "Petrification (turning to stone), mold/cast impressions, and preservation of the whole body",
+      optionsKm: ["ដំណើរកាលយជាថម ការបង្កើតពុម្ពក្រៅ និងពុម្ពក្នុង និងការរក្សាទុករាងកាយទាំងមូល", "ដំណើរកាលយជាថមតែប៉ុណ្ណោះ", "ការកកក្នុងទឹកកកតែប៉ុណ្ណោះ", "ការជីកកកាយដោយមនុស្សតែប៉ុណ្ណោះ"], answerKm: "ដំណើរកាលយជាថម ការបង្កើតពុម្ពក្រៅ និងពុម្ពក្នុង និងការរក្សាទុករាងកាយទាំងមូល",
+      explanation: "Fossils form in 3 ways: (1) petrification, where minerals gradually replace the remains, turning them to stone; (2) mold and cast formation, where an organism decays leaving an empty mold that later fills with sediment; and (3) whole-body preservation, when a carcass is buried in tree resin (amber) or trapped in ice.", explanationKm: "ហ្វូស៊ីលបង្កើតឡើងបានបីរបៀប៖ (១) ដំណើរកាលយជាថម ដែលរ៉ែជំនួសសំណល់បន្តិចម្តងៗ ធ្វើឲ្យក្លាយជាថម (២) ការបង្កើតពុម្ពក្រៅ និងពុម្ពក្នុង ដែលសារពាង្គកាយរលួយបន្សល់ទុកពុម្ពទទេ ដែលក្រោយមកបំពេញដោយកំទេចកំណប់ និង (៣) ការរក្សាទុករាងកាយទាំងមូល ពេលសាកសពត្រូវបានកប់នៅក្នុងជ័រឈើ (អំពៅ) ឬជាប់នៅក្នុងទឹកកក។",
+      formula: "Fossil formation: petrification, mold/cast, or whole-body preservation", formulaKm: "ការបង្កើតហ្វូស៊ីល៖ ដំណើរកាលយជាថម ពុម្ពក្រៅ/ក្នុង ឬរក្សារាងកាយទាំងមូល",
+      chapter: "Fossils & Evidence of Evolution", chapterKm: "កំណត់ត្រាផូស៊ីល" },
+    { topic: "Dating fossils", topicKm: "ការកំណត់អាយុហ្វូស៊ីល", difficulty: "Hard",
+      prompt: "How can scientists estimate the age of a fossil using radioactive substances?", promptKm: "តើអ្នកវិទ្យាសាស្ត្រអាចប៉ាន់ស្មានអាយុហ្វូស៊ីលដោយប្រើសារធាតុវិទ្យុសកម្មយ៉ាងដូចម្តេច?",
+      options: ["By measuring the remaining amount of a radioactive substance (like carbon-14), which decays at a fixed, known rate", "By counting the fossil's visible rings like a tree", "By weighing the fossil only", "By comparing its color to a chart"], answer: "By measuring the remaining amount of a radioactive substance (like carbon-14), which decays at a fixed, known rate",
+      optionsKm: ["តាមរយៈការវាស់បរិមាណដែលនៅសល់នៃសារធាតុវិទ្យុសកម្ម (ដូចជាកាបូន១៤) ដែលបំបែកក្នុងអត្រាថេរដែលគេស្គាល់", "តាមរយៈការរាប់រង្វង់ដែលមើលឃើញរបស់ហ្វូស៊ីលដូចដើមឈើ", "តាមរយៈការថ្លឹងទម្ងន់ហ្វូស៊ីលតែប៉ុណ្ណោះ", "តាមរយៈការប្រៀបធៀបពណ៌របស់វាទៅតារាង"], answerKm: "តាមរយៈការវាស់បរិមាណដែលនៅសល់នៃសារធាតុវិទ្យុសកម្ម (ដូចជាកាបូន១៤) ដែលបំបែកក្នុងអត្រាថេរដែលគេស្គាល់",
+      explanation: "Radioactive substances like carbon-14 decay into other substances (like nitrogen-14) at a constant, known rate, unaffected by outside conditions. By comparing the ratio of remaining radioactive substance to its decay product in a fossil, scientists can calculate its age — for example, if the ratio has fallen to half of what's found in the atmosphere, the fossil is about 5,730 years old.", explanationKm: "សារធាតុវិទ្យុសកម្មដូចជាកាបូន១៤ បំបែកទៅជាសារធាតុមួយទៀត (ដូចជាអាសូត១៤) ក្នុងអត្រាថេរដែលគេស្គាល់ ដោយមិនប៉ះពាល់ដោយលក្ខខណ្ឌខាងក្រៅ។ ដោយប្រៀបធៀបសមាមាត្រសារធាតុវិទ្យុសកម្មនៅសល់ធៀបនឹងផលិតផលបំបែកក្នុងហ្វូស៊ីល អ្នកវិទ្យាសាស្ត្រអាចគណនាអាយុរបស់វា ឧទាហរណ៍ បើសមាមាត្រធ្លាក់ចុះមកពាក់កណ្តាលនៃអ្វីដែលមាននៅក្នុងបរិយាកាស ហ្វូស៊ីលនោះមានអាយុប្រមាណ ៥៧៣០ឆ្នាំ។",
+      formula: "Radioactive dating: measure decay ratio (e.g. C-14 half-life ≈ 5730 years)", formulaKm: "កំណត់អាយុវិទ្យុសកម្ម៖ វាស់សមាមាត្របំបែក (ឧ. កន្លះអាយុ C-14 ≈ ៥៧៣០ឆ្នាំ)",
+      chapter: "Fossils & Evidence of Evolution", chapterKm: "កំណត់ត្រាផូស៊ីល" },
+    { topic: "Order of fossils in rock layers", topicKm: "លំដាប់ហ្វូស៊ីលតាមស្រទាប់ថ្ម", difficulty: "Medium",
+      prompt: "In an undisturbed sequence of sedimentary rock layers, which fossils are generally the oldest?", promptKm: "ក្នុងស្រទាប់ថ្មកំទេចកំណករៀបតាមលំដាប់ដែលមិនរញ្ជួយ តើហ្វូស៊ីលណាដែលចាស់ជាងគេជាទូទៅ?",
+      options: ["Fossils found in the deepest (lowest) layers", "Fossils found in the topmost layer", "All fossils are always the same age regardless of layer", "Fossils are dated only by their color"], answer: "Fossils found in the deepest (lowest) layers",
+      optionsKm: ["ហ្វូស៊ីលនៅស្រទាប់ជ្រៅបំផុត (ខាងក្រោមបំផុត)", "ហ្វូស៊ីលនៅស្រទាប់លើគេបំផុត", "ហ្វូស៊ីលទាំងអស់តែងតែមានអាយុដូចគ្នា មិនគិតពីស្រទាប់ទេ", "ហ្វូស៊ីលកំណត់អាយុដោយពណ៌របស់វាតែប៉ុណ្ណោះ"], answerKm: "ហ្វូស៊ីលនៅស្រទាប់ជ្រៅបំផុត (ខាងក្រោមបំផុត)",
+      explanation: "Since sediment layers are deposited over time with newer layers forming on top of older ones, fossils found in the deepest (lowest) rock layers are generally the oldest, while those closer to the surface are younger.", explanationKm: "ដោយសារស្រទាប់កំទេចកំណកបានតម្កល់ជាបន្តបន្ទាប់តាមពេលវេលា ដោយស្រទាប់ថ្មីបង្កើតនៅលើស្រទាប់ចាស់ ហ្វូស៊ីលនៅស្រទាប់ថ្មជ្រៅបំផុត (ខាងក្រោមបំផុត) ជាទូទៅចាស់ជាងគេ ចំណែកឯហ្វូស៊ីលនៅជិតផ្ទៃថ្មវិញក្មេងជាង។",
+      formula: "Rock layers: deepest layer = oldest fossil; topmost layer = youngest fossil", formulaKm: "ស្រទាប់ថ្ម៖ ស្រទាប់ជ្រៅបំផុត = ហ្វូស៊ីលចាស់បំផុត; ស្រទាប់លើ = ហ្វូស៊ីលក្មេងបំផុត",
+      chapter: "Fossils & Evidence of Evolution", chapterKm: "កំណត់ត្រាផូស៊ីល" },
+    { topic: "Importance of fossils", topicKm: "សារៈសំខាន់នៃហ្វូស៊ីល", difficulty: "Medium",
+      prompt: "What is the main scientific importance of fossils?", promptKm: "តើសារៈសំខាន់ចម្បងខាងវិទ្យាសាស្ត្រនៃហ្វូស៊ីលជាអ្វី?",
+      options: ["They help scientists understand the history of life's evolution and the Earth's climate in past ages", "They are only useful as decorations", "They prove that no species has ever gone extinct", "They are only used to date rocks, never organisms"], answer: "They help scientists understand the history of life's evolution and the Earth's climate in past ages",
+      optionsKm: ["ជួយអ្នកវិទ្យាសាស្ត្រយល់ពីប្រវត្តិវិវត្តន៍ជីវិត និងអាកាសធាតុផែនដីនៅសម័យបុរាណ", "មានប្រយោជន៍តែសម្រាប់តុបតែងប៉ុណ្ណោះ", "បញ្ជាក់ថាគ្មានប្រភេទណាធ្លាប់អស់ពូជទេ", "ប្រើតែសម្រាប់កំណត់អាយុថ្ម មិនដែលកំណត់សារពាង្គកាយទេ"], answerKm: "ជួយអ្នកវិទ្យាសាស្ត្រយល់ពីប្រវត្តិវិវត្តន៍ជីវិត និងអាកាសធាតុផែនដីនៅសម័យបុរាណ",
+      explanation: "Fossils let scientists trace the appearance, growth and extinction of species over geological time, and reveal what the Earth's climate conditions were like in each geological era — key evidence for the theory of evolution.", explanationKm: "ហ្វូស៊ីលអនុញ្ញាតឲ្យអ្នកវិទ្យាសាស្ត្រតាមដានការកកើត ការរីកចម្រើន និងការផុតពូជនៃប្រភេទឆ្លងកាត់សម័យកាលភូគព្ភសាស្ត្រ ព្រមទាំងបង្ហាញពីលក្ខខណ្ឌអាកាសធាតុនៃផែនដីនៅសម័យកាលនីមួយៗ ជាភស្តុតាងសំខាន់សម្រាប់ទ្រឹស្តីវិវត្តន៍។",
+      formula: "Fossils reveal: evolution timeline + ancient climate conditions", formulaKm: "ហ្វូស៊ីលបង្ហាញ៖ លំដាប់ពេលវេលាវិវត្តន៍ + លក្ខខណ្ឌអាកាសធាតុបុរាណ",
+      chapter: "Fossils & Evidence of Evolution", chapterKm: "កំណត់ត្រាផូស៊ីល" },
   ],
   English: [
     { topic: "Grammar", topicKm: "វេយ្យាករណ៍", difficulty: "Easy",
@@ -2175,13 +2825,617 @@ const RAW_EXERCISES = {
       options: ["Suryavarman II", "Jayavarman VII", "Norodom", "Ang Duong"], answer: "Suryavarman II",
       optionsKm: ["ព្រះបាទសូរ្យវរ្ម័នទី២", "ព្រះបាទជ័យវរ្ម័នទី៧", "ព្រះបាទនរោត្តម", "ព្រះបាទអង្គដួង"], answerKm: "ព្រះបាទសូរ្យវរ្ម័នទី២",
       explanation: "Angkor Wat was constructed in the early 12th century under King Suryavarman II.", explanationKm: "អង្គរវត្តត្រូវបានសាងសង់នៅដើមសតវត្សទី១២ ក្រោមរជ្ជកាលព្រះបាទសូរ្យវរ្ម័នទី២។",
-      formula: "Key fact: Angkor Wat ≈ early 1100s, Suryavarman II", formulaKm: "ចំណុចសំខាន់៖ អង្គរវត្ត ≈ ដើមទសវត្សរ៍ ១១០០ សូរ្យវរ្ម័នទី២" },
+      formula: "Key fact: Angkor Wat ≈ early 1100s, Suryavarman II", formulaKm: "ចំណុចសំខាន់៖ អង្គរវត្ត ≈ ដើមទសវត្សរ៍ ១១០០ សូរ្យវរ្ម័នទី២",
+      chapter: "Angkor Era", chapterKm: "សម័យអង្គរ" },
     { topic: "Khmer Empire", topicKm: "អាណាចក្រខ្មែរ", difficulty: "Easy",
       prompt: "What was the capital of the Khmer Empire at its height?", promptKm: "តើរាជធានីរបស់អាណាចក្រខ្មែរនៅសម័យរុងរឿងបំផុតគឺទីណា?",
       options: ["Angkor", "Phnom Penh", "Oudong", "Longvek"], answer: "Angkor",
       optionsKm: ["អង្គរ", "ភ្នំពេញ", "ឧដុង្គ", "លង្វែក"], answerKm: "អង្គរ",
       explanation: "Angkor was the empire's capital during its golden age.", explanationKm: "អង្គរជារាជធានីនៃអាណាចក្រក្នុងសម័យមាសរបស់ខ្លួន។",
-      formula: "Key fact: Angkor was the imperial capital", formulaKm: "ចំណុចសំខាន់៖ អង្គរជារាជធានីនៃអាណាចក្រ" },
+      formula: "Key fact: Angkor was the imperial capital", formulaKm: "ចំណុចសំខាន់៖ អង្គរជារាជធានីនៃអាណាចក្រ",
+      chapter: "Angkor Era", chapterKm: "សម័យអង្គរ" },
+
+    { topic: "Ang Duong's appeal to France", topicKm: "ការទូលសុំជំនួយបារាំងរបស់ព្រះបាទអង្គដួង", difficulty: "Medium",
+      prompt: "Which Cambodian king first appealed to France for protection against threats from Siam and Vietnam, laying the groundwork for the 1863 protectorate?", promptKm: "តើព្រះមហាក្សត្រខ្មែរអង្គណាដំបូងបានទូលសុំជំនួយពីបារាំង ដើម្បីការពារកម្ពុជាពីការគំរាមកំហែងរបស់ស្យាមនិងវៀតណាម ដែលជាមូលដ្ឋាននាំទៅដល់អាណានិគមឆ្នាំ១៨៦៣?",
+      options: ["Ang Duong", "Norodom", "Sisowath", "Norodom Sihanouk"], answer: "Ang Duong",
+      optionsKm: ["ព្រះបាទអង្គដួង", "ព្រះបាទនរោត្តម", "ព្រះបាទស៊ីសុវត្ថិ", "សម្តេចនរោត្តម សីហនុ"], answerKm: "ព្រះបាទអង្គដួង",
+      explanation: "King Ang Duong sought French protection to prevent Cambodia from being fully absorbed by Siam and Vietnam.", explanationKm: "ព្រះបាទអង្គដួងបានស្វែងរកការការពារពីបារាំង ដើម្បីទប់ស្កាត់ការលុបបំបាត់កម្ពុជាទាំងស្រុងដោយស្យាមនិងវៀតណាម។",
+      formula: "Key fact: Ang Duong first sought French protection", formulaKm: "ចំណុចសំខាន់៖ ព្រះបាទអង្គដួងជាអ្នកស្វែងរកជំនួយបារាំងដំបូង",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "French Protectorate", topicKm: "អាណានិគមបារាំង", difficulty: "Easy",
+      prompt: "In what year did France establish its protectorate over Cambodia?", promptKm: "តើបារាំងចាប់ផ្តើមដាក់អាណានិគមលើកម្ពុជានៅឆ្នាំណា?",
+      options: ["1863", "1884", "1904", "1953"], answer: "1863",
+      optionsKm: ["១៨៦៣", "១៨៨៤", "១៩០៤", "១៩៥៣"], answerKm: "១៨៦៣",
+      explanation: "France signed the protectorate treaty with Cambodia on 11 August 1863.", explanationKm: "បារាំងបានចុះហត្ថលេខាលើសន្ធិសញ្ញាអាណានិគមជាមួយកម្ពុជានៅថ្ងៃទី១១ ខែសីហា ឆ្នាំ១៨៦៣។",
+      formula: "Key fact: French protectorate began 11 August 1863", formulaKm: "ចំណុចសំខាន់៖ អាណានិគមបារាំងចាប់ផ្តើមថ្ងៃទី១១ សីហា ១៨៦៣",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "1884 rebellion", topicKm: "ការបះបោរឆ្នាំ១៨៨៤", difficulty: "Medium",
+      prompt: "In what year did Cambodians rise up against a new French convention that stripped the king and local mandarins of power?", promptKm: "តើប្រជាជនខ្មែរបានបះបោរប្រឆាំងនឹងអនុសញ្ញាថ្មីរបស់បារាំង ដែលដកហូតអំណាចព្រះមហាក្សត្រនិងមន្ត្រីមូលដ្ឋាននៅឆ្នាំណា?",
+      options: ["1884", "1863", "1904", "1953"], answer: "1884",
+      optionsKm: ["១៨៨៤", "១៨៦៣", "១៩០៤", "១៩៥៣"], answerKm: "១៨៨៤",
+      explanation: "The 1884 convention triggered a widespread rebellion because it took real power away from the king and local officials.", explanationKm: "អនុសញ្ញាឆ្នាំ១៨៨៤បានធ្វើឱ្យមានការបះបោរយ៉ាងទូលំទូលាយ ព្រោះវាដកហូតអំណាចជាក់ស្តែងពីព្រះមហាក្សត្រនិងមន្ត្រីមូលដ្ឋាន។",
+      formula: "Key fact: 1884 convention sparked rebellion", formulaKm: "ចំណុចសំខាន់៖ អនុសញ្ញា១៨៨៤ នាំឱ្យមានការបះបោរ",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Kings during the French period", topicKm: "ព្រះមហាក្សត្រសម័យអាណានិគមបារាំង", difficulty: "Medium",
+      prompt: "Which king reigned immediately before Norodom Sihanouk, during the French protectorate (1927–1941)?", promptKm: "តើព្រះមហាក្សត្រអង្គណាបានគ្រងរាជ្យមុនសម្តេចនរោត្តម សីហនុ ក្នុងសម័យអាណានិគមបារាំង (១៩២៧-១៩៤១)?",
+      options: ["Sisowath Monivong", "Norodom", "Sisowath", "Ang Duong"], answer: "Sisowath Monivong",
+      optionsKm: ["ព្រះបាទស៊ីសុវត្ថិមុនីវង្ស", "ព្រះបាទនរោត្តម", "ព្រះបាទស៊ីសុវត្ថិ", "ព្រះបាទអង្គដួង"], answerKm: "ព្រះបាទស៊ីសុវត្ថិមុនីវង្ស",
+      explanation: "Cambodia's kings under French rule reigned in sequence: Norodom (1860–1904), Sisowath (1904–1927), Sisowath Monivong (1927–1941), then Norodom Sihanouk (1941–1955).", explanationKm: "ព្រះមហាក្សត្រខ្មែរសម័យអាណានិគមបារាំងគ្រងរាជ្យតាមលំដាប់៖ ព្រះបាទនរោត្តម (១៨៦០-១៩០៤), ព្រះបាទស៊ីសុវត្ថិ (១៩០៤-១៩២៧), ព្រះបាទស៊ីសុវត្ថិមុនីវង្ស (១៩២៧-១៩៤១), បន្ទាប់មកសម្តេចនរោត្តម សីហនុ (១៩៤១-១៩៥៥)។",
+      formula: "Key fact: Norodom → Sisowath → Sisowath Monivong → Sihanouk", formulaKm: "ចំណុចសំខាន់៖ នរោត្តម → ស៊ីសុវត្ថិ → ស៊ីសុវត្ថិមុនីវង្ស → សីហនុ",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Return of Battambang and Siem Reap", topicKm: "ការទទួលយកសៀមរាប-បាត់ដំបងមកវិញ", difficulty: "Medium",
+      prompt: "On 23 March 1907, France negotiated the return of which Cambodian provinces, which Siam had controlled since the 18th century?", promptKm: "នៅថ្ងៃទី២៣ ខែមីនា ឆ្នាំ១៩០៧ បារាំងបានចរចាទទួលយកខេត្តណាខ្លះរបស់កម្ពុជាមកវិញ ដែលស្យាមបានគ្រប់គ្រងតាំងពីសតវត្សទី១៨?",
+      options: ["Battambang, Siem Reap and Sisophon", "Kampong Cham and Kratie", "Takeo and Kampot", "Ratanakiri and Mondulkiri"], answer: "Battambang, Siem Reap and Sisophon",
+      optionsKm: ["បាត់ដំបង សៀមរាប និងស៊ីសុផុន", "កំពង់ចាម និងក្រចេះ", "តាកែវ និងកំពត", "រតនគិរី និងមណ្ឌលគិរី"], answerKm: "បាត់ដំបង សៀមរាប និងស៊ីសុផុន",
+      explanation: "These provinces, home to the Angkor temples, were returned to Cambodia through French diplomatic negotiation with Siam.", explanationKm: "ខេត្តទាំងនេះ ដែលជាទីតាំងប្រាសាទអង្គរ ត្រូវបានប្រគល់មកកម្ពុជាវិញ តាមរយៈការចរចាការទូតរបស់បារាំងជាមួយស្យាម។",
+      formula: "23 Mar 1907: Battambang, Siem Reap, Sisophon returned by Siam", formulaKm: "២៣ មីនា ១៩០៧៖ បាត់ដំបង សៀមរាប ស៊ីសុផុន ត្រូវបានប្រគល់មកវិញ",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Territorial restoration 1904", topicKm: "ការប្រគល់ដីវិញ ១៩០៤", difficulty: "Medium",
+      prompt: "On 13 February 1904, ahead of the larger 1907 restoration, Siam returned which two Cambodian provinces?", promptKm: "នៅថ្ងៃទី១៣ ខែកុម្ភៈ ឆ្នាំ១៩០៤ មុននឹងមានការប្រគល់ដីជាថ្មីទៀតឆ្នាំ១៩០៧ ស្យាមបានប្រគល់ខេត្តអ្វីខ្លះរបស់កម្ពុជាមកវិញ?",
+      options: ["Mlu Prey and Stung Treng", "Battambang and Siem Reap", "Kampot and Takeo", "Koh Kong and Kampong Som"], answer: "Mlu Prey and Stung Treng",
+      optionsKm: ["ម្លូប្រៃ និងស្ទឹងត្រែង", "បាត់ដំបង និងសៀមរាប", "កំពត និងតាកែវ", "កោះកុង និងកំពង់សោម"], answerKm: "ម្លូប្រៃ និងស្ទឹងត្រែង",
+      explanation: "France negotiated the return of Mlu Prey and Stung Treng from Siam in February 1904; Battambang, Siem Reap and Sisophon followed in a separate 1907 treaty.", explanationKm: "បារាំងបានចរចាទទួលបានម្លូប្រៃ និងស្ទឹងត្រែងមកវិញពីស្យាមក្នុងខែកុម្ភៈ ១៩០៤ រីឯបាត់ដំបង សៀមរាប និងស៊ីសុផុន ត្រូវបានប្រគល់មកវិញដោយឡែកក្នុងសន្ធិសញ្ញាឆ្នាំ១៩០៧។",
+      formula: "1904 = Mlu Prey + Stung Treng; 1907 = Battambang + Siem Reap + Sisophon", formulaKm: "១៩០៤ = ម្លូប្រៃ + ស្ទឹងត្រែង; ១៩០៧ = បាត់ដំបង + សៀមរាប + ស៊ីសុផុន",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Loss of Koh Tral", topicKm: "ការបាត់បង់កោះត្រល់", difficulty: "Medium",
+      prompt: "On 31 January 1939, France transferred which Cambodian island to Cochinchina's administration, a cession Cambodia still disputes today?", promptKm: "នៅថ្ងៃទី៣១ ខែមករា ឆ្នាំ១៩៣៩ បារាំងបានកាត់ផ្តាច់កោះណារបស់កម្ពុជាទៅចំណុះការគ្រប់គ្រងកូសាំងស៊ីន ដែលកម្ពុជានៅតែជជែកវែកញែកសព្វថ្ងៃ?",
+      options: ["Koh Tral (Phu Quoc)", "Koh Kong", "Koh Rong", "Koh Sdach"], answer: "Koh Tral (Phu Quoc)",
+      optionsKm: ["កោះត្រល់ (ភូកុក)", "កោះកុង", "កោះរ៉ុង", "កោះស្តេច"], answerKm: "កោះត្រល់ (ភូកុក)",
+      explanation: "France redrew the administrative boundary in 1939, placing Koh Tral under Cochinchina; the island (known as Phu Quoc) remains under Vietnamese control today.", explanationKm: "បារាំងបានផ្លាស់ប្តូរព្រំដែនរដ្ឋបាលក្នុងឆ្នាំ១៩៣៩ ដាក់កោះត្រល់ចំណុះកូសាំងស៊ីន បច្ចុប្បន្នកោះនេះ (ភូកុក) នៅតែស្ថិតក្រោមការគ្រប់គ្រងវៀតណាម។",
+      formula: "31 Jan 1939 → Koh Tral to Cochinchina", formulaKm: "៣១ មករា ១៩៣៩ → កោះត្រល់ទៅកូសាំងស៊ីន",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Cause of the protectorate", topicKm: "មូលហេតុនៃអាណានិគម", difficulty: "Medium",
+      prompt: "According to the standard BAC II answer, what was the primary reason Cambodia accepted French colonial protection in 1863?", promptKm: "តាមចម្លើយគំរូប្រឡងបាក់ឌុប តើមូលហេតុចម្បងអ្វីខ្លះដែលធ្វើឲ្យកម្ពុជាទទួលយកអាណានិគមនិយមបារាំងក្នុងឆ្នាំ១៨៦៣?",
+      options: ["Siam and Vietnam's continued aggression and pressure on Cambodian territory and sovereignty", "Cambodia wanted to modernize its army with French weapons", "Cambodia sought a trade partnership with France", "The Cambodian king was educated in France"], answer: "Siam and Vietnam's continued aggression and pressure on Cambodian territory and sovereignty",
+      optionsKm: ["ការគំរាមកំហែងជាប់លាប់របស់ស្យាម-យួនលើទឹកដី និងអធិបតេយ្យភាពកម្ពុជា", "កម្ពុជាចង់ធ្វើទំនើបកម្មកងទ័ពដោយអាវុធបារាំង", "កម្ពុជាចង់ធ្វើដៃគូពាណិជ្ជកម្មជាមួយបារាំង", "ព្រះមហាក្សត្រខ្មែរបានសិក្សានៅបារាំង"], answerKm: "ការគំរាមកំហែងជាប់លាប់របស់ស្យាម-យួនលើទឹកដី និងអធិបតេយ្យភាពកម្ពុជា",
+      explanation: "Facing constant territorial encroachment and assimilation pressure from Siam and Vietnam, Cambodia sought a European power to protect its ethnic survival, leading King Ang Duong and later Norodom to turn to France.", explanationKm: "ដោយប្រឈមមុខនឹងការរំលោភទឹកដី និងសម្ពាធបំបែកជាតិពីស្យាម-យួនជាប់លាប់ កម្ពុជាបានស្វែងរកមហាអំណាចអឺរ៉ុបមួយដើម្បីការពារជនជាតិខ្លួន ដែលនាំឲ្យព្រះបាទអង្គដួង និងក្រោយមកព្រះបាទនរោត្តម បែរទៅរកបារាំង។",
+      formula: "Siam+Vietnam threat → seek French protection", formulaKm: "ការគំរាមស្យាម+យួន → ស្វែងរកការការពារបារាំង",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Positive legacy of French rule", topicKm: "ផលវិជ្ជមាននៃរបបអាណានិគម", difficulty: "Medium",
+      prompt: "Which of the following is considered a positive outcome of French colonial rule, according to the standard BAC II model answer?", promptKm: "តើមួយណាខាងក្រោមត្រូវបានចាត់ទុកជាផលវិជ្ជមាននៃអាណានិគមនិយមបារាំង តាមចម្លើយគំរូប្រឡងបាក់ឌុប?",
+      options: ["France helped protect the Khmer ethnic territory from being absorbed by neighboring countries", "France returned all Cambodian land lost since the Angkor era", "France ended all taxation in Cambodia", "France granted Cambodia full independence immediately in 1863"], answer: "France helped protect the Khmer ethnic territory from being absorbed by neighboring countries",
+      optionsKm: ["បារាំងបានជួយការពារទឹកដីជនជាតិខ្មែរកុំឲ្យត្រូវលេបត្របញ្ចូលដោយប្រទេសជិតខាង", "បារាំងបានប្រគល់ទឹកដីខ្មែរដែលបាត់បង់តាំងពីសម័យអង្គរមកវិញទាំងអស់", "បារាំងបានលុបបំបាត់ការយកពន្ធទាំងអស់នៅកម្ពុជា", "បារាំងបានផ្តល់ឯករាជ្យពេញលេញដល់កម្ពុជាភ្លាមៗនៅឆ្នាំ១៨៦៣"], answerKm: "បារាំងបានជួយការពារទឹកដីជនជាតិខ្មែរកុំឲ្យត្រូវលេបត្របញ្ចូលដោយប្រទេសជិតខាង",
+      explanation: "Model answers cite French protection of Khmer ethnic territory from Siamese-Vietnamese absorption as a key positive, alongside infrastructure, administrative and education reforms.", explanationKm: "ចម្លើយគំរូលើកឡើងពីការការពារទឹកដីជនជាតិខ្មែរពីការលេបត្របញ្ចូលរបស់ស្យាម-យួន ថាជាផលវិជ្ជមានសំខាន់មួយ រួមជាមួយកំណែទម្រង់ហេដ្ឋារចនាសម្ព័ន្ធ រដ្ឋបាល និងអប់រំ។",
+      formula: "French rule +: protected Khmer land from absorption", formulaKm: "បារាំង +: ការពារដីខ្មែរពីការលេបត្របញ្ចូល",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Negative impact of French rule", topicKm: "ផលអវិជ្ជមាននៃរបបអាណានិគម", difficulty: "Medium",
+      prompt: "Which of the following is listed as a major negative impact of French colonial rule on ordinary Cambodians?", promptKm: "តើមួយណាខាងក្រោមត្រូវបានចាត់ទុកជាផលអវិជ្ជមានចម្បងនៃអាណានិគមនិយមបារាំងលើប្រជាជនខ្មែរសាមញ្ញ?",
+      options: ["Heavy taxes and forced corvée labor that impoverished the population", "Mandatory French-language education for every citizen", "The banning of Buddhism throughout the country", "Abolition of the monarchy in 1863"], answer: "Heavy taxes and forced corvée labor that impoverished the population",
+      optionsKm: ["ការយកពន្ធដារ និងបង្ខំពលកម្មជាទម្រង់យ៉ាងធ្ងន់ធ្ងរ ដែលធ្វើឲ្យប្រជាជនក្រីក្រ", "ការបង្ខំអប់រំភាសាបារាំងដល់ប្រជាពលរដ្ឋគ្រប់រូប", "ការហាមឃាត់ព្រះពុទ្ធសាសនាទូទាំងប្រទេស", "ការលុបបំបាត់របបរាជានិយមក្នុងឆ្នាំ១៨៦៣"], answerKm: "ការយកពន្ធដារ និងបង្ខំពលកម្មជាទម្រង់យ៉ាងធ្ងន់ធ្ងរ ដែលធ្វើឲ្យប្រជាជនក្រីក្រ",
+      explanation: "The protectorate imposed heavy taxes and corvée labor obligations on Cambodians, a major grievance cited in BAC II model answers on French rule's negative side.", explanationKm: "របបអាណានិគមបានដាក់ពន្ធដារ និងកាតព្វកិច្ចពលកម្មយ៉ាងធ្ងន់ធ្ងរលើប្រជាជនខ្មែរ ដែលជាចំណុចអសុខចិត្តចម្បងមួយក្នុងចម្លើយគំរូស្តីពីផលអវិជ្ជមានរបបអាណានិគម។",
+      formula: "French rule −: heavy taxes + corvée labor", formulaKm: "បារាំង −: ពន្ធដារ + ពលកម្មបង្ខំ",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "The 1908 Dangrek map", topicKm: "ផែនទីដងរែក ១៩០៨", difficulty: "Hard",
+      prompt: "The 1908 French-drawn map of the Dangrek region later proved crucial to Cambodia in which international legal case?", promptKm: "ផែនទីតំបន់ដងរែកឆ្នាំ១៩០៨ ដែលគូសដោយបារាំង ក្រោយមកបានក្លាយជាភស្តុតាងសំខាន់សម្រាប់កម្ពុជាក្នុងសំណុំរឿងតុលាការអន្តរជាតិណា?", options: ["The Preah Vihear temple case at the International Court of Justice", "The Angkor Wat ownership dispute", "The Mekong River boundary case", "The Koh Tral territorial case"], answer: "The Preah Vihear temple case at the International Court of Justice",
+      optionsKm: ["សំណុំរឿងប្រាសាទព្រះវិហារនៅតុលាការយុត្តិធម៌អន្តរជាតិ", "វិវាទកម្មសិទ្ធិប្រាសាទអង្គរវត្ត", "សំណុំរឿងព្រំដែនទន្លេមេគង្គ", "សំណុំរឿងទឹកដីកោះត្រល់"], answerKm: "សំណុំរឿងប្រាសាទព្រះវិហារនៅតុលាការយុត្តិធម៌អន្តរជាតិ",
+      explanation: "Cambodia used the French-drawn 1908 map, known as the 'Dangrek' map, as key evidence to win the Preah Vihear temple case at the ICJ in 1962.", explanationKm: "កម្ពុជាបានប្រើផែនទីដងរែកដែលគូសដោយបារាំងក្នុងឆ្នាំ១៩០៨ ជាភស្តុតាងសំខាន់ដើម្បីឈ្នះក្តីប្រាសាទព្រះវិហារនៅតុលាការយុត្តិធម៌អន្តរជាតិឆ្នាំ១៩៦២។",
+      formula: "1908 Dangrek map → won Preah Vihear case (1962)", formulaKm: "ផែនទីដងរែក ១៩០៨ → ឈ្នះក្តីព្រះវិហារ (១៩៦២)",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Royal Crusade for Independence", topicKm: "ការទមទរឯករាជ្យ", difficulty: "Medium",
+      prompt: "Which Cambodian king personally toured France, the US, Canada, Japan and Thailand in 1953 to campaign for independence?", promptKm: "តើព្រះមហាក្សត្រខ្មែរអង្គណាបានយាងទៅបារាំង សហរដ្ឋអាមេរិក កាណាដា ជប៉ុន និងថៃដោយផ្ទាល់ក្នុងឆ្នាំ១៩៥៣ ដើម្បីទមទរឯករាជ្យ?",
+      options: ["Norodom Sihanouk", "Norodom", "Sisowath Monivong", "Ang Duong"], answer: "Norodom Sihanouk",
+      optionsKm: ["សម្តេចនរោត្តម សីហនុ", "ព្រះបាទនរោត្តម", "ព្រះបាទស៊ីសុវត្ថិមុនីវង្ស", "ព្រះបាទអង្គដួង"], answerKm: "សម្តេចនរោត្តម សីហនុ",
+      explanation: "This diplomatic tour is known as the \"Royal Crusade for Independence.\"", explanationKm: "ដំណើរទស្សនកិច្ចនេះត្រូវបានស្គាល់ថាជា \"យុទ្ធនាការទមទរឯករាជ្យ\" របស់សម្តេចនរោត្តម សីហនុ។",
+      formula: "Key fact: Royal Crusade for Independence, 1953", formulaKm: "ចំណុចសំខាន់៖ យុទ្ធនាការទមទរឯករាជ្យ ឆ្នាំ១៩៥៣",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Independence from France", topicKm: "ឯករាជ្យពីបារាំង", difficulty: "Easy",
+      prompt: "Cambodia gained full independence from France in which year?", promptKm: "តើកម្ពុជាទទួលបានឯករាជ្យពេញលេញពីបារាំងនៅឆ្នាំណា?",
+      options: ["1953", "1945", "1954", "1970"], answer: "1953",
+      optionsKm: ["១៩៥៣", "១៩៤៥", "១៩៥៤", "១៩៧០"], answerKm: "១៩៥៣",
+      explanation: "Cambodia received full independence from France on 9 November 1953, under King Norodom Sihanouk's leadership.", explanationKm: "កម្ពុជាបានទទួលឯករាជ្យពេញលេញពីបារាំងនៅថ្ងៃទី៩ ខែវិច្ឆិកា ឆ្នាំ១៩៥៣ ក្រោមការដឹកនាំរបស់សម្តេចនរោត្តម សីហនុ។",
+      formula: "Key fact: Independence Day = 9 November 1953", formulaKm: "ចំណុចសំខាន់៖ ទិវាឯករាជ្យ = ៩ វិច្ឆិកា ១៩៥៣",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Geneva Conference", topicKm: "សន្និសីទក្រុងហ្សឺណែវ", difficulty: "Medium",
+      prompt: "The Geneva Conference that recognized Cambodia's independence, sovereignty and territorial integrity was held in which year?", promptKm: "តើសន្និសីទក្រុងហ្សឺណែវ ដែលទទួលស្គាល់ឯករាជ្យ អធិបតេយ្យភាព និងបូរណភាពទឹកដីកម្ពុជា ធ្វើឡើងនៅឆ្នាំណា?",
+      options: ["1954", "1953", "1955", "1970"], answer: "1954",
+      optionsKm: ["១៩៥៤", "១៩៥៣", "១៩៥៥", "១៩៧០"], answerKm: "១៩៥៤",
+      explanation: "The 1954 Geneva Conference required all foreign troops to withdraw from Cambodia and confirmed its sovereignty.", explanationKm: "សន្និសីទក្រុងហ្សឺណែវឆ្នាំ១៩៥៤ តម្រូវឱ្យកងទ័ពបរទេសទាំងអស់ដកចេញពីកម្ពុជា និងបញ្ជាក់ពីអធិបតេយ្យភាពរបស់កម្ពុជា។",
+      formula: "Key fact: Geneva Conference, 1954", formulaKm: "ចំណុចសំខាន់៖ សន្និសីទក្រុងហ្សឺណែវ ឆ្នាំ១៩៥៤",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Length of French rule", topicKm: "រយៈពេលអាណានិគមបារាំង", difficulty: "Easy",
+      prompt: "The French protectorate over Cambodia (1863–1953) lasted for how many years?", promptKm: "តើអាណានិគមបារាំងលើកម្ពុជា (១៨៦៣-១៩៥៣) មានរយៈពេលប៉ុន្មានឆ្នាំ?",
+      options: ["90 years", "70 years", "50 years", "100 years"], answer: "90 years",
+      optionsKm: ["៩០ឆ្នាំ", "៧០ឆ្នាំ", "៥០ឆ្នាំ", "១០០ឆ្នាំ"], answerKm: "៩០ឆ្នាំ",
+      explanation: "From 1863 to 1953 is exactly 90 years of French protectorate rule.", explanationKm: "ចាប់ពីឆ្នាំ១៨៦៣ដល់១៩៥៣ គឺជារយៈពេល៩០ឆ្នាំគត់នៃអាណានិគមបារាំង។",
+      formula: "Key fact: French protectorate = 90 years", formulaKm: "ចំណុចសំខាន់៖ អាណានិគមបារាំង = ៩០ឆ្នាំ",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "Preservation of Angkor", topicKm: "ការអភិរក្សប្រាសាទអង្គរ", difficulty: "Easy",
+      prompt: "France founded a research institute that studied and helped restore the Angkor temples during the protectorate era. What kind of institution was it?", promptKm: "បារាំងបានបង្កើតស្ថាប័នស្រាវជ្រាវមួយ ដែលបានសិក្សានិងជួយជួសជុលប្រាសាទអង្គរឡើងវិញក្នុងសម័យអាណានិគម។ តើវាជាស្ថាប័នប្រភេទណា?",
+      options: ["A French research school for Angkorian archaeology and history", "A military academy", "A Buddhist monastic university", "A royal trade office"], answer: "A French research school for Angkorian archaeology and history",
+      optionsKm: ["សាលាស្រាវជ្រាវបារាំងសម្រាប់បុរាណវិទ្យា និងប្រវត្តិសាស្ត្រអង្គរ", "សាលាយោធា", "សាកលវិទ្យាល័យព្រះពុទ្ធសាសនា", "ការិយាល័យពាណិជ្ជកម្មរាជវាំង"], answerKm: "សាលាស្រាវជ្រាវបារាំងសម្រាប់បុរាណវិទ្យា និងប្រវត្តិសាស្ត្រអង្គរ",
+      explanation: "France built a research school that studied and catalogued ancient Khmer civilization and restored crumbling Angkorian temples — a lasting benefit for later generations.", explanationKm: "បារាំងបានបង្កើតសាលាមួយសម្រាប់ស្រាវជ្រាវ ចងក្រងអរិយធម៌ប្រវត្តិសាស្ត្រខ្មែរ និងជួសជុលប្រាសាទបុរាណដែលបាក់បែក ដែលនាំផលប្រយោជន៍ដល់កូនខ្មែរជំនាន់ក្រោយ។",
+      formula: "Key fact: French research school restored the Angkor temples", formulaKm: "ចំណុចសំខាន់៖ សាលាស្រាវជ្រាវបារាំង ជួសជុលប្រាសាទអង្គរ",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+    { topic: "1949 territorial cession", topicKm: "ការកាត់ទឹកដីឆ្នាំ១៩៤៩", difficulty: "Hard",
+      prompt: "In 1949, France transferred a portion of ethnic-Khmer territory in the Mekong Delta (Kampuchea Krom) to the administration of which country?", promptKm: "ក្នុងឆ្នាំ១៩៤៩ បារាំងបានកាត់ទឹកដីកម្ពុជាក្រោម ដែលមានជនជាតិខ្មែរច្រើន ឲ្យទៅស្ថិតក្រោមការគ្រប់គ្រងប្រទេសណា?",
+      options: ["Vietnam", "Laos", "Thailand", "China"], answer: "Vietnam",
+      optionsKm: ["វៀតណាម", "ឡាវ", "ថៃ", "ចិន"], answerKm: "វៀតណាម",
+      explanation: "France transferred Kampuchea Krom (Cochinchina) to Vietnamese administration on 4 June 1949, a decision still remembered by many ethnic Khmer today.", explanationKm: "បារាំងបានកាត់ទឹកដីកម្ពុជាក្រោម (កូសាំងស៊ីន) ឲ្យទៅស្ថិតក្រោមរដ្ឋបាលវៀតណាមនៅថ្ងៃទី៤ ខែមិថុនា ឆ្នាំ១៩៤៩ ជាការសម្រេចចិត្តដែលជនជាតិខ្មែរជាច្រើននៅចងចាំរហូតមកដល់សព្វថ្ងៃ។",
+      formula: "Key fact: Kampuchea Krom ceded to Vietnam, 1949", formulaKm: "ចំណុចសំខាន់៖ កម្ពុជាក្រោម កាត់ទៅវៀតណាម ១៩៤៩",
+      chapter: "French Protectorate (1863–1953)", chapterKm: "អាណាព្យាបាលបារាំង (១៨៦៣-១៩៥៣)" },
+
+    { topic: "Sangkum Reastr Niyum", topicKm: "សង្គមរាស្ត្រនិយម", difficulty: "Easy",
+      prompt: "In what year did Norodom Sihanouk abdicate the throne to found and lead the Sangkum Reastr Niyum movement?", promptKm: "តើសម្តេចនរោត្តម សីហនុ បានលះបង់រាជសម្បត្តិដើម្បីបង្កើត និងដឹកនាំចលនាសង្គមរាស្ត្រនិយមនៅឆ្នាំណា?",
+      options: ["1955", "1953", "1960", "1970"], answer: "1955",
+      optionsKm: ["១៩៥៥", "១៩៥៣", "១៩៦០", "១៩៧០"], answerKm: "១៩៥៥",
+      explanation: "The Sangkum Reastr Niyum was founded on 22 March 1955 and governed Cambodia until 1970.", explanationKm: "សង្គមរាស្ត្រនិយមត្រូវបានបង្កើតឡើងនៅថ្ងៃទី២២ ខែមីនា ឆ្នាំ១៩៥៥ និងបានដឹកនាំកម្ពុជារហូតដល់ឆ្នាំ១៩៧០។",
+      formula: "Key fact: Sangkum Reastr Niyum founded 22 March 1955", formulaKm: "ចំណុចសំខាន់៖ សង្គមរាស្ត្រនិយម បង្កើតថ្ងៃទី២២ មីនា ១៩៥៥",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Why Sihanouk founded the Sangkum", topicKm: "ហេតុអ្វីបង្កើតសង្គមរាស្ត្រនិយម", difficulty: "Medium",
+      prompt: "Why did Norodom Sihanouk abdicate the throne in 1955 to found and personally lead the Sangkum Reastr Niyum?", promptKm: "ហេតុអ្វីបានជាសម្តេចនរោត្តម សីហនុ លះបង់រាជសម្បត្តិក្នុងឆ្នាំ១៩៥៥ ដើម្បីបង្កើតនិងដឹកនាំសង្គមរាស្ត្រនិយមដោយផ្ទាល់?",
+      options: ["He believed the existing political parties were too divided to build the nation", "The French forced him to abdicate", "He wanted to become a Buddhist monk", "The United Nations required it"], answer: "He believed the existing political parties were too divided to build the nation",
+      optionsKm: ["ទ្រង់យល់ថាគណបក្សនយោបាយពេលនោះបែកបាក់គ្នាពេក មិនអាចកសាងជាតិបាន", "បារាំងបង្ខំឲ្យទ្រង់លះបង់រាជសម្បត្តិ", "ទ្រង់ចង់ចូលបួសជាព្រះសង្ឃ", "អង្គការសហប្រជាជាតិតម្រូវឲ្យធ្វើដូច្នេះ"], answerKm: "ទ្រង់យល់ថាគណបក្សនយោបាយពេលនោះបែកបាក់គ្នាពេក មិនអាចកសាងជាតិបាន",
+      explanation: "Sihanouk felt Cambodia could not build itself right after independence while political parties argued for power, so he abdicated to unite them under one movement.", explanationKm: "សម្តេចសីហនុមានព្រះរាជតម្រិះថា កម្ពុជាមិនអាចកសាងជាតិទើបនឹងទទួលឯករាជ្យបានឡើយ ប្រសិនបើគណបក្សនយោបាយបែងចែកគ្នាដណ្តើមអំណាច ទើបទ្រង់លះបង់រាជសម្បត្តិដើម្បីបង្រួបបង្រួមគណបក្សទាំងអស់ជាមួយចលនាមួយ។",
+      formula: "Key fact: Sangkum founded to unite divided political parties", formulaKm: "ចំណុចសំខាន់៖ សង្គមរាស្ត្រនិយម បង្កើតដើម្បីបង្រួបបង្រួមគណបក្ស",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Sangkum's first election result", topicKm: "លទ្ធផលបោះឆ្នោតដំបូងសង្គមរាស្ត្រនិយម", difficulty: "Medium",
+      prompt: "In the Sangkum Reastr Niyum's first election (September 1955), what share of the vote did it win?", promptKm: "តើគណបក្សសង្គមរាស្ត្រនិយមទទួលបានសម្លេងឆ្នោតប៉ុន្មានភាគរយ ក្នុងការបោះឆ្នោតដំបូងរបស់ខ្លួន (ខែកញ្ញា ១៩៥៥)?",
+      options: ["83%", "51%", "65%", "99%"], answer: "83%",
+      optionsKm: ["៨៣ភាគរយ", "៥១ភាគរយ", "៦៥ភាគរយ", "៩៩ភាគរយ"], answerKm: "៨៣ភាគរយ",
+      explanation: "The Sangkum Reastr Niyum won about 83% of the vote in its first election, letting it form a one-party government.", explanationKm: "សង្គមរាស្ត្រនិយមទទួលបានប្រមាណ៨៣ភាគរយនៃសម្លេងឆ្នោតក្នុងការបោះឆ្នោតដំបូង ដែលអនុញ្ញាតឱ្យបង្កើតរដ្ឋាភិបាលឯកបក្ស។",
+      formula: "Key fact: Sangkum won ~83% in its first election", formulaKm: "ចំណុចសំខាន់៖ សង្គមរាស្ត្រនិយមឈ្នះ ៨៣% ក្នុងការបោះឆ្នោតដំបូង",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "National Congress (Samaj Cheat)", topicKm: "សមាជជាតិ", difficulty: "Medium",
+      prompt: "Under the Sangkum regime, what was the name of the forum where citizens of every class met directly with the government to discuss national affairs?", promptKm: "ក្នុងសម័យសង្គមរាស្ត្រនិយម តើវេទិកាដែលប្រជាពលរដ្ឋគ្រប់វណ្ណៈជួបជាមួយរាជរដ្ឋាភិបាលដោយផ្ទាល់ដើម្បីពិភាក្សាកិច្ចការជាតិ មានឈ្មោះថាអ្វី?",
+      options: ["National Congress (Samaj Cheat)", "The Organization (Angkar)", "Supreme National Council", "People's Assembly"], answer: "National Congress (Samaj Cheat)",
+      optionsKm: ["សមាជជាតិ", "អង្គការ", "ក្រុមប្រឹក្សាជាតិជាន់ខ្ពស់", "រដ្ឋសភាប្រជាជន"], answerKm: "សមាជជាតិ",
+      explanation: "The National Congress (Samaj Cheat), founded in 1955, was a direct-democracy forum letting citizens question the government face to face.", explanationKm: "សមាជជាតិ ដែលបង្កើតឡើងក្នុងឆ្នាំ១៩៥៥ ជាវេទិកាប្រជាធិបតេយ្យផ្ទាល់ ដែលអនុញ្ញាតឱ្យប្រជាពលរដ្ឋសួរសំណួររាជរដ្ឋាភិបាលដោយផ្ទាល់មុខ។",
+      formula: "Key fact: Samaj Cheat = Sangkum's national congress", formulaKm: "ចំណុចសំខាន់៖ សមាជជាតិ = វេទិកាជាតិសម័យសង្គមរាស្ត្រនិយម",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Bandung Conference", topicKm: "សន្និសីទបានដុង", difficulty: "Medium",
+      prompt: "At which international conference in April 1955 did Sihanouk formally announce Cambodia's neutral, non-aligned foreign policy to the world?", promptKm: "តើសន្និសីទអន្តរជាតិណា ក្នុងខែមេសា ១៩៥៥ ដែលសម្តេចសីហនុប្រកាសជាផ្លូវការពីគោលនយោបាយអព្យាក្រិតរបស់កម្ពុជាដល់ពិភពលោក?",
+      options: ["Bandung Conference (Indonesia)", "Geneva Conference", "Paris Peace Conference", "United Nations General Assembly"], answer: "Bandung Conference (Indonesia)",
+      optionsKm: ["សន្និសីទបានដុង (ឥណ្ឌូនេស៊ី)", "សន្និសីទក្រុងហ្សឺណែវ", "សន្និសីទសន្តិភាពក្រុងប៉ារីស", "សន្និបាតអង្គការសហប្រជាជាតិ"], answerKm: "សន្និសីទបានដុង (ឥណ្ឌូនេស៊ី)",
+      explanation: "At the Asian-African Conference in Bandung (18-24 April 1955), Sihanouk declared Cambodia's neutrality and met leaders like Zhou Enlai and Pham Van Dong.", explanationKm: "នៅសន្និសីទប្រជាជាតិអាស៊ី-អាហ្វ្រិកនៅបានដុង (១៨-២៤ មេសា ១៩៥៥) សម្តេចសីហនុបានប្រកាសពីអព្យាក្រិតភាពរបស់កម្ពុជា និងបានជួបមេដឹកនាំដូចជាចូអានឡាយ និងផាមវ៉ានដុង។",
+      formula: "Key fact: Bandung Conference, April 1955 → neutrality declared", formulaKm: "ចំណុចសំខាន់៖ សន្និសីទបានដុង មេសា ១៩៥៥ → ប្រកាសអព្យាក្រិត",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Cambodia joins the United Nations", topicKm: "កម្ពុជាចូលជាសមាជិកអង្គការសហប្រជាជាតិ", difficulty: "Easy",
+      prompt: "Cambodia became a member of the United Nations on what date?", promptKm: "តើកម្ពុជាបានចូលជាសមាជិកអង្គការសហប្រជាជាតិនៅថ្ងៃណា?",
+      options: ["14 December 1955", "9 November 1953", "22 March 1955", "18 April 1955"], answer: "14 December 1955",
+      optionsKm: ["១៤ ធ្នូ ១៩៥៥", "៩ វិច្ឆិកា ១៩៥៣", "២២ មីនា ១៩៥៥", "១៨ មេសា ១៩៥៥"], answerKm: "១៤ ធ្នូ ១៩៥៥",
+      explanation: "Cambodia joined the UN on 14 December 1955, using the occasion to announce its path of neutrality.", explanationKm: "កម្ពុជាបានចូលជាសមាជិកអង្គការសហប្រជាជាតិនៅថ្ងៃទី១៤ ខែធ្នូ ឆ្នាំ១៩៥៥ ដោយប្រើឱកាសនេះប្រកាសពីមាគ៌ានយោបាយអព្យាក្រិតរបស់ខ្លួន។",
+      formula: "Key fact: Cambodia joined UN, 14 Dec 1955", formulaKm: "ចំណុចសំខាន់៖ កម្ពុជាចូល UN ១៤ ធ្នូ ១៩៥៥",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Joint declaration with India", topicKm: "សេចក្តីប្រកាសរួមជាមួយឥណ្ឌា", difficulty: "Hard",
+      prompt: "In March 1955, Sihanouk signed a joint declaration on peaceful coexistence with which foreign leader, during a visit to India?", promptKm: "ក្នុងខែមីនា ១៩៥៥ សម្តេចសីហនុបានចុះហត្ថលេខាលើសេចក្តីប្រកាសរួមស្តីពីការរួមរស់ដោយសន្តិភាព ជាមួយមេដឹកនាំបរទេសណា ក្នុងដំណើរទស្សនកិច្ចទៅឥណ្ឌា?",
+      options: ["Jawaharlal Nehru (India)", "Zhou Enlai (China)", "Ho Chi Minh (Vietnam)", "U Nu (Burma)"], answer: "Jawaharlal Nehru (India)",
+      optionsKm: ["ចាវហ្ស៊ឺឡាល់ នេរូ (ឥណ្ឌា)", "ចូអានឡាយ (ចិន)", "ហូជីមិញ (វៀតណាម)", "អ៊ូនុ (ភូមា)"], answerKm: "ចាវហ្ស៊ឺឡាល់ នេរូ (ឥណ្ឌា)",
+      explanation: "On 18 March 1955, Sihanouk and Indian Prime Minister Nehru signed a joint declaration committing both countries to peaceful coexistence.", explanationKm: "នៅថ្ងៃទី១៨ ខែមីនា ១៩៥៥ សម្តេចសីហនុ និងនាយករដ្ឋមន្ត្រីឥណ្ឌា នេរូ បានចុះហត្ថលេខាលើសេចក្តីប្រកាសរួមមួយ ដើម្បីរួមរស់ដោយសន្តិភាពរវាងប្រទេសទាំងពីរ។",
+      formula: "Key fact: Sihanouk-Nehru declaration, March 1955", formulaKm: "ចំណុចសំខាន់៖ សេចក្តីប្រកាសសីហនុ-នេរូ មីនា ១៩៥៥",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Sangkum-era foreign policy", topicKm: "គោលនយោបាយអព្យាក្រិត", difficulty: "Medium",
+      prompt: "What foreign policy did Cambodia adopt throughout the Sangkum Reastr Niyum period (1955-1970)?", promptKm: "តើកម្ពុជាបានប្រកាន់យកគោលនយោបាយអ្វី ក្នុងអំឡុងសម័យសង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)?",
+      options: ["Neutrality / non-alignment", "Full alliance with the US", "Full alliance with the USSR", "Isolationism"], answer: "Neutrality / non-alignment",
+      optionsKm: ["អព្យាក្រិតភាព / មិនចូលបក្សសម្ព័ន្ធ", "សម្ព័ន្ធភាពពេញលេញជាមួយសហរដ្ឋអាមេរិក", "សម្ព័ន្ធភាពពេញលេញជាមួយសហភាពសូវៀត", "ភាពនៅកម្រិតខ្លួនឯង"], answerKm: "អព្យាក្រិតភាព / មិនចូលបក្សសម្ព័ន្ធ",
+      explanation: "Cambodia's neutrality policy let it stay at peace for 15 years while neighboring Vietnam was engulfed in war.", explanationKm: "គោលនយោបាយអព្យាក្រិតបានអនុញ្ញាតឱ្យកម្ពុជារស់នៅដោយសន្តិភាពអស់រយៈពេល១៥ឆ្នាំ ខណៈដែលប្រទេសជិតខាងគឺវៀតណាមកំពុងជួបសង្គ្រាម។",
+      formula: "Key fact: Neutrality policy, Sangkum era 1955-1970", formulaKm: "ចំណុចសំខាន់៖ គោលនយោបាយអព្យាក្រិត សម័យសង្គមរាស្ត្រនិយម ១៩៥៥-១៩៧០",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Sihanoukville port", topicKm: "កំពង់ផែព្រះសីហនុ", difficulty: "Easy",
+      prompt: "During the Sangkum era, Cambodia built its own deep-water seaport to reduce dependence on Vietnamese ports. What is it called?", promptKm: "ក្នុងសម័យសង្គមរាស្ត្រនិយម កម្ពុជាបានសាងសង់កំពង់ផែសមុទ្រជម្រៅផ្ទាល់ខ្លួន ដើម្បីកាត់បន្ថយការពឹងផ្អែកលើកំពង់ផែវៀតណាម។ តើវាមានឈ្មោះថាអ្វី?",
+      options: ["Sihanoukville (Kampong Som)", "Koh Kong", "Kep", "Kampot"], answer: "Sihanoukville (Kampong Som)",
+      optionsKm: ["ក្រុងព្រះសីហនុ (កំពង់សោម)", "កោះកុង", "កែប", "កំពត"], answerKm: "ក្រុងព្រះសីហនុ (កំពង់សោម)",
+      explanation: "Sihanoukville, Cambodia's first deep-water port, was built during the Sangkum era to give the country independent access to the sea.", explanationKm: "ក្រុងព្រះសីហនុ ជាកំពង់ផែសមុទ្រជម្រៅដំបូងរបស់កម្ពុជា ត្រូវបានសាងសង់ក្នុងសម័យសង្គមរាស្ត្រនិយម ដើម្បីឲ្យប្រទេសមានផ្លូវចេញចូលសមុទ្រដោយឯករាជ្យ។",
+      formula: "Key fact: Sihanoukville port built during Sangkum era", formulaKm: "ចំណុចសំខាន់៖ កំពង់ផែព្រះសីហនុ សាងសង់សម័យសង្គមរាស្ត្រនិយម",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Basis of the neutrality policy", topicKm: "មូលដ្ឋានគោលនយោបាយអព្យាក្រិត", difficulty: "Hard",
+      prompt: "Cambodia's neutrality (non-alignment) policy during the Sangkum era was formally grounded in the resolutions of which 1954 international conference?", promptKm: "គោលនយោបាយអព្យាក្រិតរបស់កម្ពុជាក្នុងសម័យសង្គមរាស្ត្រនិយម ត្រូវបានផ្អែកតាមសេចក្តីសម្រេចរបស់សន្និសីទអន្តរជាតិណា ឆ្នាំ១៩៥៤?", options: ["The Geneva Conference on Indochina", "The Bandung Conference", "The Paris Peace Conference", "The San Francisco Conference"], answer: "The Geneva Conference on Indochina",
+      optionsKm: ["សន្និសីទក្រុងហ្សឺណែវស្តីពីឥណ្ឌូចិន", "សន្និសីទបាដុង", "សន្និសីទសន្តិភាពប៉ារីស", "សន្និសីទសាន់ហ្វ្រាន់ស៊ីស្កូ"], answerKm: "សន្និសីទក្រុងហ្សឺណែវស្តីពីឥណ្ឌូចិន",
+      explanation: "The 1954 Geneva Conference, proposed partly by China and the Soviet Union, recognized Cambodia's independence and became the foundation Sihanouk cited for pursuing a neutral foreign policy.", explanationKm: "សន្និសីទក្រុងហ្សឺណែវ ឆ្នាំ១៩៥៤ ដែលស្នើឡើងដោយចិននិងសូវៀតមួយផ្នែក បានទទួលស្គាល់ឯករាជ្យកម្ពុជា និងក្លាយជាមូលដ្ឋានដែលសម្តេចសីហនុលើកឡើងសម្រាប់ការប្រកាន់យកគោលនយោបាយអព្យាក្រិត។",
+      formula: "1954 Geneva Conference → basis for neutrality policy", formulaKm: "សន្និសីទហ្សឺណែវ ១៩៥៤ → មូលដ្ឋានគោលនយោបាយអព្យាក្រិត",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "1961 non-alignment charter", topicKm: "ធម្មនុញ្ញមិនចូលបក្សសម្ព័ន្ធ ១៩៦១", difficulty: "Hard",
+      prompt: "In September 1961, Sihanouk signed the charter of the non-aligned movement in which city, reinforcing Cambodia's neutral stance during the Cold War?", promptKm: "ក្នុងខែកញ្ញា ១៩៦១ សម្តេចសីហនុបានចុះហត្ថលេខាលើធម្មនុញ្ញចលនាមិនចូលបក្សសម្ព័ន្ធនៅទីក្រុងណា ជាការពង្រឹងជំហរអព្យាក្រិតរបស់កម្ពុជាកំឡុងសង្គ្រាមត្រជាក់?", options: ["Belgrade", "Bandung", "Geneva", "New Delhi"], answer: "Belgrade",
+      optionsKm: ["បែលក្រាដ", "បាដុង", "ហ្សឺណែវ", "ញូវដេលី"], answerKm: "បែលក្រាដ",
+      explanation: "Sihanouk signed the non-aligned movement's founding charter in Belgrade, Yugoslavia, in September 1961, cementing Cambodia's refusal to join either Cold War bloc.", explanationKm: "សម្តេចសីហនុបានចុះហត្ថលេខាលើធម្មនុញ្ញចលនាមិនចូលបក្សសម្ព័ន្ធនៅទីក្រុងបែលក្រាដ ប្រទេសយូហ្គោស្លាវី ក្នុងខែកញ្ញា ១៩៦១ ដោយបញ្ជាក់ពីការបដិសេធចូលចំណែកជាមួយប្លុកណាមួយក្នុងសង្គ្រាមត្រជាក់។",
+      formula: "Sept 1961 → Belgrade non-aligned charter", formulaKm: "កញ្ញា ១៩៦១ → ធម្មនុញ្ញបែលក្រាដ",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+    { topic: "Women's suffrage", topicKm: "សិទ្ធិបោះឆ្នោតស្រ្តី", difficulty: "Medium",
+      prompt: "Cambodian women were granted the right to vote and stand for election on what date during the Sangkum era?", promptKm: "ស្រ្តីខ្មែរទទួលបានសិទ្ធិបោះឆ្នោត និងឈរឈ្មោះបោះឆ្នោតនៅថ្ងៃណា ក្នុងសម័យសង្គមរាស្ត្រនិយម?", options: ["6 May 1958", "9 November 1953", "23 March 1955", "1 September 1961"], answer: "6 May 1958",
+      optionsKm: ["៦ ឧសភា ១៩៥៨", "៩ វិច្ឆិកា ១៩៥៣", "២៣ មីនា ១៩៥៥", "១ កញ្ញា ១៩៦១"], answerKm: "៦ ឧសភា ១៩៥៨",
+      explanation: "On 6 May 1958, the Sangkum government granted Cambodian women the right to vote and to run for elected office, part of its social reform program.", explanationKm: "នៅថ្ងៃទី៦ ឧសភា ១៩៥៨ រាជរដ្ឋាភិបាលសង្គមរាស្ត្រនិយមបានផ្តល់សិទ្ធិដល់ស្រ្តីខ្មែរក្នុងការបោះឆ្នោត និងឈរឈ្មោះបោះឆ្នោត ជាផ្នែកមួយនៃកម្មវិធីកំណែទម្រង់សង្គម។",
+      formula: "6 May 1958 → women's suffrage", formulaKm: "៦ ឧសភា ១៩៥៨ → សិទ្ធិបោះឆ្នោតស្រ្តី",
+      chapter: "Sangkum Reastr Niyum (1955–1970)", chapterKm: "សង្គមរាស្ត្រនិយម (១៩៥៥-១៩៧០)" },
+
+    { topic: "1970 coup", topicKm: "រដ្ឋប្រហារឆ្នាំ១៩៧០", difficulty: "Easy",
+      prompt: "The coup that overthrew Norodom Sihanouk and created the Khmer Republic took place on what date?", promptKm: "តើរដ្ឋប្រហារដែលទម្លាក់សម្តេចនរោត្តម សីហនុ និងបង្កើតសាធារណរដ្ឋខ្មែរ កើតឡើងនៅថ្ងៃណា?",
+      options: ["18 March 1970", "17 April 1975", "7 January 1979", "23 October 1991"], answer: "18 March 1970",
+      optionsKm: ["១៨ មីនា ១៩៧០", "១៧ មេសា ១៩៧៥", "៧ មករា ១៩៧៩", "២៣ តុលា ១៩៩១"], answerKm: "១៨ មីនា ១៩៧០",
+      explanation: "The 18 March 1970 coup ended the Sangkum era and led to five years of civil war.", explanationKm: "រដ្ឋប្រហារថ្ងៃទី១៨ ខែមីនា ឆ្នាំ១៩៧០ បានបញ្ចប់សម័យសង្គមរាស្ត្រនិយម ហើយនាំឱ្យមានសង្គ្រាមស៊ីវិលអស់រយៈពេល៥ឆ្នាំ។",
+      formula: "Key fact: 1970 coup = 18 March 1970", formulaKm: "ចំណុចសំខាន់៖ រដ្ឋប្រហារឆ្នាំ១៩៧០ = ១៨ មីនា ១៩៧០",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Cause of the 1970 coup", topicKm: "មូលហេតុរដ្ឋប្រហារ១៩៧០", difficulty: "Medium",
+      prompt: "Which of these was a major grievance that led conservative officials to depose Sihanouk in March 1970?", promptKm: "តើមួយណាខាងក្រោមជាមូលហេតុសំខាន់ដែលនាំឱ្យមន្ត្រីនិយមធនទម្លាក់សម្តេចសីហនុ ក្នុងខែមីនា ១៩៧០?",
+      options: ["Vietnamese communist forces were using Cambodian territory as a base and supply route", "Sihanouk had declared war on Thailand", "Sihanouk had abolished the monarchy himself", "Cambodia had lost a war against Laos"], answer: "Vietnamese communist forces were using Cambodian territory as a base and supply route",
+      optionsKm: ["កងកម្លាំងកុម្មុយនីស្តវៀតណាមប្រើទឹកដីកម្ពុជាជាមូលដ្ឋាននិងផ្លូវសម្ភារៈ", "សម្តេចសីហនុបានប្រកាសសង្គ្រាមនឹងថៃ", "សម្តេចសីហនុបានលុបបំបាត់ព្រះរាជានិយមដោយខ្លួនឯង", "កម្ពុជាចាញ់សង្គ្រាមនឹងឡាវ"], answerKm: "កងកម្លាំងកុម្មុយនីស្តវៀតណាមប្រើទឹកដីកម្ពុជាជាមូលដ្ឋាននិងផ្លូវសម្ភារៈ",
+      explanation: "Conservative officials were angered that Vietnamese communist forces (Viet Cong and North Vietnamese troops) used Cambodian border areas as bases and supply routes, which they felt Sihanouk had tolerated for too long.", explanationKm: "មន្ត្រីនិយមធនមានការខឹងសម្បារ ដែលកងកម្លាំងកុម្មុយនីស្តវៀតណាម (វៀតកុងនិងទាហានវៀតណាមខាងជើង) ប្រើតំបន់ព្រំដែនកម្ពុជាជាមូលដ្ឋាននិងផ្លូវសម្ភារៈ ដែលពួកគេយល់ថាសម្តេចសីហនុបានអត់ធ្មត់យូរពេក។",
+      formula: "Key fact: Vietnamese use of Cambodian territory fueled the 1970 coup", formulaKm: "ចំណុចសំខាន់៖ ការប្រើទឹកដីកម្ពុជារបស់វៀតណាម ជំរុញរដ្ឋប្រហារ១៩៧០",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Founding of the Khmer Republic", topicKm: "ការប្រកាសបង្កើតសាធារណរដ្ឋខ្មែរ", difficulty: "Easy",
+      prompt: "The Khmer Republic was officially proclaimed on what date (distinct from the 18 March coup itself)?", promptKm: "តើសាធារណរដ្ឋខ្មែរត្រូវបានប្រកាសបង្កើតជាផ្លូវការនៅថ្ងៃណា (ខុសពីថ្ងៃរដ្ឋប្រហារ១៨ មីនា)?",
+      options: ["9 October 1970", "18 March 1970", "17 April 1975", "7 January 1979"], answer: "9 October 1970",
+      optionsKm: ["៩ តុលា ១៩៧០", "១៨ មីនា ១៩៧០", "១៧ មេសា ១៩៧៥", "៧ មករា ១៩៧៩"], answerKm: "៩ តុលា ១៩៧០",
+      explanation: "The coup happened on 18 March 1970, but the Khmer Republic itself was formally proclaimed on 9 October 1970.", explanationKm: "រដ្ឋប្រហារកើតឡើងនៅថ្ងៃទី១៨ ខែមីនា ១៩៧០ ប៉ុន្តែសាធារណរដ្ឋខ្មែរខ្លួនឯងត្រូវបានប្រកាសបង្កើតជាផ្លូវការនៅថ្ងៃទី៩ ខែតុលា ១៩៧០។",
+      formula: "Key fact: Khmer Republic proclaimed 9 October 1970", formulaKm: "ចំណុចសំខាន់៖ សាធារណរដ្ឋខ្មែរប្រកាសបង្កើត ៩ តុលា ១៩៧០",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Khmer Republic", topicKm: "សាធារណរដ្ឋខ្មែរ", difficulty: "Easy",
+      prompt: "Who became president of the Khmer Republic (1970-1975)?", promptKm: "តើនរណាបានក្លាយជាប្រធានាធិបតីសាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)?",
+      options: ["Lon Nol", "Sisowath Sirik Matak", "Heng Samrin", "Hun Sen"], answer: "Lon Nol",
+      optionsKm: ["លន់ នល់", "ស៊ីសុវត្ថិ ស៊ីរិកម៉ាតាក់", "ហេង សំរិន", "ហ៊ុន សែន"], answerKm: "លន់ នល់",
+      explanation: "Lon Nol led the coup government and served as president of the Khmer Republic.", explanationKm: "លន់ នល់ បានដឹកនាំរដ្ឋាភិបាលរដ្ឋប្រហារ និងបានធ្វើជាប្រធានាធិបតីសាធារណរដ្ឋខ្មែរ។",
+      formula: "Key fact: Khmer Republic president = Lon Nol", formulaKm: "ចំណុចសំខាន់៖ ប្រធានាធិបតីសាធារណរដ្ឋខ្មែរ = លន់ នល់",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Civil war death toll", topicKm: "ចំនួនអ្នកស្លាប់ក្នុងសង្គ្រាមស៊ីវិល", difficulty: "Medium",
+      prompt: "The Cambodian civil war (1970–1975) is estimated to have killed how many people?", promptKm: "តើសង្គ្រាមស៊ីវិលកម្ពុជា (១៩៧០-១៩៧៥) ប៉ាន់ស្មានថាបានសម្លាប់ប្រជាជនប៉ុន្មាននាក់?",
+      options: ["Over 1 million", "About 50,000", "About 200,000", "Over 3 million"], answer: "Over 1 million",
+      optionsKm: ["ជាងមួយលាននាក់", "ប្រមាណ ៥០.០០០នាក់", "ប្រមាណ ២០០.០០០នាក់", "ជាងបីលាននាក់"], answerKm: "ជាងមួយលាននាក់",
+      explanation: "The five-year civil war killed over a million people and left many more wounded, displaced, or orphaned.", explanationKm: "សង្គ្រាមស៊ីវិលរយៈពេល៥ឆ្នាំបានសម្លាប់ប្រជាជនជាងមួយលាននាក់ និងបន្សល់ទុកអ្នករបួស ជនភៀសខ្លួន និងក្មេងកំព្រាជាច្រើនទៀត។",
+      formula: "Key fact: 1970-75 civil war deaths > 1 million", formulaKm: "ចំណុចសំខាន់៖ អ្នកស្លាប់សង្គ្រាម១៩៧០-៧៥ > ១លាននាក់",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "War damage to industry", topicKm: "ការខូចខាតឧស្សាហកម្មដោយសង្គ្រាម", difficulty: "Medium",
+      prompt: "By the end of the civil war (1975), roughly what percentage of Cambodia's factories had been destroyed or damaged?", promptKm: "នៅចុងសង្គ្រាមស៊ីវិល (១៩៧៥) តើប្រមាណប៉ុន្មានភាគរយនៃរោងចក្រកម្ពុជាត្រូវបានបំផ្លិចបំផ្លាញ ឬខូចខាត?",
+      options: ["75%", "25%", "50%", "10%"], answer: "75%",
+      optionsKm: ["៧៥ភាគរយ", "២៥ភាគរយ", "៥០ភាគរយ", "១០ភាគរយ"], answerKm: "៧៥ភាគរយ",
+      explanation: "About 75% of Cambodia's factories were destroyed or damaged by the war, crippling the country's industrial base.", explanationKm: "ប្រមាណ៧៥ភាគរយនៃរោងចក្រកម្ពុជាត្រូវបានបំផ្លិចបំផ្លាញ ឬខូចខាតដោយសារសង្គ្រាម ធ្វើឱ្យមូលដ្ឋានឧស្សាហកម្មប្រទេសខ្សោយថយ។",
+      formula: "Key fact: ~75% of factories destroyed by 1975", formulaKm: "ចំណុចសំខាន់៖ រោងចក្រ ~៧៥% ត្រូវខូចខាតដល់ឆ្នាំ១៩៧៥",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Refugees in Phnom Penh", topicKm: "ជនភៀសខ្លួននៅភ្នំពេញ", difficulty: "Medium",
+      prompt: "About how many war refugees fled from the countryside into Phnom Penh during the civil war?", promptKm: "តើប្រមាណប៉ុន្មាននាក់ជាជនភៀសខ្លួនពីជនបទ បានភៀសមកកាន់ទីក្រុងភ្នំពេញក្នុងកំឡុងសង្គ្រាមស៊ីវិល?",
+      options: ["About 2 million", "About 100,000", "About 500,000", "About 5 million"], answer: "About 2 million",
+      optionsKm: ["ប្រមាណ ២លាននាក់", "ប្រមាណ ១០០.០០០នាក់", "ប្រមាណ ៥០០.០០០នាក់", "ប្រមាណ ៥លាននាក់"], answerKm: "ប្រមាណ ២លាននាក់",
+      explanation: "Roughly 2 million people fled fighting in the countryside for the relative safety of Phnom Penh, where many lived without enough food, jobs, or shelter.", explanationKm: "ប្រមាណ២លាននាក់បានភៀសខ្លួនចេញពីការប្រយុទ្ធក្នុងជនបទ មករកសុវត្ថិភាពនៅភ្នំពេញ ជាកន្លែងដែលពួកគេជាច្រើនរស់នៅដោយខ្វះការងារ ចំណីអាហារ និងជម្រក។",
+      formula: "Key fact: ~2 million refugees fled to Phnom Penh", formulaKm: "ចំណុចសំខាន់៖ ជនភៀសខ្លួន ~២លាននាក់ ភៀសមកភ្នំពេញ",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "US bombing campaign", topicKm: "យុទ្ធនាការទម្លាក់គ្រាប់បែកអាមេរិក", difficulty: "Hard",
+      prompt: "Between 1969 and 1973, about how many tons of bombs did the US B-52 campaign drop on Cambodia?", promptKm: "ចន្លោះឆ្នាំ១៩៦៩ ដល់១៩៧៣ តើអាមេរិកបានទម្លាក់គ្រាប់បែកចំនួនប៉ុន្មានតោនលើកម្ពុជាតាមរយៈយន្តហោះ B ៥២?",
+      options: ["About 2 million tons", "About 200,000 tons", "About 20,000 tons", "About 20 million tons"], answer: "About 2 million tons",
+      optionsKm: ["ប្រមាណ ២លានតោន", "ប្រមាណ ២០០.០០០តោន", "ប្រមាណ ២០.០០០តោន", "ប្រមាណ ២០លានតោន"], answerKm: "ប្រមាណ ២លានតោន",
+      explanation: "The US B-52 bombing campaign dropped roughly 2 million tons of bombs on the Cambodian countryside, turning many rice fields into bomb-cratered land.", explanationKm: "យុទ្ធនាការទម្លាក់គ្រាប់បែកអាមេរិកដោយយន្តហោះ B ៥២ បានទម្លាក់គ្រាប់បែកប្រមាណ២លានតោនលើជនបទកម្ពុជា ធ្វើឱ្យស្រែស្រូវជាច្រើនក្លាយជាដីរណ្តៅគ្រាប់បែក។",
+      formula: "Key fact: US B-52 campaign dropped ~2 million tons of bombs, 1969-73", formulaKm: "ចំណុចសំខាន់៖ គ្រាប់បែក B ៥២ ~២លានតោន ១៩៦៩-៧៣",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Lon Nol's exile", topicKm: "ការភៀសខ្លួនរបស់លន់ នល់", difficulty: "Medium",
+      prompt: "Lon Nol fled Cambodia by plane just before the Khmer Rouge takeover, on what date?", promptKm: "តើលន់ នល់ បានភៀសខ្លួនចេញពីកម្ពុជាតាមយន្តហោះ មុនពេលខ្មែរក្រហមចូលកាន់កាប់ នៅថ្ងៃណា?",
+      options: ["1 April 1975", "17 April 1975", "18 March 1970", "9 October 1970"], answer: "1 April 1975",
+      optionsKm: ["១ មេសា ១៩៧៥", "១៧ មេសា ១៩៧៥", "១៨ មីនា ១៩៧០", "៩ តុលា ១៩៧០"], answerKm: "១ មេសា ១៩៧៥",
+      explanation: "Lon Nol left Cambodia on 1 April 1975 and went to live in the United States, just over two weeks before the Khmer Rouge captured Phnom Penh.", explanationKm: "លន់ នល់បានចាកចេញពីកម្ពុជានៅថ្ងៃទី១ ខែមេសា ឆ្នាំ១៩៧៥ ហើយទៅរស់នៅសហរដ្ឋអាមេរិក ជាងពីរសប្តាហ៍មុនពេលខ្មែរក្រហមចូលកាន់កាប់ភ្នំពេញ។",
+      formula: "Key fact: Lon Nol fled 1 April 1975", formulaKm: "ចំណុចសំខាន់៖ លន់ នល់ ភៀសខ្លួន ១ មេសា ១៩៧៥",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Causes of the 1970 coup", topicKm: "មូលហេតុរដ្ឋប្រហារ ១៩៧០", difficulty: "Hard",
+      prompt: "Besides accusations that Sihanouk's neutrality policy had lost direction, which foreign involvement is cited as a cause of the 18 March 1970 coup?", promptKm: "ក្រៅពីការចោទប្រកាន់ថាគោលនយោបាយអព្យាក្រិតរបស់សីហនុលែងមានទិសដៅ តើអន្តរាគមន៍បរទេសណាមួយត្រូវបានលើកឡើងជាមូលហេតុនៃរដ្ឋប្រហារ ១៨ មីនា ១៩៧០?", options: ["Interference by Vietnam and the United States in Cambodian politics", "A trade dispute with Thailand", "A border war with Laos", "French demands to restore colonial rule"], answer: "Interference by Vietnam and the United States in Cambodian politics",
+      optionsKm: ["ការជ្រៀតជ្រែករបស់វៀតណាម និងសហរដ្ឋអាមេរិកក្នុងនយោបាយខ្មែរ", "វិវាទពាណិជ្ជកម្មជាមួយថៃ", "សង្គ្រាមព្រំដែនជាមួយឡាវ", "ការទាមទាររបស់បារាំងឲ្យស្តារអាណានិគមឡើងវិញ"], answerKm: "ការជ្រៀតជ្រែករបស់វៀតណាម និងសហរដ្ឋអាមេរិកក្នុងនយោបាយខ្មែរ",
+      explanation: "BAC II model answers list Vietnamese and American interference in Cambodian internal politics, alongside elite discontent with Sihanouk, as key causes of the March 1970 coup.", explanationKm: "ចម្លើយគំរូបាក់ឌុបលើកឡើងពីការជ្រៀតជ្រែករបស់វៀតណាម និងសហរដ្ឋអាមេរិកក្នុងនយោបាយផ្ទៃក្នុងខ្មែរ រួមជាមួយភាពមិនពេញចិត្តរបស់ថ្នាក់ដឹកនាំចំពោះសីហនុ ថាជាមូលហេតុចម្បងនៃរដ្ឋប្រហារ មីនា ១៩៧០។",
+      formula: "1970 coup causes: elite split + Vietnam/US interference", formulaKm: "មូលហេតុរដ្ឋប្រហារ ១៩៧០៖ បាក់បែកអ្នកដឹកនាំ + ជ្រៀតជ្រែកវៀតណាម/អាមេរិក",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Why the Khmer Republic collapsed", topicKm: "មូលហេតុដួលរលំសាធារណរដ្ឋខ្មែរ", difficulty: "Hard",
+      prompt: "According to the BAC II model answer, what was a key reason ordinary people in Phnom Penh grew exhausted with the Khmer Republic government?", promptKm: "តាមចម្លើយគំរូបាក់ឌុប តើហេតុអ្វីខ្លះដែលធ្វើឲ្យប្រជាជននៅភ្នំពេញនឿយណាយនឹងរដ្ឋាភិបាលសាធារណរដ្ឋខ្មែរ?", options: ["Corruption, inflation, food and job shortages amid worsening war conditions", "The government banned all religious practice", "The government moved the capital away from Phnom Penh", "Taxes were completely abolished, bankrupting the state"], answer: "Corruption, inflation, food and job shortages amid worsening war conditions",
+      optionsKm: ["អំពើពុករលួយ អតិផរណា កង្វះអាហារ និងការងារ ក្នុងស្ថានភាពសង្គ្រាមកាន់តែធ្ងន់ធ្ងរ", "រដ្ឋាភិបាលហាមឃាត់ការអនុវត្តសាសនាទាំងអស់", "រដ្ឋាភិបាលបានផ្លាស់ប្តូររាជធានីចេញពីភ្នំពេញ", "ពន្ធត្រូវបានលុបបំបាត់ទាំងស្រុង ធ្វើឲ្យរដ្ឋក្ស័យធន"], answerKm: "អំពើពុករលួយ អតិផរណា កង្វះអាហារ និងការងារ ក្នុងស្ថានភាពសង្គ្រាមកាន់តែធ្ងន់ធ្ងរ",
+      explanation: "Living on a shrinking patch of land under siege, Phnom Penh residents faced food and shelter shortages, unemployment, inflation, corruption and injustice — fueling widespread discontent with the Khmer Republic.", explanationKm: "ការរស់នៅលើទីក្រុងតូចចង្អៀតក្រោមការឡោមព័ទ្ធ ប្រជាជនភ្នំពេញជួបប្រទះកង្វះអាហារ ជម្រក ការគ្មានការងារធ្វើ អតិផរណា អំពើពុករលួយ និងអយុត្តិធម៌ ដែលជាមូលហេតុនៃភាពមិនពេញចិត្តទូលំទូលាយចំពោះសាធារណរដ្ឋខ្មែរ។",
+      formula: "KR collapse: corruption + inflation + shortages + war fatigue", formulaKm: "ការដួលរលំសាធារណរដ្ឋខ្មែរ៖ ពុករលួយ + អតិផរណា + កង្វះខាត + នឿយណាយសង្គ្រាម",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+    { topic: "Siege of Phnom Penh", topicKm: "ការឡោមព័ទ្ធភ្នំពេញ", difficulty: "Medium",
+      prompt: "In the final phase of the civil war, how did the Khmer Rouge cripple the Khmer Republic government in Phnom Penh?", promptKm: "ក្នុងដំណាក់កាលចុងក្រោយនៃសង្គ្រាមស៊ីវិល តើខ្មែរក្រហមបានធ្វើអ្វី ដើម្បីធ្វើឲ្យរដ្ឋាភិបាលសាធារណរដ្ឋខ្មែរនៅភ្នំពេញអន់ថយ?", options: ["They besieged the city and blocked food and supply routes by both land and river", "They negotiated a ceasefire and shared power", "They cut off electricity only, leaving food supplies untouched", "They opened the borders to allow more refugees in freely"], answer: "They besieged the city and blocked food and supply routes by both land and river",
+      optionsKm: ["ពួកគេឡោមព័ទ្ធទីក្រុង និងបិទផ្លូវដឹកជញ្ជូនចំណីអាហារទាំងផ្លូវគោក និងផ្លូវទឹក", "ពួកគេចរចាឈប់បាញ់ប្រហារ និងចែករំលែកអំណាច", "ពួកគេកាត់ថាមពលអគ្គិសនីតែម្យ៉ាង ទុកចំណីអាហារដដដល", "ពួកគេបើកព្រំដែនឲ្យជនភៀសខ្លួនចូលដោយសេរី"], answerKm: "ពួកគេឡោមព័ទ្ធទីក្រុង និងបិទផ្លូវដឹកជញ្ជូនចំណីអាហារទាំងផ្លូវគោក និងផ្លូវទឹក",
+      explanation: "The Khmer Rouge surrounded Phnom Penh and tightened control over food-supply routes, worsening shortages and hastening the Republic's collapse in April 1975.", explanationKm: "ខ្មែរក្រហមបានឡោមព័ទ្ធទីក្រុងភ្នំពេញ និងរឹតបន្តឹងការដឹកជញ្ជូនចំណីអាហារចូល ធ្វើឲ្យកង្វះខាតកាន់តែធ្ងន់ធ្ងរ និងបង្កើនល្បឿនការដួលរលំរបស់សាធារណរដ្ឋខ្មែរនៅខែមេសា ១៩៧៥។",
+      formula: "KR siege → cut supply routes → Republic collapse (April 1975)", formulaKm: "ខ្មែរក្រហមឡោមព័ទ្ធ → កាត់ផ្លូវដឹកជញ្ជូន → ដួលរលំ (មេសា ១៩៧៥)",
+      chapter: "Khmer Republic (1970–1975)", chapterKm: "សាធារណរដ្ឋខ្មែរ (១៩៧០-១៩៧៥)" },
+
+    { topic: "Fall of Phnom Penh", topicKm: "ការដួលរលំទីក្រុងភ្នំពេញ", difficulty: "Easy",
+      prompt: "The Khmer Rouge captured Phnom Penh, ending the Khmer Republic, on what date?", promptKm: "តើខ្មែរក្រហមបានចូលកាន់កាប់ទីក្រុងភ្នំពេញ បញ្ចប់សាធារណរដ្ឋខ្មែរ នៅថ្ងៃណា?",
+      options: ["17 April 1975", "18 March 1970", "7 January 1979", "9 November 1953"], answer: "17 April 1975",
+      optionsKm: ["១៧ មេសា ១៩៧៥", "១៨ មីនា ១៩៧០", "៧ មករា ១៩៧៩", "៩ វិច្ឆិកា ១៩៥៣"], answerKm: "១៧ មេសា ១៩៧៥",
+      explanation: "The Khmer Rouge entered Phnom Penh on 17 April 1975, beginning the Democratic Kampuchea regime.", explanationKm: "ខ្មែរក្រហមបានចូលកាន់កាប់ទីក្រុងភ្នំពេញនៅថ្ងៃទី១៧ ខែមេសា ឆ្នាំ១៩៧៥ ដែលជាការចាប់ផ្តើមនៃរបបកម្ពុជាប្រជាធិបតេយ្យ។",
+      formula: "Key fact: Fall of Phnom Penh = 17 April 1975", formulaKm: "ចំណុចសំខាន់៖ ការដួលរលំភ្នំពេញ = ១៧ មេសា ១៩៧៥",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Democratic Kampuchea", topicKm: "កម្ពុជាប្រជាធិបតេយ្យ", difficulty: "Easy",
+      prompt: "What was the official name of the Khmer Rouge regime (1975-1979)?", promptKm: "តើឈ្មោះផ្លូវការរបស់របបខ្មែរក្រហម (១៩៧៥-១៩៧៩) ហៅថាអ្វី?",
+      options: ["Democratic Kampuchea", "Khmer Republic", "State of Cambodia", "People's Republic of Kampuchea"], answer: "Democratic Kampuchea",
+      optionsKm: ["កម្ពុជាប្រជាធិបតេយ្យ", "សាធារណរដ្ឋខ្មែរ", "រដ្ឋកម្ពុជា", "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា"], answerKm: "កម្ពុជាប្រជាធិបតេយ្យ",
+      explanation: "The Khmer Rouge regime called itself \"Democratic Kampuchea\" from 1975 to 1979.", explanationKm: "របបខ្មែរក្រហមបានហៅខ្លួនឯងថា \"កម្ពុជាប្រជាធិបតេយ្យ\" ចាប់ពីឆ្នាំ១៩៧៥ដល់១៩៧៩។",
+      formula: "Key fact: 1975-1979 regime = Democratic Kampuchea", formulaKm: "ចំណុចសំខាន់៖ របប១៩៧៥-១៩៧៩ = កម្ពុជាប្រជាធិបតេយ្យ",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "The Khmer Rouge's \"8 points\"", topicKm: "គោលការណ៍៨ចំណុចរបស់ខ្មែរក្រហម", difficulty: "Hard",
+      prompt: "Which of these was one of the Khmer Rouge's declared \"8 points\" after taking power in 1975?", promptKm: "តើមួយណាខាងក្រោមជាគោលការណ៍មួយក្នុងចំណោម\"៨ចំណុច\"ដែលខ្មែរក្រហមប្រកាសក្រោយឡើងកាន់អំណាចឆ្នាំ១៩៧៥?",
+      options: ["Evacuate everyone from the cities", "Restore private banking and currency", "Protect all ethnic minorities equally", "Reinstate the previous government's leaders"], answer: "Evacuate everyone from the cities",
+      optionsKm: ["ជម្លៀសប្រជាជនចេញពីទីក្រុងទាំងអស់", "ស្តារធនាគារឯកជននិងរូបិយប័ណ្ណឡើងវិញ", "ការពារជនជាតិភាគតិចទាំងអស់ស្មើគ្នា", "តែងតាំងមេដឹកនាំរបបចាស់ឡើងវិញ"], answerKm: "ជម្លៀសប្រជាជនចេញពីទីក្រុងទាំងអស់",
+      explanation: "The \"8 points\" included evacuating all cities, abolishing money and markets, and executing the former regime's leaders — the exact opposite of the other three options.", explanationKm: "\"៨ចំណុច\" រួមមានការជម្លៀសទីក្រុងទាំងអស់ លុបបំបាត់ការប្រើប្រាស់រូបិយវត្ថុនិងទីផ្សារ និងប្រហារជីវិតមេដឹកនាំរបបចាស់ — ផ្ទុយពីជម្រើសផ្សេងទៀតទាំងស្រុង។",
+      formula: "Key fact: 8-points program included city evacuation", formulaKm: "ចំណុចសំខាន់៖ គោលការណ៍៨ចំណុច រួមមានការជម្លៀសទីក្រុង",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "\"Angkar\" (the Organization)", topicKm: "\"អង្គការ\"", difficulty: "Medium",
+      prompt: "In Democratic Kampuchea, the all-powerful body holding legislative, executive and judicial power at once was known by what name?", promptKm: "ក្នុងសម័យកម្ពុជាប្រជាធិបតេយ្យ តើអង្គភាពដែលកាន់អំណាចនីតិបញ្ញត្តិ នីតិប្រតិបត្តិ និងតុលាការក្នុងពេលតែមួយ មានឈ្មោះហៅថាអ្វី?",
+      options: ["Angkar (the Organization)", "The Central Committee", "The People's Assembly", "The Revolutionary Council"], answer: "Angkar (the Organization)",
+      optionsKm: ["អង្គការ", "គណៈកម្មាធិការមជ្ឈិម", "រដ្ឋសភាប្រជាជន", "ក្រុមប្រឹក្សាបដិវត្តន៍"], answerKm: "អង្គការ",
+      explanation: "\"Angkar\" (the Organization) was the faceless, all-powerful ruling body that Khmer Rouge cadres and citizens alike were told to obey absolutely.", explanationKm: "\"អង្គការ\" ជាអង្គភាពគ្រប់គ្រងអត្តនាមដ៏ខ្លាំងក្លា ដែលកម្មាភិបាលខ្មែរក្រហមនិងប្រជាជនត្រូវបានប្រាប់ឱ្យគោរពស្តាប់បង្គាប់ដាច់ខាត។",
+      formula: "Key fact: Angkar = DK's supreme ruling body", formulaKm: "ចំណុចសំខាន់៖ អង្គការ = អង្គភាពគ្រប់គ្រងកំពូលកម្ពុជាប្រជាធិបតេយ្យ",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "\"New people\" under the Khmer Rouge", topicKm: "\"ប្រជាជនថ្មី\" សម័យខ្មែរក្រហម", difficulty: "Medium",
+      prompt: "People evacuated from Phnom Penh and other cities after 17 April 1975 were classified by the Khmer Rouge as ___?", promptKm: "ប្រជាជនដែលត្រូវបានជម្លៀសចេញពីភ្នំពេញនិងទីក្រុងផ្សេងៗ ក្រោយថ្ងៃទី១៧ មេសា ១៩៧៥ ត្រូវបានខ្មែរក្រហមចាត់ទុកជា ___?",
+      options: ["\"New people\" (17 April people)", "\"Base people\" (old people)", "Full citizens", "Party members"], answer: "\"New people\" (17 April people)",
+      optionsKm: ["\"ប្រជាជនថ្មី\" (ប្រជាជន១៧មេសា)", "\"ប្រជាជនចាស់\" (ប្រជាជនមូលដ្ឋាន)", "ប្រជាពលរដ្ឋពេញសិទ្ធិ", "សមាជិកបក្ស"], answerKm: "\"ប្រជាជនថ្មី\" (ប្រជាជន១៧មេសា)",
+      explanation: "The Khmer Rouge divided the population into \"base people\" (rural, pre-1975) and \"new people\" (evacuated city dwellers), who were distrusted and treated far more harshly.", explanationKm: "ខ្មែរក្រហមបានបែងចែកប្រជាជនជា\"ប្រជាជនមូលដ្ឋាន\" (ជនបទ មុនឆ្នាំ១៩៧៥) និង\"ប្រជាជនថ្មី\" (អ្នកទីក្រុងដែលជម្លៀស) ដែលត្រូវបានសង្ស័យនិងប្រព្រឹត្តចំពោះយ៉ាងធ្ងន់ធ្ងរជាង។",
+      formula: "Key fact: 17 April evacuees = \"new people\"", formulaKm: "ចំណុចសំខាន់៖ អ្នកជម្លៀស១៧មេសា = \"ប្រជាជនថ្មី\"",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "\"Base people\" under the Khmer Rouge", topicKm: "\"ប្រជាជនមូលដ្ឋាន\" សម័យខ្មែរក្រហម", difficulty: "Medium",
+      prompt: "People who already lived in Khmer Rouge-controlled rural areas before 17 April 1975 were classified as ___?", promptKm: "ប្រជាជនដែលរស់នៅក្នុងតំបន់ជនបទក្រោមការគ្រប់គ្រងខ្មែរក្រហមរួចហើយ មុនថ្ងៃទី១៧ មេសា ១៩៧៥ ត្រូវបានចាត់ទុកជា ___?",
+      options: ["\"Base people\" (old people)", "\"New people\" (17 April people)", "Full citizens", "Party members"], answer: "\"Base people\" (old people)",
+      optionsKm: ["\"ប្រជាជនមូលដ្ឋាន\" (ប្រជាជនចាស់)", "\"ប្រជាជនថ្មី\" (ប្រជាជន១៧មេសា)", "ប្រជាពលរដ្ឋពេញសិទ្ធិ", "សមាជិកបក្ស"], answerKm: "\"ប្រជាជនមូលដ្ឋាន\" (ប្រជាជនចាស់)",
+      explanation: "\"Base people\" were trusted more than the \"new people\" evacuated from cities, and could even become cooperative or unit leaders.", explanationKm: "\"ប្រជាជនមូលដ្ឋាន\" ត្រូវបានទុកចិត្តជាង\"ប្រជាជនថ្មី\"ដែលជម្លៀសពីទីក្រុង ហើយថែមទាំងអាចក្លាយជាប្រធានសហករណ៍ ឬប្រធានកងបាន។",
+      formula: "Key fact: Base people = pre-1975 rural population", formulaKm: "ចំណុចសំខាន់៖ ប្រជាជនមូលដ្ឋាន = ប្រជាជនជនបទមុន១៩៧៥",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Zonal administration", topicKm: "ការបែងចែករដ្ឋបាលជាភូមិភាគ", difficulty: "Medium",
+      prompt: "Democratic Kampuchea divided the country into how many administrative zones?", promptKm: "តើកម្ពុជាប្រជាធិបតេយ្យបានបែងចែកប្រទេសជាភូមិភាគចំនួនប៉ុន្មាន?",
+      options: ["7 zones", "4 zones", "10 zones", "25 zones"], answer: "7 zones",
+      optionsKm: ["៧ភូមិភាគ", "៤ភូមិភាគ", "១០ភូមិភាគ", "២៥ភូមិភាគ"], answerKm: "៧ភូមិភាគ",
+      explanation: "The country was split into 7 zones and 32 regions, each with its own zonal and regional command — including the Eastern, Northwestern, and Southwestern zones.", explanationKm: "ប្រទេសត្រូវបានបែងចែកជា៧ភូមិភាគ និង៣២តំបន់ ដែលនីមួយៗមានបញ្ជាការភូមិភាគនិងតំបន់ផ្ទាល់ខ្លួន — រួមទាំងភូមិភាគខាងកើត ភូមិភាគពាយ័ព្យ និងភូមិភាគនិរតី។",
+      formula: "Key fact: DK = 7 zones, 32 regions", formulaKm: "ចំណុចសំខាន់៖ កម្ពុជាប្រជាធិបតេយ្យ = ៧ភូមិភាគ ៣២តំបន់",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Purge of the Eastern Zone", topicKm: "ការសម្លាប់សម្អាតភូមិភាគខាងកើត", difficulty: "Hard",
+      prompt: "In 1978, the Khmer Rouge purged cadres of which zone, accusing them of having \"Khmer bodies with Vietnamese minds\"?", promptKm: "ក្នុងឆ្នាំ១៩៧៨ ខ្មែរក្រហមបានសម្លាប់សម្អាតកម្មាភិបាលភូមិភាគណា ដោយចោទថាមាន\"ខ្លួនខ្មែរក្បាលយួន\"?",
+      options: ["Eastern Zone", "Northwestern Zone", "Central Zone", "Southwestern Zone"], answer: "Eastern Zone",
+      optionsKm: ["ភូមិភាគខាងកើត", "ភូមិភាគពាយ័ព្យ", "ភូមិភាគកណ្តាល", "ភូមិភាគនិរតី"], answerKm: "ភូមិភាគខាងកើត",
+      explanation: "Fearing disloyalty near the Vietnamese border, the Khmer Rouge leadership purged the Eastern Zone in 1978, killing many cadres and civilians accused of secretly sympathizing with Vietnam.", explanationKm: "ដោយខ្លាចភាពមិនស្មោះត្រង់នៅជិតព្រំដែនវៀតណាម មេដឹកនាំខ្មែរក្រហមបានសម្លាប់សម្អាតភូមិភាគខាងកើតក្នុងឆ្នាំ១៩៧៨ សម្លាប់កម្មាភិបាលនិងប្រជាជនជាច្រើនដែលត្រូវចោទថាកប់ចិត្តគាំទ្រវៀតណាមដោយសម្ងាត់។",
+      formula: "Key fact: Eastern Zone purge, 1978", formulaKm: "ចំណុចសំខាន់៖ ការសម្លាប់សម្អាតភូមិភាគខាងកើត ១៩៧៨",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Democratic Kampuchea national anthem", topicKm: "ចម្រៀងជាតិកម្ពុជាប្រជាធិបតេយ្យ", difficulty: "Medium",
+      prompt: "What was the title of the Democratic Kampuchea national anthem?", promptKm: "តើចម្រៀងជាតិសម័យកម្ពុជាប្រជាធិបតេយ្យមានចំណងជើងអ្វី?",
+      options: ["\"17 April, Great Victory\"", "\"Nokor Reach\"", "\"Cambodia's Prosperity\"", "\"Glorious Kingdom\""], answer: "\"17 April, Great Victory\"",
+      optionsKm: ["\"១៧ មេសា មហាជោគជ័យ\"", "\"នគររាជ\"", "\"សម្បូរភាពកម្ពុជា\"", "\"រាជាណាចក្រដ៏រុងរឿង\""], answerKm: "\"១៧ មេសា មហាជោគជ័យ\"",
+      explanation: "\"17 April, Great Victory\" celebrated the day the Khmer Rouge captured Phnom Penh, and was written by Pol Pot.", explanationKm: "ចម្រៀង \"១៧ មេសា មហាជោគជ័យ\" សរសើរថ្ងៃដែលខ្មែរក្រហមចូលកាន់កាប់ភ្នំពេញ និងនិពន្ធដោយប៉ុល ពត។",
+      formula: "Key fact: DK anthem = \"17 April, Great Victory\"", formulaKm: "ចំណុចសំខាន់៖ ចម្រៀងជាតិកម្ពុជាប្រជាធិបតេយ្យ = \"១៧ មេសា មហាជោគជ័យ\"",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Democratic Kampuchea flag", topicKm: "ទង់ជាតិកម្ពុជាប្រជាធិបតេយ្យ", difficulty: "Easy",
+      prompt: "The Democratic Kampuchea flag had how many colors?", promptKm: "តើទង់ជាតិសម័យកម្ពុជាប្រជាធិបតេយ្យមានពណ៌ប៉ុន្មាន?",
+      options: ["2 (red and yellow)", "3 (red, white, blue)", "1 (plain red)", "4 (red, yellow, white, blue)"], answer: "2 (red and yellow)",
+      optionsKm: ["២ពណ៌ (ក្រហម និងលឿង)", "៣ពណ៌ (ក្រហម ស ខៀវ)", "១ពណ៌ (ក្រហមសុទ្ធ)", "៤ពណ៌ (ក្រហម លឿង ស ខៀវ)"], answerKm: "២ពណ៌ (ក្រហម និងលឿង)",
+      explanation: "The flag had a red field (revolution and struggle) with a yellow silhouette of Angkor Wat.", explanationKm: "ទង់ជាតិមានផ្ទៃក្រហម (និមិត្តរូបនៃបដិវត្តន៍និងការតស៊ូ) ជាមួយរូបប្រាសាទអង្គរពណ៌លឿង។",
+      formula: "Key fact: DK flag = red + yellow", formulaKm: "ចំណុចសំខាន់៖ ទង់ជាតិកម្ពុជាប្រជាធិបតេយ្យ = ក្រហម និងលឿង",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Khmer Rouge leadership", topicKm: "មេដឹកនាំខ្មែរក្រហម", difficulty: "Medium",
+      prompt: "Who led the Democratic Kampuchea government as Prime Minister?", promptKm: "តើនរណាបានដឹកនាំរដ្ឋាភិបាលកម្ពុជាប្រជាធិបតេយ្យ ក្នុងតួនាទីជានាយករដ្ឋមន្ត្រី?",
+      options: ["Pol Pot", "Lon Nol", "Heng Samrin", "Hun Sen"], answer: "Pol Pot",
+      optionsKm: ["ប៉ុល ពត", "លន់ នល់", "ហេង សំរិន", "ហ៊ុន សែន"], answerKm: "ប៉ុល ពត",
+      explanation: "Pol Pot was the Prime Minister and top leader of the Khmer Rouge regime.", explanationKm: "ប៉ុល ពត ជានាយករដ្ឋមន្ត្រី និងជាមេដឹកនាំកំពូលនៃរបបខ្មែរក្រហម។",
+      formula: "Key fact: Democratic Kampuchea PM = Pol Pot", formulaKm: "ចំណុចសំខាន់៖ នាយករដ្ឋមន្ត្រីកម្ពុជាប្រជាធិបតេយ្យ = ប៉ុល ពត",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "S-21 prison", topicKm: "មន្ទីរសន្តិសុខស-២១", difficulty: "Medium",
+      prompt: "Who was the head of the S-21 security prison (Tuol Sleng) during Democratic Kampuchea?", promptKm: "តើនរណាជាប្រធានមន្ទីរសន្តិសុខស-២១ (ទួលស្លែង) ក្នុងសម័យកម្ពុជាប្រជាធិបតេយ្យ?",
+      options: ["Kaing Guek Eav (Duch)", "Pol Pot", "Nuon Chea", "Ta Mok"], answer: "Kaing Guek Eav (Duch)",
+      optionsKm: ["កាំង ហ្គេកអាវ (ឌុច)", "ប៉ុល ពត", "នួន ជា", "តា ម៉ុក"], answerKm: "កាំង ហ្គេកអាវ (ឌុច)",
+      explanation: "Kaing Guek Eav, known as \"Duch,\" ran the S-21 (Tuol Sleng) security prison.", explanationKm: "កាំង ហ្គេកអាវ ហៅ \"ឌុច\" ជាអ្នកគ្រប់គ្រងមន្ទីរសន្តិសុខស-២១ (ទួលស្លែង)។",
+      formula: "Key fact: S-21 chief = Duch (Kaing Guek Eav)", formulaKm: "ចំណុចសំខាន់៖ ប្រធានស-២១ = ឌុច (កាំង ហ្គេកអាវ)",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "End of the Khmer Rouge regime", topicKm: "ការដួលរលំខ្មែរក្រហម", difficulty: "Easy",
+      prompt: "Cambodia was liberated from the Democratic Kampuchea (Khmer Rouge) regime on what date?", promptKm: "តើកម្ពុជាបានរួចផុតពីរបបកម្ពុជាប្រជាធិបតេយ្យ (ខ្មែរក្រហម) នៅថ្ងៃណា?",
+      options: ["7 January 1979", "17 April 1975", "26 September 1989", "23 October 1991"], answer: "7 January 1979",
+      optionsKm: ["៧ មករា ១៩៧៩", "១៧ មេសា ១៩៧៥", "២៦ កញ្ញា ១៩៨៩", "២៣ តុលា ១៩៩១"], answerKm: "៧ មករា ១៩៧៩",
+      explanation: "The Kampuchean United Front for National Salvation, backed by Vietnamese forces, liberated Phnom Penh on 7 January 1979.", explanationKm: "រណសិរ្សសាមគ្គីសង្គ្រោះជាតិកម្ពុជា ជាមួយកងទ័ពវៀតណាម បានរំដោះទីក្រុងភ្នំពេញនៅថ្ងៃទី៧ ខែមករា ឆ្នាំ១៩៧៩។",
+      formula: "Key fact: Liberation Day = 7 January 1979", formulaKm: "ចំណុចសំខាន់៖ ទិវាប្រោសលោក = ៧ មករា ១៩៧៩",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Death toll of Democratic Kampuchea", topicKm: "ចំនួនអ្នកស្លាប់សម័យកម្ពុជាប្រជាធិបតេយ្យ", difficulty: "Medium",
+      prompt: "The Democratic Kampuchea regime (1975–1979) is recorded as having killed how many people?", promptKm: "របបកម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩) ត្រូវបានកត់ត្រាថាបានសម្លាប់ប្រជាជនប៉ុន្មាននាក់?",
+      options: ["Over 3 million", "About 500,000", "About 100,000", "Over 10 million"], answer: "Over 3 million",
+      optionsKm: ["ជាងបីលាននាក់", "ប្រមាណ ៥០០.០០០នាក់", "ប្រមាណ ១០០.០០០នាក់", "ជាងដប់លាននាក់"], answerKm: "ជាងបីលាននាក់",
+      explanation: "The regime is recorded as having killed over 3 million people through execution, forced labor, and starvation — far more than the roughly 1 million killed in the earlier civil war.", explanationKm: "របបនេះត្រូវបានកត់ត្រាថាបានសម្លាប់ប្រជាជនជាងបីលាននាក់ តាមរយៈការប្រហារជីវិត ការបង្ខំធ្វើការ និងការអត់ឃ្លាន — ច្រើនជាងអ្នកស្លាប់ប្រមាណមួយលាននាក់ក្នុងសង្គ្រាមស៊ីវិលមុននោះឆ្ងាយណាស់។",
+      formula: "Key fact: DK regime death toll > 3 million", formulaKm: "ចំណុចសំខាន់៖ អ្នកស្លាប់សម័យខ្មែរក្រហម > ៣លាននាក់",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Failed rice-production target", topicKm: "ខែនការផលិតស្រូវបីតោនបរាជ័យ", difficulty: "Medium",
+      prompt: "What was the Khmer Rouge's nationwide rice-production target, which the country failed to meet and which contributed to mass starvation?", promptKm: "តើខែនការផលិតស្រូវទូទាំងប្រទេសរបស់ខ្មែរក្រហម ដែលប្រទេសមិនអាចសម្រេចបាន និងបានរួមចំណែកឱ្យមានការអត់ឃ្លានទូលំទូលាយ គឺប៉ុន្មាន?",
+      options: ["3 tons per hectare", "1 ton per hectare", "10 tons per hectare", "5 tons per hectare"], answer: "3 tons per hectare",
+      optionsKm: ["៣តោនក្នុងមួយហិចតា", "១តោនក្នុងមួយហិចតា", "១០តោនក្នុងមួយហិចតា", "៥តោនក្នុងមួយហិចតា"], answerKm: "៣តោនក្នុងមួយហិចតា",
+      explanation: "The Khmer Rouge demanded 3 tons of rice per hectare nationwide — far beyond what was realistic — while forcing people to work long hours on too little food.", explanationKm: "ខ្មែរក្រហមទាមទារផលិតកម្មស្រូវ៣តោនក្នុងមួយហិចតាទូទាំងប្រទេស — លើសពីអ្វីដែលជាក់ស្តែងឆ្ងាយណាស់ — ខណៈបង្ខំប្រជាជនធ្វើការយូរម៉ោងដោយអាហារតិចតួច។",
+      formula: "Key fact: 3 tons/hectare rice target, failed", formulaKm: "ចំណុចសំខាន់៖ ខែនការស្រូវ ៣តោន/ហិចតា មិនសម្រេច",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Basis for the Khmer Rouge tribunal", topicKm: "មូលដ្ឋានតុលាការខ្មែរក្រហម", difficulty: "Hard",
+      prompt: "The tribunal that tried senior Khmer Rouge leaders charged them with genocide, crimes against humanity, and which additional category of international crime?", promptKm: "តុលាការដែលកាត់ទោសមេដឹកនាំកំពូលខ្មែរក្រហម បានចោទប្រកាន់ពួកគេពីបទឧក្រិដ្ឋកម្មប្រល័យពូជសាសន៍ ឧក្រិដ្ឋកម្មប្រឆាំងមនុស្សជាតិ និងប្រភេទឧក្រិដ្ឋកម្មអន្តរជាតិណាមួយទៀត?", options: ["War crimes and grave breaches of the 1949 Geneva Conventions", "Tax evasion and smuggling", "Election fraud", "Environmental destruction only"], answer: "War crimes and grave breaches of the 1949 Geneva Conventions",
+      optionsKm: ["ឧក្រិដ្ឋកម្មសង្គ្រាម និងការរំលោភបំពានយ៉ាងធ្ងន់ធ្ងរលើអនុសញ្ញាក្រុងហ្សឺណែវឆ្នាំ១៩៤៩", "ការគេចពន្ធ និងជួញដូរខុសច្បាប់", "ការក្លែងបន្លំឆ្នោត", "ការបំផ្លាញបរិស្ថានតែមួយមុខ"], answerKm: "ឧក្រិដ្ឋកម្មសង្គ្រាម និងការរំលោភបំពានយ៉ាងធ្ងន់ធ្ងរលើអនុសញ្ញាក្រុងហ្សឺណែវឆ្នាំ១៩៤៩",
+      explanation: "The tribunal's charges included genocide, crimes against humanity, war crimes, crimes against internationally protected persons, and grave breaches of the 1949 Geneva Conventions.", explanationKm: "បទចោទប្រកាន់របស់តុលាការរួមមាន ការប្រល័យពូជសាសន៍ ឧក្រិដ្ឋកម្មប្រឆាំងមនុស្សជាតិ ឧក្រិដ្ឋកម្មសង្គ្រាម ឧក្រិដ្ឋកម្មប្រឆាំងអ្នកទទួលបានការការពារអន្តរជាតិ និងការរំលោភបំពានយ៉ាងធ្ងន់ធ្ងរលើអនុសញ្ញាក្រុងហ្សឺណែវ ១៩៤៩។",
+      formula: "KR tribunal charges: genocide + crimes vs humanity + war crimes + Geneva breaches", formulaKm: "បទចោទតុលាការខ្មែរក្រហម៖ ប្រល័យពូជសាសន៍ + ប្រឆាំងមនុស្សជាតិ + សង្គ្រាម + រំលោភហ្សឺណែវ",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Purpose of the tribunal", topicKm: "គោលបំណងតុលាការ", difficulty: "Medium",
+      prompt: "Which of the following is a stated purpose of trying the senior Khmer Rouge leaders, according to the BAC II model answer?", promptKm: "តើគោលបំណងណាមួយខាងក្រោម ត្រូវបានចែងក្នុងចម្លើយគំរូបាក់ឌុប សម្រាប់ការកាត់ទោសមេដឹកនាំកំពូលខ្មែរក្រហម?", options: ["To deliver justice to survivors and serve as a lesson so such a regime never happens again", "To confiscate all remaining Khmer Rouge property for the state treasury", "To force all former Khmer Rouge cadres into exile", "To rewrite Cambodia's constitution"], answer: "To deliver justice to survivors and serve as a lesson so such a regime never happens again",
+      optionsKm: ["ដើម្បីផ្តល់យុត្តិធម៌ដល់ជនរងគ្រោះ និងធ្វើជាមេរៀនកុំឲ្យរបបនេះកើតមានជាថ្មី", "ដើម្បីរឹបអូសទ្រព្យសម្បត្តិខ្មែរក្រហមទាំងអស់ចូលឃ្លាំងរដ្ឋ", "ដើម្បីបង្ខំអតីតកម្មាភិបាលខ្មែរក្រហមទាំងអស់ឲ្យនិរទេស", "ដើម្បីសរសេររដ្ឋធម្មនុញ្ញកម្ពុជាឡើងវិញ"], answerKm: "ដើម្បីផ្តល់យុត្តិធម៌ដល់ជនរងគ្រោះ និងធ្វើជាមេរៀនកុំឲ្យរបបនេះកើតមានជាថ្មី",
+      explanation: "The tribunal aimed to give justice and psychological closure to survivors, serve as a lesson for future leaders, deter any repeat of such a regime, and support national reconciliation.", explanationKm: "តុលាការមានគោលបំណងផ្តល់យុត្តិធម៌ និងភាពស្ងប់ស្ងាត់ផ្លូវចិត្តដល់ជនរងគ្រោះ ធ្វើជាមេរៀនសម្រាប់ថ្នាក់ដឹកនាំជំនាន់ក្រោយ ទប់ស្កាត់កុំឲ្យរបបនេះកើតឡើងជាថ្មី និងគាំទ្រការផ្សះផ្សាជាតិ។",
+      formula: "Tribunal purpose: justice + lesson + deterrence + reconciliation", formulaKm: "គោលបំណងតុលាការ៖ យុត្តិធម៌ + មេរៀន + ការទប់ស្កាត់ + ការផ្សះផ្សាជាតិ",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Cause of the mass killings", topicKm: "មូលហេតុសម្លាប់រង្គាល", difficulty: "Hard",
+      prompt: "The Khmer Rouge's policy of rushing to achieve rapid agricultural targets within a 4-year plan was known by what name?", promptKm: "គោលនយោបាយខ្មែរក្រហមដែលប្រញាប់សម្រេចគោលដៅកសិកម្មយ៉ាងឆាប់រហ័សក្នុងផែនការ៤ឆ្នាំ មានឈ្មោះហៅថាអ្វី?", options: ["\"Super Great Leap Forward\"", "\"Win-Win Policy\"", "\"Blue Revolution\"", "\"National Reconciliation Plan\""], answer: "\"Super Great Leap Forward\"",
+      optionsKm: ["\"មហាឡោតផ្លោះ មហាអស្ចារ្យ\"", "\"គោលនយោបាយឈ្នះ-ឈ្នះ\"", "\"បដិវត្តន៍ខៀវ\"", "\"ផែនការផ្សះផ្សាជាតិ\""], answerKm: "\"មហាឡោតផ្លោះ មហាអស្ចារ្យ\"",
+      explanation: "This policy, aiming to rapidly transform the economy within a 4-year plan, drove the forced labor and unrealistic quotas that contributed heavily to starvation and death under Democratic Kampuchea.", explanationKm: "គោលនយោបាយនេះ ដែលមានគោលដៅផ្លាស់ប្តូរសេដ្ឋកិច្ចយ៉ាងឆាប់រហ័សក្នុងផែនការ៤ឆ្នាំ បានជំរុញឲ្យមានពលកម្មបង្ខំ និងកូតាមិនប្រាកដនិយម ដែលរួមចំណែកយ៉ាងខ្លាំងដល់ការអត់ឃ្លាន និងការស្លាប់ក្នុងសម័យកម្ពុជាប្រជាធិបតេយ្យ។",
+      formula: "\"Super Great Leap Forward\" = 4-year plan → forced labor + famine", formulaKm: "\"មហាឡោតផ្លោះ មហាអស្ចារ្យ\" = ផែនការ៤ឆ្នាំ → ពលកម្មបង្ខំ + អត់ឃ្លាន",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Early internal dissent", topicKm: "ការប្រឆាំងផ្ទៃក្នុងដំបូង", difficulty: "Hard",
+      prompt: "In January 1976, which Khmer Rouge official publicly opposed Pol Pot's leadership, reflecting early internal cracks in the regime?", promptKm: "ក្នុងខែមករា ១៩៧៦ តើមន្ត្រីខ្មែរក្រហមណាបានចេញមុខប្រឆាំងជាសាធារណៈនឹងការដឹកនាំរបស់ប៉ុលពត ដែលឆ្លុះបញ្ចាំងពីស្នាមប្រេះដំបូងក្នុងរបប?", options: ["Hu Nim", "Hun Sen", "Heng Samrin", "Son Sann"], answer: "Hu Nim",
+      optionsKm: ["ហ៊ូ នឹម", "ហ៊ុន សែន", "ហេង សំរិន", "សឺន សាន"], answerKm: "ហ៊ូ នឹម",
+      explanation: "Hu Nim, a Khmer Rouge official, publicly spoke out against Pol Pot in January 1976 — an early sign of internal dissent that the regime later crushed through purges.", explanationKm: "ហ៊ូ នឹម ជាមន្ត្រីខ្មែរក្រហម បានចេញមុខប្រឆាំងជាសាធារណៈនឹងប៉ុលពតក្នុងខែមករា ១៩៧៦ ជាសញ្ញាដំបូងនៃការប្រឆាំងផ្ទៃក្នុង ដែលក្រោយមករបបបានបង្ក្រាបតាមរយៈការសម្លាប់សម្អាត។",
+      formula: "Jan 1976: Hu Nim opposes Pol Pot", formulaKm: "មករា ១៩៧៦៖ ហ៊ូ នឹម ប្រឆាំងប៉ុលពត",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+    { topic: "Hun Sen's defection", topicKm: "ការភៀសខ្លួនរបស់ហ៊ុន សែន", difficulty: "Medium",
+      prompt: "On 20 June 1977, a mid-level Khmer Rouge commander fled to Vietnam to seek support and build an opposition force. Who was this commander?", promptKm: "នៅថ្ងៃទី២០ ខែមិថុនា ឆ្នាំ១៩៧៧ មេបញ្ជាការខ្មែរក្រហមកម្រិតមធ្យមម្នាក់បានភៀសខ្លួនទៅវៀតណាម ដើម្បីស្វែងរកការគាំទ្រ និងបង្កើតកម្លាំងប្រឆាំង។ តើនរណាជាមេបញ្ជាការនេះ?", options: ["Hun Sen", "Heng Samrin", "Pol Pot", "Nuon Chea"], answer: "Hun Sen",
+      optionsKm: ["ហ៊ុន សែន", "ហេង សំរិន", "ប៉ុល ពត", "នួន ជា"], answerKm: "ហ៊ុន សែន",
+      explanation: "Hun Sen defected to Vietnam on 20 June 1977 to escape Khmer Rouge purges and seek support, later becoming a founding leader of the Kampuchean United Front for National Salvation.", explanationKm: "ហ៊ុន សែន បានភៀសខ្លួនទៅវៀតណាមនៅថ្ងៃទី២០ មិថុនា ១៩៧៧ ដើម្បីគេចពីការសម្លាប់សម្អាតរបស់ខ្មែរក្រហម និងស្វែងរកការគាំទ្រ ដោយក្រោយមកបានក្លាយជាថ្នាក់ដឹកនាំស្ថាបនិកនៃរណសិរ្សសាមគ្គីសង្គ្រោះជាតិកម្ពុជា។",
+      formula: "20 June 1977: Hun Sen flees to Vietnam", formulaKm: "២០ មិថុនា ១៩៧៧៖ ហ៊ុន សែនភៀសទៅវៀតណាម",
+      chapter: "Democratic Kampuchea (1975–1979)", chapterKm: "កម្ពុជាប្រជាធិបតេយ្យ (១៩៧៥-១៩៧៩)" },
+
+    { topic: "Kampuchean United Front for National Salvation", topicKm: "រណសិរ្សសាមគ្គីសង្គ្រោះជាតិកម្ពុជា", difficulty: "Medium",
+      prompt: "The Kampuchean United Front for National Salvation, which helped liberate Cambodia from the Khmer Rouge, was founded on what date?", promptKm: "តើរណសិរ្សសាមគ្គីសង្គ្រោះជាតិកម្ពុជា ដែលបានជួយរំដោះកម្ពុជាពីខ្មែរក្រហម ត្រូវបានបង្កើតឡើងនៅថ្ងៃណា?",
+      options: ["2 December 1978", "7 January 1979", "17 April 1975", "26 September 1989"], answer: "2 December 1978",
+      optionsKm: ["២ ធ្នូ ១៩៧៨", "៧ មករា ១៩៧៩", "១៧ មេសា ១៩៧៥", "២៦ កញ្ញា ១៩៨៩"], answerKm: "២ ធ្នូ ១៩៧៨",
+      explanation: "Founded on 2 December 1978 by figures including Heng Samrin and Hun Sen, this front led the campaign that liberated Phnom Penh a month later.", explanationKm: "បង្កើតឡើងនៅថ្ងៃទី២ ខែធ្នូ ១៩៧៨ ដោយបុគ្គលដូចជាហេង សំរិននិងហ៊ុន សែន រណសិរ្សនេះបានដឹកនាំយុទ្ធនាការដែលរំដោះភ្នំពេញមួយខែក្រោយមក។",
+      formula: "Key fact: United Front founded 2 Dec 1978", formulaKm: "ចំណុចសំខាន់៖ រណសិរ្សសាមគ្គី បង្កើត ២ ធ្នូ ១៩៧៨",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Renaming to the State of Cambodia", topicKm: "ការប្រែឈ្មោះទៅជារដ្ឋកម្ពុជា", difficulty: "Medium",
+      prompt: "Cambodia was renamed from the \"People's Republic of Kampuchea\" to the \"State of Cambodia\" on what date?", promptKm: "តើកម្ពុជាប្តូរឈ្មោះពី\"សាធារណរដ្ឋប្រជាមានិតកម្ពុជា\"ទៅជា\"រដ្ឋកម្ពុជា\"នៅថ្ងៃណា?",
+      options: ["30 April 1989", "26 September 1989", "23 October 1991", "24 September 1993"], answer: "30 April 1989",
+      optionsKm: ["៣០ មេសា ១៩៨៩", "២៦ កញ្ញា ១៩៨៩", "២៣ តុលា ១៩៩១", "២៤ កញ្ញា ១៩៩៣"], answerKm: "៣០ មេសា ១៩៨៩",
+      explanation: "On 30 April 1989, Cambodia adopted a new flag and anthem and restored Buddhism as the state religion under its new name, State of Cambodia.", explanationKm: "នៅថ្ងៃទី៣០ ខែមេសា ១៩៨៩ កម្ពុជាបានប្តូរទង់ជាតិនិងចម្រៀងជាតិថ្មី ព្រមទាំងស្តារព្រះពុទ្ធសាសនាជាសាសនារដ្ឋឡើងវិញ ក្រោមឈ្មោះថ្មីថា\"រដ្ឋកម្ពុជា\"។",
+      formula: "Key fact: PRK → State of Cambodia, 30 April 1989", formulaKm: "ចំណុចសំខាន់៖ សាធារណរដ្ឋប្រជាមានិតកម្ពុជា → រដ្ឋកម្ពុជា ៣០ មេសា ១៩៨៩",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Vietnamese troop withdrawal", topicKm: "ការដកកងទ័ពវៀតណាម", difficulty: "Medium",
+      prompt: "Vietnamese troops fully withdrew from Cambodia on what date?", promptKm: "តើកងទ័ពវៀតណាមបានដកចេញពីកម្ពុជាទាំងស្រុងនៅថ្ងៃណា?",
+      options: ["26 September 1989", "7 January 1979", "30 April 1989", "23 October 1991"], answer: "26 September 1989",
+      optionsKm: ["២៦ កញ្ញា ១៩៨៩", "៧ មករា ១៩៧៩", "៣០ មេសា ១៩៨៩", "២៣ តុលា ១៩៩១"], answerKm: "២៦ កញ្ញា ១៩៨៩",
+      explanation: "Vietnamese forces completed their withdrawal from Cambodia on 26 September 1989.", explanationKm: "កងទ័ពវៀតណាមបានបញ្ចប់ការដកចេញពីកម្ពុជាទាំងស្រុងនៅថ្ងៃទី២៦ ខែកញ្ញា ឆ្នាំ១៩៨៩។",
+      formula: "Key fact: Vietnamese withdrawal completed 26 Sept 1989", formulaKm: "ចំណុចសំខាន់៖ ការដកកងទ័ពវៀតណាមចប់ ២៦ កញ្ញា ១៩៨៩",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Paris Peace Agreements", topicKm: "សន្ធិសញ្ញាក្រុងប៉ារីស", difficulty: "Medium",
+      prompt: "The Paris Peace Agreements, ending Cambodia's civil war, were signed on what date?", promptKm: "តើសន្ធិសញ្ញាសន្តិភាពក្រុងប៉ារីស ដែលបញ្ចប់សង្គ្រាមស៊ីវិលកម្ពុជា ត្រូវបានចុះហត្ថលេខានៅថ្ងៃណា?",
+      options: ["23 October 1991", "7 January 1979", "26 September 1989", "24 September 1993"], answer: "23 October 1991",
+      optionsKm: ["២៣ តុលា ១៩៩១", "៧ មករា ១៩៧៩", "២៦ កញ្ញា ១៩៨៩", "២៤ កញ្ញា ១៩៩៣"], answerKm: "២៣ តុលា ១៩៩១",
+      explanation: "18 countries signed the Paris Peace Agreements on 23 October 1991, ending the political crisis in Cambodia.", explanationKm: "ប្រទេសចំនួន១៨ បានចុះហត្ថលេខាលើសន្ធិសញ្ញាសន្តិភាពក្រុងប៉ារីសនៅថ្ងៃទី២៣ ខែតុលា ឆ្នាំ១៩៩១ ដែលបញ្ចប់វិបត្តិនយោបាយនៅកម្ពុជា។",
+      formula: "Key fact: Paris Peace Agreements = 23 October 1991", formulaKm: "ចំណុចសំខាន់៖ សន្ធិសញ្ញាក្រុងប៉ារីស = ២៣ តុលា ១៩៩១",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Paris Peace Agreements — signatories", topicKm: "ប្រទេសចូលរួមសន្ធិសញ្ញាក្រុងប៉ារីស", difficulty: "Medium",
+      prompt: "How many countries signed the 1991 Paris Peace Agreements on Cambodia?", promptKm: "តើប្រទេសប៉ុន្មានបានចុះហត្ថលេខាលើសន្ធិសញ្ញាសន្តិភាពក្រុងប៉ារីសឆ្នាំ១៩៩១ស្តីពីកម្ពុជា?",
+      options: ["18", "10", "25", "5"], answer: "18",
+      optionsKm: ["១៨", "១០", "២៥", "៥"], answerKm: "១៨",
+      explanation: "18 countries, plus the UN Secretary-General and non-aligned movement representatives, signed the Paris Peace Agreements.", explanationKm: "ប្រទេសចំនួន១៨ ព្រមទាំងលេខាធិការអង្គការសហប្រជាជាតិនិងតំណាងចលនាមិនចូលបក្សសម្ព័ន្ធ បានចុះហត្ថលេខាលើសន្ធិសញ្ញាសន្តិភាពក្រុងប៉ារីស។",
+      formula: "Key fact: 18 countries signed the Paris Peace Agreements", formulaKm: "ចំណុចសំខាន់៖ ប្រទេស១៨ ចុះហត្ថលេខាសន្ធិសញ្ញាក្រុងប៉ារីស",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "UNTAC", topicKm: "អាជ្ញាធររណ្ដោះអាសន្នអង្គការសហប្រជាជាតិ", difficulty: "Medium",
+      prompt: "What does UNTAC, the body that administered Cambodia's transition and organized its 1993 election, stand for?", promptKm: "តើ UNTAC ដែលបានគ្រប់គ្រងដំណាក់កាលអន្តរកាល និងរៀបចំការបោះឆ្នោតឆ្នាំ១៩៩៣ តំណាងឱ្យអ្វី?",
+      options: ["United Nations Transitional Authority in Cambodia", "United Nations Trade and Cooperation", "United Nations Truce and Ceasefire", "United Nations Technical Assistance Commission"], answer: "United Nations Transitional Authority in Cambodia",
+      optionsKm: ["អាជ្ញាធររណ្ដោះអាសន្នរបស់អង្គការសហប្រជាជាតិនៅកម្ពុជា", "ពាណិជ្ជកម្ម និងសហប្រតិបត្តិការអង្គការសហប្រជាជាតិ", "ការឈប់បាញ់ប្រហារអង្គការសហប្រជាជាតិ", "គណៈកម្មការជំនួយបច្ចេកទេសអង្គការសហប្រជាជាតិ"], answerKm: "អាជ្ញាធររណ្ដោះអាសន្នរបស់អង្គការសហប្រជាជាតិនៅកម្ពុជា",
+      explanation: "UNTAC disarmed the factions, organized the 1993 election, and helped bring home about 350,000 refugees.", explanationKm: "UNTAC បានដកអាវុធភាគីជម្លោះ រៀបចំការបោះឆ្នោតឆ្នាំ១៩៩៣ និងជួយនាំជនភៀសខ្លួនប្រមាណ៣៥០.០០០នាក់ត្រឡប់មាតុភូមិវិញ។",
+      formula: "Key fact: UNTAC ran the 1992-93 transition", formulaKm: "ចំណុចសំខាន់៖ UNTAC គ្រប់គ្រងអន្តរកាល ១៩៩២-៩៣",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "UNTAC's nickname", topicKm: "ឈ្មោះហៅក្រៅរបស់ UNTAC", difficulty: "Easy",
+      prompt: "UNTAC's peacekeeping troops in Cambodia were commonly nicknamed after their headgear as the ___?", promptKm: "តើកងទ័ពរក្សាសន្តិភាព UNTAC នៅកម្ពុជាត្រូវបានគេហៅក្រៅតាមមួករបស់ពួកគេថាជា ___?",
+      options: ["Blue Helmet troops", "Green Beret troops", "White Helmet troops", "Red Cap troops"], answer: "Blue Helmet troops",
+      optionsKm: ["កងទ័ពមួកខៀវ", "កងទ័ពមួកបៃតង", "កងទ័ពមួកស", "កងទ័ពមួកក្រហម"], answerKm: "កងទ័ពមួកខៀវ",
+      explanation: "UNTAC's soldiers wore blue helmets, the standard UN peacekeeping color, earning them the nickname \"Blue Helmet troops.\"", explanationKm: "ទាហាន UNTAC ពាក់មួកខៀវ ជាពណ៌ស្តង់ដាររបស់កងកម្លាំងរក្សាសន្តិភាពអង្គការសហប្រជាជាតិ ធ្វើឱ្យពួកគេត្រូវបានហៅថា\"កងទ័ពមួកខៀវ\"។",
+      formula: "Key fact: UNTAC troops = \"Blue Helmet troops\"", formulaKm: "ចំណុចសំខាន់៖ ទាហាន UNTAC = \"កងទ័ពមួកខៀវ\"",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Krom Samaki (solidarity groups)", topicKm: "ក្រុមសាមគ្គី", difficulty: "Medium",
+      prompt: "After 1979, the government organized farmers into \"Krom Samaki\" (solidarity groups) mainly to help which people, who lacked labor and farm tools?", promptKm: "ក្រោយឆ្នាំ១៩៧៩ រដ្ឋាភិបាលបានរៀបចំកសិករជា\"ក្រុមសាមគ្គី\" ជាចម្បងដើម្បីជួយអ្នកណាដែលខ្វះកម្លាំងពលកម្ម និងឧបករណ៍កសិកម្ម?",
+      options: ["War widows, orphans and the elderly", "Former Khmer Rouge cadres", "City merchants", "Buddhist monks"], answer: "War widows, orphans and the elderly",
+      optionsKm: ["ស្ត្រីមេម៉ាយ ក្មេងកំព្រា និងមនុស្សចាស់ជរា", "អតីតកម្មាភិបាលខ្មែរក្រហម", "ឈ្មួញទីក្រុង", "ព្រះសង្ឃ"], answerKm: "ស្ត្រីមេម៉ាយ ក្មេងកំព្រា និងមនុស្សចាស់ជរា",
+      explanation: "Krom Samaki grouped about 10 or more families together to share labor, draft animals and tools, helping those left without support after the Khmer Rouge era.", explanationKm: "ក្រុមសាមគ្គីបានប្រមូលគ្រួសារប្រមាណ១០ ឬច្រើនជាងនេះ ដើម្បីចែករំលែកកម្លាំងពលកម្ម សត្វព្រៃ និងឧបករណ៍ ជួយអ្នកដែលនៅសល់ដោយគ្មានជំនួយបន្ទាប់ពីសម័យខ្មែរក្រហម។",
+      formula: "Key fact: Krom Samaki helped widows, orphans, elderly farm together", formulaKm: "ចំណុចសំខាន់៖ ក្រុមសាមគ្គី ជួយមេម៉ាយ កំព្រា មនុស្សចាស់",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "KPRP leadership", topicKm: "មេដឹកនាំគណបក្សប្រជាជនបដិវត្តន៍កម្ពុជា", difficulty: "Medium",
+      prompt: "Who led the Kampuchean People's Revolutionary Party (the ruling party) from 1981 onward?", promptKm: "តើនរណាបានដឹកនាំគណបក្សប្រជាជនបដិវត្តន៍កម្ពុជា (គណបក្សកាន់អំណាច) ចាប់ពីឆ្នាំ១៩៨១ តទៅ?",
+      options: ["Heng Samrin", "Pen Sovan", "Hun Sen", "Chan Sy"], answer: "Heng Samrin",
+      optionsKm: ["ហេង សំរិន", "ប៉ែន សុវណ្ណ", "ហ៊ុន សែន", "ចាន់ ស៊ី"], answerKm: "ហេង សំរិន",
+      explanation: "Heng Samrin took over leadership of the party from Pen Sovan in December 1981.", explanationKm: "ហេង សំរិនបានដឹកនាំគណបក្សបន្តពីប៉ែន សុវណ្ណ នៅខែធ្នូ ឆ្នាំ១៩៨១។",
+      formula: "Key fact: Heng Samrin led KPRP from 1981", formulaKm: "ចំណុចសំខាន់៖ ហេង សំរិន ដឹកនាំគណបក្សចាប់ពី១៩៨១",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Supreme National Council", topicKm: "ក្រុមប្រឹក្សាជាតិជាន់ខ្ពស់", difficulty: "Medium",
+      prompt: "The Supreme National Council (SNC), which represented all four Cambodian factions before the 1993 election, was chaired by whom?", promptKm: "ក្រុមប្រឹក្សាជាតិជាន់ខ្ពស់ (SNC) ដែលតំណាងឱ្យភាគីខ្មែរទាំង៤មុនការបោះឆ្នោត១៩៩៣ ដឹកនាំដោយនរណា?",
+      options: ["Norodom Sihanouk", "Heng Samrin", "Hun Sen", "Son Sann"], answer: "Norodom Sihanouk",
+      optionsKm: ["សម្តេចនរោត្តម សីហនុ", "ហេង សំរិន", "ហ៊ុន សែន", "សឺន សាន"], answerKm: "សម្តេចនរោត្តម សីហនុ",
+      explanation: "The SNC, formed in September 1990 with 12 members from all Cambodian factions, was chaired by Sihanouk and administered the transition alongside UNTAC.", explanationKm: "SNC ដែលបង្កើតឡើងក្នុងខែកញ្ញា ១៩៩០ មានសមាជិក១២រូបមកពីភាគីខ្មែរទាំងអស់ ដឹកនាំដោយសម្តេចសីហនុ និងបានគ្រប់គ្រងដំណាក់កាលអន្តរកាលរួមជាមួយ UNTAC។",
+      formula: "Key fact: SNC formed 1990, chaired by Sihanouk", formulaKm: "ចំណុចសំខាន់៖ SNC បង្កើត១៩៩០ ដឹកនាំដោយសីហនុ",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "UNTAC repatriation", topicKm: "ការនាំជនភៀសខ្លួនត្រឡប់មកវិញ", difficulty: "Medium",
+      prompt: "UNTAC helped repatriate about how many Cambodian refugees from the Thai border camps back home?", promptKm: "តើ UNTAC បានជួយនាំជនភៀសខ្លួនខ្មែរពីជំរំតាមព្រំដែនថៃ ត្រឡប់មកមាតុភូមិវិញប្រមាណប៉ុន្មាននាក់?",
+      options: ["About 350,000", "About 35,000", "About 3.5 million", "About 3,500"], answer: "About 350,000",
+      optionsKm: ["ប្រមាណ ៣៥០.០០០នាក់", "ប្រមាណ ៣៥.០០០នាក់", "ប្រមាណ ៣,៥លាននាក់", "ប្រមាណ ៣.៥០០នាក់"], answerKm: "ប្រមាណ ៣៥០.០០០នាក់",
+      explanation: "UNTAC helped roughly 350,000 Cambodian refugees, who had been living in camps along the Thai border, return home before the 1993 election.", explanationKm: "UNTAC បានជួយជនភៀសខ្លួនខ្មែរប្រមាណ៣៥០.០០០នាក់ ដែលបានរស់នៅជំរំតាមព្រំដែនថៃ ត្រឡប់មកមាតុភូមិវិញ មុនការបោះឆ្នោត១៩៩៣។",
+      formula: "Key fact: UNTAC repatriated ~350,000 refugees", formulaKm: "ចំណុចសំខាន់៖ UNTAC នាំជនភៀសខ្លួន ~៣៥០.០០០នាក់ មកវិញ",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "1984 France-brokered talks", topicKm: "កិច្ចចរចាបារាំង ១៩៨៤", difficulty: "Hard",
+      prompt: "In November 1984, which country arranged a preliminary meeting plan between Sihanouk and representatives of the People's Republic of Kampuchea?", promptKm: "ក្នុងខែវិច្ឆិកា ១៩៨៤ ប្រទេសណាបានរៀបចំផែនការប្រជុំដំបូងរវាងសម្តេចសីហនុ និងតំណាងសាធារណរដ្ឋប្រជាមានិតកម្ពុជា?", options: ["France", "China", "The Soviet Union", "Japan"], answer: "France",
+      optionsKm: ["បារាំង", "ចិន", "សូវៀត", "ជប៉ុន"], answerKm: "បារាំង",
+      explanation: "France organized preliminary talks between Sihanouk and PRK representatives in November 1984, an early step in the years-long process toward peace.", explanationKm: "បារាំងបានរៀបចំកិច្ចប្រជុំដំបូងរវាងសម្តេចសីហនុ និងតំណាងសាធារណរដ្ឋប្រជាមានិតកម្ពុជាក្នុងខែវិច្ឆិកា ១៩៨៤ ជាជំហានដំបូងក្នុងដំណើរការស្វែងរកសន្តិភាពជាច្រើនឆ្នាំ។",
+      formula: "Nov 1984: France arranges Sihanouk-PRK talks", formulaKm: "វិច្ឆិកា ១៩៨៤៖ បារាំងរៀបចំកិច្ចប្រជុំសីហនុ-PRK",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "1987 Sihanouk–Hun Sen talks", topicKm: "កិច្ចប្រជុំសីហនុ-ហ៊ុនសែន ១៩៨៧", difficulty: "Medium",
+      prompt: "In December 1987, Sihanouk and Hun Sen held their first direct meeting to seek a political solution, in which country?", promptKm: "ក្នុងខែធ្នូ ១៩៨៧ សម្តេចសីហនុ និងហ៊ុន សែន បានជួបគ្នាផ្ទាល់ជាលើកដំបូង ដើម្បីស្វែងរកដំណោះស្រាយនយោបាយ នៅប្រទេសណា?", options: ["France", "Indonesia", "Thailand", "Vietnam"], answer: "France",
+      optionsKm: ["បារាំង", "ឥណ្ឌូនេស៊ី", "ថៃ", "វៀតណាម"], answerKm: "បារាំង",
+      explanation: "Sihanouk and Hun Sen met for the first time on 2 December 1987 in France, beginning a series of talks that eventually led to the 1991 Paris Peace Agreements.", explanationKm: "សម្តេចសីហនុ និងហ៊ុន សែន បានជួបគ្នាជាលើកដំបូងនៅថ្ងៃទី២ ខែធ្នូ ១៩៨៧ នៅប្រទេសបារាំង ជាការចាប់ផ្តើមស៊េរីកិច្ចចរចា ដែលចុងក្រោយនាំទៅដល់កិច្ចព្រមព្រៀងសន្តិភាពក្រុងប៉ារីសឆ្នាំ១៩៩១។",
+      formula: "2 Dec 1987: first Sihanouk-Hun Sen meeting (France)", formulaKm: "២ ធ្នូ ១៩៨៧៖ ជួបគ្នាលើកដំបូងសីហនុ-ហ៊ុនសែន (បារាំង)",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Composition of the SNC", topicKm: "សមាសភាព SNC", difficulty: "Hard",
+      prompt: "The Supreme National Council (SNC), formed in September 1990, had 12 members split how between the two sides of the conflict?", promptKm: "ក្រុមប្រឹក្សាជាតិជាន់ខ្ពស់ (SNC) ដែលបង្កើតឡើងក្នុងខែកញ្ញា ១៩៩០ មានសមាជិក១២រូប បែងចែកយ៉ាងដូចម្តេចរវាងភាគីទាំងសង្ខាងជម្លោះ?", options: ["6 members from the State of Cambodia and 6 from the tripartite resistance coalition", "10 members from the government and 2 from the opposition", "All 12 members from foreign observer nations", "4 members from each of three factions equally"], answer: "6 members from the State of Cambodia and 6 from the tripartite resistance coalition",
+      optionsKm: ["សមាជិក៦រូបពីរដ្ឋកម្ពុជា និង៦រូបទៀតពីសម្ព័ន្ធភាពបីភាគី", "សមាជិក១០រូបពីរដ្ឋាភិបាល និង២រូបពីភាគីប្រឆាំង", "សមាជិកទាំង១២រូបជាតំណាងបរទេសសង្កេតការណ៍", "សមាជិក៤រូបក្នុងមួយភាគីស្មើគ្នាទាំងបី"], answerKm: "សមាជិក៦រូបពីរដ្ឋកម្ពុជា និង៦រូបទៀតពីសម្ព័ន្ធភាពបីភាគី",
+      explanation: "The SNC, chaired by Sihanouk, balanced 6 seats for the State of Cambodia and 6 for the tripartite resistance (FUNCINPEC, KPNLF, Khmer Rouge), representing all Cambodian factions before the 1993 election.", explanationKm: "SNC ដែលដឹកនាំដោយសម្តេចសីហនុ បានតុល្យភាពសមាជិក៦រូបសម្រាប់រដ្ឋកម្ពុជា និង៦រូបសម្រាប់សម្ព័ន្ធភាពបីភាគី (ហ្វុងសិនប៉ិច KPNLF និងខ្មែរក្រហម) តំណាងឱ្យគ្រប់ភាគីខ្មែរមុនការបោះឆ្នោត១៩៩៣។",
+      formula: "SNC 1990: 12 members = 6 (State of Cambodia) + 6 (tripartite)", formulaKm: "SNC ១៩៩០៖ សមាជិក១២ = ៦(រដ្ឋកម្ពុជា) + ៦(បីភាគី)",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Reintroduction of currency", topicKm: "ការចេញប្រាក់រៀលជាថ្មី", difficulty: "Medium",
+      prompt: "After the Khmer Rouge had abolished money entirely, in what year did the PRK government reissue the Riel as national currency?", promptKm: "ក្រោយពេលខ្មែរក្រហមបានលុបបំបាត់ប្រាក់កាសទាំងស្រុង តើរដ្ឋាភិបាល PRK បានចេញប្រាក់រៀលជាថ្មីជារូបិយវត្ថុជាតិនៅឆ្នាំណា?", options: ["1980", "1975", "1985", "1993"], answer: "1980",
+      optionsKm: ["១៩៨០", "១៩៧៥", "១៩៨៥", "១៩៩៣"], answerKm: "១៩៨០",
+      explanation: "In 1980, the PRK government reissued the Riel to circulate nationwide, restoring a money economy that the Khmer Rouge had completely abolished.", explanationKm: "ក្នុងឆ្នាំ១៩៨០ រដ្ឋាភិបាល PRK បានចេញប្រាក់រៀលឲ្យចរាចរទូទាំងប្រទេសឡើងវិញ ស្តារសេដ្ឋកិច្ចប្រាក់កាសដែលខ្មែរក្រហមបានលុបបំបាត់ទាំងស្រុង។",
+      formula: "1980: Riel currency reissued", formulaKm: "១៩៨០៖ ប្រាក់រៀលចេញជាថ្មី",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+    { topic: "Post-1979 education slogan", topicKm: "ពាក្យស្លោកអប់រំក្រោយ១៩៧៩", difficulty: "Medium",
+      prompt: "To rebuild the education system after 1979, despite a severe shortage of trained teachers, the government promoted which slogan?", promptKm: "ដើម្បីស្តារប្រព័ន្ធអប់រំឡើងវិញក្រោយឆ្នាំ១៩៧៩ ខណៈខ្វះគ្រូបណ្តុះបណ្តាលយ៉ាងធ្ងន់ធ្ងរ រដ្ឋាភិបាលបានលើកកម្ពស់ពាក្យស្លោកអ្វី?", options: ["\"Those who know more teach those who know less; those who know less teach those who know nothing\"", "\"Education is the enemy of the revolution\"", "\"Every citizen must learn French first\"", "\"Only city residents may attend school\""], answer: "\"Those who know more teach those who know less; those who know less teach those who know nothing\"",
+      optionsKm: ["\"អ្នកចេះច្រើនបង្រៀនអ្នកចេះតិច អ្នកចេះតិចបង្រៀនអ្នកមិនចេះ\"", "\"ការអប់រំជាសត្រូវនៃបដិវត្តន៍\"", "\"ប្រជាពលរដ្ឋគ្រប់រូបត្រូវរៀនភាសាបារាំងជាមុនសិន\"", "\"មានតែអ្នកនៅទីក្រុងទេដែលអាចចូលរៀន\""], answerKm: "\"អ្នកចេះច្រើនបង្រៀនអ្នកចេះតិច អ្នកចេះតិចបង្រៀនអ្នកមិនចេះ\"",
+      explanation: "With almost the entire pre-1975 teaching corps killed or scattered, the PRK relied on this slogan to rebuild education using whoever had any knowledge to pass on.", explanationKm: "ដោយសារគ្រូបង្រៀនស្ទើរតែទាំងអស់មុនឆ្នាំ១៩៧៥ត្រូវបានសម្លាប់ ឬខ្ចាត់ខ្ចាយ រដ្ឋាភិបាល PRK បានពឹងផ្អែកលើពាក្យស្លោកនេះ ដើម្បីស្តារការអប់រំដោយប្រើអ្នកណាដែលមានចំណេះដឹងបន្តិចបន្តួច។",
+      formula: "Post-1979 education: \"those who know more teach those who know less\"", formulaKm: "អប់រំក្រោយ១៩៧៩៖ \"អ្នកចេះច្រើនបង្រៀនអ្នកចេះតិច\"",
+      chapter: "PRK & State of Cambodia (1979–1993)", chapterKm: "សាធារណរដ្ឋប្រជាមានិតកម្ពុជា និងរដ្ឋកម្ពុជា (១៩៧៩-១៩៩៣)" },
+
+    { topic: "1993 election", topicKm: "ការបោះឆ្នោត១៩៩៣", difficulty: "Easy",
+      prompt: "The UN-organized general election that led to the second Kingdom of Cambodia was held in what year?", promptKm: "តើការបោះឆ្នោតទូទៅ ដែលរៀបចំដោយអង្គការសហប្រជាជាតិ និងនាំទៅដល់ព្រះរាជាណាចក្រកម្ពុជាទី២ ធ្វើឡើងនៅឆ្នាំណា?",
+      options: ["1993", "1979", "1989", "1998"], answer: "1993",
+      optionsKm: ["១៩៩៣", "១៩៧៩", "១៩៨៩", "១៩៩៨"], answerKm: "១៩៩៣",
+      explanation: "The May 1993 election, organized by UNTAC, led to the founding of the second Kingdom of Cambodia.", explanationKm: "ការបោះឆ្នោតខែឧសភា ឆ្នាំ១៩៩៣ ដែលរៀបចំដោយ UNTAC បាននាំទៅដល់ការបង្កើតព្រះរាជាណាចក្រកម្ពុជាទី២។",
+      formula: "Key fact: 1993 election → 2nd Kingdom of Cambodia", formulaKm: "ចំណុចសំខាន់៖ ការបោះឆ្នោត១៩៩៣ → ព្រះរាជាណាចក្រកម្ពុជាទី២",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Two co-Prime Ministers", topicKm: "នាយករដ្ឋមន្ត្រីរួមពីរអង្គ", difficulty: "Medium",
+      prompt: "After the 1993 election, Cambodia had two co-Prime Ministers. Who served as First Prime Minister?", promptKm: "ក្រោយការបោះឆ្នោត១៩៩៣ កម្ពុជាមាននាយករដ្ឋមន្ត្រីរួមពីរអង្គ។ តើនរណាបានធ្វើជានាយករដ្ឋមន្ត្រីទី១?",
+      options: ["Norodom Ranariddh", "Hun Sen", "Heng Samrin", "Son Sann"], answer: "Norodom Ranariddh",
+      optionsKm: ["នរោត្តម រណឫទ្ធិ", "ហ៊ុន សែន", "ហេង សំរិន", "សឺន សាន"], answerKm: "នរោត្តម រណឫទ្ធិ",
+      explanation: "Norodom Ranariddh served as First Prime Minister and Hun Sen as Second Prime Minister in the coalition government formed after the 1993 election.", explanationKm: "នរោត្តម រណឫទ្ធិបានធ្វើជានាយករដ្ឋមន្ត្រីទី១ ហើយហ៊ុន សែនធ្វើជានាយករដ្ឋមន្ត្រីទី២ ក្នុងរដ្ឋាភិបាលចម្រុះដែលបង្កើតឡើងក្រោយការបោះឆ្នោត១៩៩៣។",
+      formula: "Key fact: 1993 coalition = Ranariddh (1st PM) + Hun Sen (2nd PM)", formulaKm: "ចំណុចសំខាន់៖ រដ្ឋាភិបាល១៩៩៣ = រណឫទ្ធិ(នាយករដ្ឋមន្ត្រីទី១) + ហ៊ុនសែន(ទី២)",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Founding of the second Kingdom", topicKm: "ការប្រកាសបង្កើតព្រះរាជាណាចក្រទី២", difficulty: "Medium",
+      prompt: "The second Kingdom of Cambodia, with its new constitution and restored monarchy, was formally established on what date?", promptKm: "តើព្រះរាជាណាចក្រកម្ពុជាទី២ ដែលមានរដ្ឋធម្មនុញ្ញថ្មីនិងស្តាររាជានិយមឡើងវិញ ត្រូវបានបង្កើតឡើងជាផ្លូវការនៅថ្ងៃណា?",
+      options: ["24 September 1993", "23 October 1991", "May 1993", "7 January 1979"], answer: "24 September 1993",
+      optionsKm: ["២៤ កញ្ញា ១៩៩៣", "២៣ តុលា ១៩៩១", "ឧសភា ១៩៩៣", "៧ មករា ១៩៧៩"], answerKm: "២៤ កញ្ញា ១៩៩៣",
+      explanation: "The election was held in May 1993, but the second Kingdom of Cambodia was formally proclaimed under its new constitution on 24 September 1993.", explanationKm: "ការបោះឆ្នោតធ្វើឡើងក្នុងខែឧសភា ១៩៩៣ ប៉ុន្តែព្រះរាជាណាចក្រកម្ពុជាទី២ត្រូវបានប្រកាសជាផ្លូវការក្រោមរដ្ឋធម្មនុញ្ញថ្មីនៅថ្ងៃទី២៤ ខែកញ្ញា ១៩៩៣។",
+      formula: "Key fact: 2nd Kingdom proclaimed 24 Sept 1993", formulaKm: "ចំណុចសំខាន់៖ ព្រះរាជាណាចក្រទី២ ប្រកាស ២៤ កញ្ញា ១៩៩៣",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Win-win policy", topicKm: "គោលនយោបាយឈ្នះ-ឈ្នះ", difficulty: "Medium",
+      prompt: "Hun Sen's \"win-win\" policy, which integrated the last Khmer Rouge forces and ended Cambodia's civil war, was completed by the end of what year?", promptKm: "តើគោលនយោបាយ \"ឈ្នះ-ឈ្នះ\" របស់សម្តេចហ៊ុន សែន ដែលធ្វើសមាហរណកម្មកងកម្លាំងខ្មែរក្រហមចុងក្រោយ និងបញ្ចប់សង្គ្រាមស៊ីវិលកម្ពុជា បានបញ្ចប់នៅចុងឆ្នាំណា?",
+      options: ["1998", "1979", "1991", "1993"], answer: "1998",
+      optionsKm: ["១៩៩៨", "១៩៧៩", "១៩៩១", "១៩៩៣"], answerKm: "១៩៩៨",
+      explanation: "By the end of 1998, the remaining Khmer Rouge forces had integrated into the government, ending decades of civil war.", explanationKm: "នៅចុងឆ្នាំ១៩៩៨ កងកម្លាំងខ្មែរក្រហមដែលនៅសេសសល់ត្រូវបានធ្វើសមាហរណកម្មចូលជាមួយរដ្ឋាភិបាល ដែលបញ្ចប់សង្គ្រាមស៊ីវិលរាប់ទសវត្សរ៍។",
+      formula: "Key fact: Win-win policy completed, end of 1998", formulaKm: "ចំណុចសំខាន់៖ គោលនយោបាយឈ្នះ-ឈ្នះ បញ្ចប់ចុងឆ្នាំ១៩៩៨",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Win-Win Monument", topicKm: "វិមានឈ្នះ-ឈ្នះ", difficulty: "Easy",
+      prompt: "The \"Win-Win Monument,\" commemorating the end of Cambodia's civil war, was inaugurated on what date?", promptKm: "តើ\"វិមានឈ្នះ-ឈ្នះ\" ដែលចងចាំការបញ្ចប់សង្គ្រាមស៊ីវិលកម្ពុជា ត្រូវបានសម្ពោធនៅថ្ងៃណា?",
+      options: ["29 December 2018", "29 December 1998", "24 September 1993", "23 October 1991"], answer: "29 December 2018",
+      optionsKm: ["២៩ ធ្នូ ២០១៨", "២៩ ធ្នូ ១៩៩៨", "២៤ កញ្ញា ១៩៩៣", "២៣ តុលា ១៩៩១"], answerKm: "២៩ ធ្នូ ២០១៨",
+      explanation: "The Win-Win Monument, built at Chroy Changvar in Phnom Penh at Hun Sen's initiative, was inaugurated on 29 December 2018.", explanationKm: "វិមានឈ្នះ-ឈ្នះ ដែលសាងសង់នៅជ្រោយចង្វារ ភ្នំពេញ តាមគំនិតផ្តួចផ្តើមរបស់សម្តេចហ៊ុន សែន ត្រូវបានសម្ពោធនៅថ្ងៃទី២៩ ខែធ្នូ ២០១៨។",
+      formula: "Key fact: Win-Win Monument inaugurated 29 Dec 2018", formulaKm: "ចំណុចសំខាន់៖ វិមានឈ្នះ-ឈ្នះ សម្ពោធ ២៩ ធ្នូ ២០១៨",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Cambodia joins the WTO", topicKm: "កម្ពុជាចូលជាសមាជិក WTO", difficulty: "Easy",
+      prompt: "Alongside ASEAN, which major international trade organization did Cambodia join in the 2000s?", promptKm: "ក្រៅពីអាស៊ាន តើកម្ពុជាបានចូលជាសមាជិកអង្គការពាណិជ្ជកម្មអន្តរជាតិសំខាន់មួយណាទៀត ក្នុងទសវត្សរ៍២០០០?",
+      options: ["World Trade Organization (WTO)", "European Union (EU)", "OPEC", "G7"], answer: "World Trade Organization (WTO)",
+      optionsKm: ["អង្គការពាណិជ្ជកម្មពិភពលោក (WTO)", "សហភាពអឺរ៉ុប (EU)", "អូបិក (OPEC)", "ក្រុមប្រទេសឧស្សាហកម្ម G7"], answerKm: "អង្គការពាណិជ្ជកម្មពិភពលោក (WTO)",
+      explanation: "Cambodia joined the World Trade Organization in the 2000s, opening its economy further to international trade.", explanationKm: "កម្ពុជាបានចូលជាសមាជិកអង្គការពាណិជ្ជកម្មពិភពលោកក្នុងទសវត្សរ៍២០០០ បើកទូលាយសេដ្ឋកិច្ចរបស់ខ្លួនកាន់តែច្រើនទៅកាន់ពាណិជ្ជកម្មអន្តរជាតិ។",
+      formula: "Key fact: Cambodia joined WTO in the 2000s", formulaKm: "ចំណុចសំខាន់៖ កម្ពុជាចូល WTO ទសវត្សរ៍២០០០",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "UNESCO World Heritage sites", topicKm: "បេតិកភណ្ឌពិភពលោក", difficulty: "Easy",
+      prompt: "Which two Cambodian sites are listed as UNESCO World Heritage sites?", promptKm: "តើទីតាំងខ្មែរពីរណាខ្លះត្រូវបានចុះបញ្ជីជាបេតិកភណ្ឌពិភពលោករបស់អង្គការយូណេស្កូ?",
+      options: ["Angkor and Preah Vihear Temple", "Kep and Kampot", "Tonle Sap and Mekong River", "Sihanoukville and Koh Rong"], answer: "Angkor and Preah Vihear Temple",
+      optionsKm: ["អង្គរ និងប្រាសាទព្រះវិហារ", "កែប និងកំពត", "ទន្លេសាប និងទន្លេមេគង្គ", "ក្រុងព្រះសីហនុ និងកោះរ៉ុង"], answerKm: "អង្គរ និងប្រាសាទព្រះវិហារ",
+      explanation: "Angkor and Preah Vihear Temple are both listed as UNESCO World Heritage sites, recognized for their outstanding cultural and historical value.", explanationKm: "អង្គរ និងប្រាសាទព្រះវិហារ ត្រូវបានចុះបញ្ជីជាបេតិកភណ្ឌពិភពលោករបស់អង្គការយូណេស្កូ ដោយទទួលស្គាល់តម្លៃវប្បធម៌និងប្រវត្តិសាស្ត្រពិសេស។",
+      formula: "Key fact: Angkor + Preah Vihear = UNESCO World Heritage", formulaKm: "ចំណុចសំខាន់៖ អង្គរ + ព្រះវិហារ = បេតិកភណ្ឌពិភពលោក",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Cambodian peacekeepers abroad", topicKm: "កងទ័ពមួកខៀវខ្មែរនៅក្រៅប្រទេស", difficulty: "Medium",
+      prompt: "Since the 2000s, Cambodia has sent its own soldiers on UN peacekeeping missions abroad. What is this Cambodian peacekeeping contingent commonly called?", promptKm: "ចាប់ពីទសវត្សរ៍២០០០ កម្ពុជាបានចាត់ទាហានផ្ទាល់ខ្លួនទៅបំពេញបេសកកម្មរក្សាសន្តិភាពរបស់អង្គការសហប្រជាជាតិនៅក្រៅប្រទេស។ តើកងទ័ពនេះត្រូវបានគេហៅថាអ្វី?",
+      options: ["Blue Helmet troops", "Green Beret troops", "White Guard troops", "Red Cross troops"], answer: "Blue Helmet troops",
+      optionsKm: ["កងទ័ពមួកខៀវ", "កងទ័ពមួកបៃតង", "កងឆ្មាំស", "កងឆ្កាងក្រហម"], answerKm: "កងទ័ពមួកខៀវ",
+      explanation: "Cambodia's UN peacekeeping soldiers are called \"Blue Helmet troops,\" after the standard blue helmets worn by UN peacekeepers worldwide.", explanationKm: "ទាហានរក្សាសន្តិភាពរបស់កម្ពុជាត្រូវបានហៅថា\"កងទ័ពមួកខៀវ\" តាមមួកខៀវស្តង់ដារដែលទាហានរក្សាសន្តិភាពអង្គការសហប្រជាជាតិពាក់ទូទាំងពិភពលោក។",
+      formula: "Key fact: Cambodia's UN peacekeepers = \"Blue Helmet troops\"", formulaKm: "ចំណុចសំខាន់៖ ទាហានរក្សាសន្តិភាពខ្មែរ = \"កងទ័ពមួកខៀវ\"",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Second Prime Minister 1993", topicKm: "នាយករដ្ឋមន្ត្រីទី២ ១៩៩៣", difficulty: "Medium",
+      prompt: "After the 1993 election, who served as Second Prime Minister alongside First Prime Minister Norodom Ranariddh?", promptKm: "ក្រោយការបោះឆ្នោត១៩៩៣ តើនរណាបានធ្វើជានាយករដ្ឋមន្ត្រីទី២ រួមជាមួយនាយករដ្ឋមន្ត្រីទី១ នរោត្តម រណឫទ្ធិ?", options: ["Hun Sen", "Son Sann", "Heng Samrin", "Chea Sim"], answer: "Hun Sen",
+      optionsKm: ["ហ៊ុន សែន", "សឺន សាន", "ហេង សំរិន", "ជា ស៊ីម"], answerKm: "ហ៊ុន សែន",
+      explanation: "The 1993 coalition government installed two co-Prime Ministers: Norodom Ranariddh as First Prime Minister and Hun Sen as Second Prime Minister, balancing FUNCINPEC and the Cambodian People's Party.", explanationKm: "រដ្ឋាភិបាលចម្រុះឆ្នាំ១៩៩៣ បានតែងតាំងនាយករដ្ឋមន្ត្រីរួមពីរអង្គ៖ នរោត្តម រណឫទ្ធិ ជានាយករដ្ឋមន្ត្រីទី១ និងហ៊ុន សែន ជានាយករដ្ឋមន្ត្រីទី២ ធ្វើតុល្យភាពរវាងហ្វុងសិនប៉ិច និងគណបក្សប្រជាជនកម្ពុជា។",
+      formula: "1993: PM1 = Ranariddh, PM2 = Hun Sen", formulaKm: "១៩៩៣៖ នាយក១ = រណឫទ្ធិ, នាយក២ = ហ៊ុនសែន",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Development strategies", topicKm: "យុទ្ធសាស្ត្រអភិវឌ្ឍន៍", difficulty: "Hard",
+      prompt: "After 1998, the government pursued national development first through a \"Triangle Strategy\" and later through which follow-up strategy?", promptKm: "ក្រោយឆ្នាំ១៩៩៨ រាជរដ្ឋាភិបាលបានអនុវត្តយុទ្ធសាស្ត្រអភិវឌ្ឍន៍ជាតិដំបូងតាមរយៈ \"យុទ្ធសាស្ត្រត្រីកោណ\" និងក្រោយមកតាមរយៈយុទ្ធសាស្ត្រអ្វី?", options: ["\"Rectangular Strategy\"", "\"Circular Strategy\"", "\"Pentagon Strategy\"", "\"Diamond Strategy\""], answer: "\"Rectangular Strategy\"",
+      optionsKm: ["\"យុទ្ធសាស្ត្រចតុកោណ\"", "\"យុទ្ធសាស្ត្ររង្វង់\"", "\"យុទ្ធសាស្ត្របញ្ចកោណ\"", "\"យុទ្ធសាស្ត្រពេជ្រ\""], answerKm: "\"យុទ្ធសាស្ត្រចតុកោណ\"",
+      explanation: "The government's Triangle Strategy (security, integration, development) was followed by the Rectangular Strategy focused on good governance, agriculture, private-sector growth and infrastructure.", explanationKm: "យុទ្ធសាស្ត្រត្រីកោណរបស់រាជរដ្ឋាភិបាល (សន្តិសុខ សមាហរណកម្ម អភិវឌ្ឍន៍) ត្រូវបានបន្តដោយយុទ្ធសាស្ត្រចតុកោណ ដែលផ្តោតលើអភិបាលកិច្ចល្អ កសិកម្ម ការរីកចម្រើនវិស័យឯកជន និងហេដ្ឋារចនាសម្ព័ន្ធ។",
+      formula: "Triangle Strategy → Rectangular Strategy", formulaKm: "យុទ្ធសាស្ត្រត្រីកោណ → យុទ្ធសាស្ត្រចតុកោណ",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
+    { topic: "Significance of UNESCO listing", topicKm: "សារៈសំខាន់នៃការចុះបញ្ជីយូណេស្កូ", difficulty: "Medium",
+      prompt: "Beyond national pride, what is one practical benefit Cambodia gains from having Angkor and Preah Vihear listed as UNESCO World Heritage sites?", promptKm: "ក្រៅពីមោទនភាពជាតិ តើផលប្រយោជន៍ជាក់ស្តែងមួយណា ដែលកម្ពុជាទទួលបានពីការដាក់អង្គរ និងព្រះវិហារក្នុងបញ្ជីបេតិកភណ្ឌពិភពលោករបស់យូណេស្កូ?", options: ["International technical and financial support for preserving the sites, plus tourism revenue", "Automatic membership in the United Nations Security Council", "Exemption from all international treaties", "Full military protection guaranteed by UNESCO"], answer: "International technical and financial support for preserving the sites, plus tourism revenue",
+      optionsKm: ["ការគាំទ្រផ្នែកបច្ចេកទេស និងហិរញ្ញវត្ថុអន្តរជាតិសម្រាប់ថែរក្សា ព្រមទាំងចំណូលពីទេសចរណ៍", "ការចូលជាសមាជិកក្រុមប្រឹក្សាសន្តិសុខ អ.ស.ប ដោយស្វ័យប្រវត្តិ", "ការលើកលែងពីកិច្ចព្រមព្រៀងអន្តរជាតិទាំងអស់", "ការធានាការពារយោធាពេញលេញពីយូណេស្កូ"], answerKm: "ការគាំទ្រផ្នែកបច្ចេកទេស និងហិរញ្ញវត្ថុអន្តរជាតិសម្រាប់ថែរក្សា ព្រមទាំងចំណូលពីទេសចរណ៍",
+      explanation: "UNESCO listing brings international technical and financial assistance for conservation and drives tourism revenue that benefits local communities and the national economy.", explanationKm: "ការចុះបញ្ជីយូណេស្កូនាំមកនូវជំនួយបច្ចេកទេស និងហិរញ្ញវត្ថុអន្តរជាតិសម្រាប់ការអភិរក្ស ព្រមទាំងជំរុញចំណូលទេសចរណ៍ដែលផ្តល់ផលប្រយោជន៍ដល់សហគមន៍មូលដ្ឋាន និងសេដ្ឋកិច្ចជាតិ។",
+      formula: "UNESCO listing → technical/financial aid + tourism revenue", formulaKm: "ការចុះបញ្ជីយូណេស្កូ → ជំនួយបច្ចេកទេស/ហិរញ្ញវត្ថុ + ចំណូលទេសចរណ៍",
+      chapter: "Kingdom of Cambodia II (1993–present)", chapterKm: "ព្រះរាជាណាចក្រកម្ពុជាទី២ (១៩៩៣-បច្ចុប្បន្ន)" },
   ],
   Geography: [
     { topic: "Rivers", topicKm: "ទន្លេ", difficulty: "Easy",
@@ -2249,6 +3503,11 @@ const subjectLabel = (subject, lang) => (lang === "km" ? (SUBJECT_LABEL_KM[subje
 // still write it that way, but Bondus's own Khmer copy uses the transliteration.
 const bacIILabel = (lang) => (lang === "km" ? "បាក់ឌុប" : "BAC II");
 
+const KHMER_DIGITS = ["០", "១", "២", "៣", "៤", "៥", "៦", "៧", "៨", "៩"];
+// Converts any number/digit-string to Khmer numerals when lang is "km"; passes through
+// unchanged (and non-km languages) otherwise, so callers can wrap any plain number for display.
+const localizeNum = (n, lang) => (lang === "km" ? String(n).replace(/[0-9]/g, (d) => KHMER_DIGITS[d]) : String(n));
+
 const EXERCISE_BANK_RAW = RAW_EXERCISES;
 function getExercises(subject, lang = "en") {
   const list = EXERCISE_BANK_RAW[subject] || [];
@@ -2259,6 +3518,9 @@ function getExercises(subject, lang = "en") {
     answer: lang === "km" && r.answerKm ? r.answerKm : r.answer,
     explanation: lang === "km" ? (r.explanationKm || r.explanation) : r.explanation,
     formula: lang === "km" ? (r.formulaKm || r.formula) : r.formula,
+    // Only subjects whose bank entries carry a chapter (currently History) get grouped into a
+    // chapter-picker step in PracticeSubject; everything else is unaffected (chapter stays undefined).
+    chapter: lang === "km" ? (r.chapterKm || r.chapter) : r.chapter,
   }));
 }
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
@@ -2274,6 +3536,7 @@ const STATUS = {
   in_progress: { label: "In progress", color: "var(--gold)", soft: "var(--gold-soft)", icon: Clock },
   completed: { label: "Completed", color: "var(--jade)", soft: "var(--jade-soft)", icon: CheckCircle2 },
 };
+const diffColor = (d) => (d === "Hard" ? "var(--ember)" : d === "Medium" ? "var(--gold)" : "var(--jade)");
 
 function StatusControl({ status, onChange, lang = "en" }) {
   return (
@@ -2333,8 +3596,15 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
 }
 
 function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, lang = "en" }) {
-  const list = getExercises(subject, lang);
+  const fullList = getExercises(subject, lang);
+  // Subjects whose bank entries carry a chapter (currently only History) get an extra
+  // chapter-picker step before the exercise list; every other subject is unaffected.
+  const hasChapters = fullList.some((ex) => ex.chapter);
+  const chapters = hasChapters ? [...new Set(fullList.map((ex) => ex.chapter))] : [];
+  const [chapter, setChapter] = useState(null);
+  const list = hasChapters ? fullList.filter((ex) => ex.chapter === chapter) : fullList;
   const [idx, setIdx] = useState(null);
+  const backToList = hasChapters && chapter != null ? () => setChapter(null) : onBack;
 
   // ── Adaptive difficulty (session-only): 3 correct in a row steps up, 2 wrong in a row steps
   // down, and missing the same topic twice nudges the student to review it. ──
@@ -2394,7 +3664,38 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
       <ExercisePlayer ex={list[idx]} entry={practice[list[idx].id]} subject={subject} index={idx} total={list.length} tier={tier} banner={banner}
         onAnswer={(ex, result, meta) => { onAnswer(ex, result, meta); handleResult(ex, result === "correct"); }}
         onSetStatus={onSetStatus} onBack={() => setIdx(null)}
-        onNext={list.length > 1 ? () => setIdx(pickNext(idx)) : null} lang={lang} />
+        onNext={list.length > 1 ? () => setIdx(pickNext(idx)) : null} lang={lang} glass />
+    );
+  }
+
+  if (hasChapters && chapter == null) {
+    return (
+      <div className="space-y-5 eai-rise">
+        <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
+        <div>
+          <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
+          <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "chooseChapterDesc")}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {chapters.map((ch) => {
+            const chList = fullList.filter((ex) => ex.chapter === ch);
+            const doneN = chList.filter((ex) => practice[ex.id]?.status === "completed").length;
+            const pct = chList.length ? Math.round((doneN / chList.length) * 100) : 0;
+            return (
+              <button key={ch} onClick={() => setChapter(ch)} className="eai-card eai-tile eai-focus p-5 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
+                    <BookOpen size={19} style={{ color: "var(--primary)" }} />
+                  </div>
+                  <Ring value={pct} size={44} color="var(--jade)"><span className="eai-display font-bold" style={{ fontSize: 10 }}>{pct}%</span></Ring>
+                </div>
+                <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{ch}</h3>
+                <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{chList.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 
@@ -2403,11 +3704,11 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
 
   return (
     <div className="space-y-5 eai-rise">
-      <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
+      <button onClick={backToList} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {hasChapters ? t(lang, "allChapters") : t(lang, "allSubjects")}</button>
       <div className="eai-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
+            <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{hasChapters ? chapter : subjectLabel(subject, lang)}</h2>
             <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
           </div>
           <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
@@ -2441,7 +3742,7 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
   );
 }
 
-function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnswer, onSetStatus, onBack, onNext, lang = "en" }) {
+function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnswer, onSetStatus, onBack, onNext, lang = "en", glass = false }) {
   const [choice, setChoice] = useState(null);
   const [phase, setPhase] = useState("answering"); // answering | mistake | result
   const isMcq = Array.isArray(ex.options);
@@ -2514,7 +3815,8 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 
         {phase === "answering" && (
           <button onClick={submit} disabled={choice == null || String(choice).trim() === ""}
-            className={`eai-btn eai-focus w-full mt-5 py-3 text-sm text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)", opacity: choice == null || String(choice).trim() === "" ? 0.5 : 1 }}>
+            className={`eai-btn ${glass ? "eai-glass" : "text-white"} eai-focus w-full mt-5 py-3 text-sm ${lang === "km" ? "eai-km" : ""}`}
+            style={glass ? undefined : { background: "var(--primary)", opacity: choice == null || String(choice).trim() === "" ? 0.5 : 1 }}>
             {t(lang, "checkAnswer")}
           </button>
         )}
@@ -2564,16 +3866,16 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 
             <div className="flex flex-wrap gap-2 pt-1">
               {!correct && (
-                <button onClick={retry} className={`eai-btn eai-focus py-2.5 px-4 text-sm flex items-center gap-1.5 eai-soft ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>
+                <button onClick={retry} className={`eai-btn ${glass ? "eai-glass" : "eai-soft"} eai-focus py-2.5 px-4 text-sm flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={glass ? undefined : { color: "var(--ink)" }}>
                   <RotateCcw size={15} /> {t(lang, "tryAgain")}
                 </button>
               )}
               {onNext && (
-                <button onClick={next} className={`eai-btn eai-focus py-2.5 px-4 text-sm text-white flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                <button onClick={next} className={`eai-btn ${glass ? "eai-glass" : "text-white"} eai-focus py-2.5 px-4 text-sm flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={glass ? undefined : { background: "var(--primary)" }}>
                   {t(lang, "nextExercise")} <ChevronRight size={15} />
                 </button>
               )}
-              <button onClick={onBack} className={`eai-btn eai-focus py-2.5 px-4 text-sm eai-soft ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>{t(lang, "backToList")}</button>
+              <button onClick={onBack} className={`eai-btn ${glass ? "eai-glass" : "eai-soft"} eai-focus py-2.5 px-4 text-sm ${lang === "km" ? "eai-km" : ""}`} style={glass ? undefined : { color: "var(--ink)" }}>{t(lang, "backToList")}</button>
             </div>
           </div>
         )}
@@ -2794,8 +4096,8 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
                 <div className="px-4 py-3 rounded-2xl text-sm font-semibold mb-4" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{choice}</div>
                 <p className={`text-xs font-semibold eai-muted mb-2.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "howSureWereYou")}</p>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <button onClick={() => answer("confident")} className={`eai-btn eai-focus py-3 text-sm font-semibold text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--jade)" }}>😎 {t(lang, "confidentWord")}</button>
-                  <button onClick={() => answer("guess")} className={`eai-btn eai-focus py-3 text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--bg-soft)", color: "var(--ink)" }}>🤔 {t(lang, "guessedWord")}</button>
+                  <button onClick={() => answer("confident")} className={`eai-btn eai-glass eai-focus py-3 text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ "--glass-tint": "var(--jade)" }}>😎 {t(lang, "confidentWord")}</button>
+                  <button onClick={() => answer("guess")} className={`eai-btn eai-glass eai-focus py-3 text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ "--glass-tint": "var(--gold)" }}>🤔 {t(lang, "guessedWord")}</button>
                 </div>
               </div>
             )}
@@ -2846,7 +4148,7 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
             </div>
           </div>
 
-          <button onClick={onComplete} className={`eai-btn eai-focus w-full mt-5 py-3 text-sm text-white flex items-center justify-center gap-2 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+          <button onClick={onComplete} className={`eai-btn eai-glass eai-focus w-full mt-5 py-3 text-sm flex items-center justify-center gap-2 ${lang === "km" ? "eai-km" : ""}`}>
             <Sparkles size={16} /> {t(lang, "goToDashboard")} <ChevronRight size={16} />
           </button>
         </div>
@@ -2855,117 +4157,6 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
   );
 }
 
-/* Per-university entrance exam content: official practice sets + commonly-seen exercises. */
-const UNI_DETAIL = {
-  RUPP: {
-    exam: "Entrance & Scholarship Exam", examKm: "ការប្រឡងចូល និងអាហារូបករណ៍",
-    sets: [
-      { title: "Entrance Mock — Full Paper", subject: "Mixed", q: 80, diff: "Hard" },
-      { title: "Scholarship Aptitude Test", subject: "Reasoning", q: 40, diff: "Medium" },
-      { title: "English Proficiency Set", subject: "English", q: 50, diff: "Medium" },
-    ],
-    common: [
-      { topic: "Quadratic equations & functions", subject: "Mathematics", freq: "Frequently" },
-      { topic: "Academic reading comprehension", subject: "English", freq: "Frequently" },
-      { topic: "Essay: contemporary Cambodian society", subject: "Khmer Literature", freq: "Often" },
-      { topic: "Logical reasoning puzzles", subject: "Reasoning", freq: "Often" },
-      { topic: "Current affairs & general knowledge", subject: "General", freq: "Sometimes" },
-    ],
-  },
-  ITC: {
-    exam: "Engineering Entrance Exam", examKm: "ការប្រឡងចូលផ្នែកវិស្វកម្ម",
-    sets: [
-      { title: "Mathematics Entrance Paper", subject: "Mathematics", q: 40, diff: "Hard" },
-      { title: "Physics Problem Set", subject: "Physics", q: 35, diff: "Hard" },
-      { title: "Chemistry Fundamentals", subject: "Chemistry", q: 30, diff: "Medium" },
-    ],
-    common: [
-      { topic: "Derivatives & integrals", subject: "Mathematics", freq: "Frequently" },
-      { topic: "Kinematics & Newton's laws", subject: "Physics", freq: "Frequently" },
-      { topic: "Vectors & trigonometry", subject: "Mathematics", freq: "Often" },
-      { topic: "Stoichiometry & the mole", subject: "Chemistry", freq: "Often" },
-      { topic: "Electric circuits basics", subject: "Physics", freq: "Sometimes" },
-    ],
-  },
-  AUPP: {
-    exam: "Admissions & English Placement", examKm: "ការចូលរៀន និងតេស្តកម្រិតភាសាអង់គ្លេស",
-    sets: [
-      { title: "English Placement Test", subject: "English", q: 60, diff: "Medium" },
-      { title: "Critical Reading & Writing", subject: "English", q: 45, diff: "Medium" },
-      { title: "Quantitative Aptitude (SAT-style)", subject: "Mathematics", q: 40, diff: "Medium" },
-    ],
-    common: [
-      { topic: "Essay writing & argumentation", subject: "English", freq: "Frequently" },
-      { topic: "Sentence correction & grammar", subject: "English", freq: "Frequently" },
-      { topic: "Data interpretation & word problems", subject: "Mathematics", freq: "Often" },
-      { topic: "Vocabulary in context", subject: "English", freq: "Often" },
-      { topic: "Algebra & percentages", subject: "Mathematics", freq: "Sometimes" },
-    ],
-  },
-  NUM: {
-    exam: "Business & Management Entrance", examKm: "ការប្រឡងចូលពាណិជ្ជកម្ម និងគ្រប់គ្រង",
-    sets: [
-      { title: "Math for Business Paper", subject: "Mathematics", q: 40, diff: "Medium" },
-      { title: "English for Business", subject: "English", q: 50, diff: "Medium" },
-      { title: "Logical & Numerical Reasoning", subject: "Reasoning", q: 35, diff: "Medium" },
-    ],
-    common: [
-      { topic: "Percentages, interest & ratios", subject: "Mathematics", freq: "Frequently" },
-      { topic: "Reading & business vocabulary", subject: "English", freq: "Frequently" },
-      { topic: "Data tables & graph reading", subject: "Reasoning", freq: "Often" },
-      { topic: "Basic statistics & averages", subject: "Mathematics", freq: "Often" },
-      { topic: "Short essay: economy & society", subject: "English", freq: "Sometimes" },
-    ],
-  },
-  RULE: {
-    exam: "Law & Economics Entrance", examKm: "ការប្រឡងចូលនីតិសាស្ត្រ និងសេដ្ឋកិច្ច",
-    sets: [
-      { title: "Khmer Essay & Comprehension", subject: "Khmer Literature", q: 30, diff: "Medium" },
-      { title: "General Knowledge & Civics", subject: "General", q: 50, diff: "Medium" },
-      { title: "Logical Reasoning for Law", subject: "Reasoning", q: 40, diff: "Hard" },
-    ],
-    common: [
-      { topic: "Argumentative essay (Khmer)", subject: "Khmer Literature", freq: "Frequently" },
-      { topic: "Constitution & civic knowledge", subject: "General", freq: "Frequently" },
-      { topic: "Critical reasoning & inference", subject: "Reasoning", freq: "Often" },
-      { topic: "Current legal & social affairs", subject: "General", freq: "Often" },
-      { topic: "Economics fundamentals", subject: "General", freq: "Sometimes" },
-    ],
-  },
-  CADT: {
-    exam: "Digital Technology Entrance", examKm: "ការប្រឡងចូលបច្ចេកវិទ្យាឌីជីថល",
-    sets: [
-      { title: "Mathematics Diagnostic", subject: "Mathematics", q: 35, diff: "Medium" },
-      { title: "Computing & Logic Set", subject: "Reasoning", q: 30, diff: "Medium" },
-      { title: "English & Comprehension Combined", subject: "English", q: 45, diff: "Medium" },
-    ],
-    common: [
-      { topic: "Functions & graphs", subject: "Mathematics", freq: "Frequently" },
-      { topic: "Algorithmic & logical thinking", subject: "Reasoning", freq: "Frequently" },
-      { topic: "Reading comprehension", subject: "English", freq: "Often" },
-      { topic: "Probability & statistics basics", subject: "Mathematics", freq: "Often" },
-      { topic: "Number sequences & patterns", subject: "Reasoning", freq: "Sometimes" },
-    ],
-  },
-  UHS: {
-    exam: "Health Sciences Entrance", examKm: "ការប្រឡងចូលវិទ្យាសាស្ត្រសុខាភិបាល",
-    sets: [
-      { title: "Biology Diagnostic", subject: "Biology", q: 40, diff: "Hard" },
-      { title: "Chemistry Concepts Set", subject: "Chemistry", q: 35, diff: "Hard" },
-      { title: "Mathematics & Physics Combined", subject: "Mathematics", q: 30, diff: "Medium" },
-    ],
-    common: [
-      { topic: "Human anatomy & physiology", subject: "Biology", freq: "Frequently" },
-      { topic: "Organic chemistry basics", subject: "Chemistry", freq: "Frequently" },
-      { topic: "Cell biology & genetics", subject: "Biology", freq: "Often" },
-      { topic: "Chemical reactions & equations", subject: "Chemistry", freq: "Often" },
-      { topic: "Applied mathematics for sciences", subject: "Mathematics", freq: "Sometimes" },
-    ],
-  },
-};
-
-const diffColor = (d) => (d === "Hard" ? "var(--ember)" : d === "Medium" ? "var(--gold)" : "var(--jade)");
-const freqColor = (f) => (f === "Frequently" ? "var(--ember)" : f === "Often" ? "var(--gold)" : "var(--muted)");
 
 function Majors({ abbr, color, lang = "en" }) {
   const faculties = UNI_MAJORS[abbr];
@@ -3053,7 +4244,6 @@ function scoreUniversityMatch(uni, up, info = UNI_PROFILE_INFO[uni.abbr]) {
 }
 
 function UniversityDetail({ uni, p, onBack, lang = "en" }) {
-  const d = UNI_DETAIL[uni.abbr] || { exam: "Entrance Exam", examKm: "ការប្រឡងចូល", sets: [], common: [] };
   const info = UNI_PROFILE_INFO[uni.abbr];
   const isUni = p?.educationLevel === "university";
   const up = p?.universityProfile;
@@ -3070,7 +4260,6 @@ function UniversityDetail({ uni, p, onBack, lang = "en" }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: uni.c }} /><span className="eai-display text-xl font-extrabold">{uni.abbr}</span></div>
           <p className={`text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? uni.nKm : uni.n}</p>
-          <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? d.examKm : d.exam} · {t(lang, "readinessWord")} {uni.ready}%</p>
         </div>
       </div>
 
@@ -3119,59 +4308,6 @@ function UniversityDetail({ uni, p, onBack, lang = "en" }) {
 
       {/* Majors offered */}
       <Majors abbr={uni.abbr} color={uni.c} lang={lang} />
-
-      {/* Published practice sets */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <FileText size={17} style={{ color: "var(--primary)" }} />
-          <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "publishedSets")}</h3>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{t(lang, "officialWord")}</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {d.sets.map((s, i) => (
-            <div key={i} className="eai-card eai-tile p-5">
-              <div className="flex items-center justify-between">
-                <div className="grid place-items-center rounded-xl" style={{ width: 38, height: 38, background: "var(--primary-soft)" }}>
-                  <ClipboardCheck size={18} style={{ color: "var(--primary)" }} />
-                </div>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: diffColor(s.diff) }}>{s.diff}</span>
-              </div>
-              <h4 className="eai-display font-bold mt-3 text-sm">{s.title}</h4>
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{s.subject}</span>
-                <span className="text-xs eai-muted flex items-center gap-1"><Clock size={12} /> {s.q} Q</span>
-              </div>
-              <button className={`eai-btn eai-focus w-full mt-4 py-2 text-sm text-white flex items-center justify-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
-                <Eye size={14} /> {t(lang, "startSet")}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Common exercises */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Repeat size={17} style={{ color: "var(--gold)" }} />
-          <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "commonExercises")}</h3>
-        </div>
-        <div className="eai-card divide-y" style={{ borderColor: "var(--line)" }}>
-          {d.common.map((c, i) => (
-            <div key={i} className="flex items-center gap-3 p-4" style={{ borderColor: "var(--line)" }}>
-              <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 34, height: 34, background: "var(--bg-soft)" }}>
-                <Target size={16} style={{ color: freqColor(c.freq) }} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold truncate">{c.topic}</p>
-                <span className="text-xs px-2 py-0.5 rounded-full eai-soft eai-muted">{c.subject}</span>
-              </div>
-              <span className="text-xs font-semibold flex-shrink-0" style={{ color: freqColor(c.freq) }}>{c.freq}</span>
-              <button className={`eai-btn eai-focus text-xs py-1.5 px-3 eai-soft flex-shrink-0 hidden sm:block ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>{t(lang, "navPractice")}</button>
-            </div>
-          ))}
-        </div>
-        <p className={`text-xs eai-muted mt-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "frequencyNote")}</p>
-      </div>
     </div>
   );
 }
@@ -3295,9 +4431,9 @@ function Universities({ p, lang = "en" }) {
 }
 
 /* Study-abroad detail view — a simpler twin of UniversityDetail for ABROAD_UNIVERSITIES entries,
-   which have no UNI_MAJORS prose catalog or UNI_DETAIL entrance-exam practice sets (those are
-   Cambodia-domestic concepts). Shows the match panel, an admissions/cost block, majors as plain
-   tag chips, and the curator's note on why this school made the list. */
+   which have no UNI_MAJORS prose catalog (that's a Cambodia-domestic concept). Shows the match
+   panel, an admissions/cost block, majors as plain tag chips, and the curator's note on why this
+   school made the list. */
 function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
   const up = p?.universityProfile;
   const match = up ? scoreUniversityMatch(uni, up, uni) : null;
@@ -5894,7 +7030,7 @@ const STRINGS = {
     practiceTitle: "Practice & mock exams",
     practiceDesc: "Pick a subject. Every exercise is auto-corrected with an explanation and the formula to use, and you can mark each one Pending, In progress, or Completed.",
     focusArea: "Focus area", exercisesAutoGraded: "exercises · auto-graded", completedWord: "completed",
-    allSubjects: "All subjects", exercisesWord: "exercises", reviewWord: "Review", solveWord: "Solve",
+    allSubjects: "All subjects", allChapters: "All chapters", chooseChapterDesc: "Choose a chapter to see its exercises.", exercisesWord: "exercises", reviewWord: "Review", solveWord: "Solve",
     status_pending: "Pending", status_in_progress: "In progress", status_completed: "Completed",
     exerciseXofY: "Exercise {i} of {n}", adaptiveWord: "Adaptive",
     typeAnswer: "Type your answer…", checkAnswer: "Check answer",
@@ -5907,10 +7043,8 @@ const STRINGS = {
     tryAgain: "Try again", nextExercise: "Next exercise", backToList: "Back to list",
     // Universities
     universitiesTitle: "University & scholarship prep",
-    universitiesDesc: "Tap a university to see its published practice sets and common exam exercises.",
-    viewPracticeSets: "View practice sets & common exercises", allUniversities: "All universities",
-    readinessWord: "readiness", publishedSets: "Published practice sets", officialWord: "Official", startSet: "Start set",
-    commonExercises: "Common exercises in this exam", frequencyNote: "Frequency reflects how often each topic has appeared in recent past papers.",
+    universitiesDesc: "Tap a university to see its majors, admissions info and match score.",
+    viewPracticeSets: "View university details", allUniversities: "All universities",
     majorsOffered: "Majors offered", majorsWord: "majors",
     // Progress
     progressDesc: "Your full stats, analytics, and where you stand.",
@@ -6046,7 +7180,7 @@ const STRINGS = {
     practiceTitle: "លំហាត់អនុវត្ត និងតេស្តសាកល្បង",
     practiceDesc: "ជ្រើសរើសមុខវិជ្ជាមួយ។ លំហាត់នីមួយៗត្រូវបានកែដោយស្វ័យប្រវត្តិជាមួយការពន្យល់ និងរូបមន្តត្រូវប្រើ ហើយអ្នកអាចសម្គាល់វាថា កំពុងរង់ចាំ កំពុងធ្វើ ឬបានបញ្ចប់។",
     focusArea: "ផ្នែកត្រូវផ្តោត", exercisesAutoGraded: "លំហាត់ · ដាក់ពិន្ទុស្វ័យប្រវត្តិ", completedWord: "បានបញ្ចប់",
-    allSubjects: "មុខវិជ្ជាទាំងអស់", exercisesWord: "លំហាត់", reviewWord: "ពិនិត្យឡើងវិញ", solveWord: "ដោះស្រាយ",
+    allSubjects: "មុខវិជ្ជាទាំងអស់", allChapters: "ជំពូកទាំងអស់", chooseChapterDesc: "ជ្រើសរើសជំពូកមួយ ដើម្បីមើលលំហាត់របស់វា។", exercisesWord: "លំហាត់", reviewWord: "ពិនិត្យឡើងវិញ", solveWord: "ដោះស្រាយ",
     status_pending: "កំពុងរង់ចាំ", status_in_progress: "កំពុងធ្វើ", status_completed: "បានបញ្ចប់",
     exerciseXofY: "លំហាត់ {i} នៃ {n}", adaptiveWord: "សម្របតាមកម្រិត",
     typeAnswer: "វាយចម្លើយរបស់អ្នក…", checkAnswer: "ពិនិត្យចម្លើយ",
@@ -6059,10 +7193,8 @@ const STRINGS = {
     tryAgain: "សាកល្បងម្តងទៀត", nextExercise: "លំហាត់បន្ទាប់", backToList: "ត្រឡប់ទៅបញ្ជី",
     // Universities
     universitiesTitle: "ការត្រៀមប្រឡងចូលសាកលវិទ្យាល័យ និងអាហារូបករណ៍",
-    universitiesDesc: "ចុចលើសាកលវិទ្យាល័យមួយ ដើម្បីមើលសំណុំលំហាត់ដែលបានចេញផ្សាយ និងលំហាត់ដែលច្រើនតែជួប។",
-    viewPracticeSets: "មើលសំណុំលំហាត់ និងលំហាត់ទូទៅ", allUniversities: "សាកលវិទ្យាល័យទាំងអស់",
-    readinessWord: "កម្រិតត្រៀមខ្លួន", publishedSets: "សំណុំលំហាត់ដែលបានចេញផ្សាយ", officialWord: "ផ្លូវការ", startSet: "ចាប់ផ្តើមសំណុំលំហាត់",
-    commonExercises: "លំហាត់ទូទៅក្នុងការប្រឡងនេះ", frequencyNote: "ភាពញឹកញាប់បង្ហាញពីរបៀបដែលប្រធានបទនីមួយៗបានលេចឡើងក្នុងក្រដាសប្រឡងថ្មីៗ។",
+    universitiesDesc: "ចុចលើសាកលវិទ្យាល័យមួយ ដើម្បីមើលជំនាញ ព័ត៌មានចូលរៀន និងពិន្ទុភាពសមស្រប។",
+    viewPracticeSets: "មើលព័ត៌មានលម្អិតសាកលវិទ្យាល័យ", allUniversities: "សាកលវិទ្យាល័យទាំងអស់",
     majorsOffered: "ជំនាញដែលមាន", majorsWord: "ជំនាញ",
     // Progress
     progressDesc: "ស្ថិតិ ការវិភាគពេញលេញរបស់អ្នក និងទីតាំងរបស់អ្នកឈរ។",
