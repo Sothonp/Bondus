@@ -1,6 +1,6 @@
 # EduAI Cambodia — Frontend Prototype
 
-AI-powered learning platform for Cambodian students (Grade 9 / BAC II, university
+AI-powered learning platform for Cambodian students (Grade 12 / BAC II, university
 entrance, language tests). React + Vite + Tailwind v4 frontend, plus a local
 FastAPI RAG server that powers the **AI Coach** (Study Help) with answers grounded
 in the Grade 12 math curriculum, in Khmer or English, with LaTeX formulas.
