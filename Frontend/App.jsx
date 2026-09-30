@@ -572,7 +572,69 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-scroll::-webkit-scrollbar-thumb{ background:var(--line); border-radius:99px; }
 .eai-pick{ transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease; cursor:pointer; }
 .eai-pick:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
-@media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
+
+/* Streak pill flame: an organic, irregular flicker (scale/skew/rotate all drift out of sync with
+   each other) plus a pulsing ember glow, looping forever — reads as a living flame rather than a
+   metronomic pulse. */
+.eai-fx-fire{ display:inline-flex; transform-origin:50% 92%; animation:eai-fire-flicker 1.7s ease-in-out infinite; }
+/* Same flicker, stretched to twice the duration — for a larger, more prominent flame (like the
+   Dashboard streak card) where a slow, gentle flicker reads better than the pill's quicker one. */
+.eai-fx-fire-slow{ display:inline-flex; transform-origin:50% 92%; animation:eai-fire-flicker 3.4s ease-in-out infinite; }
+@keyframes eai-fire-flicker{
+  0%   { transform:scale(1,1) rotate(0deg) skewX(0deg); filter:drop-shadow(0 0 2px var(--ember)) brightness(1); }
+  13%  { transform:scale(1.1,0.9) rotate(-4deg) skewX(2deg); filter:drop-shadow(0 0 6px var(--ember)) brightness(1.2); }
+  27%  { transform:scale(0.93,1.08) rotate(3deg) skewX(-2deg); filter:drop-shadow(0 0 3px var(--ember)) brightness(0.92); }
+  41%  { transform:scale(1.07,0.95) rotate(-2deg) skewX(1deg); filter:drop-shadow(0 0 7px var(--ember)) brightness(1.25); }
+  56%  { transform:scale(0.96,1.06) rotate(4deg) skewX(-1deg); filter:drop-shadow(0 0 3px var(--ember)) brightness(0.97); }
+  70%  { transform:scale(1.08,0.93) rotate(-3deg) skewX(2deg); filter:drop-shadow(0 0 6px var(--ember)) brightness(1.15); }
+  85%  { transform:scale(0.97,1.04) rotate(1deg) skewX(-1deg); filter:drop-shadow(0 0 4px var(--ember)) brightness(1.05); }
+  100% { transform:scale(1,1) rotate(0deg) skewX(0deg); filter:drop-shadow(0 0 2px var(--ember)) brightness(1); }
+}
+
+/* XP pill lightning: mostly still, punctuated by two quick bright strikes per loop (a double-flash
+   strobe, like a real bolt), instead of a smooth rhythmic pulse. */
+.eai-fx-bolt{ display:inline-flex; animation:eai-bolt-flicker 2.6s ease-in-out infinite; }
+@keyframes eai-bolt-flicker{
+  0%, 38%, 53%, 78%, 100% { filter:drop-shadow(0 0 1px var(--gold)) brightness(1); opacity:1; }
+  40%  { filter:drop-shadow(0 0 3px var(--gold)) brightness(1.3); opacity:.9; }
+  43%  { filter:drop-shadow(0 0 9px #fff59d) brightness(2); opacity:1; }
+  46%  { filter:drop-shadow(0 0 2px var(--gold)) brightness(0.9); opacity:.85; }
+  50%  { filter:drop-shadow(0 0 10px #fff59d) brightness(2.1); opacity:1; }
+  80%  { filter:drop-shadow(0 0 6px var(--gold)) brightness(1.5); opacity:1; }
+}
+
+/* Level pill trending-up arrow: a gentle climbing drift — eases upward with a brightening glow,
+   then resets — evoking a graph line (or rocket) actually ascending, looping forever. */
+.eai-fx-climb{ display:inline-flex; animation:eai-climb-drift 2s ease-in-out infinite; }
+@keyframes eai-climb-drift{
+  0%   { transform:translateY(0) scale(1); filter:drop-shadow(0 0 1px var(--primary)) brightness(1); }
+  35%  { transform:translateY(-2px) scale(1.04); filter:drop-shadow(0 0 4px var(--primary)) brightness(1.1); }
+  60%  { transform:translateY(-3.5px) scale(1.07); filter:drop-shadow(0 0 6px var(--primary)) brightness(1.2); }
+  80%  { transform:translateY(-1px) scale(1.03); filter:drop-shadow(0 0 3px var(--primary)) brightness(1.08); }
+  100% { transform:translateY(0) scale(1); filter:drop-shadow(0 0 1px var(--primary)) brightness(1); }
+}
+/* Explore-tile icon badges (Dashboard's Practice/Universities/Browse/Progress cards): a soft glow
+   pulse behind the icon plus a synced brightness flash on the icon itself, tinted per-tile via
+   --icon-glow (each tile already has its own accent color) rather than a bespoke keyframe set per
+   color like the header pill effects above. --icon-glow-delay staggers the four tiles so they
+   breathe out of sync instead of flashing in robotic unison. */
+.eai-icon-glow{ position:relative; }
+.eai-icon-glow::before{
+  content:""; position:absolute; inset:-10px; border-radius:16px;
+  background:radial-gradient(circle, var(--icon-glow, var(--primary)) 0%, transparent 70%);
+  opacity:.22; animation:eai-icon-glow-pulse 2.6s ease-in-out infinite; animation-delay:var(--icon-glow-delay, 0s);
+  pointer-events:none; z-index:0;
+}
+.eai-icon-glow svg{ position:relative; z-index:1; animation:eai-icon-glow-flash 2.6s ease-in-out infinite; animation-delay:var(--icon-glow-delay, 0s); }
+@keyframes eai-icon-glow-pulse{
+  0%, 100%{ opacity:.18; transform:scale(.85); }
+  50%{ opacity:.5; transform:scale(1.18); }
+}
+@keyframes eai-icon-glow-flash{
+  0%, 100%{ filter:drop-shadow(0 0 0 transparent); }
+  50%{ filter:drop-shadow(0 0 6px var(--icon-glow, var(--primary))); }
+}
+@media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } .eai-fx-fire,.eai-fx-fire-slow,.eai-fx-bolt,.eai-fx-climb,.eai-icon-glow::before,.eai-icon-glow svg{ animation:none; } }
 
 /* ── Liquid glass button (High School track — trial rollout) ──
    A frosted, refractive replacement for a flat-color button: translucent tinted glass at rest
@@ -706,12 +768,9 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-hero-card{ position:relative; overflow:hidden; border-radius:22px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); display:flex; }
 .eai-hero-content{ position:relative; z-index:3; padding:32px; flex:1 1 auto; min-width:0; }
 @media (max-width:640px){ .eai-hero-content{ padding:24px; } }
-.eai-hero-illustration{ position:relative; flex:0 0 42%; display:none; overflow:hidden; }
-@media (min-width:768px){ .eai-hero-illustration{ display:block; } }
-.eai-hero-image{ position:absolute; top:-15%; left:0; width:110%; height:130%; object-fit:cover; object-position:left center; z-index:1; opacity:.9; }
-.theme-dark .eai-hero-image{ filter:invert(1) brightness(1.6); opacity:.75; }
-.eai-hero-divider{ position:absolute; inset:0; z-index:2; pointer-events:none; background:var(--primary);
-  clip-path:polygon(10% 0%, 17% 0%, -9% 100%, -16% 100%); }
+.eai-hero-mascot{ position:relative; z-index:3; flex:0 0 92px; display:flex; align-items:flex-end; justify-content:center; padding:14px 12px 0 0; }
+@media (min-width:480px){ .eai-hero-mascot{ flex-basis:120px; padding-right:18px; } }
+@media (min-width:768px){ .eai-hero-mascot{ flex-basis:172px; padding:22px 30px 0 0; } }
 .eai-hero-greeting{ font-size:14px; color:var(--gold); }
 .eai-hero-title{ font-family:'Sora', system-ui, sans-serif; font-size:28px; font-weight:800; color:var(--ink); margin-top:4px; letter-spacing:-.01em; }
 @media (max-width:640px){ .eai-hero-title{ font-size:24px; } }
@@ -848,7 +907,52 @@ input.eai-input::placeholder{ color:var(--muted); }
   75% { transform:rotate(-3deg) scaleY(1.01); }
 }
 
+/* The interactive mascot's resting loop: anchored in place (no horizontal drift at all — only
+   translateY/rotate/scaleY), reading as a gentle breathing bounce rather than the character
+   sliding around its box. This is the default state for LivingMascot (Welcome screen). */
+.eai-mascot-living .eai-mascot-img{ animation:eai-mascot-living 3s ease-in-out infinite; }
+@keyframes eai-mascot-living{
+  0%, 100% { transform:translateY(0) rotate(0deg) scaleY(1); }
+  25%  { transform:translateY(-4px) rotate(3deg) scaleY(1.015); }
+  50%  { transform:translateY(-6px) rotate(0deg) scaleY(1.02); }
+  75%  { transform:translateY(-2px) rotate(-3deg) scaleY(1.01); }
+}
+
+/* One-shot "wave hello" gesture, triggered by the mascot's Wave button. No separate arm layer to
+   swing, so this is a friendly whole-body wiggle (rotate/scale only, anchored) rather than a
+   literal arm-raise — still reads as an energetic greeting. */
+.eai-mascot-wave .eai-mascot-img{ animation:eai-mascot-wave .9s ease-in-out 1; }
+@keyframes eai-mascot-wave{
+  0%   { transform:rotate(0deg) scale(1); }
+  15%  { transform:rotate(-9deg) scale(1.03); }
+  30%  { transform:rotate(7deg) scale(1.03); }
+  45%  { transform:rotate(-7deg) scale(1.02); }
+  60%  { transform:rotate(5deg) scale(1.02); }
+  75%  { transform:rotate(-3deg) scale(1.01); }
+  100% { transform:rotate(0deg) scale(1); }
+}
+
 .eai-mascot-hover .eai-mascot-img{ animation:none; transform:rotate(-6deg) scale(1.06); transition:transform .25s ease-out; }
+
+/* Toggled directly on OwlMascot's pointTargetRef element while the owl's "point" state is aiming
+   at it — a glow ring + slight scale-up, so the gesture visibly lands on something. */
+.eai-mascot-pointed{ box-shadow:0 0 0 4px var(--primary-soft), var(--shadow) !important; transform:scale(1.04); }
+
+/* Duolingo-style MCQ layout: owl beside a bordered question card, options as full-width stacked
+   rows instead of a plain grid. Stacks (mascot above card) below the sm breakpoint. */
+.eai-ex-layout{ display:flex; align-items:flex-start; gap:18px; }
+.eai-ex-mascot{ width:150px; flex-shrink:0; }
+.eai-ex-card{ flex:1; min-width:0; background:var(--card); border:2px solid color-mix(in srgb, var(--primary) 28%, var(--line)); border-radius:26px; padding:24px 26px; box-shadow:var(--shadow); }
+.eai-ex-qlabel{ font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--primary); }
+.eai-ex-question{ font-size:19px; font-weight:800; margin:6px 0 18px; line-height:1.35; }
+.eai-ex-options{ display:flex; flex-direction:column; gap:10px; }
+.eai-ex-option{ width:100%; text-align:left; padding:14px 18px; border-radius:16px; font-size:14px; font-weight:600; display:flex; align-items:center; justify-content:space-between; gap:10px; transition:border-color .12s ease, background .12s ease, transform .1s ease; }
+.eai-ex-option:active:not(:disabled){ transform:translateY(1px); }
+@media (max-width:640px){
+  .eai-ex-layout{ flex-direction:column; align-items:center; }
+  .eai-ex-mascot{ width:120px; }
+  .eai-ex-card{ width:100%; padding:20px; }
+}
 
 .eai-mascot-happy .eai-mascot-img{ animation:eai-mascot-happy .7s ease-in-out 1; }
 @keyframes eai-mascot-happy{
@@ -1007,10 +1111,11 @@ function Ring({ value, size = 60, stroke = 7, color = "var(--gold)", children })
   );
 }
 
-function Pill({ icon: Icon, color, soft, label, value }) {
+function Pill({ icon: Icon, color, soft, label, value, effect }) {
+  const fxClass = effect === "fire" ? "eai-fx-fire" : effect === "bolt" ? "eai-fx-bolt" : effect === "climb" ? "eai-fx-climb" : "";
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: soft }}>
-      <Icon size={16} style={{ color }} />
+      <span className={fxClass}><Icon size={16} style={{ color }} /></span>
       <span className={`text-sm font-bold eai-display ${kmClass(value)}`} style={{ color: "var(--ink)" }}>{value}</span>
       <span className={`text-xs eai-muted hidden sm:inline ${kmClass(label)}`}>{label}</span>
     </div>
@@ -1029,10 +1134,12 @@ function CardHead({ title, kh, action }) {
   );
 }
 
-/* White dashboard hero card: greeting + actions on the left, a handwritten-formula illustration on
-   the right behind a bold diagonal purple divider. The illustration is purely decorative (empty alt,
-   aria-hidden) and is hidden below the `md` breakpoint so it never competes with the text on mobile. */
-function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, onAskCoach, lang = "en" }) {
+/* White dashboard hero card: greeting + actions on the left, the animated owl mascot beside the
+   message on the right — always visible (just smaller on narrow phones) rather than hidden below a
+   breakpoint, since it's compact enough not to crowd the text/buttons. No pointTargetRef here (no
+   bubble to aim at); the "point" pose just falls back to its fixed default angle, which still reads
+   fine as a generic friendly gesture as it cycles through the rest of its idle/wave/walk/dance loop. */
+function WelcomeHeroCard({ userName, greeting, message, onStartPlan, onAskCoach, lang = "en" }) {
   const firstName = (userName || "").split(" ")[0];
   return (
     <div className="eai-hero-card">
@@ -1049,12 +1156,9 @@ function WelcomeHeroCard({ userName, greeting, message, imageUrl, onStartPlan, o
           </button>
         </div>
       </div>
-      {imageUrl && (
-        <div className="eai-hero-illustration">
-          <img src={imageUrl} alt="" aria-hidden="true" className="eai-hero-image" />
-          <div className="eai-hero-divider" />
-        </div>
-      )}
+      <div className="eai-hero-mascot" aria-hidden="true">
+        <OwlMascot />
+      </div>
     </div>
   );
 }
@@ -1129,6 +1233,18 @@ function OnboardingProgress({ step, lang = "en", stepLabels, stepLabelsKm }) {
 }
 
 function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, children, lang = "en", setLang, mascotState = "idle" }) {
+  const bubbleRef = useRef(null);
+  const owlTrigger = useRef({ type: "no", nonce: 0, duration: 1.3 });
+  const prevMascotState = useRef(mascotState);
+  useEffect(() => {
+    // Bridges the older idle/happy/sad/... state prop (still driven by real validation events,
+    // e.g. Login's shake-on-error) into a one-shot "no" head-shake on the rigged owl.
+    if (mascotState === "sad" && prevMascotState.current !== "sad") {
+      owlTrigger.current = { type: "no", nonce: owlTrigger.current.nonce + 1, duration: 1.3 };
+    }
+    prevMascotState.current = mascotState;
+  }, [mascotState]);
+
   return (
     <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
       <style>{STYLES}</style>
@@ -1157,9 +1273,9 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
             {(title || description) && (
               <div className="eai-ob-mascot-row">
                 <div className="eai-ob-mascot-avatar">
-                  <Mascot src="/logos/Bondus_mascot_headphones_transparent.png" state={mascotState} fill />
+                  <OwlMascot pointTargetRef={bubbleRef} triggerRef={owlTrigger} />
                 </div>
-                <div className="eai-ob-bubble">
+                <div className="eai-ob-bubble" ref={bubbleRef}>
                   {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
                   {description && <p className={`eai-ob-desc ${lang === "km" ? "eai-km" : ""}`}>{description}</p>}
                 </div>
@@ -1289,44 +1405,400 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    is already saved in this browser — logging out (see App's handleLogout) intentionally leaves
    that data in place so it can be recovered here later. */
 
-/* Small confetti burst used by Mascot's "celebration" state — a handful of colored particles
-   flying outward and fading, randomized once per mount so repeated celebrations don't look
-   identical. Pure CSS animation driven by --dx/--dy/--rot custom properties per particle. */
-const CONFETTI_COLORS = ["var(--primary)", "var(--gold)", "var(--jade)", "var(--ember)"];
-function ConfettiBurst() {
-  const particles = useMemo(() => Array.from({ length: 14 }, (_, i) => {
-    const angle = (Math.PI * 2 * i) / 14 + (Math.random() * 0.5 - 0.25);
-    const dist = 55 + Math.random() * 45;
-    return {
-      id: i,
-      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-      dx: `${Math.cos(angle) * dist}px`,
-      dy: `${Math.sin(angle) * dist - 18}px`,
-      rot: `${Math.round(Math.random() * 360)}deg`,
-      delay: `${Math.random() * 0.12}s`,
+/* Genuinely-rigged SVG owl mascot — independent parts (head, ears, arms, feet, eyes) driven by a
+   small spring-physics system, ported from a standalone HTML/SVG/JS prototype into React: the SVG
+   markup became JSX (camelCased presentation attributes; per-instance-unique gradient/clip ids via
+   a random suffix, so mounting this twice on one page can't collide), and the animation — spring
+   step, per-state pose(), the auto idle/wave/point/dance/walk/jump sequencer, blinking, and the
+   render loop — moved unchanged into a single mount-once useEffect that grabs each part through
+   refs instead of document.getElementById. Always runs the built-in "auto" behavior sequence;
+   clicking the owl makes it jump on top of that, exactly like the prototype's SVG click handler.
+   `pointTargetRef`, when given, is what the "point" state aims its arm/eyes at — re-aimed every
+   frame via getBoundingClientRect + getScreenCTM so it tracks correctly even if the target moves
+   or the layout changes; the target also gets an "eai-mascot-pointed" class toggled on it while
+   pointed at, for a highlight. No mode buttons are exposed here — see the removed Wave/Cheer/Idle
+   controls this replaced. */
+function OwlMascot({ pointTargetRef, triggerRef }) {
+  const uid = useRef(Math.random().toString(36).slice(2, 8)).current;
+  const refs = useRef({});
+  const setRef = (name) => (el) => { refs.current[name] = el; };
+
+  useEffect(() => {
+    const $ = (name) => refs.current[name];
+    const TAU = Math.PI * 2;
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const lerp = (a, b, k) => a + (b - a) * k;
+    const sm = (k) => k * k * (3 - 2 * k);
+    const nowS = () => performance.now() / 1000;
+
+    const cfg = {
+      x: [140, 18], y: [380, 26], rot: [160, 12], sx: [260, 15], sy: [260, 15], hr: [170, 11], hy: [200, 14],
+      aL: [200, 13], aR: [200, 13], fL: [300, 22], fR: [300, 22], hp: [120, 14], eL: [90, 7], eR: [90, 7],
+      gL: [260, 20], gR: [260, 20], lk: [160, 14], lv: [160, 14],
     };
-  }), []);
+    const init = { sx: 1, sy: 1, aL: 10, aR: 10 };
+    const P = {};
+    Object.keys(cfg).forEach((k) => {
+      const v = init[k] !== undefined ? init[k] : 0;
+      P[k] = { x: v, v: 0, t: v, k: cfg[k][0], c: cfg[k][1] };
+    });
+    function step(dt) {
+      const n = 2, h = dt / n;
+      for (let i = 0; i < n; i++) {
+        for (const k in P) {
+          const p = P[k];
+          p.v += ((p.t - p.x) * p.k - p.v * p.c) * h;
+          p.x += p.v * h;
+        }
+      }
+    }
+
+    const svgEl = refs.current.svg;
+    const aim = { dir: 1, ang: 100, lv: 0 };
+    function svgToScreen(x, y) {
+      const pt = svgEl.createSVGPoint(); pt.x = x; pt.y = y;
+      return pt.matrixTransform(svgEl.getScreenCTM());
+    }
+    function aimAt(el) {
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const tx = r.left + r.width / 2, ty = r.top + r.height / 2;
+      const sR = svgToScreen(260 + 58, 490 - 104), sL = svgToScreen(260 - 58, 490 - 104);
+      const eye = svgToScreen(260, 490 - 186);
+      const dir = tx > (sR.x + sL.x) / 2 ? 1 : -1;
+      const s = dir > 0 ? sR : sL;
+      const dx = tx - s.x, dy = ty - s.y;
+      aim.dir = dir;
+      aim.ang = clamp(Math.atan2(Math.abs(dx), dy) * 180 / Math.PI, 35, 170);
+      aim.lv = clamp((ty - eye.y) / 220, -1, 1);
+    }
+
+    let walkX = 0, walkDir = 1;
+    function pose(s, t) {
+      const d = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, hr: 0, hy: 0, aL: 10, aR: 10, fL: 0, fR: 0, hp: 0, gL: 0, gR: 0, lk: 0, lv: 0 };
+      const br = Math.sin(t * TAU / 2.4);
+      let c, sh, a, b, u, k, tilt, up, w, beat, pu, ang, poke, dc;
+
+      if (s === "idle") {
+        sh = Math.sin(t * TAU / 4.8);
+        d.sy = 1 + .022 * br; d.sx = 1 - .012 * br;
+        d.rot = sh * 1.6; d.x = sh * 7;
+        d.fL = Math.max(0, sh) * 4; d.fR = Math.max(0, -sh) * 4;
+        tilt = clamp(Math.sin(t * TAU / 7) * 2.2, 0, 1);
+        d.hr = -sh * 2.2 + tilt * 9; d.hp = tilt;
+        d.aL = 10 + br * 1.5; d.aR = 10 + br * 1.5 + sh * 2;
+      } else if (s === "wave") {
+        up = sm(clamp(t / .35, 0, 1));
+        d.sy = 1 + .02 * br; d.sx = 1 - .01 * br;
+        d.aR = lerp(10, 128, up) + Math.sin(t * TAU * 2.4) * 18 * up;
+        d.aL = 10 + br * 1.5;
+        d.hr = up * 9; d.hp = up; d.rot = -up * 2.5; d.x = -up * 6;
+      } else if (s === "point") {
+        pu = sm(clamp(t / .3, 0, 1));
+        poke = Math.sin(t * TAU * 1.7) * 5 * pu;
+        ang = lerp(10, aim.ang, pu) + poke;
+        d.sy = 1 + .02 * br; d.sx = 1 - .01 * br;
+        if (aim.dir > 0) { d.aR = ang; d.gR = pu; d.aL = 10 + br * 1.5; }
+        else { d.aL = ang; d.gL = pu; d.aR = 10 + br * 1.5; }
+        d.hr = aim.dir * 7 * pu; d.rot = aim.dir * 3 * pu; d.x = aim.dir * 5 * pu;
+        d.lk = aim.dir * pu; d.lv = aim.lv * pu; d.hp = 0;
+      } else if (s === "no") {
+        dc = Math.exp(-t * 1.6);
+        d.hr = Math.sin(t * TAU * 3) * 12 * dc; d.sy = 1 + .02 * br; d.hp = 0;
+      } else if (s === "walk") {
+        c = t * TAU * 1.5; w = Math.sin(c);
+        d.fL = Math.max(0, w) * 15; d.fR = Math.max(0, -w) * 15;
+        d.rot = w * 5 + walkDir * 3; d.y = -Math.abs(w) * 6;
+        d.aL = 18 - w * 24; d.aR = 18 + w * 24;
+        d.hr = -w * 3; d.hp = .3;
+        d.sy = 1 + .02 * Math.cos(2 * c); d.sx = 1 - .012 * Math.cos(2 * c);
+        d.x = walkX;
+      } else if (s === "dance") {
+        beat = t * 1.9;
+        a = Math.sin(Math.PI * beat); b = Math.abs(a);
+        d.y = -b * 26; d.sy = .9 + .16 * b; d.sx = 1.08 - .14 * b;
+        d.rot = a * 8; d.x = a * 10;
+        d.hr = Math.sin(Math.PI * beat + 1) * 11; d.hy = -b * 5;
+        d.aL = 85 + 55 * a; d.aR = 85 - 55 * a;
+        d.fL = Math.max(0, a) * 12; d.fR = Math.max(0, -a) * 12; d.hp = 1;
+      } else if (s === "jump") {
+        u = t % 1.9;
+        if (u < .28) {
+          k = sm(u / .28);
+          d.sy = 1 - .2 * k; d.sx = 1 + .14 * k; d.aL = d.aR = 10 - 22 * k; d.hp = .4;
+        } else if (u < 1.0) {
+          k = (u - .28) / .72;
+          d.y = -112 * 4 * k * (1 - k);
+          d.sy = lerp(1.14, 1, clamp(k * 2, 0, 1)); d.sx = 2 - d.sy;
+          d.aL = d.aR = 150; d.fL = d.fR = 10; d.hp = 1;
+          d.rot = Math.sin(k * TAU) * 8; d.hr = -Math.sin(k * TAU) * 6;
+        } else if (u < 1.25) {
+          k = (u - 1.0) / .25;
+          d.sy = .82 + .1 * k; d.sx = 1.16 - .1 * k; d.aL = d.aR = lerp(60, 10, k); d.hp = 1;
+        } else {
+          k = (u - 1.25) / .65;
+          d.hr = Math.sin(k * TAU * 1.5) * 6 * (1 - k); d.hp = 1 - k * .6;
+          d.aL = d.aR = 10 + (1 - k) * 20;
+        }
+      }
+      return d;
+    }
+
+    const seq = [["idle", 4], ["wave", 3.2], ["idle", 1], ["point", 4], ["idle", 1], ["dance", 7.6], ["idle", 1], ["walk", 6.5], ["idle", 1], ["jump", 5.7]];
+    const seqTotal = seq.reduce((s, e) => s + e[1], 0);
+    let mode = "auto", over = null, cur = "idle", curStart = 0, t0 = nowS();
+    // Read fresh every frame rather than snapshotting once: the target (the Welcome screen's
+    // speech bubble) remounts on a `key={text}` change every time its message rotates, which
+    // would otherwise leave this pointed at a detached DOM node after the first rotation.
+    let prevAimEl = null;
+    // External one-shot reactions (e.g. a form-validation error) come through triggerRef rather
+    // than a prop the effect depends on, so a parent can request one mid-sequence without
+    // tearing down and restarting this whole rig; read fresh each frame, same as pointTargetRef.
+    let lastTriggerNonce = triggerRef?.current?.nonce ?? 0;
+
+    function pick(now) {
+      if (over) { if (now < over.until) return over.s; over = null; }
+      if (mode !== "auto") return mode;
+      let m = (now - t0) % seqTotal;
+      for (let i = 0; i < seq.length; i++) { if (m < seq[i][1]) return seq[i][0]; m -= seq[i][1]; }
+      return "idle";
+    }
+
+    let nextBlink = 2, blinkStart = -1, dbl = false;
+    function blinkScale(now) {
+      if (blinkStart < 0 && now >= nextBlink) blinkStart = now;
+      let sc = 1;
+      if (blinkStart >= 0) {
+        const k = (now - blinkStart) / .15;
+        if (k >= 1) {
+          blinkStart = -1;
+          if (dbl) { dbl = false; nextBlink = now + .12; }
+          else { nextBlink = now + 2 + Math.random() * 3; dbl = Math.random() < .25; }
+        } else sc = 1 - .92 * Math.sin(Math.PI * k);
+      }
+      return sc;
+    }
+
+    const f = (n) => n.toFixed(2);
+    let last = nowS();
+    let rafId, hlOn = false;
+
+    function frame(ts) {
+      const now = ts / 1000;
+      const dt = Math.min(.05, Math.max(.001, now - last)); last = now;
+
+      if (triggerRef?.current && triggerRef.current.nonce !== lastTriggerNonce) {
+        lastTriggerNonce = triggerRef.current.nonce;
+        over = { s: triggerRef.current.type, until: now + (triggerRef.current.duration || 1.3) };
+      }
+
+      const s = pick(now);
+      if (s !== cur) { cur = s; curStart = now; }
+      const t = now - curStart;
+
+      if (cur === "walk") {
+        walkX += walkDir * 72 * dt;
+        if (walkX > 75) { walkX = 75; walkDir = -1; }
+        if (walkX < -75) { walkX = -75; walkDir = 1; }
+      }
+      const aimEl = pointTargetRef?.current || null;
+      if (aimEl !== prevAimEl) { prevAimEl?.classList.remove("eai-mascot-pointed"); prevAimEl = aimEl; hlOn = false; }
+      if (cur === "point") aimAt(aimEl);
+
+      const isPoint = cur === "point";
+      if (isPoint !== hlOn) { hlOn = isPoint; aimEl?.classList.toggle("eai-mascot-pointed", isPoint); }
+
+      const d = pose(cur, t);
+      for (const k in d) P[k].t = d[k];
+      P.eL.t = -P.hr.x * .5 + P.y.v * .03 + Math.sin(now * 3) * 1.5;
+      P.eR.t = -P.hr.x * .5 - P.y.v * .03 - Math.sin(now * 3 + 1) * 1.5;
+      step(dt);
+
+      $("move").setAttribute("transform", `translate(${f(P.x.x)} ${f(P.y.x)}) rotate(${f(P.rot.x)}) scale(${f(P.sx.x)} ${f(P.sy.x)})`);
+      $("head").setAttribute("transform", `translate(0 ${f(P.hy.x)}) rotate(${f(P.hr.x)} 0 -130)`);
+      $("earL").setAttribute("transform", `rotate(${f(clamp(P.eL.x, -25, 25))} -84 -268)`);
+      $("earR").setAttribute("transform", `rotate(${f(clamp(P.eR.x, -25, 25))} 84 -268)`);
+      $("armL").setAttribute("transform", `translate(-58 -104) rotate(${f(P.aL.x)})`);
+      $("armR").setAttribute("transform", `translate(58 -104) rotate(${f(-P.aR.x)})`);
+      $("fingL").setAttribute("transform", `translate(0 62) scale(${f(clamp(P.gL.x, 0, 1.15))})`);
+      $("fingR").setAttribute("transform", `translate(0 62) scale(${f(clamp(P.gR.x, 0, 1.15))})`);
+      $("footL").setAttribute("transform", `translate(0 ${f(-Math.max(0, P.fL.x))})`);
+      $("footR").setAttribute("transform", `translate(0 ${f(-Math.max(0, P.fR.x))})`);
+
+      const happy = P.hp.x > .5;
+      $("eyesOpen").setAttribute("display", happy ? "none" : "inline");
+      $("eyesHappy").setAttribute("display", happy ? "inline" : "none");
+      const bs = blinkScale(now), lx = P.lk.x * 7, ly = P.lv.x * 5;
+      $("eyeL").setAttribute("transform", `translate(${f(-42 + lx)} ${f(-186 + ly)}) scale(1 ${f(bs)})`);
+      $("eyeR").setAttribute("transform", `translate(${f(42 + lx)} ${f(-186 + ly)}) scale(1 ${f(bs)})`);
+      const cr = 16 + 5 * clamp(P.hp.x, 0, 1);
+      $("cheekL").setAttribute("r", f(cr)); $("cheekR").setAttribute("r", f(cr));
+
+      const sc = clamp(1 + P.y.x / 320, .5, 1.1);
+      $("shadow").setAttribute("cx", f(260 + P.x.x));
+      $("shadow").setAttribute("rx", f(96 * sc));
+      $("shadow").setAttribute("opacity", f(.03 + .15 * sc));
+
+      rafId = requestAnimationFrame(frame);
+    }
+    rafId = requestAnimationFrame(frame);
+
+    const onClick = () => { over = { s: "jump", until: nowS() + 1.9 }; };
+    svgEl?.addEventListener("click", onClick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      svgEl?.removeEventListener("click", onClick);
+      prevAimEl?.classList.remove("eai-mascot-pointed");
+    };
+  }, [pointTargetRef, triggerRef]);
+
   return (
-    <div className="eai-mascot-confetti" aria-hidden="true">
-      {particles.map((p) => (
-        <span key={p.id} style={{ background: p.color, "--dx": p.dx, "--dy": p.dy, "--rot": p.rot, animationDelay: p.delay }} />
-      ))}
+    <svg ref={setRef("svg")} viewBox="0 0 520 540" role="img" aria-label="Animated blue owl mascot with mint headphones"
+      style={{ display: "block", width: "100%", height: "auto", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
+      <defs>
+        <radialGradient id={`gBlue-${uid}`} cx="35%" cy="28%" r="85%">
+          <stop offset="0" stopColor="#93B9FF" />
+          <stop offset=".55" stopColor="#6A9AF3" />
+          <stop offset="1" stopColor="#4F7DE0" />
+        </radialGradient>
+        <linearGradient id={`gWhite-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" />
+          <stop offset="1" stopColor="#E6EDFB" />
+        </linearGradient>
+        <linearGradient id={`gBeak-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFD76B" />
+          <stop offset="1" stopColor="#F5A623" />
+        </linearGradient>
+        <clipPath id={`clipBody-${uid}`}><ellipse cx="0" cy="-78" rx="64" ry="68" /></clipPath>
+      </defs>
+
+      <ellipse ref={setRef("shadow")} cx="260" cy="494" rx="96" ry="14" fill="#1b2a55" opacity=".18" />
+
+      <g transform="translate(260 490)">
+        <g ref={setRef("move")}>
+          <ellipse ref={setRef("footL")} cx="-34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
+          <ellipse ref={setRef("footR")} cx="34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
+
+          <ellipse cx="0" cy="-78" rx="64" ry="68" fill={`url(#gBlue-${uid})`} />
+          <g clipPath={`url(#clipBody-${uid})`}>
+            <ellipse cx="0" cy="-98" rx="80" ry="22" fill="#2f55b8" opacity=".28" />
+            <ellipse cx="-30" cy="-40" rx="26" ry="14" fill="#fff" opacity=".12" />
+          </g>
+
+          <g ref={setRef("head")}>
+            <g ref={setRef("earL")}><path d="M -96 -258 Q -128 -300 -110 -344 Q -66 -330 -40 -290 Z" fill="#6597F1" /></g>
+            <g ref={setRef("earR")}><path d="M 96 -258 Q 128 -300 110 -344 Q 66 -330 40 -290 Z" fill="#6597F1" /></g>
+
+            <ellipse cx="0" cy="-195" rx="118" ry="100" fill={`url(#gBlue-${uid})`} />
+            <ellipse cx="-62" cy="-262" rx="38" ry="14" fill="#fff" opacity=".2" transform="rotate(-22 -62 -262)" />
+
+            <path d="M 0 -215 C -18 -240 -98 -245 -100 -185 C -100 -130 -48 -112 0 -112 C 48 -112 100 -130 100 -185 C 98 -245 18 -240 0 -215 Z" fill={`url(#gWhite-${uid})`} />
+
+            <g ref={setRef("eyesOpen")}>
+              <g ref={setRef("eyeL")} transform="translate(-42 -186)"><ellipse rx="11" ry="15" fill="#22263f" /><circle cx="-3" cy="-5" r="4" fill="#fff" /></g>
+              <g ref={setRef("eyeR")} transform="translate(42 -186)"><ellipse rx="11" ry="15" fill="#22263f" /><circle cx="-3" cy="-5" r="4" fill="#fff" /></g>
+            </g>
+            <g ref={setRef("eyesHappy")} display="none" stroke="#22263f" strokeWidth="8" strokeLinecap="round" fill="none">
+              <path d="M -60 -182 Q -42 -206 -24 -182" />
+              <path d="M 24 -182 Q 42 -206 60 -182" />
+            </g>
+
+            <circle ref={setRef("cheekL")} cx="-72" cy="-160" r="16" fill="#F7B7A3" opacity=".9" />
+            <circle ref={setRef("cheekR")} cx="72" cy="-160" r="16" fill="#F7B7A3" opacity=".9" />
+            <path d="M -17 -176 Q 0 -190 17 -176 Q 12 -152 0 -146 Q -12 -152 -17 -176 Z" fill={`url(#gBeak-${uid})`} />
+
+            <path d="M -108 -190 C -118 -360 118 -360 108 -190" stroke="#5DBB93" strokeWidth="16" fill="none" strokeLinecap="round" />
+            <path d="M -50 -306 Q 0 -329 50 -306" stroke="#F1F7F3" strokeWidth="16" fill="none" />
+            <g transform="translate(-124 -186)">
+              <ellipse rx="26" ry="44" fill="#4FB08A" />
+              <ellipse cx="-4" rx="18" ry="34" fill="#F1F7F3" />
+              <ellipse cx="-8" rx="11" ry="24" fill="#5DBB93" />
+            </g>
+            <g transform="translate(124 -186)">
+              <ellipse rx="26" ry="44" fill="#4FB08A" />
+              <ellipse cx="4" rx="18" ry="34" fill="#F1F7F3" />
+              <ellipse cx="8" rx="11" ry="24" fill="#5DBB93" />
+            </g>
+          </g>
+
+          <g ref={setRef("armL")}>
+            <rect x="-17" y="-10" width="34" height="74" rx="17" fill="#6291EE" />
+            <circle cx="0" cy="54" r="19" fill="#7FAAF7" />
+            <g ref={setRef("fingL")} transform="translate(0 62) scale(0)"><ellipse cx="0" cy="14" rx="8" ry="15" fill="#7FAAF7" /></g>
+          </g>
+          <g ref={setRef("armR")}>
+            <rect x="-17" y="-10" width="34" height="74" rx="17" fill="#6291EE" />
+            <circle cx="0" cy="54" r="19" fill="#7FAAF7" />
+            <g ref={setRef("fingR")} transform="translate(0 62) scale(0)"><ellipse cx="0" cy="14" rx="8" ry="15" fill="#7FAAF7" /></g>
+          </g>
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/* Duolingo-style speech bubble: a rounded card with a small triangular tail. Two tail variants are
+   both always in the DOM, toggled by Tailwind's `sm:` breakpoint (640px) rather than a runtime
+   width check: below it the bubble stacks above the mascot (tail points down), at/above it the
+   bubble sits beside the mascot (tail points left) — matching LivingMascot's own responsive
+   `flex-col-reverse sm:flex-row` switch below. `text` swaps with a fade/rise so a new encouraging
+   line doesn't just pop in. `bubbleRef` (optional) is attached to the card itself, so OwlMascot can
+   aim its "point" gesture at it and toggle a highlight on it directly. */
+function MascotSpeechBubble({ text, lang = "en", bubbleRef }) {
+  return (
+    <div className="eai-rise" key={text} style={{ position: "relative", maxWidth: 220 }}>
+      <div ref={bubbleRef} className={`eai-card ${kmClass(text)}`} style={{ padding: "10px 16px", fontSize: 14, fontWeight: 600, textAlign: "center", color: "var(--ink)", transition: "box-shadow .25s ease, transform .25s ease" }}>
+        {text}
+      </div>
+      {/* Mobile (<640px): bubble above the mascot, tail points down. */}
+      <div aria-hidden="true" className="sm:hidden" style={{
+        position: "absolute", left: "50%", bottom: -9, transform: "translateX(-50%)", width: 0, height: 0,
+        borderLeft: "9px solid transparent", borderRight: "9px solid transparent", borderTop: "9px solid var(--line)",
+      }} />
+      <div aria-hidden="true" className="sm:hidden" style={{
+        position: "absolute", left: "50%", bottom: -7, transform: "translateX(-50%)", width: 0, height: 0,
+        borderLeft: "7px solid transparent", borderRight: "7px solid transparent", borderTop: "7px solid var(--card)",
+      }} />
+      {/* Desktop (≥640px): bubble beside the mascot, tail points left. Two stacked border-triangles
+          (outline color behind, card color on top, 2px smaller) — the standard CSS trick for a
+          bordered directional tail. */}
+      <div aria-hidden="true" className="hidden sm:block" style={{
+        position: "absolute", left: -9, top: "50%", transform: "translateY(-50%)", width: 0, height: 0,
+        borderTop: "9px solid transparent", borderBottom: "9px solid transparent", borderRight: "9px solid var(--line)",
+      }} />
+      <div aria-hidden="true" className="hidden sm:block" style={{
+        position: "absolute", left: -7, top: "50%", transform: "translateY(-50%)", width: 0, height: 0,
+        borderTop: "7px solid transparent", borderBottom: "7px solid transparent", borderRight: "7px solid var(--card)",
+      }} />
     </div>
   );
 }
 
-/* Reusable animated mascot — one static image "acted" through whole-image CSS states rather than
-   independently-rigged parts (see the session note on why: the art is a single flattened render,
-   not separated layers). `fill` sizes it to 100%/100% of a pre-sized parent (e.g. the onboarding
-   avatar slot); omit it to size naturally off width like a normal responsive image (e.g. Welcome's
-   big illustration). States: idle | hover | happy | sad | loading | success | celebration. */
-function Mascot({ src, state = "idle", fill = false, alt = "Bondus mascot", className = "", style }) {
+/* Living mascot: a locked-in-place box (the wrapper itself never moves — the rigged SVG owl inside
+   handles its own in-place idle/wave/point/dance/walk/jump sequencing) with a speech bubble cycling
+   through encouraging lines. Responsive layout: on mobile the bubble stacks above the mascot
+   (flex-col-reverse — the bubble is the last DOM child, so reversing the column puts it first/on
+   top); at the sm breakpoint (640px) and up it switches to a side-by-side row, bubble to the
+   mascot's right. The owl's "point" state periodically aims its arm and eyes at that speech bubble
+   (and highlights it), so the gesture always has a real, present target regardless of which layout
+   is active. */
+function LivingMascot({ lang = "en" }) {
+  const [msgIdx, setMsgIdx] = useState(0);
+  const bubbleRef = useRef(null);
+  const MESSAGE_KEYS = ["mascotMsg1", "mascotMsg2", "mascotMsg3", "mascotMsg4", "mascotMsg5", "mascotMsg6"];
+
+  useEffect(() => {
+    const id = setInterval(() => setMsgIdx((i) => (i + 1) % MESSAGE_KEYS.length), 4500);
+    return () => clearInterval(id);
+  }, []);
+
   return (
-    <div className={`eai-mascot eai-mascot-${state} ${className}`} style={{ position: "relative", ...(fill ? { width: "100%", height: "100%" } : null), ...style }}>
-      <img src={src} alt={alt} className="eai-mascot-img"
-        style={fill ? { width: "100%", height: "100%", objectFit: "contain", display: "block" } : { width: "100%", height: "auto", display: "block" }} />
-      {state === "success" && <span className="eai-mascot-badge" aria-hidden="true"><Check size={14} /></span>}
-      {state === "celebration" && <ConfettiBurst />}
+    <div className="flex flex-col-reverse sm:flex-row items-center justify-center gap-3 sm:gap-5">
+      <div style={{ width: "clamp(190px, 24vw, 340px)", maxWidth: "65vw" }}>
+        <OwlMascot pointTargetRef={bubbleRef} />
+      </div>
+      <MascotSpeechBubble text={t(lang, MESSAGE_KEYS[msgIdx])} lang={lang} bubbleRef={bubbleRef} />
     </div>
   );
 }
@@ -1398,11 +1870,11 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
           </div>
         </div>
 
-        {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", flex: 1, marginTop: "24px" }}>
-          <div style={{ width: "clamp(220px, 28vw, 420px)", maxWidth: "90vw" }}>
-            <Mascot src="/logos/Bondus_mascout_nobg.png" alt="BONDUS mascot" />
-          </div>
+        {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens.
+            alignItems: flex-start (not center) keeps it up near the buttons instead of sinking to the middle of the
+            leftover flex space below. */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", width: "100%", flex: 1, marginTop: "0px" }}>
+          <LivingMascot lang={lang} />
         </div>
       </div>
     </div>
@@ -1744,7 +2216,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
         <div className="eai-card p-6 flex flex-col gap-5 justify-center">
           <div className="flex items-center gap-4">
             <div className="grid place-items-center rounded-2xl" style={{ width: 60, height: 60, background: "var(--ember-soft)" }}>
-              <Flame size={30} style={{ color: "var(--ember)" }} />
+              <span className="eai-fx-fire-slow"><Flame size={30} style={{ color: "var(--ember)" }} /></span>
             </div>
             <div>
               <p className="eai-display text-3xl font-extrabold leading-none">{p.streak}</p>
@@ -1778,9 +2250,9 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
           { icon: GraduationCap, label: t(lang, "navUniversities"), desc: t(lang, "exploreBrowseMajors"), tab: "universities", c: "var(--primary)" },
           { icon: BookOpen, label: t(lang, "browseTitle"), desc: t(lang, "exploreBrowsePast"), tab: "browse", c: "var(--ember)" },
           { icon: BarChart3, label: t(lang, "navProgress"), desc: t(lang, "exploreStats"), tab: "progress", c: "var(--gold)" },
-        ].map((c) => (
+        ].map((c, i) => (
           <button key={c.label} onClick={() => go(c.tab)} className="eai-card eai-tile eai-focus p-5 text-left flex items-center gap-3.5">
-            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}>
+            <div className="eai-icon-glow grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)", "--icon-glow": c.c, "--icon-glow-delay": `${i * 0.4}s` }}>
               <c.icon size={19} style={{ color: c.c }} />
             </div>
             <div className="min-w-0">
@@ -4308,13 +4780,16 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
   const correct = submitted && gradeAnswer(ex, choice);
   const startRef = useRef(Date.now());
   const pendingTimeRef = useRef(0);
+  const cardRef = useRef(null);
+  const owlTrigger = useRef({ type: "no", nonce: 0, duration: 1.3 });
+  const reactOwl = (type, duration) => { owlTrigger.current = { type, nonce: owlTrigger.current.nonce + 1, duration }; };
 
   const submit = () => {
     if (choice == null || String(choice).trim() === "") return;
     const isCorrect = gradeAnswer(ex, choice);
     const timeSec = Math.round((Date.now() - startRef.current) / 100) / 10;
-    if (isCorrect) { onAnswer(ex, "correct", { timeSec }); setPhase("result"); }
-    else { pendingTimeRef.current = timeSec; setPhase("mistake"); }
+    if (isCorrect) { onAnswer(ex, "correct", { timeSec }); setPhase("result"); reactOwl("jump", 1.9); }
+    else { pendingTimeRef.current = timeSec; setPhase("mistake"); reactOwl("no", 1.3); }
   };
   const chooseMistake = (mistakeType) => { onAnswer(ex, "incorrect", { timeSec: pendingTimeRef.current, mistakeType }); setPhase("result"); };
   const retry = () => { setPhase("answering"); setChoice(null); startRef.current = Date.now(); };
@@ -4322,10 +4797,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 
   return (
     <div className="space-y-5 eai-rise">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {subjectLabel(subject, lang)}</button>
-        <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "exerciseXofY").replace("{i}", index + 1).replace("{n}", total)}</span>
-      </div>
+      <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {subjectLabel(subject, lang)}</button>
 
       {banner && (
         <div className="eai-rise flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold" style={{ background: `var(--${banner.tone}-soft)`, color: `var(--${banner.tone})` }}>
@@ -4333,45 +4805,51 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
         </div>
       )}
 
-      <div className="eai-card p-6">
-        <div className="flex items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-2">
+      <div className="eai-ex-layout">
+        <div className="eai-ex-mascot">
+          <OwlMascot pointTargetRef={cardRef} triggerRef={owlTrigger} />
+        </div>
+
+        <div className="eai-ex-card" ref={cardRef}>
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <span className={`eai-ex-qlabel eai-display ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "questionWord")} {index + 1} {t(lang, "ofWord")} {total}</span>
+            <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
+          </div>
+          <div className="flex items-center gap-2 mb-3">
             <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
             <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
             {tier && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>🎯 {t(lang, "adaptiveWord")}: {tier}</span>}
           </div>
-          <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
-        </div>
 
-        <h3 className="eai-display text-lg font-bold mb-5">{ex.prompt}</h3>
+          <h3 className="eai-ex-question eai-display">{ex.prompt}</h3>
 
-        {isMcq ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {ex.options.map((opt) => {
-              const chosen = choice === opt;
-              const isAnswer = opt === ex.answer;
-              let bg = "var(--card)", bd = "var(--line)", col = "var(--ink)";
-              if (submitted) {
-                if (isAnswer) { bg = "var(--jade-soft)"; bd = "var(--jade)"; col = "var(--jade)"; }
-                else if (chosen) { bg = "var(--ember-soft)"; bd = "var(--ember)"; col = "var(--ember)"; }
-              } else if (chosen) { bg = "var(--primary-soft)"; bd = "var(--primary)"; col = "var(--primary)"; }
-              return (
-                <button key={opt} disabled={submitted} onClick={() => setChoice(opt)}
-                  className="eai-focus text-left px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-between"
-                  style={{ background: bg, border: `1.5px solid ${bd}`, color: col, cursor: submitted ? "default" : "pointer" }}>
-                  {opt}
-                  {submitted && isAnswer && <CheckCircle2 size={17} />}
-                  {submitted && chosen && !isAnswer && <XCircle size={17} />}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <input className="eai-input eai-focus w-full px-4 py-3 text-sm" placeholder={t(lang, "typeAnswer")} value={choice ?? ""}
-            disabled={submitted} onChange={(e) => setChoice(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-        )}
+          {isMcq ? (
+            <div className="eai-ex-options">
+              {ex.options.map((opt) => {
+                const chosen = choice === opt;
+                const isAnswer = opt === ex.answer;
+                let bg = "var(--card)", bd = "var(--line)", col = "var(--ink)";
+                if (submitted) {
+                  if (isAnswer) { bg = "var(--jade-soft)"; bd = "var(--jade)"; col = "var(--jade)"; }
+                  else if (chosen) { bg = "var(--ember-soft)"; bd = "var(--ember)"; col = "var(--ember)"; }
+                } else if (chosen) { bg = "var(--primary-soft)"; bd = "var(--primary)"; col = "var(--primary)"; }
+                return (
+                  <button key={opt} disabled={submitted} onClick={() => setChoice(opt)}
+                    className="eai-ex-option eai-focus"
+                    style={{ background: bg, border: `1.5px solid ${bd}`, color: col, cursor: submitted ? "default" : "pointer" }}>
+                    {opt}
+                    {submitted && isAnswer && <CheckCircle2 size={17} />}
+                    {submitted && chosen && !isAnswer && <XCircle size={17} />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <input className="eai-input eai-focus w-full px-4 py-3 text-sm" placeholder={t(lang, "typeAnswer")} value={choice ?? ""}
+              disabled={submitted} onChange={(e) => setChoice(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+          )}
 
-        {phase === "answering" && (
+          {phase === "answering" && (
           <button onClick={submit} disabled={choice == null || String(choice).trim() === ""}
             className={`eai-btn ${glass ? "eai-glass" : "text-white"} eai-focus w-full mt-5 py-3 text-sm ${lang === "km" ? "eai-km" : ""}`}
             style={glass ? undefined : { background: "var(--primary)", opacity: choice == null || String(choice).trim() === "" ? 0.5 : 1 }}>
@@ -4437,6 +4915,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -7557,6 +8036,8 @@ const STRINGS = {
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
     createAccount: "Create an account", login: "Login",
+    mascotMsg1: "Let's study together! 📚", mascotMsg2: "You've got this! 💪", mascotMsg3: "Ready when you are!",
+    mascotMsg4: "Keep that streak alive! 🔥", mascotMsg5: "Small steps, big wins!", mascotMsg6: "I believe in you!",
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
     navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress", navExplore: "Explore",
@@ -7708,6 +8189,8 @@ const STRINGS = {
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
     createAccount: "បង្កើតគណនី", login: "ចូលគណនី",
+    mascotMsg1: "តោះសិក្សាជាមួយគ្នា! 📚", mascotMsg2: "អ្នកអាចធ្វើវាបាន! 💪", mascotMsg3: "ត្រៀមខ្លួនហើយ ពេលណាក៏បាន!",
+    mascotMsg4: "រក្សានិន្នាការឱ្យបន្ត! 🔥", mascotMsg5: "ជំហានតូចៗ ជោគជ័យធំ!", mascotMsg6: "ខ្ញុំជឿជាក់លើអ្នក!",
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
     navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព", navExplore: "ស្វែងរក",
@@ -7897,7 +8380,7 @@ export default function App() {
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
   const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
@@ -8153,7 +8636,7 @@ export default function App() {
           </nav>
           <div className="p-3 space-y-2">
             <div className="eai-soft rounded-2xl p-4 text-center">
-              <Flame size={20} style={{ color: "var(--ember)", margin: "0 auto" }} />
+              <span className="eai-fx-fire" style={{ display: "block", margin: "0 auto", width: 20 }}><Flame size={20} style={{ color: "var(--ember)" }} /></span>
               <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
               <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
             </div>
@@ -8166,9 +8649,9 @@ export default function App() {
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
               <button className="lg:hidden eai-focus" onClick={() => setOpen(true)}><Menu size={22} /></button>
               <div className="hidden sm:flex items-center gap-2">
-                <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} />
-                <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" />
-                <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" />
+                <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
+                <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
+                <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" effect="climb" />
               </div>
               <div className="flex items-center gap-2 ml-auto">
                 {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
