@@ -34,7 +34,33 @@ export const REWARD_STYLES = `
 .eai-rw-actions{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:20px; }
 .eai-rw-actions .eai-btn:disabled{ opacity:.6; cursor:default; }
 
+/* ── treasure box on the Set complete screen ── */
+.eai-rw-box-wrap{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+.eai-rw-box{ position:relative; display:block; padding:0; border:0; background:none; cursor:pointer; border-radius:24px; }
+.eai-rw-box:disabled{ cursor:default; }
+.eai-rw-chest{ display:block; overflow:visible; }
+.eai-rw-box.is-idle::before{ content:""; position:absolute; inset:-14px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, color-mix(in srgb, var(--gold) 38%, transparent), transparent 68%); animation:eai-rw-pulse 2.4s ease-in-out infinite; }
+.eai-rw-box.is-idle .eai-rw-chest{ animation:eai-rw-bob 2.6s ease-in-out infinite; }
+.eai-rw-box.is-opening .eai-rw-chest{ animation:eai-rw-shake .5s ease-in-out; }
+.eai-rw-lid{ transform-box:fill-box; transform-origin:50% 100%; transition:transform .35s cubic-bezier(.3,1.4,.5,1) .45s; }
+.eai-rw-box.is-opening .eai-rw-lid, .eai-rw-box.is-opened .eai-rw-lid{ transform:translateY(-16px) scaleY(.8); }
+.eai-rw-inside{ opacity:0; transition:opacity .3s ease .45s; }
+.eai-rw-box.is-opening .eai-rw-inside, .eai-rw-box.is-opened .eai-rw-inside{ opacity:1; }
+.eai-rw-spark{ transform-box:fill-box; transform-origin:center; animation:eai-rw-twinkle 1.8s ease-in-out infinite; }
+.eai-rw-box.is-opening .eai-rw-spark, .eai-rw-box.is-opened .eai-rw-spark{ animation:none; opacity:0; }
+.eai-rw-burst{ position:absolute; left:50%; top:46%; width:160px; height:160px; margin:-80px 0 0 -80px; border-radius:50%; opacity:0; pointer-events:none;
+  background:radial-gradient(circle, #FFE7A0 0%, color-mix(in srgb, #FFD76B 45%, transparent) 38%, transparent 70%); }
+.eai-rw-box.is-opening .eai-rw-burst{ animation:eai-rw-burst .9s ease-out .4s forwards; }
+.eai-rw-claimed{ margin-top:16px; }
+@keyframes eai-rw-bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
+@keyframes eai-rw-pulse{ 0%,100%{ opacity:.55; transform:scale(.94); } 50%{ opacity:1; transform:scale(1.06); } }
+@keyframes eai-rw-shake{ 0%,100%{ transform:translateX(0) rotate(0); } 20%{ transform:translateX(-5px) rotate(-3deg); } 40%{ transform:translateX(5px) rotate(3deg); }
+  60%{ transform:translateX(-4px) rotate(-2deg); } 80%{ transform:translateX(4px) rotate(2deg); } }
+@keyframes eai-rw-twinkle{ 0%,100%{ opacity:.25; transform:scale(.6); } 50%{ opacity:1; transform:scale(1.15); } }
+@keyframes eai-rw-burst{ 0%{ opacity:0; transform:scale(.3); } 35%{ opacity:1; } 100%{ opacity:0; transform:scale(1.5); } }
+
 @media (prefers-reduced-motion: reduce){
-  .eai-rw-modal *, .eai-rw-particle{ animation:none !important; transition:none !important; }
+  .eai-rw-modal *, .eai-rw-particle, .eai-rw-box, .eai-rw-box *, .eai-rw-box::before{ animation:none !important; transition:none !important; }
 }
 `;

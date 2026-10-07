@@ -21,3 +21,7 @@ test("the level-up effect uses the shared advanceLevel", () => {
 test("the reward styles are part of the app's STYLES", () => {
   assert.match(app, /\$\{REWARD_STYLES\}/);
 });
+test("SetComplete renders the treasure box, and both callers give it the set's key", () => {
+  assert.match(app, /<TreasureBox setKey=\{setKey\}/);
+  assert.equal((app.match(/<SetComplete[\s\S]*?setKey=\{list\[members\[0\]\]\.id\}/g) || []).length, 2);
+});
