@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SLOTS, RARITIES, ITEMS, MILESTONES, RANDOM_POOL, MILESTONE_ITEM_IDS } from "./catalog.js";
-import { bonusXpFor, advanceLevel, levelFill, emptyRewards, pickReward } from "./rewardLogic.js";
+import { bonusXpFor, advanceLevel, levelFill, emptyRewards, pickReward, claimBox, equipItem, sanitizeOutfit, sanitizeRewards } from "./rewardLogic.js";
 
 test("catalog: 16 unique items, 5/3/4/4 per slot, valid rarities, both names present", () => {
   assert.equal(new Set(ITEMS.map((i) => i.id)).size, 16);
@@ -108,4 +108,92 @@ test("pickReward: every random item owned and no milestone due → null (Review 
 });
 test("pickReward: unknown ids in owned are ignored", () => {
   assert.equal(pickReward({ owned: ["nope", 7, null], ...NONE, rng: seq(0, 0) }).itemId, "hat-flower");
+});
+
+const ALL = ITEMS.map((i) => i.id);
+const P = (level, xp, xpToNext) => ({ level, xp, xpToNext });
+const run = (over = {}) => claimBox({ rewards: emptyRewards(), progress: P(1, 40, 500), longestStreak: 0, setKey: "Chemistry-1", total: 10, retried: 3, rng: () => 0, now: 1000, ...over });
+const advanceLevelFor = (xp) => ({ xp, ...advanceLevel({ level: 1, xpToNext: 500 }, xp) });   // a consistent progress at any XP
+
+test("claimBox: a claimed set returns null and pays nothing (Review Focus 1)", () => {
+  const first = run(); assert.ok(first);
+  assert.equal(run({ rewards: first.rewards }), null);
+});
+test("claimBox: the first claim pays 80 XP, grants the party hat, records the claim and leaves the outfit alone", () => {
+  const { rewards, result } = run();
+  assert.deepEqual(result, { xp: 80, flawless: false, itemId: "hat-party", source: "milestone", before: P(1, 40, 500), after: P(1, 120, 500), leveledUp: false });
+  assert.deepEqual(rewards.claimedSets, { "Chemistry-1": { at: 1000, xp: 80, itemId: "hat-party" } });
+  assert.deepEqual(rewards.owned, ["hat-party"]);
+  assert.deepEqual(rewards.outfit, emptyRewards().outfit);
+});
+test("claimBox: a flawless set pays 120", () => {
+  assert.equal(run({ retried: 0 }).result.xp, 120); assert.equal(run({ retried: 0 }).result.flawless, true);
+});
+test("claimBox: nothing left to give → +25 consolation, itemId null, claim still recorded (Review Focus 4)", () => {
+  const { result, rewards } = run({ rewards: { ...emptyRewards(), owned: ALL } });
+  assert.equal(result.itemId, null); assert.equal(result.source, null); assert.equal(result.xp, 105);
+  assert.equal(rewards.claimedSets["Chemistry-1"].itemId, null); assert.equal(rewards.owned.length, 16);
+});
+test("claimBox: a bonus can cross two levels at once (Review Focus 5)", () => {
+  const { result } = run({ progress: P(1, 499, 500), total: 40, retried: 0 });   // flawless cap → 225
+  assert.deepEqual(result.after, P(3, 724, 911)); assert.equal(result.leveledUp, true);
+});
+test("claimBox: the box's own XP counts toward a level milestone (Review Focus 5)", () => {
+  const owned = ["hat-party"];
+  const up = run({ rewards: { ...emptyRewards(), owned }, progress: P(2, 600, 675), retried: 0 });   // +120 → level 3
+  assert.deepEqual([up.result.itemId, up.result.source, up.result.after.level], ["face-round", "milestone", 3]);
+  const stay = run({ rewards: { ...emptyRewards(), owned }, progress: P(2, 500, 675), retried: 0 });  // 620 → still level 2
+  assert.equal(stay.result.source, "random");
+});
+test("claimBox: consolation XP may level up but never triggers a second pick (Review Focus 5)", () => {
+  const { result } = run({ rewards: { ...emptyRewards(), owned: ALL }, progress: P(1, 400, 500) });  // 80 + 25 → 505
+  assert.deepEqual([result.itemId, result.after.level, result.leveledUp], [null, 2, true]);
+});
+test("claimBox never leaves a level-up pending, so App's level-up effect (and its toast) stays silent (Review Focus 5)", () => {
+  for (const xp of [0, 120, 499, 674, 5515, 40000]) for (const total of [1, 10, 60]) for (const retried of [0, 2]) {
+    const { result } = run({ progress: advanceLevelFor(xp), total, retried });
+    assert.ok(result.after.xp < result.after.xpToNext);
+  }
+});
+test("claimBox: setsCompleted counts this claim, so the 10th claimed set grants the medal", () => {
+  const claimed = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`s${i}`, { at: 1, xp: 50, itemId: null }]));
+  const owned = ALL.filter((id) => id !== "extra-medal");
+  assert.equal(run({ rewards: { claimedSets: claimed, owned, outfit: emptyRewards().outfit } }).result.itemId, "extra-medal");
+});
+
+test("equipItem: equips an owned item in its own slot without mutating the input", () => {
+  const before = { ...emptyRewards(), owned: ["hat-party"] };
+  const after = equipItem(before, "hat", "hat-party");
+  assert.equal(after.outfit.hat, "hat-party"); assert.equal(before.outfit.hat, null);
+});
+test("equipItem: unowned, unknown or wrong-slot requests return the same object; null unequips", () => {
+  const r = { ...emptyRewards(), owned: ["hat-party"], outfit: { hat: "hat-party", face: null, body: null, extra: null } };
+  for (const [slot, id] of [["hat", "hat-crown"], ["hat", "nope"], ["face", "hat-party"], ["cape", "hat-party"]]) assert.equal(equipItem(r, slot, id), r);
+  assert.equal(equipItem(r, "hat", null).outfit.hat, null);
+});
+
+test("sanitizeRewards: garbage in → a fresh empty wardrobe (Review Focus 3)", () => {
+  for (const raw of [undefined, null, 5, "x", [], { claimedSets: 3, owned: "a", outfit: 7 }]) {
+    const out = sanitizeRewards(raw); assert.deepEqual(out, emptyRewards());
+  }
+});
+test("sanitizeRewards: unknown and duplicate item ids are dropped, order kept (Review Focus 3)", () => {
+  assert.deepEqual(sanitizeRewards({ owned: ["hat-party", "nope", "hat-party", "face-round"] }).owned, ["hat-party", "face-round"]);
+});
+test("sanitizeRewards: the outfit keeps only owned items that fit their slot (Review Focus 3)", () => {
+  const raw = { owned: ["face-round"], outfit: { hat: "face-round", face: "face-round", body: "nope", extra: "extra-medal" } };
+  assert.deepEqual(sanitizeRewards(raw).outfit, { hat: null, face: "face-round", body: null, extra: null });
+  assert.deepEqual(sanitizeOutfit(raw.outfit, raw.owned), { hat: null, face: "face-round", body: null, extra: null });
+});
+test("sanitizeRewards: malformed claim entries are dropped, good ones kept, and a valid wardrobe round-trips", () => {
+  const good = { at: 5, xp: 80, itemId: "hat-party" };
+  assert.deepEqual(sanitizeRewards({ claimedSets: { a: good, b: "x", c: { at: "z" } } }).claimedSets, { a: good });
+  const r = { claimedSets: { a: good }, owned: ["hat-party"], outfit: { hat: "hat-party", face: null, body: null, extra: null } };
+  assert.deepEqual(sanitizeRewards(JSON.parse(JSON.stringify(r))), r);
+});
+test("sanitizeRewards: names that only exist on Object.prototype are not items (Review Focus 3)", () => {
+  const raw = { owned: ["constructor", "toString", "__proto__", "hat-party"], claimedSets: { a: { at: 1, xp: 1, itemId: "constructor" } } };
+  const out = sanitizeRewards(raw);
+  assert.deepEqual(out.owned, ["hat-party"]);
+  assert.equal(out.claimedSets.a.itemId, null);
 });
