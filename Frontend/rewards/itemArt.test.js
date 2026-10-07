@@ -42,3 +42,9 @@ test("ItemThumb: cropped to thumbBox, named in the requested language, with ever
   assert.ok(html.includes('aria-label="អាវផាយ"'));
   assert.equal((html.match(/data-item="body-cape"/g) || []).length, 2);
 });
+test("ItemThumb: wide items get a wider frame so wings and glasses aren't tiny, tall ones stay square", () => {
+  const widthOf = (itemId) => Number(s.render(s.h(art.ItemThumb, { itemId, size: 88 })).match(/width="(\d+)"/)[1]);
+  assert.equal(widthOf("hat-party"), 88);       // taller than wide
+  assert.equal(widthOf("extra-wings"), 158);    // 2.8 : 1, capped at 1.8 × size
+  assert.equal(widthOf("face-round"), 158);
+});

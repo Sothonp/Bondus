@@ -18,3 +18,6 @@ test("App wraps the retake screen and the signed-in shell in the RewardsContext 
 test("the level-up effect uses the shared advanceLevel", () => {
   assert.match(app, /advanceLevel\(\{ level: cur\.level, xpToNext: cur\.xpToNext \}/);
 });
+test("the reward styles are part of the app's STYLES", () => {
+  assert.match(app, /\$\{REWARD_STYLES\}/);
+});

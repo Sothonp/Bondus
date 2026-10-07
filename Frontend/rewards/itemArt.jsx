@@ -315,14 +315,17 @@ export function OutfitLayers({ outfit, mount, uid = "o" }) {
   );
 }
 
-/* A small picture of one item on its own, cropped to its thumbBox. `dimmed` greys it for locked items. */
+/* A small picture of one item on its own, cropped to its thumbBox. `size` is its height; wide items (wings, glasses) get
+   a wider frame, up to 1.8 × size, so they aren't tiny in a square. `dimmed` greys it for locked items. */
 export function ItemThumb({ itemId, lang = "en", size = 64, dimmed = false }) {
   const art = artOf(itemId);
   const item = ITEM_BY_ID[itemId];
   if (!art || !item) return null;
   const outfit = { [item.slot]: itemId };
+  const [, , boxW, boxH] = art.thumbBox;
+  const width = boxW > boxH ? Math.round(size * Math.min(boxW / boxH, 1.8)) : size;
   return (
-    <svg viewBox={art.thumbBox.join(" ")} width={size} height={size} role="img" aria-label={lang === "km" ? item.nameKm : item.name}
+    <svg viewBox={art.thumbBox.join(" ")} width={width} height={size} role="img" aria-label={lang === "km" ? item.nameKm : item.name}
       style={dimmed ? { opacity: 0.4, filter: "grayscale(1)" } : undefined}>
       {MOUNTS.filter((m) => art.layers[m]).map((m) => <OutfitLayers key={m} outfit={outfit} mount={m} uid={`thumb-${itemId}`} />)}
     </svg>
