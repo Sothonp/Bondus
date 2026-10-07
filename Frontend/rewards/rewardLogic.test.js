@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SLOTS, RARITIES, ITEMS, MILESTONES, RANDOM_POOL, MILESTONE_ITEM_IDS } from "./catalog.js";
-import { bonusXpFor, advanceLevel, levelFill, emptyRewards } from "./rewardLogic.js";
+import { bonusXpFor, advanceLevel, levelFill, emptyRewards, pickReward } from "./rewardLogic.js";
 
 test("catalog: 16 unique items, 5/3/4/4 per slot, valid rarities, both names present", () => {
   assert.equal(new Set(ITEMS.map((i) => i.id)).size, 16);
@@ -58,4 +58,54 @@ test("levelFill: the xp / xpToNext ratio, clamped to 0..1, safe on bad input", (
 test("emptyRewards: a fresh object each call with an all-null outfit", () => {
   assert.deepEqual(emptyRewards(), { claimedSets: {}, owned: [], outfit: { hat: null, face: null, body: null, extra: null } });
   assert.notEqual(emptyRewards(), emptyRewards());
+});
+
+const NONE = { level: 1, setsCompleted: 0, longestStreak: 0, flawless: false };
+const seq = (...v) => { let i = 0; return () => v[i++ % v.length]; };
+
+test("pickReward: the first box guarantees the party hat whatever rng says", () => {
+  assert.deepEqual(pickReward({ owned: [], ...NONE, setsCompleted: 1, rng: seq(0.99) }), { itemId: "hat-party", source: "milestone" });
+});
+test("pickReward: milestones are granted one per call, in spec order", () => {
+  const stats = { level: 10, setsCompleted: 10, longestStreak: 7, flawless: false };
+  const owned = []; const got = [];
+  for (let i = 0; i < 7; i++) { const r = pickReward({ owned, ...stats, rng: seq(0) }); assert.equal(r.source, "milestone"); got.push(r.itemId); owned.push(r.itemId); }
+  assert.deepEqual(got, ["hat-party", "face-round", "hat-grad", "body-scarf", "extra-medal", "body-cape", "hat-crown"]);
+});
+test("pickReward: a milestone waits until its condition holds (level 4 → no graduation cap, no cape)", () => {
+  const r = pickReward({ owned: ["hat-party", "face-round"], level: 4, setsCompleted: 2, longestStreak: 3, flawless: false, rng: seq(0, 0) });
+  assert.equal(r.source, "random");
+});
+test("pickReward: random drops never come from milestone items", () => {
+  const milestone = new Set(["hat-party", "face-round", "hat-grad", "body-scarf", "extra-medal", "body-cape", "hat-crown"]);
+  for (let a = 0; a < 1; a += 0.07) for (let b = 0; b < 1; b += 0.13) {
+    const r = pickReward({ owned: [], ...NONE, rng: seq(a, b) });
+    assert.equal(r.source, "random"); assert.ok(!milestone.has(r.itemId));
+  }
+});
+test("pickReward: normal tier edges at 60 / 88 / 98 (common, rare, epic, legendary)", () => {
+  const at = (roll) => pickReward({ owned: [], ...NONE, rng: seq(roll, 0) }).itemId;
+  assert.equal(at(0.599), "hat-flower"); assert.equal(at(0.601), "face-shades");
+  assert.equal(at(0.879), "face-shades"); assert.equal(at(0.881), "hat-wizard");
+  assert.equal(at(0.979), "hat-wizard"); assert.equal(at(0.981), "extra-wings");
+});
+test("pickReward: a flawless set shifts the weights (40 / 75 / 95)", () => {
+  const at = (roll, flawless) => pickReward({ owned: [], ...NONE, flawless, rng: seq(roll, 0) }).itemId;
+  assert.equal(at(0.5, false), "hat-flower"); assert.equal(at(0.5, true), "face-shades");
+  assert.equal(at(0.949, true), "hat-wizard"); assert.equal(at(0.951, true), "extra-wings");
+});
+test("pickReward: inside a tier the second roll picks uniformly (common: 0 → flower, 0.5 → backpack, 0.99 → badge)", () => {
+  const at = (second) => pickReward({ owned: [], ...NONE, rng: seq(0, second) }).itemId;
+  assert.equal(at(0), "hat-flower"); assert.equal(at(0.5), "extra-backpack"); assert.equal(at(0.99), "extra-badge");
+});
+test("pickReward: an exhausted tier is skipped and the weights renormalise", () => {
+  const owned = ["hat-flower", "body-bowtie", "extra-backpack", "extra-badge"];
+  assert.equal(pickReward({ owned, ...NONE, rng: seq(0, 0) }).itemId, "face-shades");
+});
+test("pickReward: every random item owned and no milestone due → null (Review Focus 4)", () => {
+  const owned = ["hat-flower", "hat-wizard", "face-shades", "face-star", "body-bowtie", "body-labcoat", "extra-backpack", "extra-badge", "extra-wings"];
+  assert.equal(pickReward({ owned, ...NONE, rng: seq(0, 0) }), null);
+});
+test("pickReward: unknown ids in owned are ignored", () => {
+  assert.equal(pickReward({ owned: ["nope", 7, null], ...NONE, rng: seq(0, 0) }).itemId, "hat-flower");
 });
