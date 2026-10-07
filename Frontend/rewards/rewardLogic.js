@@ -133,3 +133,6 @@ export function sanitizeRewards(raw) {
   }
   return { claimedSets, owned, outfit: sanitizeOutfit(raw.outfit, owned) };
 }
+
+/* Do two outfits wear the same thing in every slot? (The Wardrobe uses it to tell whether the draft has unsaved changes.) */
+export const sameOutfit = (a, b) => SLOTS.every((slot) => (a?.[slot] ?? null) === (b?.[slot] ?? null));

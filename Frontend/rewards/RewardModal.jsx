@@ -4,7 +4,7 @@ import { animate, motion, useReducedMotion } from "framer-motion";
 import { Sparkles, TrendingUp, X } from "lucide-react";
 import { ITEM_BY_ID } from "./catalog.js";
 import { levelFill } from "./rewardLogic.js";
-import { ItemThumb } from "./itemArt.jsx";
+import { ItemThumb, RARITY_CLASS } from "./itemArt.jsx";
 import { RARITY_LABEL_KEY, localizeDigits, rt } from "./rewardStrings.js";
 
 /* The pop-up a treasure box opens into: the item that dropped (if any), the bonus XP, and level progress.
@@ -12,8 +12,6 @@ import { RARITY_LABEL_KEY, localizeDigits, rt } from "./rewardStrings.js";
    It owns the level-up announcement (App skips its own toast for a box's XP). Esc, the overlay and ✕ call onClose;
    focus moves in on open and Tab stays inside. TreasureBox renders it and puts focus back on the chest. */
 
-// A literal lookup (not a template string) so rewardStyles.test.js can see which classes are used.
-const RARITY_CLASS = { common: "eai-rw-rarity-common", rare: "eai-rw-rarity-rare", epic: "eai-rw-rarity-epic", legendary: "eai-rw-rarity-legendary" };
 const CONFETTI = ["var(--gold)", "var(--jade)", "var(--primary)", "var(--ember)"];
 
 // The XP figure, counting up from 0 (straight to the value when motion is reduced).

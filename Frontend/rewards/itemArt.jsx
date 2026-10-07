@@ -297,6 +297,10 @@ export const ITEM_ART = {
   },
 };
 
+// The accent-colour class for each rarity (rewardStyles.js sets --rw-accent on them). A literal lookup, not a template
+// string, so rewardStyles.test.js can see which classes are used.
+export const RARITY_CLASS = { common: "eai-rw-rarity-common", rare: "eai-rw-rarity-rare", epic: "eai-rw-rarity-epic", legendary: "eai-rw-rarity-legendary" };
+
 // The art for an item id; an own-property check so a stray "constructor" in a save can't reach Object.prototype.
 const artOf = (id) => (typeof id === "string" && Object.prototype.hasOwnProperty.call(ITEM_ART, id) ? ITEM_ART[id] : null);
 

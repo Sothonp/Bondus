@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SLOTS, RARITIES, ITEMS, MILESTONES, RANDOM_POOL, MILESTONE_ITEM_IDS } from "./catalog.js";
-import { bonusXpFor, advanceLevel, levelFill, emptyRewards, pickReward, claimBox, equipItem, sanitizeOutfit, sanitizeRewards } from "./rewardLogic.js";
+import { bonusXpFor, advanceLevel, levelFill, emptyRewards, pickReward, claimBox, equipItem, sanitizeOutfit, sanitizeRewards, sameOutfit } from "./rewardLogic.js";
 
 test("catalog: 16 unique items, 5/3/4/4 per slot, valid rarities, both names present", () => {
   assert.equal(new Set(ITEMS.map((i) => i.id)).size, 16);
@@ -196,4 +196,10 @@ test("sanitizeRewards: names that only exist on Object.prototype are not items (
   const out = sanitizeRewards(raw);
   assert.deepEqual(out.owned, ["hat-party"]);
   assert.equal(out.claimedSets.a.itemId, null);
+});
+
+test("sameOutfit: equal outfits match; a difference in any one slot does not", () => {
+  const a = { hat: "hat-party", face: null, body: "body-scarf", extra: null };
+  assert.equal(sameOutfit(a, { ...a }), true);
+  for (const slot of ["hat", "face", "body", "extra"]) assert.equal(sameOutfit(a, { ...a, [slot]: a[slot] === null ? "x" : null }), false, slot);
 });

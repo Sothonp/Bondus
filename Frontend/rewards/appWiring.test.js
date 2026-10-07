@@ -25,3 +25,7 @@ test("SetComplete renders the treasure box, and both callers give it the set's k
   assert.match(app, /<TreasureBox setKey=\{setKey\}/);
   assert.equal((app.match(/<SetComplete[\s\S]*?setKey=\{list\[members\[0\]\]\.id\}/g) || []).length, 2);
 });
+test("both sidebars link to the Wardrobe and the page is registered", () => {
+  assert.equal((app.match(/id: "wardrobe"/g) || []).length, 2);
+  assert.match(app, /wardrobe: <Wardrobe /);
+});
