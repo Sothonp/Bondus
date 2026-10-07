@@ -14,6 +14,7 @@ import {
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
+  Sigma, FlaskConical, Dna, BookText, Languages as LanguagesIcon, Map as MapIcon, Scale, Shirt,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,6 +23,17 @@ import rehypeKatex from "rehype-katex";
 import { UNIS, UNI_MAJORS, UNI_SCHOLARSHIPS, UNI_PROFILE_INFO } from "../src/data/universities.js";
 import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
+import { CHEMISTRY_EXERCISES } from "../src/data/chemistryExercises.js";
+import { MATHEMATICS_EXERCISES, withFoundationsChapter } from "../src/data/mathematicsExercises.js";
+import StudyOwlScene from "./StudyOwlScene.jsx";
+import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
+import { RewardsContext, useRewards } from "./rewards/RewardsContext.jsx";
+import { OutfitLayers } from "./rewards/itemArt.jsx";
+import { REWARD_STYLES } from "./rewards/rewardStyles.js";
+import TreasureBox from "./rewards/TreasureBox.jsx";
+import Wardrobe from "./rewards/Wardrobe.jsx";
+import { setIndexes, nextInSet, nextSetStart } from "./practiceFlow.js";
+import { CHEER_STRINGS, pickCheer } from "./mascotCheers.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
 /* Field-specific subject priorities. Change these lists to extend the curriculum. */
@@ -519,7 +531,7 @@ const LEADERBOARD_SEED = [
 
 /* ════════════════════════ Theme + base styles ════════════════════════ */
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap');
 
 .eai-root{ font-family:'Plus Jakarta Sans', system-ui, sans-serif; color:var(--ink);
   background:var(--bg); min-height:100vh; -webkit-font-smoothing:antialiased; }
@@ -613,28 +625,44 @@ input.eai-input::placeholder{ color:var(--muted); }
   80%  { transform:translateY(-1px) scale(1.03); filter:drop-shadow(0 0 3px var(--primary)) brightness(1.08); }
   100% { transform:translateY(0) scale(1); filter:drop-shadow(0 0 1px var(--primary)) brightness(1); }
 }
-/* Explore-tile icon badges (Dashboard's Practice/Universities/Browse/Progress cards): a soft glow
-   pulse behind the icon plus a synced brightness flash on the icon itself, tinted per-tile via
-   --icon-glow (each tile already has its own accent color) rather than a bespoke keyframe set per
-   color like the header pill effects above. --icon-glow-delay staggers the four tiles so they
-   breathe out of sync instead of flashing in robotic unison. */
-.eai-icon-glow{ position:relative; }
-.eai-icon-glow::before{
-  content:""; position:absolute; inset:-10px; border-radius:16px;
-  background:radial-gradient(circle, var(--icon-glow, var(--primary)) 0%, transparent 70%);
-  opacity:.22; animation:eai-icon-glow-pulse 2.6s ease-in-out infinite; animation-delay:var(--icon-glow-delay, 0s);
-  pointer-events:none; z-index:0;
+/* Explore-tile icons (Dashboard's Practice/Universities/Browse/Progress cards): same idea as the
+   header pills above — the glyph itself is animated and only the glyph glows (drop-shadow tinted
+   by --icon-glow, each tile's own accent color). The badge behind it stays flat: no halo. Each icon
+   gets a motion that suits it, and --icon-glow-delay staggers the four so they don't move in
+   robotic unison. */
+.eai-ico{ display:inline-flex; animation-duration:2.6s; animation-timing-function:ease-in-out; animation-iteration-count:infinite; animation-delay:var(--icon-glow-delay, 0s); }
+.eai-ico-target{ animation-name:eai-ico-lockon; }
+.eai-ico-cap{ transform-origin:50% 80%; animation-name:eai-ico-toss; }
+.eai-ico-book{ transform-origin:50% 90%; animation-name:eai-ico-flip; }
+.eai-ico-chart{ transform-origin:50% 100%; animation-name:eai-ico-grow; }
+/* Target: a quick "lock-on" pulse — shrinks in, snaps out bright, settles. */
+@keyframes eai-ico-lockon{
+  0%, 100%{ transform:scale(1); filter:drop-shadow(0 0 1px var(--icon-glow, var(--primary))) brightness(1); }
+  30%{ transform:scale(.88); filter:drop-shadow(0 0 2px var(--icon-glow, var(--primary))) brightness(1); }
+  45%{ transform:scale(1.14); filter:drop-shadow(0 0 8px var(--icon-glow, var(--primary))) brightness(1.3); }
+  65%{ transform:scale(1); filter:drop-shadow(0 0 3px var(--icon-glow, var(--primary))) brightness(1.05); }
 }
-.eai-icon-glow svg{ position:relative; z-index:1; animation:eai-icon-glow-flash 2.6s ease-in-out infinite; animation-delay:var(--icon-glow-delay, 0s); }
-@keyframes eai-icon-glow-pulse{
-  0%, 100%{ opacity:.18; transform:scale(.85); }
-  50%{ opacity:.5; transform:scale(1.18); }
+/* Graduation cap: a little graduation-day toss — tips back, hops up, drops back down. */
+@keyframes eai-ico-toss{
+  0%, 100%{ transform:translateY(0) rotate(0deg); filter:drop-shadow(0 0 1px var(--icon-glow, var(--primary))) brightness(1); }
+  25%{ transform:translateY(0) rotate(-7deg); filter:drop-shadow(0 0 3px var(--icon-glow, var(--primary))) brightness(1.1); }
+  50%{ transform:translateY(-4px) rotate(6deg); filter:drop-shadow(0 0 8px var(--icon-glow, var(--primary))) brightness(1.25); }
+  75%{ transform:translateY(0) rotate(-2deg); filter:drop-shadow(0 0 3px var(--icon-glow, var(--primary))) brightness(1.05); }
 }
-@keyframes eai-icon-glow-flash{
-  0%, 100%{ filter:drop-shadow(0 0 0 transparent); }
-  50%{ filter:drop-shadow(0 0 6px var(--icon-glow, var(--primary))); }
+/* Open book: pages "breathe" open and shut, with the glow rising as it opens. */
+@keyframes eai-ico-flip{
+  0%, 100%{ transform:scale(1,1); filter:drop-shadow(0 0 1px var(--icon-glow, var(--primary))) brightness(1); }
+  40%{ transform:scale(1.12,.94); filter:drop-shadow(0 0 7px var(--icon-glow, var(--primary))) brightness(1.25); }
+  65%{ transform:scale(.95,1.05); filter:drop-shadow(0 0 3px var(--icon-glow, var(--primary))) brightness(1.05); }
 }
-@media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } .eai-fx-fire,.eai-fx-fire-slow,.eai-fx-bolt,.eai-fx-climb,.eai-icon-glow::before,.eai-icon-glow svg{ animation:none; } }
+/* Bar chart: bars "grow" — stretches up from the baseline with a brightening glow, then resets. */
+@keyframes eai-ico-grow{
+  0%, 100%{ transform:scale(1,1); filter:drop-shadow(0 0 1px var(--icon-glow, var(--primary))) brightness(1); }
+  35%{ transform:scale(.96,.82); filter:drop-shadow(0 0 2px var(--icon-glow, var(--primary))) brightness(1); }
+  60%{ transform:scale(1.04,1.14); filter:drop-shadow(0 0 8px var(--icon-glow, var(--primary))) brightness(1.3); }
+  80%{ transform:scale(1,1.03); filter:drop-shadow(0 0 3px var(--icon-glow, var(--primary))) brightness(1.08); }
+}
+@media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } .eai-fx-fire,.eai-fx-fire-slow,.eai-fx-bolt,.eai-fx-climb,.eai-ico{ animation:none; } }
 
 /* ── Liquid glass button (High School track — trial rollout) ──
    A frosted, refractive replacement for a flat-color button: translucent tinted glass at rest
@@ -765,12 +793,27 @@ input.eai-input::placeholder{ color:var(--muted); }
 @media (prefers-reduced-motion: reduce){ .eai-rise{ animation:none; } .eai-btn,.eai-tile,.eai-pick{ transition:none; } }
 
 /* ── Welcome hero card ── */
-.eai-hero-card{ position:relative; overflow:hidden; border-radius:22px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); display:flex; }
+.eai-hero-card{ position:relative; overflow:hidden; border-radius:22px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); display:flex; flex-direction:column; }
+@media (min-width:640px){ .eai-hero-card{ flex-direction:row; } }
 .eai-hero-content{ position:relative; z-index:3; padding:32px; flex:1 1 auto; min-width:0; }
-@media (max-width:640px){ .eai-hero-content{ padding:24px; } }
-.eai-hero-mascot{ position:relative; z-index:3; flex:0 0 92px; display:flex; align-items:flex-end; justify-content:center; padding:14px 12px 0 0; }
-@media (min-width:480px){ .eai-hero-mascot{ flex-basis:120px; padding-right:18px; } }
-@media (min-width:768px){ .eai-hero-mascot{ flex-basis:172px; padding:22px 30px 0 0; } }
+@media (max-width:640px){ .eai-hero-content{ padding:24px 24px 8px; } }
+/* The study scene: a tinted "room" (wall = the box's own background, floor/desk drawn by the SVG)
+   that fades in from the text side — or from the top when stacked on phones — and sits flush with
+   the card's bottom-right corner. The fade is a CSS mask, so the wall, floor and props all share it;
+   the SVG's viewBox leaves 36 units (5.7% of its width) of empty wall on the left for it to happen in.
+   The box takes whatever the greeting doesn't need (it keeps ~436px so both buttons stay on one row);
+   the SVG is height-capped, so on very wide cards it stops growing and the extra width is just wall. */
+.eai-hero-mascot{ --hero-floor:#D8D7F0; --hero-base:rgba(255,255,255,.45); position:relative; z-index:3; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;
+  background:var(--primary-soft);
+  -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 18px); mask-image:linear-gradient(180deg, transparent 0, #000 18px); }
+@media (min-width:640px){
+  .eai-hero-mascot{ flex:0 1 calc(100% - 436px); min-width:260px; max-width:460px;
+    -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 5.5%); mask-image:linear-gradient(90deg, transparent 0, #000 5.5%); }
+}
+.theme-dark .eai-hero-mascot{ --hero-floor:#15172F; --hero-base:rgba(255,255,255,.06); }
+/* Handwriting on the study scene's whiteboard — beats the Khmer UI's blanket font override */
+.eai-hand{ font-family:'Caveat','Segoe Print','Bradley Hand','Comic Sans MS',cursive; }
+.eai-km-root .eai-hand{ font-family:'Caveat','Segoe Print','Bradley Hand','Comic Sans MS',cursive !important; }
 .eai-hero-greeting{ font-size:14px; color:var(--gold); }
 .eai-hero-title{ font-family:'Sora', system-ui, sans-serif; font-size:28px; font-weight:800; color:var(--ink); margin-top:4px; letter-spacing:-.01em; }
 @media (max-width:640px){ .eai-hero-title{ font-size:24px; } }
@@ -941,7 +984,17 @@ input.eai-input::placeholder{ color:var(--muted); }
 /* Duolingo-style MCQ layout: owl beside a bordered question card, options as full-width stacked
    rows instead of a plain grid. Stacks (mascot above card) below the sm breakpoint. */
 .eai-ex-layout{ display:flex; align-items:flex-start; gap:18px; }
-.eai-ex-mascot{ width:150px; flex-shrink:0; }
+.eai-ex-mascot{ position:relative; width:150px; flex-shrink:0; }
+/* The owl's speech bubble (cheers / gentle encouragement — see mascotCheers.js). Wide screens: it floats
+   above the owl's head, tail pointing down at it. The owl wears 34px of padding-top so that room is always
+   there (nothing moves when the bubble appears): the owl artwork already has 42px of empty space above its
+   ears, and 34 + 42 fits the tallest bubble (2 lines = 64px) plus its 9px tail with a few px to spare.
+   The bubble's bottom edge is therefore 64px below the column top. It may overhang the column by 8px each
+   side (the 18px gap to the card keeps 10px clear), centred so the tail points at the owl. Every line stays
+   within 2 lines at that width (checked in Edge for EN and KM). Phones: see the media query below. */
+.eai-ex-owl{ padding-top:34px; }
+.eai-ex-say{ position:absolute; left:-8px; right:-8px; bottom:calc(100% - 64px); display:flex; justify-content:center; pointer-events:none; z-index:2; }
+.eai-ex-say .eai-tail-side{ display:none; }
 .eai-ex-card{ flex:1; min-width:0; background:var(--card); border:2px solid color-mix(in srgb, var(--primary) 28%, var(--line)); border-radius:26px; padding:24px 26px; box-shadow:var(--shadow); }
 .eai-ex-qlabel{ font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--primary); }
 .eai-ex-question{ font-size:19px; font-weight:800; margin:6px 0 18px; line-height:1.35; }
@@ -950,7 +1003,12 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ex-option:active:not(:disabled){ transform:translateY(1px); }
 @media (max-width:640px){
   .eai-ex-layout{ flex-direction:column; align-items:center; }
-  .eai-ex-mascot{ width:120px; }
+  /* Phones: the owl sits at the left of its row and its bubble beside it (tail pointing left) — no extra height. */
+  .eai-ex-mascot{ width:100%; display:flex; align-items:center; gap:10px; }
+  .eai-ex-owl{ width:104px; flex-shrink:0; padding-top:0; }
+  .eai-ex-say{ position:static; flex:1; min-width:0; justify-content:flex-start; }
+  .eai-ex-say .eai-tail-down{ display:none; }
+  .eai-ex-say .eai-tail-side{ display:block; }
   .eai-ex-card{ width:100%; padding:20px; }
 }
 
@@ -1023,7 +1081,7 @@ input.eai-input::placeholder{ color:var(--muted); }
   transition:background-color .18s ease, border-color .18s ease, transform .15s ease, box-shadow .18s ease; }
 .eai-ob-track-card:hover{ border-color:var(--primary); transform:translateY(-1px); }
 .eai-ob-track-card.is-selected{ background:var(--primary-soft); border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-ring); }
-.eai-ob-tag{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--glass-bg); border:1px solid var(--glass-line); color:var(--muted); }
+.eai-ob-tag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--glass-bg); border:1px solid var(--glass-line); color:var(--muted); }
 
 .eai-ob-chip{ height:37px; padding:0 14px; border-radius:999px; border:1px solid var(--glass-line); background:var(--glass-bg); color:var(--ink);
   font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
@@ -1064,7 +1122,7 @@ input.eai-input::placeholder{ color:var(--muted); }
   .eai-ob-track-card, .eai-ob-btn-primary, .eai-ob-btn-secondary, .eai-ob-toggle{ transition:none; }
   .eai-ob-bubble{ animation:none; }
 }
-`;
+${REWARD_STYLES}`;
 
 /* ════════════════════════ Signature motif + atoms ════════════════════════ */
 function Angkor({ className, style }) {
@@ -1134,18 +1192,17 @@ function CardHead({ title, kh, action }) {
   );
 }
 
-/* White dashboard hero card: greeting + actions on the left, the animated owl mascot beside the
-   message on the right — always visible (just smaller on narrow phones) rather than hidden below a
-   breakpoint, since it's compact enough not to crowd the text/buttons. No pointTargetRef here (no
-   bubble to aim at); the "point" pose just falls back to its fixed default angle, which still reads
-   fine as a generic friendly gesture as it cycles through the rest of its idle/wave/walk/dance loop. */
+/* White dashboard hero card: greeting + actions on the left, and on the right a little room where
+   the owl mascot sits at his desk studying maths while a whiteboard writes the solution out (see
+   StudyOwlScene.jsx). The scene is wider than the old standing owl, so on phones it stacks under the
+   text instead of squeezing in beside it. */
 function WelcomeHeroCard({ userName, greeting, message, onStartPlan, onAskCoach, lang = "en" }) {
   const firstName = (userName || "").split(" ")[0];
   return (
     <div className="eai-hero-card">
       <div className="eai-hero-content">
         <p className="eai-km eai-hero-greeting">{greeting}, {firstName}! 👋</p>
-        <h2 className={`eai-hero-title ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? `សូមស្វាគមន៍, ${firstName}។` : `Welcome, ${firstName}.`}</h2>
+        <h2 className={`eai-hero-title ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? `សូមស្វាគមន៍, ${firstName}` : `Welcome, ${firstName}.`}</h2>
         {message && <p className={`eai-hero-message ${lang === "km" ? "eai-km" : ""}`}>{message}</p>}
         <div className="eai-hero-actions">
           <button onClick={onStartPlan} className={`eai-btn eai-glass eai-focus px-4 py-2.5 text-sm flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`}>
@@ -1157,7 +1214,7 @@ function WelcomeHeroCard({ userName, greeting, message, onStartPlan, onAskCoach,
         </div>
       </div>
       <div className="eai-hero-mascot" aria-hidden="true">
-        <OwlMascot />
+        <StudyOwlScene />
       </div>
     </div>
   );
@@ -1348,13 +1405,13 @@ function TrackCard({ meta, subjects, selected, onSelect, lang = "en" }) {
       </div>
       <p className={`text-xs eai-muted mt-3 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? meta.blurbKm : meta.blurb}</p>
       <div className="flex flex-wrap gap-1.5 mt-3">
-        {subjects.map((s) => <span key={s} className={`eai-ob-tag ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s, lang)}</span>)}
+        {subjects.map((s) => <span key={s} className={`eai-ob-tag ${lang === "km" ? "eai-km" : ""}`}><SubjectIcon subject={s} size={12} />{subjectLabel(s, lang)}</span>)}
       </div>
     </button>
   );
 }
 
-function SubjectChip({ label, selected, onToggle, lang = "en" }) {
+function SubjectChip({ subject, label, selected, onToggle, lang = "en" }) {
   return (
     <motion.button type="button" aria-pressed={selected} whileTap={{ scale: 0.95 }} onClick={onToggle}
       className={`eai-ob-chip eai-focus ${selected ? "is-selected" : ""} ${lang === "km" ? "eai-km" : ""}`}>
@@ -1366,6 +1423,7 @@ function SubjectChip({ label, selected, onToggle, lang = "en" }) {
           </motion.span>
         )}
       </AnimatePresence>
+      {subject && <SubjectIcon subject={subject} size={15} />}
       {label}
     </motion.button>
   );
@@ -1417,9 +1475,14 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    frame via getBoundingClientRect + getScreenCTM so it tracks correctly even if the target moves
    or the layout changes; the target also gets an "eai-mascot-pointed" class toggled on it while
    pointed at, for a highlight. No mode buttons are exposed here — see the removed Wave/Cheer/Idle
-   controls this replaced. */
-function OwlMascot({ pointTargetRef, triggerRef }) {
+   controls this replaced.
+   The owl wears the saved outfit from RewardsContext (cosmetic items drawn as SVG layers — see rewards/itemArt.jsx);
+   an `outfit` prop overrides it, which is how the Wardrobe previews changes before they are saved. The layers draw at
+   four mounts: back (behind everything), torso (below the chin), face (under the headphones) and top (over them). */
+export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
   const uid = useRef(Math.random().toString(36).slice(2, 8)).current;
+  const rewardsCtx = useRewards();
+  const worn = outfit ?? rewardsCtx.outfit;
   const refs = useRef({});
   const setRef = (name) => (el) => { refs.current[name] = el; };
 
@@ -1677,6 +1740,7 @@ function OwlMascot({ pointTargetRef, triggerRef }) {
 
       <g transform="translate(260 490)">
         <g ref={setRef("move")}>
+          <OutfitLayers outfit={worn} mount="back" uid={uid} />
           <ellipse ref={setRef("footL")} cx="-34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
           <ellipse ref={setRef("footR")} cx="34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
 
@@ -1685,6 +1749,8 @@ function OwlMascot({ pointTargetRef, triggerRef }) {
             <ellipse cx="0" cy="-98" rx="80" ry="22" fill="#2f55b8" opacity=".28" />
             <ellipse cx="-30" cy="-40" rx="26" ry="14" fill="#fff" opacity=".12" />
           </g>
+
+          <OutfitLayers outfit={worn} mount="torso" uid={uid} />
 
           <g ref={setRef("head")}>
             <g ref={setRef("earL")}><path d="M -96 -258 Q -128 -300 -110 -344 Q -66 -330 -40 -290 Z" fill="#6597F1" /></g>
@@ -1707,6 +1773,7 @@ function OwlMascot({ pointTargetRef, triggerRef }) {
             <circle ref={setRef("cheekL")} cx="-72" cy="-160" r="16" fill="#F7B7A3" opacity=".9" />
             <circle ref={setRef("cheekR")} cx="72" cy="-160" r="16" fill="#F7B7A3" opacity=".9" />
             <path d="M -17 -176 Q 0 -190 17 -176 Q 12 -152 0 -146 Q -12 -152 -17 -176 Z" fill={`url(#gBeak-${uid})`} />
+            <OutfitLayers outfit={worn} mount="face" uid={uid} />
 
             <path d="M -108 -190 C -118 -360 118 -360 108 -190" stroke="#5DBB93" strokeWidth="16" fill="none" strokeLinecap="round" />
             <path d="M -50 -306 Q 0 -329 50 -306" stroke="#F1F7F3" strokeWidth="16" fill="none" />
@@ -1720,6 +1787,7 @@ function OwlMascot({ pointTargetRef, triggerRef }) {
               <ellipse cx="4" rx="18" ry="34" fill="#F1F7F3" />
               <ellipse cx="8" rx="11" ry="24" fill="#5DBB93" />
             </g>
+            <OutfitLayers outfit={worn} mount="top" uid={uid} />
           </g>
 
           <g ref={setRef("armL")}>
@@ -1739,35 +1807,42 @@ function OwlMascot({ pointTargetRef, triggerRef }) {
 }
 
 /* Duolingo-style speech bubble: a rounded card with a small triangular tail. Two tail variants are
-   both always in the DOM, toggled by Tailwind's `sm:` breakpoint (640px) rather than a runtime
-   width check: below it the bubble stacks above the mascot (tail points down), at/above it the
-   bubble sits beside the mascot (tail points left) — matching LivingMascot's own responsive
-   `flex-col-reverse sm:flex-row` switch below. `text` swaps with a fade/rise so a new encouraging
-   line doesn't just pop in. `bubbleRef` (optional) is attached to the card itself, so OwlMascot can
-   aim its "point" gesture at it and toggle a highlight on it directly. */
-function MascotSpeechBubble({ text, lang = "en", bubbleRef }) {
+   both always in the DOM and one is shown per layout. placement "auto" (the welcome screen's
+   LivingMascot) switches on Tailwind's `sm:` breakpoint (640px): below it the bubble stacks above the
+   mascot (tail points down), at/above it the bubble sits beside the mascot (tail points left).
+   placement "exercise" is the question screen's owl column and is the reverse — above the owl's head on
+   wide screens (tail down), beside the owl on phones (tail left) — switched by the .eai-ex-say CSS so
+   it follows that layout's own breakpoint. `size` "lg" is the bigger finish-screen version and `delay`
+   (seconds) holds the pop-in back (used so the owl's jump finishes before it speaks). `text` swaps
+   with a fade/rise so a new encouraging line doesn't just pop in. `bubbleRef` (optional) is attached
+   to the card itself, so OwlMascot can aim its "point" gesture at it and toggle a highlight on it
+   directly. */
+function MascotSpeechBubble({ text, lang = "en", bubbleRef, placement = "auto", size = "md", delay = 0 }) {
+  const exercise = placement === "exercise";
+  const downTail = exercise ? "eai-tail-down" : "sm:hidden";
+  const sideTail = exercise ? "eai-tail-side" : "hidden sm:block";
+  const big = size === "lg";
   return (
-    <div className="eai-rise" key={text} style={{ position: "relative", maxWidth: 220 }}>
-      <div ref={bubbleRef} className={`eai-card ${kmClass(text)}`} style={{ padding: "10px 16px", fontSize: 14, fontWeight: 600, textAlign: "center", color: "var(--ink)", transition: "box-shadow .25s ease, transform .25s ease" }}>
+    <div className="eai-rise" key={text} style={{ position: "relative", maxWidth: big ? 300 : 220, animationDelay: delay ? `${delay}s` : undefined }}>
+      <div ref={bubbleRef} className={`eai-card ${kmClass(text)}`} style={{ padding: big ? "14px 22px" : "10px 16px", fontSize: big ? 17 : 14, fontWeight: 600, textAlign: "center", textWrap: exercise || big ? "balance" : undefined, color: "var(--ink)", transition: "box-shadow .25s ease, transform .25s ease" }}>
         {text}
       </div>
-      {/* Mobile (<640px): bubble above the mascot, tail points down. */}
-      <div aria-hidden="true" className="sm:hidden" style={{
+      {/* Tail pointing down (bubble above the mascot). Two stacked border-triangles (outline color
+          behind, card color on top, 2px smaller) — the standard CSS trick for a bordered tail. */}
+      <div aria-hidden="true" className={downTail} style={{
         position: "absolute", left: "50%", bottom: -9, transform: "translateX(-50%)", width: 0, height: 0,
         borderLeft: "9px solid transparent", borderRight: "9px solid transparent", borderTop: "9px solid var(--line)",
       }} />
-      <div aria-hidden="true" className="sm:hidden" style={{
+      <div aria-hidden="true" className={downTail} style={{
         position: "absolute", left: "50%", bottom: -7, transform: "translateX(-50%)", width: 0, height: 0,
         borderLeft: "7px solid transparent", borderRight: "7px solid transparent", borderTop: "7px solid var(--card)",
       }} />
-      {/* Desktop (≥640px): bubble beside the mascot, tail points left. Two stacked border-triangles
-          (outline color behind, card color on top, 2px smaller) — the standard CSS trick for a
-          bordered directional tail. */}
-      <div aria-hidden="true" className="hidden sm:block" style={{
+      {/* Tail pointing left (bubble beside the mascot). */}
+      <div aria-hidden="true" className={sideTail} style={{
         position: "absolute", left: -9, top: "50%", transform: "translateY(-50%)", width: 0, height: 0,
         borderTop: "9px solid transparent", borderBottom: "9px solid transparent", borderRight: "9px solid var(--line)",
       }} />
-      <div aria-hidden="true" className="hidden sm:block" style={{
+      <div aria-hidden="true" className={sideTail} style={{
         position: "absolute", left: -7, top: "50%", transform: "translateY(-50%)", width: 0, height: 0,
         borderTop: "7px solid transparent", borderBottom: "7px solid transparent", borderRight: "7px solid var(--card)",
       }} />
@@ -2129,7 +2204,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         <div className="flex flex-wrap gap-2 mt-3">
           {FIELD_SUBJECTS[form.field].map((s) => {
             const id = subjectId(s);
-            return <SubjectChip key={id} label={subjectLabel(s, lang)} selected={form.subjectsToImprove.includes(id)} onToggle={() => toggleImprove(id)} lang={lang} />;
+            return <SubjectChip key={id} subject={s} label={subjectLabel(s, lang)} selected={form.subjectsToImprove.includes(id)} onToggle={() => toggleImprove(id)} lang={lang} />;
           })}
         </div>
       </div>
@@ -2246,14 +2321,16 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
       {/* Explore more */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Target, label: t(lang, "navPractice"), desc: t(lang, "exploreSharpen"), tab: "practice", c: "var(--jade)" },
-          { icon: GraduationCap, label: t(lang, "navUniversities"), desc: t(lang, "exploreBrowseMajors"), tab: "universities", c: "var(--primary)" },
-          { icon: BookOpen, label: t(lang, "browseTitle"), desc: t(lang, "exploreBrowsePast"), tab: "browse", c: "var(--ember)" },
-          { icon: BarChart3, label: t(lang, "navProgress"), desc: t(lang, "exploreStats"), tab: "progress", c: "var(--gold)" },
+          { icon: Target, fx: "eai-ico-target", label: t(lang, "navPractice"), desc: t(lang, "exploreSharpen"), tab: "practice", c: "var(--jade)" },
+          { icon: GraduationCap, fx: "eai-ico-cap", label: t(lang, "navUniversities"), desc: t(lang, "exploreBrowseMajors"), tab: "universities", c: "var(--primary)" },
+          { icon: BookOpen, fx: "eai-ico-book", label: t(lang, "browseTitle"), desc: t(lang, "exploreBrowsePast"), tab: "browse", c: "var(--ember)" },
+          { icon: BarChart3, fx: "eai-ico-chart", label: t(lang, "navProgress"), desc: t(lang, "exploreStats"), tab: "progress", c: "var(--gold)" },
         ].map((c, i) => (
           <button key={c.label} onClick={() => go(c.tab)} className="eai-card eai-tile eai-focus p-5 text-left flex items-center gap-3.5">
-            <div className="eai-icon-glow grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)", "--icon-glow": c.c, "--icon-glow-delay": `${i * 0.4}s` }}>
-              <c.icon size={19} style={{ color: c.c }} />
+            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}>
+              <span className={`eai-ico ${c.fx}`} style={{ "--icon-glow": c.c, "--icon-glow-delay": `${i * 0.4}s` }}>
+                <c.icon size={19} style={{ color: c.c }} />
+              </span>
             </div>
             <div className="min-w-0">
               <p className={`eai-display font-bold text-sm ${lang === "km" ? "eai-km" : ""}`}>{c.label}</p>
@@ -2522,9 +2599,7 @@ function Browse({ p, lang = "en" }) {
           return (
             <div key={sub.s} className="eai-card eai-tile p-5">
               <div className="flex items-start justify-between">
-                <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
-                  <BookOpen size={19} style={{ color: "var(--primary)" }} />
-                </div>
+                <SubjectIcon subject={sub.s} tile />
                 {sub.tag === "weak"
                   ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "recommendedForYou")}</span>
                   : <Bookmark size={16} className="eai-muted" />}
@@ -2612,7 +2687,9 @@ const RAW_EXERCISES = {
       options: ["8", "6", "10", "9"], answer: "8",
       explanation: "Mean = (4+8+6+10+12) ÷ 5 = 40 ÷ 5 = 8.", explanationKm: "មធ្យមភាគ = (4+8+6+10+12) ÷ 5 = 40 ÷ 5 = 8។",
       formula: "Mean = sum of values ÷ number of values", formulaKm: "មធ្យមភាគ = ផលបូកតម្លៃ ÷ ចំនួនតម្លៃ" },
-  ],
+    // The 8 starters above keep positions 1–8 (saved progress is keyed on `Mathematics-${position}`);
+    // the Grade 12 lesson bank is appended after them — src/data/mathematicsExercises.js.
+  ].map(withFoundationsChapter).concat(MATHEMATICS_EXERCISES),
   Physics: [
     { topic: "Kelvin temperature", topicKm: "សីតុណ្ហភាពដាច់ខាត", difficulty: "Easy",
       prompt: "How do you convert a Celsius temperature t to the absolute (Kelvin) temperature T?", promptKm: "តើត្រូវបំប្លែងសីតុណ្ហភាពសែលស្យុស t ទៅជាសីតុណ្ហភាពដាច់ខាត T យ៉ាងដូចម្តេច?",
@@ -3161,23 +3238,7 @@ const RAW_EXERCISES = {
       formula: "Half-wave: 1 diode, gaps; Full-wave: 4-diode bridge, smoother DC", formulaKm: "កន្លះខួប៖ ឌីយូត១ មានចន្លោះទទេ; ពេញមួយខួប៖ ស្ពានឌីយូត៤ ជាប់រលូនជាង",
       chapter: "AC Circuits (RLC)", chapterKm: "សៀគ្វីចរន្តឆ្លាស់" },
   ],
-  Chemistry: [
-    { topic: "Moles", topicKm: "មូល", difficulty: "Medium",
-      prompt: "How many moles are in 36 g of water (H₂O, M = 18 g/mol)?", promptKm: "តើទឹក 36 ក្រាម (H₂O, M = 18 g/mol) មានប៉ុន្មានមូល?",
-      options: ["2", "1", "0.5", "36"], answer: "2",
-      explanation: "Moles = mass ÷ molar mass = 36 ÷ 18 = 2 mol.", explanationKm: "ចំនួនមូល = ម៉ាស់ ÷ ម៉ាស់ម៉ូល = 36 ÷ 18 = 2 mol។",
-      formula: "n = mass ÷ molar mass", formulaKm: "n = ម៉ាស់ ÷ ម៉ាស់ម៉ូល" },
-    { topic: "Acids & bases", topicKm: "អាស៊ីត និងបាស", difficulty: "Medium",
-      prompt: "What is the pH of 0.01 M HCl?", promptKm: "តើ pH នៃ HCl កំហាប់ 0.01 M ស្មើនឹងប៉ុន្មាន?",
-      options: ["2", "1", "12", "0.01"], answer: "2",
-      explanation: "HCl fully dissociates, so [H⁺] = 0.01 = 10⁻². pH = −log(10⁻²) = 2.", explanationKm: "HCl បំបែកទាំងស្រុង ដូច្នេះ [H⁺] = 0.01 = 10⁻²។ pH = −log(10⁻²) = 2។",
-      formula: "pH = −log[H⁺]", formulaKm: "pH = −log[H⁺]" },
-    { topic: "Balancing", topicKm: "តុល្យភាពសមីការ", difficulty: "Easy",
-      prompt: "In 2H₂ + O₂ → 2H₂O, what is the coefficient of H₂?", promptKm: "ក្នុងសមីការ 2H₂ + O₂ → 2H₂O តើមេគុណនៃ H₂ ស្មើនឹងប៉ុន្មាន?",
-      options: ["2", "1", "3", "4"], answer: "2",
-      explanation: "Balance hydrogen and oxygen on both sides: 2H₂ + O₂ → 2H₂O.", explanationKm: "តុល្យភាពអាតូមអ៊ីដ្រូសែន និងអុកសីហ្សែនទាំងសងខាង៖ 2H₂ + O₂ → 2H₂O។",
-      formula: "Conserve atoms of each element on both sides", formulaKm: "រក្សាចំនួនអាតូមនីមួយៗឲ្យស្មើគ្នាទាំងសងខាង" },
-  ],
+  Chemistry: CHEMISTRY_EXERCISES, // Grade 12 Science lessons — src/data/chemistryExercises.js
   Biology: [
     { topic: "Root and stem function", topicKm: "តួនាទីឬស និងដើម", difficulty: "Easy",
       prompt: "In a flowering plant, what is the main function of the roots?", promptKm: "តើឬសរបស់រុក្ខជាតិមានផ្កាមានតួនាទីចម្បងអ្វី?",
@@ -4522,6 +4583,36 @@ const SUBJECT_LABEL_KM = {
   Geography: "ភូមិវិទ្យា", Morality: "សីលធម៌ពលរដ្ឋវិទ្យា", "Earth Science": "ផែនដីវិទ្យា",
 };
 const subjectLabel = (subject, lang) => (lang === "km" ? (SUBJECT_LABEL_KM[subject] ?? subject) : subject);
+
+/* Logo + accent per subject, keyed by the same canonical English names. Unknown subjects fall back
+   to the generic book icon in the primary color. */
+const SUBJECT_ICON = {
+  Mathematics: { icon: Sigma, color: "#5B5BD6" },
+  Physics: { icon: Atom, color: "#0EA5E9" },
+  Chemistry: { icon: FlaskConical, color: "var(--jade)" },
+  Biology: { icon: Dna, color: "#22A559" },
+  "Khmer Literature": { icon: BookText, color: "var(--gold)" },
+  History: { icon: Landmark, color: "#C2703D" },
+  English: { icon: LanguagesIcon, color: "var(--ember)" },
+  French: { icon: LanguagesIcon, color: "#8B5CF6" },
+  Geography: { icon: MapIcon, color: "#0EA5E9" },
+  Morality: { icon: Scale, color: "#8B5CF6" },
+  "Earth Science": { icon: Globe, color: "#22A559" },
+};
+const subjectAccent = (subject) => SUBJECT_ICON[subject]?.color ?? "var(--primary)";
+
+/* tile=true wraps the icon in the rounded soft tile used on the subject cards; otherwise it is the bare glyph. */
+function SubjectIcon({ subject, size = 19, tile = false, tileSize = 40 }) {
+  const { icon: Icon = BookOpen, color = "var(--primary)" } = SUBJECT_ICON[subject] ?? {};
+  const glyph = <Icon size={size} aria-hidden="true" style={{ color, flexShrink: 0 }} />;
+  if (!tile) return glyph;
+  return (
+    <div className="grid place-items-center rounded-xl flex-shrink-0"
+      style={{ width: tileSize, height: tileSize, background: `color-mix(in srgb, ${color} 16%, transparent)` }}>
+      {glyph}
+    </div>
+  );
+}
 // "BAC II" is the official exam's Latin-script name — most Khmer education sites and documents
 // still write it that way, but Bondus's own Khmer copy uses the transliteration.
 const bacIILabel = (lang) => (lang === "km" ? "បាក់ឌុប" : "BAC II");
@@ -4541,12 +4632,17 @@ function getExercises(subject, lang = "en") {
     answer: lang === "km" && r.answerKm ? r.answerKm : r.answer,
     explanation: lang === "km" ? (r.explanationKm || r.explanation) : r.explanation,
     formula: lang === "km" ? (r.formulaKm || r.formula) : r.formula,
-    // Only subjects whose bank entries carry a chapter (currently History, Biology, Physics) get
+    // Only subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get
     // grouped into a chapter-picker step in PracticeSubject; everything else is unaffected (chapter
     // stays undefined). Kept as the stable English key (never localized here) so PracticeSubject's
     // selected-chapter state stays valid across a language toggle — chapterKm is exposed alongside
     // it purely for display, localized separately by the component that renders it.
     chapter: r.chapter, chapterKm: r.chapterKm,
+    // Optional presentation hints (Chemistry uses both; every other bank leaves them undefined).
+    // chapterOrder sorts the chapter picker into curriculum order even when a chapter's questions
+    // were appended later; stage 0 marks a short formula quiz that PracticeSubject lists first.
+    // Neither changes an exercise's id, which stays `${subject}-${position in the bank}`.
+    chapterOrder: r.chapterOrder, stage: r.stage,
   }));
 }
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
@@ -4602,9 +4698,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
           return (
             <button key={s} onClick={() => setSubject(s)} className="eai-card eai-tile eai-focus p-5 text-left">
               <div className="flex items-center justify-between">
-                <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
-                  <Target size={19} style={{ color: "var(--primary)" }} />
-                </div>
+                <SubjectIcon subject={s} tile />
                 {isWeak && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
               </div>
               <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s, lang)}</h3>
@@ -4621,80 +4715,105 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
   );
 }
 
+/* Session state for answering one set of questions (the order rule lives in practiceFlow.js): which
+   question is on screen, whether the student is only reviewing a set that was already completed,
+   whether the question on screen is a second try of one missed earlier, which questions were missed
+   this session (for the summary) and the "set complete" screen. `progress` is the saved per-exercise
+   record (practice / uniPractice); a question counts as done once its status is "completed". Shared by
+   PracticeSubject and UniversityPracticeCourse. */
+function useSetSession(list, progress) {
+  const [idx, setIdx] = useState(null); // question on screen (index into `list`); null = the list view
+  const [reviewing, setReviewing] = useState(false);
+  const [isRetry, setIsRetry] = useState(false);
+  const [finished, setFinished] = useState(null); // { from } once every question in the set is correct
+  const [missed, setMissed] = useState({});
+  const isDone = (ex) => progress[ex.id]?.status === "completed";
+  const show = (i) => { setIdx(i); setIsRetry(!isDone(list[i]) && progress[list[i].id]?.result === "incorrect"); };
+  const onScreen = idx != null && list[idx] != null;
+  const upNext = onScreen ? nextInSet(list, isDone, idx, reviewing) : null;
+  const members = onScreen ? setIndexes(list, idx) : [];
+  return {
+    idx, isDone, isRetry, finished, missed,
+    pos: members.indexOf(idx) + 1, size: members.length, doneCount: members.filter((j) => isDone(list[j])).length, // "Question 3 of 7" + progress bar
+    start: (i) => { setReviewing(setIndexes(list, i).every((j) => isDone(list[j]))); setMissed({}); setFinished(null); show(i); },
+    // Next has nothing to offer only when the question just missed is the one left — it must be tried again.
+    canAdvance: upNext !== idx,
+    finishing: upNext == null, // nothing left in the set: Next becomes "Finish set"
+    advance: () => {
+      if (upNext == null) { setFinished({ from: idx }); setIdx(null); return; }
+      if (reviewing && upNext <= idx) setReviewing(false); // the review pass is over; only retries are left
+      show(upNext);
+    },
+    exit: () => setIdx(null),
+    leaveFinished: () => setFinished(null),
+    noteMiss: (ex) => setMissed((m) => ({ ...m, [ex.id]: true })),
+  };
+}
+
 function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, lang = "en" }) {
   const fullList = getExercises(subject, lang);
-  // Subjects whose bank entries carry a chapter (currently History, Biology, Physics) get an extra
+  // Subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get an extra
   // chapter-picker step before the exercise list; every other subject is unaffected.
   const hasChapters = fullList.some((ex) => ex.chapter);
-  const chapters = hasChapters ? [...new Set(fullList.map((ex) => ex.chapter))] : [];
+  const chapterKeys = hasChapters ? [...new Set(fullList.map((ex) => ex.chapter))] : [];
+  // Chapters keep first-appearance order unless EVERY chapter carries a numeric chapterOrder, in
+  // which case they sort by it (so lessons appended to the bank later still land in curriculum order).
+  const chapterRank = (ch) => fullList.find((ex) => ex.chapter === ch)?.chapterOrder;
+  const chapters = chapterKeys.every((ch) => chapterRank(ch) != null)
+    ? [...chapterKeys].sort((a, b) => chapterRank(a) - chapterRank(b))
+    : chapterKeys;
   const [chapter, setChapter] = useState(null);
-  const list = hasChapters ? fullList.filter((ex) => ex.chapter === chapter) : fullList;
+  // Inside a chapter, formula-quiz questions (stage 0) come first, then the practice problems —
+  // students warm up on the lesson's formulas before the longer questions. The sort is stable, so
+  // each group keeps its authored order.
+  const stageOf = (ex) => ex.stage ?? 1;
+  const list = hasChapters
+    ? fullList.filter((ex) => ex.chapter === chapter).sort((a, b) => stageOf(a) - stageOf(b))
+    : fullList;
   // Selected-chapter state above is always the stable English key so it survives a language
   // toggle intact (the exercise bank's Khmer name isn't derived until display time) — this helper
   // is the only place that turns that stable key into the localized label shown on screen.
   const chapterLabel = (ch) => (lang === "km" ? fullList.find((ex) => ex.chapter === ch)?.chapterKm || ch : ch);
-  const [idx, setIdx] = useState(null);
   const backToList = hasChapters && chapter != null ? () => setChapter(null) : onBack;
+  const session = useSetSession(list, practice);
+  // Name shown on the "set complete" screen: the formula quiz / practice problems for a staged lesson,
+  // otherwise the chapter (or the whole subject).
+  const usesStages = list.some((e) => e.stage != null);
+  const setName = (i) => (usesStages ? t(lang, stageOf(list[i]) === 0 ? "setNameFormulas" : "practiceProblemsHeading") : hasChapters ? chapterLabel(chapter) : subjectLabel(subject, lang));
 
-  // ── Adaptive difficulty (session-only): 3 correct in a row steps up, 2 wrong in a row steps
-  // down, and missing the same topic twice nudges the student to review it. ──
-  const subjectLevel = p.subjects.find((s) => s.s === subject)?.level;
-  const [tier, setTier] = useState(() => levelToDifficulty(subjectLevel));
-  const [streak, setStreak] = useState(0);
+  // ── "Missed the same topic twice" nudge (session-only). The order of the questions is NOT adaptive:
+  // a set goes forward, missed questions come round again, and the set is complete once all are right
+  // (see practiceFlow.js). ──
   const [topicMisses, setTopicMisses] = useState({});
   const [banner, setBanner] = useState(null);
   useEffect(() => { if (!banner) return; const t = setTimeout(() => setBanner(null), 5000); return () => clearTimeout(t); }, [banner]);
 
-  // Recently-shown exercise ids (most recent last) — with a small bank per subject, always
-  // deterministically picking the "first" same-tier candidate made practice bounce back and
-  // forth between just two questions the moment only two matched the current tier. Preferring
-  // whatever hasn't been seen lately (and picking randomly among ties) fixes that without
-  // needing a bigger question bank.
-  const [seenIds, setSeenIds] = useState([]);
-  useEffect(() => {
-    if (idx == null || !list[idx]) return;
-    setSeenIds((prev) => {
-      const id = list[idx].id;
-      if (prev[prev.length - 1] === id) return prev;
-      return [...prev, id].slice(-Math.max(1, list.length - 1));
-    });
-  }, [idx, subject, lang]);
-
-  const pickNext = (fromIdx) => {
-    const candidates = list.map((ex, i) => ({ ex, i })).filter(({ i }) => i !== fromIdx);
-    if (!candidates.length) return null;
-    const sameTier = candidates.filter(({ ex }) => ex.difficulty === tier);
-    const pool = sameTier.length ? sameTier : candidates;
-    const unseen = pool.filter(({ ex }) => !seenIds.includes(ex.id));
-    const finalPool = unseen.length ? unseen : pool;
-    return finalPool[Math.floor(Math.random() * finalPool.length)].i;
-  };
-
   const handleResult = (ex, correct) => {
-    const nextStreak = correct ? Math.max(1, streak + 1) : Math.min(-1, streak - 1);
+    if (!correct) session.noteMiss(ex);
     const topicShown = topicLabel(ex.topic, lang);
-    if (nextStreak >= 3 && tier !== "Hard") {
-      const newTier = tier === "Easy" ? "Medium" : "Hard";
-      setTier(newTier); setStreak(0);
-      setBanner({ text: lang === "km" ? `និន្នាការល្អ — កំពុងឡើងទៅសំណួរកម្រិត ${newTier}។` : `Nice streak — stepping up to ${newTier} questions.`, tone: "jade" });
-    } else if (nextStreak <= -2 && tier !== "Easy") {
-      const newTier = tier === "Hard" ? "Medium" : "Easy";
-      setTier(newTier); setStreak(0);
-      setBanner({ text: lang === "km" ? `តោះបន្ធូរទៅសំណួរកម្រិត ${newTier}វិញ។` : `Let's ease back to ${newTier} questions.`, tone: "gold" });
-    } else {
-      setStreak(nextStreak);
-    }
     const missCount = correct ? 0 : (topicMisses[ex.topic] || 0) + 1;
     setTopicMisses((m) => ({ ...m, [ex.topic]: missCount }));
     if (!correct && missCount >= 2) setBanner({ text: lang === "km" ? `អ្នកខកខាន ${topicShown} ពីរដងជាប់គ្នា — សូមពិនិត្យការពន្យល់ដោយប្រុងប្រយ័ត្នមុននឹងសាកល្បងម្តងទៀត។` : `You've missed ${topicShown} twice in a row — review the explanation carefully before trying again.`, tone: "ember" });
   };
 
-  if (idx != null && list[idx]) {
+  if (session.idx != null && list[session.idx]) {
+    const cur = list[session.idx];
     return (
-      <ExercisePlayer ex={list[idx]} entry={practice[list[idx].id]} subject={subject} index={idx} total={list.length} tier={tier} banner={banner}
+      <ExercisePlayer ex={cur} entry={practice[cur.id]} subject={subject} index={session.pos - 1} total={session.size}
+        progress={{ done: session.doneCount, total: session.size }} isRetry={session.isRetry} banner={banner}
         onAnswer={(ex, result, meta) => { onAnswer(ex, result, meta); handleResult(ex, result === "correct"); }}
-        onSetStatus={onSetStatus} onBack={() => setIdx(null)}
-        onNext={list.length > 1 ? () => setIdx(pickNext(idx)) : null} lang={lang} glass />
+        onSetStatus={onSetStatus} onBack={session.exit}
+        onNext={session.canAdvance ? session.advance : null} finishing={session.finishing} lang={lang} glass />
+    );
+  }
+
+  // Every question in the set answered correctly → the "set complete" screen.
+  if (session.finished) {
+    const members = setIndexes(list, session.finished.from);
+    const upcoming = nextSetStart(list, session.isDone, session.finished.from);
+    return (
+      <SetComplete name={setName(session.finished.from)} total={members.length} setKey={list[members[0]].id} retried={members.filter((j) => session.missed[list[j].id]).length}
+        onNextSet={upcoming != null ? () => session.start(upcoming) : null} onBack={session.leaveFinished} lang={lang} glass />
     );
   }
 
@@ -4738,7 +4857,10 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
       <div className="eai-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{hasChapters ? chapterLabel(chapter) : subjectLabel(subject, lang)}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{hasChapters ? chapterLabel(chapter) : subjectLabel(subject, lang)}</h2>
+              {pct === 100 && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--jade-soft)", color: "var(--jade)" }}><CheckCircle2 size={12} /> {t(lang, "status_completed")}</span>}
+            </div>
             <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
           </div>
           <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
@@ -4749,9 +4871,26 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
         {list.map((ex, i) => {
           const entry = practice[ex.id];
           const st = STATUS[entry?.status || "pending"];
+          // A section header appears wherever the group changes (only for banks that use stages).
+          const isDrill = stageOf(ex) === 0;
+          const groupStarts = list.some((e) => e.stage != null) && (i === 0 || stageOf(list[i - 1]) !== stageOf(ex));
+          const group = groupStarts ? list.filter((e) => (stageOf(e) === 0) === isDrill) : [];
+          const groupDone = group.filter((e) => practice[e.id]?.status === "completed").length;
           return (
-            <div key={ex.id} className="eai-card p-4 flex flex-wrap items-center gap-3">
-              <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{i + 1}</div>
+            <React.Fragment key={ex.id}>
+            {groupStarts && (
+              <div className={i === 0 ? "" : "pt-3"}>
+                <div className="flex items-center gap-2">
+                  {isDrill && <Brain size={16} style={{ color: "var(--primary)" }} />}
+                  <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, isDrill ? "formulaQuizHeading" : "practiceProblemsHeading")}</h3>
+                  <span className="text-xs font-semibold eai-muted">{groupDone}/{group.length}</span>
+                  {groupDone === group.length && <CheckCircle2 size={15} style={{ color: "var(--jade)" }} />}
+                </div>
+                {isDrill && <p className={`eai-muted text-xs mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "formulaQuizHint")}</p>}
+              </div>
+            )}
+            <div className="eai-card p-4 flex flex-wrap items-center gap-3">
+              <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{setIndexes(list, i).indexOf(i) + 1}</div>
               <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
                 <p className="text-sm font-semibold truncate">{ex.prompt}</p>
                 <div className="flex items-center gap-2 mt-1">
@@ -4761,10 +4900,11 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
                 </div>
               </div>
               <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
-              <button onClick={() => setIdx(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+              <button onClick={() => session.start(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
                 {entry?.status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
               </button>
             </div>
+            </React.Fragment>
           );
         })}
       </div>
@@ -4772,7 +4912,14 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
   );
 }
 
-function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnswer, onSetStatus, onBack, onNext, lang = "en", glass = false }) {
+/* `index`/`total` are the question's position inside its SET ("Question 3 of 7"), `progress` is how many
+   of the set are already correct, `isRetry` marks a question missed earlier that has come round again,
+   and `finishing` means Next will end the set (the button then reads "Finish set"). onNext is null when
+   the question just missed is the only one left — it has to be tried again. The owl beside the card
+   reacts to every answer and says something encouraging (mascotCheers.js): a cheer for a right answer
+   (a "you got it this time" one when the question had been missed before), a gentle one for a wrong
+   answer. */
+function ExercisePlayer({ ex, entry, subject, index, total, progress, isRetry = false, banner, onAnswer, onSetStatus, onBack, onNext, finishing = false, lang = "en", glass = false }) {
   const [choice, setChoice] = useState(null);
   const [phase, setPhase] = useState("answering"); // answering | mistake | result
   const isMcq = Array.isArray(ex.options);
@@ -4783,16 +4930,32 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
   const cardRef = useRef(null);
   const owlTrigger = useRef({ type: "no", nonce: 0, duration: 1.3 });
   const reactOwl = (type, duration) => { owlTrigger.current = { type, nonce: owlTrigger.current.nonce + 1, duration }; };
+  // What the owl is saying right now ({ key, kind }, or null) and the bookkeeping behind picking it: the
+  // last line shown (never repeated back to back) and whether this question has been missed in this visit
+  // (a right answer after a miss gets the "this time" line even if the question is not otherwise a retry).
+  const [cheer, setCheer] = useState(null);
+  const lastCheerRef = useRef(null);
+  const missedRef = useRef(false);
+  const sayCheer = (kind) => { const key = pickCheer(kind, lastCheerRef.current); lastCheerRef.current = key; setCheer({ key, kind }); };
+
+  // The player is reused for the next question (same component, new `ex`): start it clean — no leftover
+  // bubble from the previous question, no memory of a miss that belonged to it.
+  useEffect(() => { setCheer(null); missedRef.current = false; }, [ex.id]);
 
   const submit = () => {
     if (choice == null || String(choice).trim() === "") return;
     const isCorrect = gradeAnswer(ex, choice);
     const timeSec = Math.round((Date.now() - startRef.current) / 100) / 10;
-    if (isCorrect) { onAnswer(ex, "correct", { timeSec }); setPhase("result"); reactOwl("jump", 1.9); }
-    else { pendingTimeRef.current = timeSec; setPhase("mistake"); reactOwl("no", 1.3); }
+    if (isCorrect) {
+      onAnswer(ex, "correct", { timeSec }); setPhase("result"); reactOwl("jump", 1.9);
+      sayCheer(isRetry || missedRef.current ? "retry" : "correct");
+    } else {
+      pendingTimeRef.current = timeSec; setPhase("mistake"); reactOwl("no", 1.3);
+      missedRef.current = true; sayCheer("miss");
+    }
   };
   const chooseMistake = (mistakeType) => { onAnswer(ex, "incorrect", { timeSec: pendingTimeRef.current, mistakeType }); setPhase("result"); };
-  const retry = () => { setPhase("answering"); setChoice(null); startRef.current = Date.now(); };
+  const retry = () => { setPhase("answering"); setChoice(null); setCheer(null); startRef.current = Date.now(); };
   const next = () => { retry(); onNext?.(); };
 
   return (
@@ -4807,7 +4970,14 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 
       <div className="eai-ex-layout">
         <div className="eai-ex-mascot">
-          <OwlMascot pointTargetRef={cardRef} triggerRef={owlTrigger} />
+          <div className="eai-ex-owl"><OwlMascot pointTargetRef={cardRef} triggerRef={owlTrigger} /></div>
+          {/* Always rendered (even when empty): the phone layout's row keeps its shape, and a live region has to
+              exist before its text does for screen readers to announce it. The owl jumps for a right answer, so
+              that bubble waits (0.9s) until it is nearly back on the ground; the gentle "wrong answer" line has
+              no jump to wait for and appears straight away. */}
+          <div className="eai-ex-say" role="status">
+            {cheer && <MascotSpeechBubble text={t(lang, cheer.key)} lang={lang} placement="exercise" delay={cheer.kind === "miss" ? 0 : 0.9} />}
+          </div>
         </div>
 
         <div className="eai-ex-card" ref={cardRef}>
@@ -4815,10 +4985,15 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
             <span className={`eai-ex-qlabel eai-display ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "questionWord")} {index + 1} {t(lang, "ofWord")} {total}</span>
             <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
           </div>
-          <div className="flex items-center gap-2 mb-3">
+          {progress && (
+            <div className="h-1.5 rounded-full eai-soft mb-3 overflow-hidden" title={`${progress.done}/${progress.total}`}>
+              <div className="h-full rounded-full" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%`, background: "var(--jade)", transition: "width .4s ease" }} />
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
             <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
-            {tier && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>🎯 {t(lang, "adaptiveWord")}: {tier}</span>}
+            {isRetry && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--gold-soft)", color: "var(--gold)" }}><RotateCcw size={11} /> {t(lang, "retryChip")}</span>}
           </div>
 
           <h3 className="eai-ex-question eai-display">{ex.prompt}</h3>
@@ -4897,7 +5072,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
 
             {/* Recommendation */}
             <p className={`text-sm eai-muted leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
-              {correct ? t(lang, onNext ? "recCorrectMore" : "recCorrectLast") : t(lang, "recIncorrect")}
+              {correct ? t(lang, onNext && !finishing ? "recCorrectMore" : "recCorrectLast") : t(lang, onNext ? "recIncorrectQueued" : "recIncorrect")}
             </p>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -4908,7 +5083,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
               )}
               {onNext && (
                 <button onClick={next} className={`eai-btn ${glass ? "eai-glass" : "text-white"} eai-focus py-2.5 px-4 text-sm flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={glass ? undefined : { background: "var(--primary)" }}>
-                  {t(lang, "nextExercise")} <ChevronRight size={15} />
+                  {t(lang, finishing ? "finishSet" : "nextExercise")} <ChevronRight size={15} />
                 </button>
               )}
               <button onClick={onBack} className={`eai-btn ${glass ? "eai-glass" : "eai-soft"} eai-focus py-2.5 px-4 text-sm ${lang === "km" ? "eai-km" : ""}`} style={glass ? undefined : { color: "var(--ink)" }}>{t(lang, "backToList")}</button>
@@ -4921,12 +5096,53 @@ function ExercisePlayer({ ex, entry, subject, index, total, tier, banner, onAnsw
   );
 }
 
+/* Shown once every question of a set has been answered correctly (see useSetSession / practiceFlow.js).
+   `retried` = how many questions needed more than one try this session; `onNextSet` (optional) starts
+   the next set of the lesson, e.g. the practice problems after the formula quiz. The owl celebrates
+   (dances) with a bigger speech bubble beside it: a "flawless" line when nothing had to be retried, a
+   "you never gave up" one when some questions did. */
+function SetComplete({ name, total, retried, setKey, onNextSet, onBack, lang = "en", glass = false }) {
+  const km = lang === "km" ? "eai-km" : "";
+  const summary = retried === 0 ? t(lang, "setCompleteClean") : t(lang, retried === 1 ? "setCompleteRetriedOne" : "setCompleteRetriedMany").replace("{n}", retried);
+  // Picked once per visit (lazy initial state), not on every render, so the line doesn't change under the student.
+  const [cheerKey] = useState(() => pickCheer(retried === 0 ? "perfect" : "resilient"));
+  // OwlMascot reads its trigger's nonce when it mounts, so the dance has to be requested after mount.
+  const celebrate = useRef({ type: "dance", nonce: 0, duration: 4.5 });
+  useEffect(() => { celebrate.current = { ...celebrate.current, nonce: celebrate.current.nonce + 1 }; }, []);
+  return (
+    <div className="space-y-5 eai-rise">
+      <div className="eai-card p-8 text-center">
+        <div className="flex flex-col-reverse sm:flex-row items-center justify-center gap-3 sm:gap-5 mb-4">
+          <div style={{ width: "clamp(150px, 22vw, 210px)", maxWidth: "55vw", flexShrink: 0 }}>
+            <OwlMascot triggerRef={celebrate} />
+          </div>
+          <MascotSpeechBubble text={t(lang, cheerKey)} lang={lang} size="lg" delay={0.35} />
+        </div>
+        <h2 className={`eai-display text-2xl font-extrabold flex items-center justify-center gap-2 ${km}`}>
+          <CheckCircle2 size={26} style={{ color: "var(--jade)", flexShrink: 0 }} /> {t(lang, "setCompleteTitle")}
+        </h2>
+        <p className={`eai-muted text-sm mt-1 ${km}`}>{name} · {total}/{total} {t(lang, "completedWord")}</p>
+        <p className={`text-sm mt-4 ${km}`}>{summary}</p>
+        <div className="mt-5"><TreasureBox setKey={setKey} total={total} retried={retried} lang={lang} /></div>
+        <div className="flex flex-wrap justify-center gap-2 mt-6">
+          {onNextSet && (
+            <button onClick={onNextSet} className={`eai-btn ${glass ? "eai-glass" : "text-white"} eai-focus py-2.5 px-4 text-sm flex items-center gap-1.5 ${km}`} style={glass ? undefined : { background: "var(--primary)" }}>
+              {t(lang, "nextSetBtn")} <ChevronRight size={15} />
+            </button>
+          )}
+          <button onClick={onBack} className={`eai-btn ${glass ? "eai-glass" : "eai-soft"} eai-focus py-2.5 px-4 text-sm ${km}`} style={glass ? undefined : { color: "var(--ink)" }}>{t(lang, "backToList")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ════════════════════════ University Practice ════════════════════════
    The university track's quiz UI — reuses ExercisePlayer/StatusControl/STATUS/getUniExercises
    as-is (they're subject-shape-agnostic) rather than re-deriving the exercise-answering screen.
-   Deliberately skips PracticeSubject's session-only adaptive-difficulty stepping (tier/streak
-   banners) to keep this addition scoped — straightforward list-then-answer, same mastery
-   tracking underneath via onAnswer -> handleUniAnswer -> recordAttempt. */
+   A course is one set and uses the same flow as PracticeSubject (useSetSession / practiceFlow.js):
+   forward through the course, missed questions come round again, and the set is complete once every
+   question is right. Same mastery tracking underneath via onAnswer -> handleUniAnswer -> recordAttempt. */
 function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCourseId, onConsumeInitialCourse, lang = "en" }) {
   const up = p.universityProfile || {};
   const courses = UNI_COURSES[up.major] || [];
@@ -4988,15 +5204,24 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
 function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetStatus, onBack, lang = "en" }) {
   const key = `${major}::${course.title}`;
   const list = getUniExercises(key);
-  const [idx, setIdx] = useState(null);
+  const session = useSetSession(list, uniPractice);
   const courseTitle = lang === "km" ? course.titleKm : course.title;
 
-  if (idx != null && list[idx]) {
+  if (session.idx != null && list[session.idx]) {
+    const cur = list[session.idx];
     return (
-      <ExercisePlayer ex={list[idx]} entry={uniPractice[list[idx].id]} subject={courseTitle} index={idx} total={list.length} tier={null} banner={null}
-        onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setIdx(null)}
-        onNext={list.length > 1 ? () => setIdx((idx + 1) % list.length) : null} lang={lang} />
+      <ExercisePlayer ex={cur} entry={uniPractice[cur.id]} subject={courseTitle} index={session.pos - 1} total={session.size}
+        progress={{ done: session.doneCount, total: session.size }} isRetry={session.isRetry} banner={null}
+        onAnswer={(ex, result, meta) => { onAnswer(ex, result, meta); if (result !== "correct") session.noteMiss(ex); }}
+        onSetStatus={onSetStatus} onBack={session.exit}
+        onNext={session.canAdvance ? session.advance : null} finishing={session.finishing} lang={lang} />
     );
+  }
+
+  if (session.finished) {
+    const members = setIndexes(list, session.finished.from);
+    return <SetComplete name={courseTitle} total={list.length} setKey={list[members[0]].id} retried={list.filter((ex) => session.missed[ex.id]).length}
+      onNextSet={null} onBack={session.leaveFinished} lang={lang} />;
   }
 
   const doneN = list.filter((ex) => uniPractice[ex.id]?.status === "completed").length;
@@ -5008,7 +5233,10 @@ function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetS
       <div className="eai-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="eai-display text-2xl font-extrabold">{courseTitle}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="eai-display text-2xl font-extrabold">{courseTitle}</h2>
+              {pct === 100 && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--jade-soft)", color: "var(--jade)" }}><CheckCircle2 size={12} /> {t(lang, "status_completed")}</span>}
+            </div>
             <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
           </div>
           <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
@@ -5021,7 +5249,7 @@ function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetS
           const st = STATUS[entry?.status || "pending"];
           return (
             <div key={ex.id} className="eai-card p-4 flex flex-wrap items-center gap-3">
-              <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{i + 1}</div>
+              <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{setIndexes(list, i).indexOf(i) + 1}</div>
               <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
                 <p className="text-sm font-semibold truncate">{ex.prompt}</p>
                 <div className="flex items-center gap-2 mt-1">
@@ -5031,7 +5259,7 @@ function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetS
                 </div>
               </div>
               <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
-              <button onClick={() => setIdx(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+              <button onClick={() => session.start(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
                 {entry?.status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
               </button>
             </div>
@@ -6227,6 +6455,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
               return (
                 <div key={s.s}>
                   <button onClick={() => setOpenSubject(isOpen ? null : s.s)} className="eai-focus w-full flex items-center gap-3 py-1.5">
+                    <SubjectIcon subject={s.s} size={16} />
                     <span className={`text-sm font-semibold w-32 truncate text-left ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s.s, lang)}</span>
                     <div className="flex-1 h-2.5 rounded-full eai-soft overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${s.m ?? 0}%`, background: s.tag === "weak" ? "var(--ember)" : s.tag === "strong" ? "var(--jade)" : "var(--primary)" }} />
@@ -8010,6 +8239,7 @@ const NAV = [
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
   { id: "languages", label: "Languages", labelKm: "ភាសាបរទេស", icon: Globe },
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
+  { id: "wardrobe", label: "Wardrobe", labelKm: "បន្ទប់ស្លៀកពាក់", icon: Shirt },
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
 ];
 
@@ -8022,6 +8252,7 @@ const UNI_NAV = [
   { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
+  { id: "wardrobe", label: "Wardrobe", labelKm: "បន្ទប់ស្លៀកពាក់", icon: Shirt },
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
 ];
 
@@ -8032,6 +8263,7 @@ const UNI_NAV = [
    breaks rendering. */
 const STRINGS = {
   en: {
+    ...CHEER_STRINGS.en, // the owl's encouraging lines (mascotCheers.js)
     // Welcome
     welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
     welcomeSubtitle: "Less Time Searching, More Time Learning!",
@@ -8071,8 +8303,9 @@ const STRINGS = {
     practiceDesc: "Pick a subject. Every exercise is auto-corrected with an explanation and the formula to use, and you can mark each one Pending, In progress, or Completed.",
     focusArea: "Focus area", exercisesAutoGraded: "exercises · auto-graded", completedWord: "completed",
     allSubjects: "All subjects", allChapters: "All chapters", chooseChapterDesc: "Choose a chapter to see its exercises.", exercisesWord: "exercises", reviewWord: "Review", solveWord: "Solve",
+    formulaQuizHeading: "Formula quiz — start here", formulaQuizHint: "Short questions on this lesson's formulas. Get comfortable with them first, then move on to the practice problems below.", practiceProblemsHeading: "Practice problems",
     status_pending: "Pending", status_in_progress: "In progress", status_completed: "Completed",
-    exerciseXofY: "Exercise {i} of {n}", adaptiveWord: "Adaptive",
+    exerciseXofY: "Exercise {i} of {n}",
     typeAnswer: "Type your answer…", checkAnswer: "Check answer",
     whyMissed: "Why do you think you missed this? (optional)", skipWord: "Skip",
     correctXp: "Correct! +30 XP", notQuite: "Not quite", correctAnswerIs: "Correct answer:",
@@ -8081,6 +8314,12 @@ const STRINGS = {
     recCorrectLast: "Nice, you applied the right method. That's the last exercise in this set!",
     recIncorrect: "Re-read the formula above and how it maps to the question, then tap Try again — you've got this.",
     tryAgain: "Try again", nextExercise: "Next exercise", backToList: "Back to list",
+    finishSet: "Finish set", retryChip: "Retry — missed earlier", nextSetBtn: "Continue to the next set",
+    recIncorrectQueued: "Not quite — read the explanation above. We'll bring this question back after the rest of the set, so tap Next and keep going.",
+    setCompleteTitle: "Set complete!", setNameFormulas: "Formula quiz",
+    setCompleteClean: "You got every question right on the first try.",
+    setCompleteRetriedOne: "1 question needed another try — and you got it right in the end.",
+    setCompleteRetriedMany: "{n} questions needed another try — and you got them all right in the end.",
     // Universities
     universitiesTitle: "University & scholarship prep",
     universitiesDesc: "Tap a university to see its majors, admissions info and match score.",
@@ -8185,6 +8424,7 @@ const STRINGS = {
     goToDashboard: "Go to my dashboard",
   },
   km: {
+    ...CHEER_STRINGS.km, // the owl's encouraging lines (mascotCheers.js)
     // Welcome
     welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
     welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
@@ -8224,8 +8464,9 @@ const STRINGS = {
     practiceDesc: "ជ្រើសរើសមុខវិជ្ជាមួយ។ លំហាត់នីមួយៗត្រូវបានកែដោយស្វ័យប្រវត្តិជាមួយការពន្យល់ និងរូបមន្តត្រូវប្រើ ហើយអ្នកអាចសម្គាល់វាថា កំពុងរង់ចាំ កំពុងធ្វើ ឬបានបញ្ចប់។",
     focusArea: "ផ្នែកត្រូវផ្តោត", exercisesAutoGraded: "លំហាត់ · ដាក់ពិន្ទុស្វ័យប្រវត្តិ", completedWord: "បានបញ្ចប់",
     allSubjects: "មុខវិជ្ជាទាំងអស់", allChapters: "ជំពូកទាំងអស់", chooseChapterDesc: "ជ្រើសរើសជំពូកមួយ ដើម្បីមើលលំហាត់របស់វា។", exercisesWord: "លំហាត់", reviewWord: "ពិនិត្យឡើងវិញ", solveWord: "ដោះស្រាយ",
+    formulaQuizHeading: "កម្រងសំណួររូបមន្ត — ចាប់ផ្តើមពីទីនេះ", formulaQuizHint: "សំណួរខ្លីៗអំពីរូបមន្តនៃមេរៀននេះ។ ហាត់ឱ្យចេះច្បាស់សិន រួចទើបបន្តទៅលំហាត់អនុវត្តខាងក្រោម។", practiceProblemsHeading: "លំហាត់អនុវត្ត",
     status_pending: "កំពុងរង់ចាំ", status_in_progress: "កំពុងធ្វើ", status_completed: "បានបញ្ចប់",
-    exerciseXofY: "លំហាត់ {i} នៃ {n}", adaptiveWord: "សម្របតាមកម្រិត",
+    exerciseXofY: "លំហាត់ {i} នៃ {n}",
     typeAnswer: "វាយចម្លើយរបស់អ្នក…", checkAnswer: "ពិនិត្យចម្លើយ",
     whyMissed: "ហេតុអ្វីអ្នកគិតថាខកខានចម្លើយនេះ? (ស្រេចចិត្ត)", skipWord: "រំលង",
     correctXp: "ត្រឹមត្រូវ! +30 XP", notQuite: "មិនទាន់ត្រឹមត្រូវ", correctAnswerIs: "ចម្លើយត្រឹមត្រូវ៖",
@@ -8234,6 +8475,12 @@ const STRINGS = {
     recCorrectLast: "ល្អណាស់ — អ្នកបានប្រើវិធីត្រឹមត្រូវ។ នេះជាលំហាត់ចុងក្រោយក្នុងសំណុំនេះ!",
     recIncorrect: "អានរូបមន្តខាងលើម្តងទៀត និងរបៀបភ្ជាប់ជាមួយសំណួរ បន្ទាប់មកចុចសាកល្បងម្តងទៀត — អ្នកអាចធ្វើបាន។",
     tryAgain: "សាកល្បងម្តងទៀត", nextExercise: "លំហាត់បន្ទាប់", backToList: "ត្រឡប់ទៅបញ្ជី",
+    finishSet: "បញ្ចប់សំណុំនេះ", retryChip: "សាកល្បងម្តងទៀត — ខុសពីមុន", nextSetBtn: "បន្តទៅសំណុំបន្ទាប់",
+    recIncorrectQueued: "មិនទាន់ត្រូវទេ — សូមអានការពន្យល់ខាងលើ។ យើងនឹងយកសំណួរនេះមកសួរម្តងទៀតបន្ទាប់ពីសំណួរផ្សេងទៀតក្នុងសំណុំនេះ ដូច្នេះសូមចុចបន្ទាប់ ហើយបន្តទៅមុខ។",
+    setCompleteTitle: "បានបញ្ចប់សំណុំនេះហើយ!", setNameFormulas: "កម្រងសំណួររូបមន្ត",
+    setCompleteClean: "អ្នកឆ្លើយត្រូវគ្រប់សំណួរតាំងពីលើកដំបូង។",
+    setCompleteRetriedOne: "មាន 1 សំណួរដែលត្រូវសាកល្បងម្តងទៀត — ហើយទីបំផុតអ្នកឆ្លើយត្រូវ។",
+    setCompleteRetriedMany: "មាន {n} សំណួរដែលត្រូវសាកល្បងម្តងទៀត — ហើយទីបំផុតអ្នកឆ្លើយត្រូវទាំងអស់។",
     // Universities
     universitiesTitle: "ការត្រៀមប្រឡងចូលសាកលវិទ្យាល័យ និងអាហារូបករណ៍",
     universitiesDesc: "ចុចលើសាកលវិទ្យាល័យមួយ ដើម្បីមើលជំនាញ ព័ត៌មានចូលរៀន និងពិន្ទុភាពសមស្រប។",
@@ -8388,6 +8635,7 @@ export default function App() {
   const [uniPracticeTarget, setUniPracticeTarget] = useState(null); // course id to deep-link straight into when the Hub links to a specific course — consumed once by UniversityPractice
   const [plan, setPlan] = useState(saved?.plan ?? []);
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
+  const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
   const [langResults, setLangResults] = useState(saved?.langResults ?? {}); // { [languageName]: { listening, reading, writing, speaking, overall, feedback, completedAt } }
   const [takingLangTest, setTakingLangTest] = useState(null); // language name currently being tested, or null
   const go = (t) => { setTab(t); setOpen(false); };
@@ -8402,14 +8650,14 @@ export default function App() {
   // Persist everything so progress survives a page refresh — this prototype has no backend yet.
   useEffect(() => {
     if (!profile) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults }));
-  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards }));
+  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards]);
 
   // Logging out clears the active session but deliberately leaves localStorage alone, so "Log in"
   // can restore the same account later by matching the phone number used at signup.
   const handleLogout = () => {
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setTab("dashboard"); setEntry("welcome");
+    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setTab("dashboard"); setEntry("welcome");
   };
 
   // Matches either a phone number or an email+password against whatever's currently saved in
@@ -8429,6 +8677,7 @@ export default function App() {
     setUniPractice(data.uniPractice ?? {});
     setPlan(data.plan ?? []);
     setBonusXp(data.bonusXp ?? 0);
+    setRewards(sanitizeRewards(data.rewards));
     setShowWelcomeBack(true);
     setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
@@ -8506,10 +8755,9 @@ export default function App() {
     const totalXp = profile.xp + bonusXp;
     if (totalXp >= profile.xpToNext) {
       setProfile((cur) => {
-        let level = cur.level, xpToNext = cur.xpToNext;
-        while (cur.xp + bonusXp >= xpToNext) { level += 1; xpToNext = Math.round(xpToNext * 1.35); }
-        setLevelUpToast(level);
-        return { ...cur, level, xpToNext };
+        const next = advanceLevel({ level: cur.level, xpToNext: cur.xpToNext }, cur.xp + bonusXp);
+        setLevelUpToast(next.level);
+        return { ...cur, ...next };
       });
     }
   }, [profile, bonusXp]);
@@ -8525,6 +8773,31 @@ export default function App() {
   useEffect(() => {
     if (profile?.educationLevel === "university" && lang !== "en") setLang("en");
   }, [profile, lang]);
+
+  // Everything the rewards feature reads and writes, shared through RewardsContext (see rewards/RewardsContext.jsx).
+  // Claiming a box pays its XP, any level-up and the new wardrobe in ONE handler, so React batches them into a single
+  // render: the level-up effect above then finds nothing left to level and LevelUpToast stays quiet (the reward pop-up
+  // shows the level-up itself).
+  const rewardsApi = {
+    outfit: rewards.outfit,
+    owned: rewards.owned,
+    isClaimed: (setKey) => Boolean(rewards.claimedSets[setKey]),
+    claimSet: ({ setKey, total, retried }) => {
+      if (!profile) return null;
+      const out = claimBox({
+        rewards, progress: { level: profile.level, xp: profile.xp + bonusXp, xpToNext: profile.xpToNext },
+        longestStreak: streakStats.longestStreak, setKey, total, retried,
+      });
+      if (!out) return null;
+      setBonusXp((x) => x + out.result.xp);
+      setProfile((cur) => ({ ...cur, level: out.result.after.level, xpToNext: out.result.after.xpToNext }));
+      setRewards(out.rewards);
+      return out.result;
+    },
+    equip: (slot, itemId) => setRewards((r) => equipItem(r, slot, itemId)),
+    saveOutfit: (outfit) => setRewards((r) => ({ ...r, outfit: sanitizeOutfit(outfit, r.owned) })),
+    openWardrobe: () => go("wardrobe"),
+  };
 
   const togglePlanTask = (id) => {
     const target = plan.find((x) => x.id === id);
@@ -8575,7 +8848,7 @@ export default function App() {
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
   if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
   if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
-  if (retaking) return <Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} />;
+  if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (takingLangTest) return (
     <IeltsDiagnostic
       dark={dark}
@@ -8598,9 +8871,11 @@ export default function App() {
     uniPractice: <UniversityPractice p={p} uniPractice={uniPractice} onAnswer={handleUniAnswer} onSetStatus={handleUniSetStatus}
       initialCourseId={uniPracticeTarget} onConsumeInitialCourse={() => setUniPracticeTarget(null)} lang={lang} />,
     super: <SuperBondus p={p} lang={lang} />,
+    wardrobe: <Wardrobe lang={lang} renderOwl={(outfit) => <OwlMascot outfit={outfit} />} />,
   }[tab];
 
   return (
+    <RewardsContext.Provider value={rewardsApi}>
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" && !isUniProfile ? "eai-km-root" : ""}`}>
       <style>{STYLES}</style>
       <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
@@ -8672,6 +8947,7 @@ export default function App() {
         </div>
       </div>
     </div>
+    </RewardsContext.Provider>
   );
 }
 
