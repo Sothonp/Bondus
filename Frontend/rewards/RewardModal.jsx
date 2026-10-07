@@ -4,6 +4,7 @@ import { animate, motion, useReducedMotion } from "framer-motion";
 import { Sparkles, TrendingUp, X } from "lucide-react";
 import { ITEM_BY_ID } from "./catalog.js";
 import { levelFill } from "./rewardLogic.js";
+import { trapTarget } from "./focusTrap.js";
 import { ItemThumb, RARITY_CLASS } from "./itemArt.jsx";
 import { RARITY_LABEL_KEY, localizeDigits, rt } from "./rewardStrings.js";
 
@@ -47,7 +48,8 @@ export default function RewardModal({ result, lang = "en", equipped = false, onE
   const titleId = useId();
   const reduce = useReducedMotion();
   const dialogRef = useRef(null);
-  const primaryRef = useRef(null);
+  const equipRef = useRef(null);
+  const continueRef = useRef(null);
   const item = result.itemId ? ITEM_BY_ID[result.itemId] : null;
   const focusEquip = Boolean(item) && !equipped;   // the Equip button is the primary action until the item is worn
 
@@ -60,17 +62,13 @@ export default function RewardModal({ result, lang = "en", equipped = false, onE
       ? { width: [`${beforePct}%`, "100%", `${afterPct}%`], transition: { duration: 1.5, times: [0, 0.55, 1], ease: "easeInOut", delay: 0.3 } }
       : { width: `${afterPct}%`, transition: { duration: 0.9, ease: "easeOut", delay: 0.3 } };
 
-  useEffect(() => { primaryRef.current?.focus(); }, []);
+  useEffect(() => { (focusEquip ? equipRef : continueRef).current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
       if (e.key !== "Tab") return;
-      const focusable = dialogRef.current?.querySelectorAll("button:not([disabled])");
-      if (!focusable || focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      const target = trapTarget([...(dialogRef.current?.querySelectorAll("button:not([disabled])") ?? [])], document.activeElement, e.shiftKey);
+      if (target) { e.preventDefault(); target.focus(); }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -125,13 +123,14 @@ export default function RewardModal({ result, lang = "en", equipped = false, onE
 
         <div className="eai-rw-actions">
           {item && (
-            <button type="button" ref={focusEquip ? primaryRef : undefined} onClick={onEquip} disabled={equipped}
+            // Wearing the item disables this button, and a disabled button can't keep focus, so move focus on explicitly.
+            <button type="button" ref={equipRef} onClick={() => { onEquip(); continueRef.current?.focus(); }} disabled={equipped}
               className={`eai-btn eai-focus text-white py-2.5 px-4 text-sm ${km}`} style={{ background: "var(--primary)" }}>
               {equipped ? rt(lang, "rwEquipped") : rt(lang, "rwEquipNow")}
             </button>
           )}
           <button type="button" onClick={onOpenWardrobe} className={`eai-btn eai-soft eai-focus py-2.5 px-4 text-sm ${km}`} style={{ color: "var(--ink)" }}>{rt(lang, "rwOpenWardrobe")}</button>
-          <button type="button" ref={focusEquip ? undefined : primaryRef} onClick={onClose} className={`eai-btn eai-soft eai-focus py-2.5 px-4 text-sm ${km}`} style={{ color: "var(--ink)" }}>{rt(lang, "rwContinue")}</button>
+          <button type="button" ref={continueRef} onClick={onClose} className={`eai-btn eai-soft eai-focus py-2.5 px-4 text-sm ${km}`} style={{ color: "var(--ink)" }}>{rt(lang, "rwContinue")}</button>
         </div>
       </motion.div>
     </div>
