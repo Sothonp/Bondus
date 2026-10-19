@@ -26,6 +26,8 @@ import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUnivers
 import { CHEMISTRY_EXERCISES } from "../src/data/chemistryExercises.js";
 import { MATHEMATICS_EXERCISES, withFoundationsChapter } from "../src/data/mathematicsExercises.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
+import SubjectRibbon from "./SubjectRibbon.jsx";
+import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
 import { RewardsContext, useRewards } from "./rewards/RewardsContext.jsx";
 import { OutfitLayers } from "./rewards/itemArt.jsx";
@@ -34,6 +36,7 @@ import TreasureBox from "./rewards/TreasureBox.jsx";
 import Wardrobe from "./rewards/Wardrobe.jsx";
 import { setIndexes, nextInSet, nextSetStart } from "./practiceFlow.js";
 import { CHEER_STRINGS, pickCheer } from "./mascotCheers.js";
+import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
 /* Field-specific subject priorities. Change these lists to extend the curriculum. */
@@ -872,52 +875,29 @@ input.eai-input::placeholder{ color:var(--muted); }
 
 /* ── Onboarding flow: shared layout, progress, cards, inputs, buttons ── */
 .eai-onboarding.theme-light{
-  --bg:#F8F8FC; --card:#FFFFFF; --surface-2:#FFFFFF; --bg-soft:#F5F4FA;
-  --ink:#181A3B; --muted:#727694; --label:#696D8B; --muted-2:#999CB2; --line:#E5E4EE;
-  --input-border:#E2E1EB; --input-border-hover:#C9C6E5; --focus-border:#5148D5;
-  --primary:#4C44C7; --primary-hover:#4139B8; --primary-soft:#EFEEFC; --primary-ring:rgba(81,72,213,.12);
-  --gold:#EE9A21; --gold-soft:#FFF0D4; --ember:#E76F61;
-  --progress-track:#ECEBF5; --progress-fill:#5148D5;
-  --shadow:0 18px 50px rgba(31,31,70,.08);
-  --glass-bg:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.8); --glass-shadow:0 1px 3px rgba(26,27,58,.08), inset 0 1px 0 rgba(255,255,255,.6);
+  --bg:#FFFFFF; --card:#FFFFFF; --surface-2:#FFFFFF; --bg-soft:#F3F4F6;
+  --ink:#111827; --muted:#6B7280; --label:#4B5563; --muted-2:#9CA3AF; --line:#E5E7EB;
+  --input-border:#E5E7EB; --input-border-hover:#D1D5DB; --focus-border:#1D4ED8;
+  --primary:#1D4ED8; --primary-hover:#1E40AF; --primary-soft:#EFF6FF; --primary-ring:rgba(29,78,216,.14);
+  --gold:#EE9A21; --gold-soft:#FFF0D4; --ember:#DC2626;
+  --progress-track:#E5E7EB; --progress-fill:#1D4ED8;
+  --ob-disabled:#E5E7EB; --ob-disabled-edge:#D1D5DB;
+  --shadow:none;
+  --glass-bg:#FFFFFF; --glass-line:#E5E7EB; --glass-shadow:none;
 }
 .eai-onboarding.theme-dark{
-  --bg:#090B1D; --card:#17192F; --surface-2:#1D203B; --bg-soft:#202238;
-  --ink:#F5F3FC; --muted:#A7AAC2; --label:#B8BACD; --muted-2:#8589A4; --line:#2A2D49;
-  --input-border:#30334F; --input-border-hover:#424665; --focus-border:#8A82F4;
-  --primary:#8179F2; --primary-hover:#918AF7; --primary-soft:#28294D; --primary-ring:rgba(138,130,244,.10);
-  --gold:#EFA421; --gold-soft:#302716; --ember:#F17A70;
-  --progress-track:#292C47; --progress-fill:#8179F2;
-  --shadow:0 18px 50px rgba(0,0,0,.22);
-  --glass-bg:rgba(255,255,255,.08); --glass-line:rgba(255,255,255,.16); --glass-shadow:0 1px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
+  --bg:#111827; --card:#1F2937; --surface-2:#1F2937; --bg-soft:#1F2937;
+  --ink:#F9FAFB; --muted:#9CA3AF; --label:#D1D5DB; --muted-2:#6B7280; --line:#374151;
+  --input-border:#374151; --input-border-hover:#4B5563; --focus-border:#3B82F6;
+  --primary:#3B82F6; --primary-hover:#60A5FA; --primary-soft:rgba(59,130,246,.14); --primary-ring:rgba(59,130,246,.2);
+  --gold:#EFA421; --gold-soft:#302716; --ember:#F87171;
+  --progress-track:#1F2937; --progress-fill:#1D4ED8;
+  --ob-disabled:#374151; --ob-disabled-edge:#1F2937;
+  --shadow:none;
+  --glass-bg:#1F2937; --glass-line:#374151; --glass-shadow:none;
 }
 .eai-onboarding{ position:relative; transition:background-color .25s ease, color .25s ease; }
-.eai-onboarding::before{ content:""; position:fixed; inset:0; pointer-events:none; z-index:0; }
-.eai-onboarding.theme-light::before{ background-image:radial-gradient(circle at 50% 25%, rgba(86,78,210,.07), transparent 42%); }
-.eai-onboarding.theme-dark::before{ background-image:radial-gradient(circle at 50% 25%, rgba(115,105,235,.12), transparent 45%); }
-.eai-onboarding > *{ position:relative; z-index:1; }
 
-.eai-ob-toggle{ position:fixed; top:20px; right:20px; width:44px; height:44px; border-radius:14px; border:1px solid var(--line);
-  background:var(--bg-soft); color:var(--ink); display:grid; place-items:center; z-index:20; transition:background-color .15s ease, transform .12s ease; }
-.eai-ob-toggle:hover{ background:var(--card); transform:translateY(-1px); }
-
-.eai-ob-card{ background:var(--card); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); padding:40px; padding-top:16px; padding-bottom:64px;
-  transition:background-color .25s ease, border-color .25s ease, box-shadow .25s ease; }
-@media (max-width:640px){ .eai-ob-card{ padding:22px; padding-top:8px; padding-bottom:40px; border-radius:20px; } }
-
-.eai-ob-progress{ margin-bottom:18px; }
-.eai-ob-progress-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
-.eai-ob-progress-step{ font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase; letter-spacing:.04em; }
-.eai-ob-progress-label{ font-size:12px; font-weight:600; color:var(--muted); }
-.eai-ob-progress-track{ margin-top:8px; height:6px; border-radius:999px; background:var(--progress-track); overflow:hidden; }
-.eai-ob-progress-fill{ height:100%; border-radius:999px; background:var(--progress-fill); transition:width .3s ease; }
-
-/* Duolingo-style top row: a bare chevron beside the progress bar, instead of a separate "Back" row. */
-.eai-ob-progress-row{ display:flex; align-items:center; gap:12px; margin-bottom:22px; }
-.eai-ob-back-icon{ display:grid; place-items:center; width:32px; height:32px; border-radius:10px; flex-shrink:0;
-  color:var(--muted); transition:color .15s ease, background-color .15s ease; }
-.eai-ob-back-icon:hover{ color:var(--primary); background:var(--primary-soft); }
-.eai-ob-progress-row .eai-ob-progress{ flex:1; margin-bottom:0; }
 
 .eai-ob-heading{ margin-bottom:22px; }
 .eai-ob-title{ font-family:'Sora', system-ui, sans-serif; font-weight:700; font-size:28px; letter-spacing:-.02em; line-height:1.22; color:var(--ink); }
@@ -928,10 +908,10 @@ input.eai-input::placeholder{ color:var(--muted); }
    step's question, one at a time, instead of a plain heading. */
 .eai-ob-mascot-row{ display:flex; align-items:flex-start; gap:0px; margin-bottom:22px; }
 .eai-ob-mascot-avatar{ width:152px; height:207px; flex-shrink:0; background:transparent; display:grid; place-items:center; }
-.eai-ob-bubble{ position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 18px; box-shadow:var(--shadow); flex:1; align-self:center; animation:eai-ob-bubble-in .35s ease-out; }
+.eai-ob-bubble{ position:relative; background:var(--card); border:2px solid var(--line); border-radius:16px; padding:14px 18px; box-shadow:none; flex:1; align-self:center; animation:eai-ob-bubble-in .35s ease-out; }
 @keyframes eai-ob-bubble-in{ from{ opacity:0; transform:translateX(-8px) scale(.97); } to{ opacity:1; transform:none; } }
-.eai-ob-bubble::before{ content:""; position:absolute; left:-7px; top:64px; width:14px; height:14px; background:var(--card);
-  border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:rotate(45deg); border-radius:0 0 0 3px; }
+.eai-ob-bubble::before{ content:""; position:absolute; left:-8px; top:64px; width:14px; height:14px; background:var(--card);
+  border-left:2px solid var(--line); border-bottom:2px solid var(--line); transform:rotate(45deg); border-radius:0 0 0 3px; }
 .eai-ob-bubble .eai-ob-title{ font-size:20px; margin:0; }
 .eai-ob-bubble .eai-ob-desc{ margin-top:4px; font-size:14px; }
 @media (max-width:640px){ .eai-ob-mascot-avatar{ width:120px; height:163px; } .eai-ob-bubble .eai-ob-title{ font-size:18px; } }
@@ -950,16 +930,6 @@ input.eai-input::placeholder{ color:var(--muted); }
   75% { transform:rotate(-3deg) scaleY(1.01); }
 }
 
-/* The interactive mascot's resting loop: anchored in place (no horizontal drift at all — only
-   translateY/rotate/scaleY), reading as a gentle breathing bounce rather than the character
-   sliding around its box. This is the default state for LivingMascot (Welcome screen). */
-.eai-mascot-living .eai-mascot-img{ animation:eai-mascot-living 3s ease-in-out infinite; }
-@keyframes eai-mascot-living{
-  0%, 100% { transform:translateY(0) rotate(0deg) scaleY(1); }
-  25%  { transform:translateY(-4px) rotate(3deg) scaleY(1.015); }
-  50%  { transform:translateY(-6px) rotate(0deg) scaleY(1.02); }
-  75%  { transform:translateY(-2px) rotate(-3deg) scaleY(1.01); }
-}
 
 /* One-shot "wave hello" gesture, triggered by the mascot's Wave button. No separate arm layer to
    swing, so this is a friendly whole-body wiggle (rotate/scale only, anchored) rather than a
@@ -980,6 +950,113 @@ input.eai-input::placeholder{ color:var(--muted); }
 /* Toggled directly on OwlMascot's pointTargetRef element while the owl's "point" state is aiming
    at it — a glow ring + slight scale-up, so the gesture visibly lands on something. */
 .eai-mascot-pointed{ box-shadow:0 0 0 4px var(--primary-soft), var(--shadow) !important; transform:scale(1.04); }
+
+/* ── Landing hero: the owl flies its airplane in, lands it on a phone, and stands ─────────────────────
+   One SVG drawing. Every movement is a CSS animation of the poses heroFlight.js generates, all on one clock
+   (TOTAL_S): the plane's keyframes end at its stop, the owl's at its standing spot, so nothing is measured in JS. */
+.eai-hero{ position:relative; width:min(100%, 560px, calc(60vh * 1.1818)); aspect-ratio:520 / 440; }
+.eai-hero-svg{ display:block; width:100%; height:100%; overflow:visible; }
+.eai-hero-bubble{ position:absolute; transform:translateX(-50%); }
+.eai-hero-cloud{ animation:eai-hero-drift linear infinite; animation-duration:var(--cd); animation-delay:var(--cdl); }
+@keyframes eai-hero-drift{ from{ transform:translateX(-260px); } to{ transform:translateX(620px); } }
+.eai-plane{ animation:eai-plane-go ${TOTAL_S}s linear both; }
+.eai-plane-vanish{ animation:eai-plane-vanish ${TOTAL_S}s linear both; }
+.eai-rider{ animation:eai-rider-go ${TOTAL_S}s linear both; }
+/* Once standing, the owl bobs up and down (3 scene units: about 3px at laptop size). */
+.eai-rider-bob{ animation:eai-rider-bob 3.6s ease-in-out ${TOTAL_S}s infinite; }
+@keyframes eai-rider-bob{ 0%, 100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
+/* The propeller turns in its own plane: the blades sit in a group whose matrix (heroPlane.js) lays that plane into the
+   scene's view, so spinning them about the hub here looks like a real disc turning. */
+.eai-prop-spin{ transform-origin:0 0; animation:eai-prop-spin .32s linear infinite; }
+@keyframes eai-prop-spin{ to{ transform:rotate(360deg); } }
+.eai-stand-shadow{ animation:eai-stand-shadow ${HOP_S}s ease-out ${HOP_AT}s both; }
+@keyframes eai-stand-shadow{ from{ opacity:0; } to{ opacity:1; } }
+${planeKeyframesCss("eai-plane-go")}
+${vanishKeyframesCss("eai-plane-vanish")}
+${riderKeyframesCss("eai-rider-go")}
+/* Coming back to the landing page from sign-up: the owl is already standing and nothing replays. */
+.eai-hero-skip .eai-plane{ display:none; }
+.eai-hero-skip .eai-rider{ animation:none; transform:${STAND_TRANSFORM}; }
+.eai-hero-skip .eai-rider-bob{ animation-delay:0s; }
+.eai-hero-skip .eai-stand-shadow{ animation:none; opacity:1; }
+@media (prefers-reduced-motion: reduce){
+  .eai-hero-cloud, .eai-plane, .eai-plane-vanish, .eai-rider, .eai-rider-bob, .eai-stand-shadow, .eai-prop-spin{ animation:none; }
+  .eai-plane{ display:none; }
+  .eai-rider{ transform:${STAND_TRANSFORM}; }
+}
+
+/* ── Landing page (Welcome): flat white, Duolingo-style ──────────────────────────────────────────
+   Scoped to .eai-lp, so every other screen keeps the app's indigo theme. Rather than restyle each
+   piece, .eai-lp re-points the colour tokens: what Welcome shares with other screens (the language
+   toggle, the speech bubble, focus rings) picks the landing palette up by itself. The page is a plain
+   solid colour — no gradient, no corner glows. The blue is a rich #1D4ED8 with a darker #1E40AF
+   underside (white on it is 6.7:1, so the button labels pass WCAG AA); the neutrals are #111827
+   (headline), #6B7280 (subtitle) and #E5E5E5 (borders). --lp-link is the blue used for text ("BONDUS",
+   the secondary button). On the near-black dark page that deep blue would sink into the background (text
+   2.9:1), so dark mode keeps a brighter fill (#2563EB over #1D4ED8) and lifts the text blue to #3B82F6. */
+.eai-root.eai-lp{ --primary:#1D4ED8; --primary-deep:#1E40AF; --lp-link:#1D4ED8; --shadow:none; }
+.eai-root.eai-lp.theme-light{
+  --bg:#FFFFFF; --card:#FFFFFF; --ink:#111827; --muted:#6B7280; --line:#E5E5E5;
+  --glass-bg:#FFFFFF; --glass-line:#E5E5E5; --glass-shadow:none; --lp-hover:#F7F7F7;
+  --hero-cloud-1:#DBE8FA; --hero-cloud-2:#E6EEF8; --hero-cloud-3:#D2E2F6;
+  --hero-phone:#1D4ED8; --hero-phone-edge:#1E3A8A; --hero-screen-a:#F7FAFF; --hero-screen-b:#DCE9FA;
+  --hero-park:#BFDBFE; --hero-block:#93C5FD; --hero-runway:#CBD5E1; --hero-runway-line:#FFFFFF;
+  --hero-plane-a:#3B82F6; --hero-plane-b:#1D4ED8; --hero-plane-wing:#60A5FA; --hero-plane-fin:#1E3A8A;
+  --hero-plane-edge:#1E40AF; --hero-rim:#F8FAFC; --hero-interior:#172554; --hero-seat:#C27A0E;
+  --hero-gold:#F5A623; --hero-prop:#374151;
+  --hero-ground:rgba(15,23,42,.16);
+}
+.eai-root.eai-lp.theme-dark{
+  --primary:#2563EB; --primary-deep:#1D4ED8; --lp-hover:var(--card); --lp-link:#3B82F6;
+  --hero-cloud-1:#1A2348; --hero-cloud-2:#212B55; --hero-cloud-3:#172042;
+  --hero-phone:#2563EB; --hero-phone-edge:#1E3A8A; --hero-screen-a:#1F2B55; --hero-screen-b:#2A3A72;
+  --hero-park:#34478A; --hero-block:#4B5F9E; --hero-runway:#475569; --hero-runway-line:#E2E8F0;
+  --hero-plane-a:#60A5FA; --hero-plane-b:#2563EB; --hero-plane-wing:#3B82F6; --hero-plane-fin:#1E3A8A;
+  --hero-plane-edge:#1E3A8A; --hero-rim:#E2E8F0; --hero-interior:#0B1437; --hero-seat:#B7791F;
+  --hero-gold:#F5A623; --hero-prop:#CBD5E1;
+  --hero-ground:rgba(0,0,0,.45);
+}
+/* The speech bubble (an .eai-card) gets the same 2px outline as the buttons and corner chips; the
+   bubble's tail is drawn with a 2px outline already, so it joins up. */
+.eai-lp .eai-card{ border-width:2px; }
+/* The two buttons are chunky pressable slabs: a 4px darker underside (a real border-bottom), a bold
+   uppercase label, 16px corners. Pressing sinks the button onto its underside: the border shrinks and the
+   button moves down by the same amount, with an equal margin added back so the button below never shifts.
+   Both buttons come out exactly the same height (the primary's missing 2px top border is padding instead).
+   Khmer has no letter case and breaks if it is letter-spaced, so only Latin text gets the tracking. */
+.eai-lp-btn{ display:block; width:100%; padding:13px 16px; border:2px solid transparent; border-bottom-width:4px; border-radius:16px;
+  font-size:15px; font-weight:700; line-height:1.35; text-align:center; text-transform:uppercase; cursor:pointer;
+  transition:filter .15s ease, background-color .15s ease, transform .08s ease; }
+.eai-lp-btn:not(.eai-km){ letter-spacing:.06em; }
+.eai-lp-btn-primary{ background:var(--primary); color:#FFFFFF; border-width:0 0 4px; border-bottom-color:var(--primary-deep); padding-top:15px; }
+.eai-lp-btn-primary:hover{ filter:brightness(1.07); }
+.eai-lp-btn-primary:active{ border-bottom-width:0; margin-bottom:4px; transform:translateY(4px); }
+.eai-lp-btn-secondary{ background:var(--bg); color:var(--lp-link); border-color:var(--line); }
+.eai-lp-btn-secondary:hover{ background:var(--lp-hover); }
+.eai-lp-btn-secondary:active{ border-bottom-width:2px; margin-bottom:2px; transform:translateY(2px); }
+@media (prefers-reduced-motion: reduce){ .eai-lp-btn{ transition:none; } }
+
+/* Subject ribbon: the strip of subjects along the bottom of the landing page (SubjectRibbon.jsx). A 1px top border
+   in the page's line colour on the page background; names are small bold uppercase, muted until hovered. The track
+   scrolls sideways with the scrollbar hidden, and the list centres itself when it fits (auto margins fall back to
+   the start when it overflows, so nothing is cut off on the left). The arrows only show from 640px up: on a phone
+   the strip is dragged. Khmer has no letter case and breaks if letter-spaced, so it gets a plain, larger size. */
+.eai-ribbon{ background:var(--bg); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+.eai-ribbon-inner{ display:flex; align-items:center; max-width:1680px; margin:0 auto; padding:0 8px; }
+.eai-ribbon-track{ flex:1 1 0; min-width:0; display:flex; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; }
+.eai-ribbon-track::-webkit-scrollbar{ display:none; }
+.eai-ribbon-list{ display:flex; margin:0 auto; padding:0; list-style:none; }
+.eai-ribbon-item{ display:flex; align-items:center; gap:10px; min-height:56px; padding:0 14px; background:none; border:0; cursor:pointer; white-space:nowrap;
+  font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); transition:color .15s ease; }
+.eai-ribbon-item:hover{ color:var(--ink); }
+.eai-ribbon-item.eai-km{ font-size:14px; letter-spacing:normal; text-transform:none; }
+.eai-ribbon-tile{ display:grid; place-items:center; flex:none; width:36px; height:28px; border-radius:8px; color:#FFFFFF; }
+.eai-ribbon-arrow{ display:none; place-items:center; flex:none; width:40px; height:40px; background:none; border:0; border-radius:12px; cursor:pointer; color:var(--muted); transition:color .15s ease; }
+.eai-ribbon-arrow:hover{ color:var(--ink); }
+.eai-ribbon-arrow[aria-disabled="true"]{ opacity:.3; cursor:default; }
+.eai-ribbon-arrow[data-idle="true"]{ visibility:hidden; }
+@media (min-width:640px){ .eai-ribbon-arrow{ display:grid; } }
+@media (prefers-reduced-motion: reduce){ .eai-ribbon-item, .eai-ribbon-arrow{ transition:none; } }
 
 /* Duolingo-style MCQ layout: owl beside a bordered question card, options as full-width stacked
    rows instead of a plain grid. Stacks (mascot above card) below the sm breakpoint. */
@@ -1076,11 +1153,7 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
 .eai-ob-error{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ember); margin-top:6px; }
 
-.eai-ob-track-card{ width:100%; text-align:left; border-radius:18px; border:1px solid var(--glass-line); background:var(--glass-bg);
-  padding:20px; cursor:pointer; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
-  transition:background-color .18s ease, border-color .18s ease, transform .15s ease, box-shadow .18s ease; }
-.eai-ob-track-card:hover{ border-color:var(--primary); transform:translateY(-1px); }
-.eai-ob-track-card.is-selected{ background:var(--primary-soft); border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-ring); }
+
 .eai-ob-tag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--glass-bg); border:1px solid var(--glass-line); color:var(--muted); }
 
 .eai-ob-chip{ height:37px; padding:0 14px; border-radius:999px; border:1px solid var(--glass-line); background:var(--glass-bg); color:var(--ink);
@@ -1096,17 +1169,13 @@ input.eai-input::placeholder{ color:var(--muted); }
   transition:color .15s ease, background-color .15s ease; }
 .eai-ob-text-action:hover{ color:var(--primary); background:var(--primary-soft); }
 
-.eai-ob-btn-primary{ height:50px; width:100%; border-radius:14px; font-weight:600; font-size:14px; color:#fff; background:var(--primary);
-  border:none; transition:background-color .2s ease, transform .12s ease; }
-.eai-ob-btn-primary:hover:not(:disabled){ background:var(--primary-hover); transform:translateY(-1px); }
-.eai-ob-btn-primary:active:not(:disabled){ transform:translateY(0); }
-.eai-ob-btn-primary:disabled{ background:var(--primary-soft); color:var(--muted-2); cursor:not-allowed; }
+.eai-km.eai-ob-btn-primary{ letter-spacing:normal; }
 .eai-ob-btn-secondary{ height:50px; width:100%; border-radius:14px; font-weight:600; font-size:14px; background:var(--glass-bg); color:var(--ink);
   border:1px solid var(--glass-line); backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
   transition:background-color .2s ease, border-color .2s ease, transform .12s ease; }
 .eai-ob-btn-secondary:hover{ border-color:var(--primary); transform:translateY(-1px); }
 
-.eai-ob-option-card{ position:relative; border-radius:18px; padding:22px; border:1px solid var(--glass-line); background:var(--glass-bg);
+.eai-ob-option-card{ position:relative; border-radius:16px; padding:22px; border:2px solid var(--line); border-bottom-width:4px; background:var(--card);
   backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
   transition:background-color .2s ease, border-color .2s ease; display:flex; flex-direction:column; height:100%; }
 .eai-ob-option-card.is-primary{ background:var(--primary-soft); border-color:var(--primary); }
@@ -1118,8 +1187,7 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-ob-footer{ text-align:center; font-size:13px; color:var(--muted); margin-top:18px; }
 
 @media (prefers-reduced-motion: reduce){
-  .eai-ob-progress-fill{ transition:none; }
-  .eai-ob-track-card, .eai-ob-btn-primary, .eai-ob-btn-secondary, .eai-ob-toggle{ transition:none; }
+  .eai-ob-btn-primary, .eai-ob-btn-secondary{ transition:none; }
   .eai-ob-bubble{ animation:none; }
 }
 ${REWARD_STYLES}`;
@@ -1252,10 +1320,8 @@ const ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "ជម្រ�
 const UNI_ONBOARDING_STEPS = ["Account details", "Your goals", "Your field", "Your year"];
 const UNI_ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "គោលដៅរបស់អ្នក", "ជំនាញរបស់អ្នក", "ឆ្នាំសិក្សា"];
 
-/* Switches the app's UI language (English / Khmer) — visually matches ThemeToggle/.eai-ob-toggle
-   but styled inline rather than via that class, since .eai-ob-toggle hardcodes position:fixed
-   (fine for a lone corner button, but it fights layout when composed into a flex row alongside
-   other controls — the same reason the header's dark-mode button also skips that class). */
+/* Switches the app's UI language (English / Khmer). Styled inline so it can sit in a flex row next to the
+   theme toggle, in the onboarding header and on the landing page. */
 function LangToggle({ lang, setLang, style }) {
   return (
     <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
@@ -1276,20 +1342,19 @@ function OnboardingProgress({ step, lang = "en", stepLabels, stepLabelsKm }) {
   const list = lang === "km" ? (stepLabelsKm || ONBOARDING_STEPS_KM) : (stepLabels || ONBOARDING_STEPS);
   const pct = (step / list.length) * 100;
   return (
-    <div className="eai-ob-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
-      aria-label={`Step ${step} of ${list.length}: ${list[step - 1]}`}>
-      <div className="eai-ob-progress-top">
-        <span className={`eai-ob-progress-step ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "stepWord")} {step} {t(lang, "ofWord")} {list.length}</span>
-        <span className={`eai-ob-progress-label ${lang === "km" ? "eai-km" : ""}`}>{list[step - 1]}</span>
-      </div>
-      <div className="eai-ob-progress-track">
-        <div className="eai-ob-progress-fill" style={{ width: `${pct}%` }} />
-      </div>
+    <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+      aria-label={`Step ${step} of ${list.length}: ${list[step - 1]}`}
+      className="h-3 w-full overflow-hidden rounded-full bg-[var(--progress-track)]">
+      <div className="h-full rounded-full bg-[#1D4ED8] transition-[width] duration-300 ease-out motion-reduce:transition-none"
+        style={{ width: `${pct}%` }} />
     </div>
   );
 }
-
-function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, children, lang = "en", setLang, mascotState = "idle" }) {
+/* The onboarding screens' shared frame. It fills the whole screen (no card): a header with the back arrow, the
+   progress bar and the language and theme toggles; the mascot and its speech bubble above the step's content;
+   and an optional footer bar, pinned to the bottom, that holds the step's Continue button. Colours come from the
+   .eai-onboarding tokens: pure white in light mode, #111827 in dark mode. */
+function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title, description, onBack, footer, children, lang = "en", setLang, mascotState = "idle" }) {
   const bubbleRef = useRef(null);
   const owlTrigger = useRef({ type: "no", nonce: 0, duration: 1.3 });
   const prevMascotState = useRef(mascotState);
@@ -1303,51 +1368,58 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
   }, [mascotState]);
 
   return (
-    <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
+    <div className={`eai-root eai-onboarding ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""} flex min-h-screen w-full flex-col justify-between bg-[var(--bg)] text-[var(--ink)]`}
+      style={{ minHeight: "100dvh" }}>
       <style>{STYLES}</style>
-      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 20, display: "flex", gap: 8 }}>
-        {setLang && <LangToggle lang={lang} setLang={setLang} />}
-        <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--glass-line)", background: "var(--glass-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", boxShadow: "var(--glass-shadow)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
-          {dark ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-      </div>
 
-      <div className="flex items-start sm:items-center justify-center px-4 sm:px-6" style={{ minHeight: "100vh", paddingTop: 32, paddingBottom: 32 }}>
-        <div className="w-full eai-rise" style={{ maxWidth: 820 }}>
-          <div className="eai-ob-card">
-            <div className="eai-ob-progress-row">
-              {onBack ? (
-                <button onClick={onBack} aria-label={t(lang, "backWord")} className="eai-ob-back-icon eai-focus">
-                  <ChevronLeft size={20} />
-                </button>
-              ) : (
-                <span aria-hidden="true" className="eai-ob-back-icon" style={{ visibility: "hidden" }}><ChevronLeft size={20} /></span>
-              )}
-              {step != null && <OnboardingProgress step={step} lang={lang} stepLabels={stepLabels} stepLabelsKm={stepLabelsKm} />}
-            </div>
-
-            {(title || description) && (
-              <div className="eai-ob-mascot-row">
-                <div className="eai-ob-mascot-avatar">
-                  <OwlMascot pointTargetRef={bubbleRef} triggerRef={owlTrigger} />
-                </div>
-                <div className="eai-ob-bubble" ref={bubbleRef}>
-                  {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
-                  {description && <p className={`eai-ob-desc ${lang === "km" ? "eai-km" : ""}`}>{description}</p>}
-                </div>
-              </div>
-            )}
-
-            {children}
-          </div>
-          <p className={`eai-ob-footer ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "prototypeFooter")}</p>
+      <header className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-6 py-6">
+        {onBack ? (
+          <button onClick={onBack} aria-label={t(lang, "backWord")}
+            className="eai-focus grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[var(--muted)] transition-colors hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]">
+            <ChevronLeft size={24} />
+          </button>
+        ) : (
+          <span aria-hidden="true" className="h-10 w-10 shrink-0" />
+        )}
+        <div className="min-w-0 flex-1">
+          {step != null && <OnboardingProgress step={step} lang={lang} stepLabels={stepLabels} stepLabelsKm={stepLabelsKm} />}
         </div>
-      </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {setLang && (
+            <LangToggle lang={lang} setLang={setLang}
+              style={{ height: 40, borderRadius: 12, border: "2px solid var(--line)", background: "var(--card)", boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" }} />
+          )}
+          <button onClick={() => setDark((d) => !d)} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+            className="eai-focus grid h-10 w-10 place-items-center rounded-xl border-2 border-[var(--line)] bg-[var(--card)] text-[var(--ink)] transition-colors">
+            {dark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
+      </header>
+
+      <main className="eai-rise mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 pb-8">
+        {(title || description) && (
+          <div className="eai-ob-mascot-row w-full">
+            <div className="eai-ob-mascot-avatar">
+              <OwlMascot pointTargetRef={bubbleRef} triggerRef={owlTrigger} />
+            </div>
+            <div className="eai-ob-bubble" ref={bubbleRef}>
+              {title && <h1 className={`eai-ob-title ${lang === "km" ? "eai-km" : ""}`}>{title}</h1>}
+              {description && <p className={`eai-ob-desc ${lang === "km" ? "eai-km" : ""}`}>{description}</p>}
+            </div>
+          </div>
+        )}
+        <div className="w-full">{children}</div>
+        <p className={`eai-ob-footer ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "prototypeFooter")}</p>
+      </main>
+
+      {footer && (
+        <footer className="sticky bottom-0 z-10 w-full border-t border-[var(--line)] bg-[var(--bg)] px-6 py-4">
+          <div className="mx-auto flex w-full max-w-4xl justify-end">{footer}</div>
+        </footer>
+      )}
     </div>
   );
 }
-
 function FormField({ label, required, error, children }) {
   return (
     <label className="block">
@@ -1370,7 +1442,9 @@ function SelectField({ label, required, value, onChange, options, autoComplete }
 
 function PrimaryButton({ children, className = "", ...props }) {
   return (
-    <button className={`eai-ob-btn-primary eai-focus flex items-center justify-center gap-2 ${className}`} {...props}>
+    <button
+      className={`eai-ob-btn-primary eai-focus flex w-full items-center justify-center gap-2 rounded-2xl border-b-4 border-[#1E40AF] bg-[#1D4ED8] px-8 py-3.5 text-[15px] font-bold uppercase tracking-wider text-white transition-[transform,background-color] duration-100 hover:bg-[#1E40AF] active:translate-y-[2px] active:border-b-2 disabled:cursor-not-allowed disabled:border-[var(--ob-disabled-edge)] disabled:bg-[var(--ob-disabled)] disabled:text-[var(--muted-2)] disabled:hover:bg-[var(--ob-disabled)] disabled:active:translate-y-0 ${className}`}
+      {...props}>
       {children}
     </button>
   );
@@ -1388,7 +1462,7 @@ function TrackCard({ meta, subjects, selected, onSelect, lang = "en" }) {
   const Icon = meta.icon;
   return (
     <button type="button" role="radio" aria-checked={selected} onClick={onSelect}
-      className={`eai-ob-track-card eai-focus ${selected ? "is-selected" : ""}`}>
+      className={`eai-focus w-full cursor-pointer rounded-2xl border-2 border-b-4 p-4 text-left transition-[transform,border-color,background-color] duration-150 active:translate-y-[2px] active:border-b-2 ${selected ? "border-[#1D4ED8] bg-[var(--primary-soft)]" : "border-[var(--line)] bg-[var(--card)] hover:border-[#3B82F6]"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: meta.color }}>
@@ -1469,8 +1543,16 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    a random suffix, so mounting this twice on one page can't collide), and the animation — spring
    step, per-state pose(), the auto idle/wave/point/dance/walk/jump sequencer, blinking, and the
    render loop — moved unchanged into a single mount-once useEffect that grabs each part through
-   refs instead of document.getElementById. Always runs the built-in "auto" behavior sequence;
-   clicking the owl makes it jump on top of that, exactly like the prototype's SVG click handler.
+   refs instead of document.getElementById. Runs the built-in "auto" behavior sequence (unless `calm`,
+   below); clicking the owl makes it jump on top of that, exactly like the prototype's SVG click handler.
+   `calm` is the landing page's mode: the owl never starts the wave/point/dance/walk/jump routine by
+   itself. It holds perfectly still for `calmDelayS` after mounting (default OWL_CALM_HOLD_S), then eases
+   (OWL_CALM_RAMP_S) into the idle pose alone — breathing, a slow sway, the odd head tilt and blink. The
+   markup carries the rest pose on every part the rig moves, so even the first painted frame is the
+   neutral owl. `seated` is for an owl riding in something (the landing page's airplane): no ground
+   shadow, and whatever carries it does the moving. `svgProps` are extra attributes for the root <svg> —
+   x/y/width/height (and a `style` that replaces the default 100%-wide block) let it nest inside a
+   larger SVG drawing as a positioned child.
    `pointTargetRef`, when given, is what the "point" state aims its arm/eyes at — re-aimed every
    frame via getBoundingClientRect + getScreenCTM so it tracks correctly even if the target moves
    or the layout changes; the target also gets an "eai-mascot-pointed" class toggled on it while
@@ -1479,7 +1561,10 @@ function OnboardingOptionCard({ variant = "secondary", icon: Icon, title, descri
    The owl wears the saved outfit from RewardsContext (cosmetic items drawn as SVG layers — see rewards/itemArt.jsx);
    an `outfit` prop overrides it, which is how the Wardrobe previews changes before they are saved. The layers draw at
    four mounts: back (behind everything), torso (below the chin), face (under the headphones) and top (over them). */
-export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
+const OWL_CALM_HOLD_S = 1.2;
+const OWL_CALM_RAMP_S = 1.4;
+
+export function OwlMascot({ pointTargetRef, triggerRef, outfit, calm = false, calmDelayS = OWL_CALM_HOLD_S, seated = false, svgProps }) {
   const uid = useRef(Math.random().toString(36).slice(2, 8)).current;
   const rewardsCtx = useRewards();
   const worn = outfit ?? rewardsCtx.outfit;
@@ -1537,8 +1622,10 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
     }
 
     let walkX = 0, walkDir = 1;
+    const rest = () => ({ x: 0, y: 0, rot: 0, sx: 1, sy: 1, hr: 0, hy: 0, aL: 10, aR: 10, fL: 0, fR: 0, hp: 0, gL: 0, gR: 0, lk: 0, lv: 0 });
+    const REST = rest();
     function pose(s, t) {
-      const d = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, hr: 0, hy: 0, aL: 10, aR: 10, fL: 0, fR: 0, hp: 0, gL: 0, gR: 0, lk: 0, lv: 0 };
+      const d = rest();
       const br = Math.sin(t * TAU / 2.4);
       let c, sh, a, b, u, k, tilt, up, w, beat, pu, ang, poke, dc;
 
@@ -1609,7 +1696,10 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
 
     const seq = [["idle", 4], ["wave", 3.2], ["idle", 1], ["point", 4], ["idle", 1], ["dance", 7.6], ["idle", 1], ["walk", 6.5], ["idle", 1], ["jump", 5.7]];
     const seqTotal = seq.reduce((s, e) => s + e[1], 0);
-    let mode = "auto", over = null, cur = "idle", curStart = 0, t0 = nowS();
+    let mode = "auto", over = null, cur = "idle", t0 = nowS();
+    // calm: the idle clock starts only after the still beat, so t stays 0 (the rest pose) until then.
+    const calmFrom = t0 + calmDelayS;
+    let curStart = calm ? calmFrom : 0;
     // Read fresh every frame rather than snapshotting once: the target (the Welcome screen's
     // speech bubble) remounts on a `key={text}` change every time its message rotates, which
     // would otherwise leave this pointed at a detached DOM node after the first rotation.
@@ -1622,12 +1712,13 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
     function pick(now) {
       if (over) { if (now < over.until) return over.s; over = null; }
       if (mode !== "auto") return mode;
+      if (calm) return "idle";
       let m = (now - t0) % seqTotal;
       for (let i = 0; i < seq.length; i++) { if (m < seq[i][1]) return seq[i][0]; m -= seq[i][1]; }
       return "idle";
     }
 
-    let nextBlink = 2, blinkStart = -1, dbl = false;
+    let nextBlink = calm ? calmFrom + .8 : 2, blinkStart = -1, dbl = false;
     function blinkScale(now) {
       if (blinkStart < 0 && now >= nextBlink) blinkStart = now;
       let sc = 1;
@@ -1657,7 +1748,7 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
 
       const s = pick(now);
       if (s !== cur) { cur = s; curStart = now; }
-      const t = now - curStart;
+      const t = Math.max(0, now - curStart);
 
       if (cur === "walk") {
         walkX += walkDir * 72 * dt;
@@ -1672,9 +1763,13 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
       if (isPoint !== hlOn) { hlOn = isPoint; aimEl?.classList.toggle("eai-mascot-pointed", isPoint); }
 
       const d = pose(cur, t);
+      // calm: ease the idle pose in from rest rather than snapping to it. Always 1 once the ramp is over
+      // (and always 1 outside calm), so every other state and every non-calm owl is untouched.
+      const ramp = calm && cur === "idle" ? sm(clamp((now - calmFrom) / OWL_CALM_RAMP_S, 0, 1)) : 1;
+      if (ramp < 1) for (const k in d) d[k] = REST[k] + (d[k] - REST[k]) * ramp;
       for (const k in d) P[k].t = d[k];
-      P.eL.t = -P.hr.x * .5 + P.y.v * .03 + Math.sin(now * 3) * 1.5;
-      P.eR.t = -P.hr.x * .5 - P.y.v * .03 - Math.sin(now * 3 + 1) * 1.5;
+      P.eL.t = -P.hr.x * .5 + P.y.v * .03 + Math.sin(now * 3) * 1.5 * ramp;
+      P.eR.t = -P.hr.x * .5 - P.y.v * .03 - Math.sin(now * 3 + 1) * 1.5 * ramp;
       step(dt);
 
       $("move").setAttribute("transform", `translate(${f(P.x.x)} ${f(P.y.x)}) rotate(${f(P.rot.x)}) scale(${f(P.sx.x)} ${f(P.sy.x)})`);
@@ -1714,11 +1809,13 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
       svgEl?.removeEventListener("click", onClick);
       prevAimEl?.classList.remove("eai-mascot-pointed");
     };
-  }, [pointTargetRef, triggerRef]);
+  }, [pointTargetRef, triggerRef, calm, calmDelayS]);
 
+  const { style: svgStyle, ...svgAttrs } = svgProps ?? {};
   return (
     <svg ref={setRef("svg")} viewBox="0 0 520 540" role="img" aria-label="Animated blue owl mascot with mint headphones"
-      style={{ display: "block", width: "100%", height: "auto", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
+      style={{ display: "block", width: "100%", height: "auto", cursor: "pointer", WebkitTapHighlightColor: "transparent", ...svgStyle }}
+      {...svgAttrs}>
       <defs>
         <radialGradient id={`gBlue-${uid}`} cx="35%" cy="28%" r="85%">
           <stop offset="0" stopColor="#93B9FF" />
@@ -1736,13 +1833,13 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
         <clipPath id={`clipBody-${uid}`}><ellipse cx="0" cy="-78" rx="64" ry="68" /></clipPath>
       </defs>
 
-      <ellipse ref={setRef("shadow")} cx="260" cy="494" rx="96" ry="14" fill="#1b2a55" opacity=".18" />
+      <ellipse ref={setRef("shadow")} display={seated ? "none" : undefined} cx="260" cy="494" rx="96" ry="14" fill="#1b2a55" opacity=".18" />
 
       <g transform="translate(260 490)">
-        <g ref={setRef("move")}>
+        <g ref={setRef("move")} transform="translate(0 0) rotate(0) scale(1 1)">
           <OutfitLayers outfit={worn} mount="back" uid={uid} />
-          <ellipse ref={setRef("footL")} cx="-34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
-          <ellipse ref={setRef("footR")} cx="34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
+          <ellipse ref={setRef("footL")} transform="translate(0 0)" cx="-34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
+          <ellipse ref={setRef("footR")} transform="translate(0 0)" cx="34" cy="-12" rx="28" ry="14" fill="#4F7DE0" />
 
           <ellipse cx="0" cy="-78" rx="64" ry="68" fill={`url(#gBlue-${uid})`} />
           <g clipPath={`url(#clipBody-${uid})`}>
@@ -1752,9 +1849,9 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
 
           <OutfitLayers outfit={worn} mount="torso" uid={uid} />
 
-          <g ref={setRef("head")}>
-            <g ref={setRef("earL")}><path d="M -96 -258 Q -128 -300 -110 -344 Q -66 -330 -40 -290 Z" fill="#6597F1" /></g>
-            <g ref={setRef("earR")}><path d="M 96 -258 Q 128 -300 110 -344 Q 66 -330 40 -290 Z" fill="#6597F1" /></g>
+          <g ref={setRef("head")} transform="translate(0 0) rotate(0 0 -130)">
+            <g ref={setRef("earL")} transform="rotate(0 -84 -268)"><path d="M -96 -258 Q -128 -300 -110 -344 Q -66 -330 -40 -290 Z" fill="#6597F1" /></g>
+            <g ref={setRef("earR")} transform="rotate(0 84 -268)"><path d="M 96 -258 Q 128 -300 110 -344 Q 66 -330 40 -290 Z" fill="#6597F1" /></g>
 
             <ellipse cx="0" cy="-195" rx="118" ry="100" fill={`url(#gBlue-${uid})`} />
             <ellipse cx="-62" cy="-262" rx="38" ry="14" fill="#fff" opacity=".2" transform="rotate(-22 -62 -262)" />
@@ -1790,12 +1887,12 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
             <OutfitLayers outfit={worn} mount="top" uid={uid} />
           </g>
 
-          <g ref={setRef("armL")}>
+          <g ref={setRef("armL")} transform="translate(-58 -104) rotate(10)">
             <rect x="-17" y="-10" width="34" height="74" rx="17" fill="#6291EE" />
             <circle cx="0" cy="54" r="19" fill="#7FAAF7" />
             <g ref={setRef("fingL")} transform="translate(0 62) scale(0)"><ellipse cx="0" cy="14" rx="8" ry="15" fill="#7FAAF7" /></g>
           </g>
-          <g ref={setRef("armR")}>
+          <g ref={setRef("armR")} transform="translate(58 -104) rotate(-10)">
             <rect x="-17" y="-10" width="34" height="74" rx="17" fill="#6291EE" />
             <circle cx="0" cy="54" r="19" fill="#7FAAF7" />
             <g ref={setRef("fingR")} transform="translate(0 62) scale(0)"><ellipse cx="0" cy="14" rx="8" ry="15" fill="#7FAAF7" /></g>
@@ -1807,9 +1904,11 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
 }
 
 /* Duolingo-style speech bubble: a rounded card with a small triangular tail. Two tail variants are
-   both always in the DOM and one is shown per layout. placement "auto" (the welcome screen's
-   LivingMascot) switches on Tailwind's `sm:` breakpoint (640px): below it the bubble stacks above the
-   mascot (tail points down), at/above it the bubble sits beside the mascot (tail points left).
+   both always in the DOM and one is shown per layout. placement "auto" (the finish screen) switches
+   on Tailwind's `sm:` breakpoint (640px): below it the bubble stacks above the mascot (tail points
+   down), at/above it the bubble sits beside the mascot (tail points left). placement "above" (the
+   landing hero's bubble) is always above the mascot with the tail pointing down, whatever the
+   width — the landing page's hero column is too narrow for a side bubble.
    placement "exercise" is the question screen's owl column and is the reverse — above the owl's head on
    wide screens (tail down), beside the owl on phones (tail left) — switched by the .eai-ex-say CSS so
    it follows that layout's own breakpoint. `size` "lg" is the bigger finish-screen version and `delay`
@@ -1819,8 +1918,9 @@ export function OwlMascot({ pointTargetRef, triggerRef, outfit }) {
    directly. */
 function MascotSpeechBubble({ text, lang = "en", bubbleRef, placement = "auto", size = "md", delay = 0 }) {
   const exercise = placement === "exercise";
-  const downTail = exercise ? "eai-tail-down" : "sm:hidden";
-  const sideTail = exercise ? "eai-tail-side" : "hidden sm:block";
+  const above = placement === "above";
+  const downTail = exercise ? "eai-tail-down" : above ? "" : "sm:hidden";
+  const sideTail = exercise ? "eai-tail-side" : above ? "hidden" : "hidden sm:block";
   const big = size === "lg";
   return (
     <div className="eai-rise" key={text} style={{ position: "relative", maxWidth: big ? 300 : 220, animationDelay: delay ? `${delay}s` : undefined }}>
@@ -1850,30 +1950,142 @@ function MascotSpeechBubble({ text, lang = "en", bubbleRef, placement = "auto", 
   );
 }
 
-/* Living mascot: a locked-in-place box (the wrapper itself never moves — the rigged SVG owl inside
-   handles its own in-place idle/wave/point/dance/walk/jump sequencing) with a speech bubble cycling
-   through encouraging lines. Responsive layout: on mobile the bubble stacks above the mascot
-   (flex-col-reverse — the bubble is the last DOM child, so reversing the column puts it first/on
-   top); at the sm breakpoint (640px) and up it switches to a side-by-side row, bubble to the
-   mascot's right. The owl's "point" state periodically aims its arm and eyes at that speech bubble
-   (and highlights it), so the gesture always has a real, present target regardless of which layout
-   is active. */
-function LivingMascot({ lang = "en" }) {
-  const [msgIdx, setMsgIdx] = useState(0);
-  const bubbleRef = useRef(null);
-  const MESSAGE_KEYS = ["mascotMsg1", "mascotMsg2", "mascotMsg3", "mascotMsg4", "mascotMsg5", "mascotMsg6"];
+/* ════════════════════════ Landing hero: the owl flies its airplane in, lands it on a phone and stands ════════════════════════
+   One SVG drawing in scene units; heroFlight.js has the story and every pose. The phone lies flat in isometric view, so
+   its runway runs toward the viewer, and the airplane (HeroPlane.jsx) is a chunky 3D prop plane in the same view: as it
+   lines up, its nose points down the runway, toward the user. The owl sits inside the plane's open cockpit: the plane is
+   drawn in two layers with the owl between them, so the cockpit's near wall hides its feet and lower belly. At touchdown
+   the plane fades out, the owl hops out and stands on the runway, and then its speech bubble appears. Every movement is
+   a CSS animation of the poses heroFlight.js generates; React only waits for the owl to land. */
+const HERO_MESSAGE_KEYS = ["mascotMsg1", "mascotMsg2", "mascotMsg3", "mascotMsg4", "mascotMsg5", "mascotMsg6"];
+// Clouds drift left to right on a loop (.eai-hero-cloud). `x` is where a cloud starts, so the sky is already full on load.
+const HERO_CLOUDS = [
+  { id: 1, x: -20, y: 44, scale: 1.2, speed: 9, front: true },
+  { id: 2, x: 330, y: 22, scale: 0.95, speed: 6 },
+  { id: 3, x: 40, y: 246, scale: 0.8, speed: 12 },
+];
+const CLOUD_TRAVEL = 880;   // the drift runs from -260 to 620 (.eai-hero-drift)
+const BUBBLE_GAP = 8;       // between the bubble's tail and the owl's ears
 
-  useEffect(() => {
-    const id = setInterval(() => setMsgIdx((i) => (i + 1) % MESSAGE_KEYS.length), 4500);
-    return () => clearInterval(id);
-  }, []);
+// Set once the owl has landed in this page load, so coming back to the landing page from sign-up shows the owl
+// standing at once instead of replaying the flight.
+let heroIntroPlayed = false;
 
+function HeroCloud({ uid, cloud }) {
+  const dur = CLOUD_TRAVEL / cloud.speed;
+  const delay = -((cloud.x + 260) / CLOUD_TRAVEL) * dur;   // start part-way along, so the sky is already full
   return (
-    <div className="flex flex-col-reverse sm:flex-row items-center justify-center gap-3 sm:gap-5">
-      <div style={{ width: "clamp(190px, 24vw, 340px)", maxWidth: "65vw" }}>
-        <OwlMascot pointTargetRef={bubbleRef} />
-      </div>
-      <MascotSpeechBubble text={t(lang, MESSAGE_KEYS[msgIdx])} lang={lang} bubbleRef={bubbleRef} />
+    <g className="eai-hero-cloud" style={{ "--cd": `${dur.toFixed(1)}s`, "--cdl": `${delay.toFixed(1)}s` }}>
+      <use href={`#${uid}-cloud`} transform={`translate(0 ${cloud.y}) scale(${cloud.scale})`} style={{ fill: `var(--hero-cloud-${cloud.id})` }} />
+    </g>
+  );
+}
+
+// The phone, lying flat in isometric view: a slab with a screen. The runway runs down the middle toward the viewer,
+// with a little grass and a few buildings either side. Plan units: 520 along the runway, 290 across it.
+function HeroPhone({ uid }) {
+  return (
+    <g transform={`translate(${PHONE_C[0]} ${PHONE_C[1]})`}>
+      <g transform="translate(0 12)">{/* the slab's thickness, straight down the screen */}
+        <g transform={ISO_MATRIX}><rect x="-260" y="-145" width="520" height="290" rx="40" style={{ fill: "var(--hero-phone-edge)" }} /></g>
+      </g>
+      <g transform={ISO_MATRIX}>
+        <rect x="-260" y="-145" width="520" height="290" rx="40" style={{ fill: "var(--hero-phone)" }} />
+        <rect x="-238" y="-123" width="476" height="246" rx="26" fill={`url(#${uid}-screen)`} />
+        <rect x="-200" y="-104" width="120" height="56" rx="10" style={{ fill: "var(--hero-park)" }} />
+        <rect x="96" y="52" width="120" height="56" rx="10" style={{ fill: "var(--hero-park)" }} />
+        <rect x="-170" y="40" width="56" height="44" rx="8" style={{ fill: "var(--hero-block)" }} />
+        <rect x="104" y="-96" width="62" height="38" rx="8" style={{ fill: "var(--hero-block)" }} />
+        <rect x="-200" y="-30" width="400" height="60" rx="6" style={{ fill: "var(--hero-runway)" }} />
+        <rect x="-200" y="-26" width="400" height="2" style={{ fill: "var(--hero-runway-line)" }} />
+        <rect x="-200" y="24" width="400" height="2" style={{ fill: "var(--hero-runway-line)" }} />
+        {[-170, -110, -50, 10, 70, 130].map((u) => (
+          <rect key={u} x={u} y="-1.5" width="34" height="3" style={{ fill: "var(--hero-runway-line)" }} />
+        ))}
+      </g>
+    </g>
+  );
+}
+
+// The airplane is HeroPlane.jsx (geometry in heroPlane.js): a chunky 3D prop plane in the same view as the phone, drawn in
+// two layers with the owl between them so the owl sits inside its cockpit.
+
+function HeroScene({ lang = "en" }) {
+  const uid = useRef(Math.random().toString(36).slice(2, 8)).current;
+  const [skipIntro] = useState(() => heroIntroPlayed || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  const [landed, setLanded] = useState(skipIntro);
+  const [msgIdx, setMsgIdx] = useState(0);
+
+  // The owl's landing is an animation event; the timer is only a backstop in case that event never arrives.
+  useEffect(() => {
+    if (landed) { heroIntroPlayed = true; return undefined; }
+    const id = setTimeout(() => setLanded(true), (TOTAL_S + 0.6) * 1000);
+    return () => clearTimeout(id);
+  }, [landed]);
+
+  // The bubble starts cycling through its lines once it appears.
+  useEffect(() => {
+    if (!landed) return undefined;
+    const id = setInterval(() => setMsgIdx((i) => (i + 1) % HERO_MESSAGE_KEYS.length), 4500);
+    return () => clearInterval(id);
+  }, [landed]);
+
+  const sky = `url(#${uid}-sky)`;
+  const bubbleBottom = (1 - (STAND[1] - OWL_HEAD - BUBBLE_GAP) / SCENE_H) * 100;
+  return (
+    <div className={`eai-hero${skipIntro ? " eai-hero-skip" : ""}`}>
+      <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} className="eai-hero-svg" role="img" aria-label={t(lang, "heroAlt")}>
+        <defs>
+          <g id={`${uid}-cloud`}>
+            <rect x="6" y="34" width="128" height="26" rx="13" />
+            <circle cx="42" cy="36" r="22" /><circle cx="74" cy="26" r="28" /><circle cx="106" cy="38" r="20" />
+          </g>
+          <linearGradient id={`${uid}-fade`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#000" /><stop offset=".07" stopColor="#fff" /><stop offset=".93" stopColor="#fff" /><stop offset="1" stopColor="#000" />
+          </linearGradient>
+          <mask id={`${uid}-sky`} maskUnits="userSpaceOnUse" x="0" y="-160" width={SCENE_W} height={SCENE_H + 320}>
+            <rect x="0" y="-160" width={SCENE_W} height={SCENE_H + 320} fill={`url(#${uid}-fade)`} />
+          </mask>
+          <linearGradient id={`${uid}-screen`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" style={{ stopColor: "var(--hero-screen-a)" }} /><stop offset="1" style={{ stopColor: "var(--hero-screen-b)" }} />
+          </linearGradient>
+          <HeroPlaneDefs uid={uid} />
+        </defs>
+
+        <g mask={sky}>{HERO_CLOUDS.filter((c) => !c.front).map((c) => <HeroCloud key={c.id} uid={uid} cloud={c} />)}</g>
+        <HeroPhone uid={uid} />
+        <ellipse className="eai-stand-shadow" cx={STAND[0]} cy={STAND[1] + 3} rx="40" ry="7" style={{ fill: "var(--hero-ground)" }} />
+
+        {/* The plane in two layers with the owl between them: everything behind the owl, the owl, then the near wall of the
+            body and the rest of the near side. Both plane layers play the same keyframes on the same clock. */}
+        <g mask={sky}>
+          <g className="eai-plane">
+            <g className="eai-plane-vanish"><HeroPlaneBack uid={uid} /></g>
+          </g>
+        </g>
+
+        <g mask={sky}>
+          <g className="eai-rider" onAnimationEnd={(e) => { if (e.animationName === "eai-rider-go") setLanded(true); }}>
+            <g className="eai-rider-bob">
+              <OwlMascot calm seated calmDelayS={skipIntro ? 0.5 : TOTAL_S + 0.05} svgProps={{ ...OWL_SVG, style: { width: undefined, height: undefined } }} />
+            </g>
+          </g>
+        </g>
+
+        <g mask={sky}>
+          <g className="eai-plane">
+            <g className="eai-plane-vanish"><HeroPlaneFront uid={uid} /></g>
+          </g>
+        </g>
+
+        <g mask={sky} opacity=".88">{HERO_CLOUDS.filter((c) => c.front).map((c) => <HeroCloud key={c.id} uid={uid} cloud={c} />)}</g>
+      </svg>
+
+      {landed && (
+        <div className="eai-hero-bubble" style={{ left: `${(STAND[0] / SCENE_W) * 100}%`, bottom: `${bubbleBottom}%` }}>
+          <MascotSpeechBubble text={t(lang, HERO_MESSAGE_KEYS[msgIdx])} lang={lang} placement="above" />
+        </div>
+      )}
     </div>
   );
 }
@@ -1888,70 +2100,68 @@ function BondusLogo() {
   );
 }
 
+// The corner chips (language + theme) on the landing page. LangToggle's own glass look is switched off
+// through its `style` prop so it matches the theme button: flat, 2px border, solid fill.
+const landingChip = { height: 44, borderRadius: 12, border: "2px solid var(--line)", background: "var(--card)", color: "var(--ink)", boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" };
+
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh", background: dark ? "linear-gradient(to bottom right, #0c0d1e, #14152c, #1d1f3b)" : "linear-gradient(to bottom right, #f0f7ff, #ffffff, #f5f3ff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
+    <div className={`eai-root eai-lp ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""} relative flex flex-col items-center overflow-hidden px-6 pt-20 lg:px-10 lg:pt-12`}
+      style={{ minHeight: "100dvh" }}>
       <style>{STYLES}</style>
 
-      {/* Decorative corner accents */}
-      <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, background: "radial-gradient(circle, rgba(96, 165, 250, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
-      <div style={{ position: "absolute", bottom: -100, right: -100, width: 360, height: 360, background: "radial-gradient(circle, rgba(192, 132, 252, 0.15), transparent)", borderRadius: "50%", zIndex: 0 }}></div>
-
-      {/* Theme + language toggles */}
-      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 50, display: "flex", gap: 8 }}>
-        <LangToggle lang={lang} setLang={setLang} />
+      {/* Theme + language toggles — flat bordered chips in the top-right corner of the page. Same 44px
+          height and 2px border on both, centred on one line, so they sit square on the solid background
+          (they scroll away with the page instead of floating over it). */}
+      <div className="absolute right-5 top-5 z-50 flex items-center gap-2">
+        <LangToggle lang={lang} setLang={setLang} style={{ ...landingChip, minWidth: 44 }} />
         <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ position: "static", width: 44, height: 44, borderRadius: 14, border: "1px solid var(--glass-line)", background: "var(--glass-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", boxShadow: "var(--glass-shadow)", color: "var(--ink)", display: "grid", placeItems: "center", transition: "background-color .15s ease, transform .12s ease" }}>
+          style={{ ...landingChip, width: 44, display: "grid", placeItems: "center", cursor: "pointer" }}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
 
-      {/* Responsive Welcome Content */}
-      <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", minHeight: "100vh", padding: "48px 24px", zIndex: 10 }}>
+      {/* Duolingo-style landing layout.
+          Laptop/desktop (lg, 1024px+): two equal columns side by side, centred on the screen — mascot
+          + speech bubble on the left; title, subtitle and the two buttons stacked on the right.
+          Phone/tablet (below lg): one column — mascot on top, title + subtitle right under it, buttons
+          pinned to the bottom (thumb zone). The right-hand wrapper is `display: contents` below lg so
+          its title block and buttons become direct children of <main>; the two `mt-auto`s then split
+          the spare height so the mascot + title group floats between the top and the buttons. */}
+      <main className="relative z-10 flex w-full max-w-[1120px] flex-1 flex-col pb-8 lg:flex-row lg:items-center lg:gap-16 lg:pb-12 xl:gap-24">
+        {/* Left column — the hero scene: the owl flies its airplane in through the clouds, loops, and lands
+            on a phone, where its speech bubble appears. It sizes itself off both the column's width and
+            the screen's height, so it never pushes the page into a scroll on a short laptop screen. */}
+        <div className="mt-auto flex justify-center lg:mt-0 lg:flex-1 lg:basis-0">
+          <HeroScene lang={lang} />
+        </div>
 
-        {/* Top spacing */}
-        <div style={{ height: "32px" }}></div>
+        {/* Right column — title, subtitle, buttons */}
+        <div className="contents lg:flex lg:flex-1 lg:basis-0 lg:flex-col lg:items-center">
+          <div className="mt-6 flex w-full flex-col items-center text-center lg:mt-0">
+            <h1 className={`text-balance [font-size:clamp(28px,5vw,44px)] lg:[font-size:clamp(30px,3.6vw,44px)] ${lang === "km" ? "eai-km" : ""}`} style={{ fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
+              {t(lang, "welcomeHeading")} <span style={{ color: "var(--lp-link)" }}>{t(lang, "welcomeBrand")}</span>
+            </h1>
+            <p className={`text-balance ${lang === "km" ? "eai-km" : ""}`} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", lineHeight: "1.6" }}>
+              {t(lang, "welcomeSubtitle")}
+            </p>
+          </div>
 
-        {/* Content Section — text/buttons kept at a comfortable reading width */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", width: "100%", maxWidth: "480px" }}>
-          {/* Heading */}
-          <h1 className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(28px, 5vw, 44px)", fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
-            {t(lang, "welcomeHeading")} <span style={{ color: "var(--primary)" }}>{t(lang, "welcomeBrand")}</span>
-          </h1>
-          <p className={lang === "km" ? "eai-km" : ""} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", marginBottom: "48px", lineHeight: "1.6", maxWidth: "100%" }}>
-            {t(lang, "welcomeSubtitle")}
-          </p>
-
-          {/* Buttons */}
-          <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "48px" }}>
-            <button
-              onClick={onCreate}
-              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
-              style={{ width: "100%", padding: "14px 16px", border: "2px solid var(--primary)", color: "var(--primary)", fontWeight: "600", borderRadius: "9999px", background: "transparent", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)" }}
-              onMouseEnter={(e) => { e.target.style.background = "var(--primary-soft)"; }}
-              onMouseLeave={(e) => { e.target.style.background = "transparent"; }}
-            >
+          {/* Buttons — stacked, full width up to 420px. Styles live in the .eai-lp-btn rules in STYLES. */}
+          <div className="mt-auto flex w-full max-w-[420px] flex-col gap-3 self-center pt-8 lg:mt-10 lg:pt-0">
+            <button onClick={onCreate} className={`eai-lp-btn eai-lp-btn-secondary eai-focus ${lang === "km" ? "eai-km" : ""}`}>
               {t(lang, "createAccount")}
             </button>
-            <button
-              onClick={onLogin}
-              className={`eai-focus ${lang === "km" ? "eai-km" : ""}`}
-              style={{ width: "100%", padding: "14px 16px", background: "var(--primary)", color: "white", fontWeight: "600", borderRadius: "9999px", border: "none", cursor: "pointer", transition: "all 0.2s", fontSize: "clamp(14px, 1.5vw, 16px)", boxShadow: "0 4px 12px rgba(55, 48, 163, 0.3)" }}
-              onMouseEnter={(e) => { e.target.style.filter = "brightness(0.9)"; }}
-              onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; }}
-            >
+            <button onClick={onLogin} className={`eai-lp-btn eai-lp-btn-primary eai-focus ${lang === "km" ? "eai-km" : ""}`}>
               {t(lang, "login")}
             </button>
           </div>
         </div>
+      </main>
 
-        {/* Mascot Illustration — sized off the full viewport, not the text column, so it actually grows on wide screens.
-            alignItems: flex-start (not center) keeps it up near the buttons instead of sinking to the middle of the
-            leftover flex space below. */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", width: "100%", flex: 1, marginTop: "0px" }}>
-          <LivingMascot lang={lang} />
-        </div>
-      </div>
+      {/* Subject ribbon — pinned to the bottom of the page. The page has side padding, so the negative margins
+          let the strip and its top border run edge to edge. Tapping a subject starts sign-up. */}
+      <SubjectRibbon lang={lang} onSelect={onCreate} className="relative z-10 self-stretch -mx-6 lg:-mx-10" />
     </div>
   );
 }
@@ -1974,7 +2184,10 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
   };
   return (
     <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
-      title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}>
+      title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}
+      footer={
+        <PrimaryButton onClick={submit} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
+      }>
       <div className="flex gap-1 p-1 rounded-full eai-soft" style={{ width: "fit-content", marginBottom: 18 }}>
         {["phone", "email"].map((m) => (
           <button key={m} onClick={() => switchMethod(m)}
@@ -2006,7 +2219,7 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
         </div>
       )}
 
-      <PrimaryButton onClick={submit} className={`w-full mt-6 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
+
       <p className={`text-center text-xs eai-muted mt-4 ${lang === "km" ? "eai-km" : ""}`}>
         {t(lang, "noAccountYet")}{" "}
         <button onClick={onCreateInstead} className="eai-focus font-semibold" style={{ color: "var(--primary)" }}>{t(lang, "createOne")}</button>
@@ -2016,17 +2229,17 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
 }
 
 /* ════════════════════════ Registration ════════════════════════
-   Step 0 asks "High School or University" first — the two paths never share content after that.
+   Sign-up is high school only: it opens straight on step 1 with no education-level question.
    High-school steps 1–3 (account details, academic track, learning preferences) are the original
-   BAC II flow, unchanged. University steps 1–4 (account details, goals, field, year) build a
-   separate `universityProfile` and never touch FIELD_SUBJECTS/BAC II content at all.
+   BAC II flow, unchanged. The university steps 2–4 below are parked and unreachable from sign-up
+   (nothing sets `educationLevel: "university"` any more); they stay so the parked track keeps compiling.
    `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
    goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
 function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
-  const [step, setStep] = useState(initialStep ?? 0);
+  const [step, setStep] = useState(initialStep ?? 1);
   const [form, setForm] = useState(initialForm ?? {
     name: "", phone: "", email: "", password: "", age: "",
-    educationLevel: null, // "highschool" | "university" — locked in once chosen at step 0
+    educationLevel: "highschool", // new sign-ups are always high school; "university" only survives on already-saved profiles
     // High-school (BAC II) fields:
     grade: "12", field: "", target: "A",
     targetExamYear: EXAM_YEARS[1], dailyMinutes: 60, targetUniversity: "",
@@ -2048,27 +2261,17 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     ...f, universityGoals: f.universityGoals.includes(id) ? f.universityGoals.filter((x) => x !== id) : [...f.universityGoals, id],
   }));
 
-  // ── Step 0: education level gate ──
-  if (step === 0) {
-    return (
-      <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
-        title={t(lang, "eduLevelTitle")} description={t(lang, "eduLevelDesc")}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <OnboardingOptionCard icon={BookOpen} title={t(lang, "highSchoolOptTitle")} description={t(lang, "highSchoolOptDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "highschool"); setStep(1); }} />
-          <OnboardingOptionCard icon={GraduationCap} title={t(lang, "universityOptTitle")} description={t(lang, "universityOptDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("educationLevel", "university"); setLang?.("en"); setStep(1); }} />
-        </div>
-      </OnboardingLayout>
-    );
-  }
-
   // ── Step 1: account details (shared layout; grade/target only shown for high school) ──
   if (step === 1) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
-        onBack={() => setStep(0)} lang={lang} setLang={isUni ? undefined : setLang}
-        title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}>
+        onBack={onBack} lang={lang} setLang={isUni ? undefined : setLang}
+        title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}
+        footer={
+          <PrimaryButton onClick={() => setStep(2)} disabled={!form.name.trim()} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+            {isUni ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
+          </PrimaryButton>
+        }>
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
             <input className="eai-ob-input eai-focus" placeholder="e.g. Sophea Chan" autoComplete="name"
@@ -2100,9 +2303,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           )}
         </div>
 
-        <PrimaryButton onClick={() => setStep(2)} disabled={!form.name.trim()} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
-          {isUni ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
-        </PrimaryButton>
+
       </OnboardingLayout>
     );
   }
@@ -2159,16 +2360,19 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   if (step === 2) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
-        title={t(lang, "chooseTrackTitle")} description={t(lang, "chooseTrackDesc")}>
+        title={t(lang, "chooseTrackTitle")} description={t(lang, "chooseTrackDesc")}
+        footer={
+          <PrimaryButton onClick={() => setStep(3)} disabled={!canFinish} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+            {t(lang, "continueWord")} <ChevronRight size={16} />
+          </PrimaryButton>
+        }>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
           {Object.entries(FIELD_META).map(([key, meta]) => (
             <TrackCard key={key} meta={meta} subjects={FIELD_SUBJECTS[key]} selected={form.field === key} onSelect={() => set("field", key)} lang={lang} />
           ))}
         </div>
 
-        <PrimaryButton onClick={() => setStep(3)} disabled={!canFinish} className={`w-full mt-8 ${lang === "km" ? "eai-km" : ""}`}>
-          {t(lang, "continueWord")} <ChevronRight size={16} />
-        </PrimaryButton>
+
       </OnboardingLayout>
     );
   }
@@ -2176,7 +2380,12 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   // ── High-school step 3: learning preferences ──
   return (
     <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
-      title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}>
+      title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}
+      footer={
+        <PrimaryButton onClick={() => onComplete({ ...form, age: Number(form.age) || null })} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+          {t(lang, "continueWord")} <ChevronRight size={16} />
+        </PrimaryButton>
+      }>
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
           options={EXAM_YEARS.map((y) => ({ value: y, label: String(y) }))} />
@@ -2209,9 +2418,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         </div>
       </div>
 
-      <PrimaryButton onClick={() => onComplete({ ...form, age: Number(form.age) || null })} className={`w-full mt-7 ${lang === "km" ? "eai-km" : ""}`}>
-        {t(lang, "continueWord")} <ChevronRight size={16} />
-      </PrimaryButton>
+
     </OnboardingLayout>
   );
 }
@@ -8270,6 +8477,7 @@ const STRINGS = {
     createAccount: "Create an account", login: "Login",
     mascotMsg1: "Let's study together! 📚", mascotMsg2: "You've got this! 💪", mascotMsg3: "Ready when you are!",
     mascotMsg4: "Keep that streak alive! 🔥", mascotMsg5: "Small steps, big wins!", mascotMsg6: "I believe in you!",
+    heroAlt: "The BONDUS owl lands its airplane on a phone",
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
     navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress", navExplore: "Explore",
@@ -8364,10 +8572,6 @@ const STRINGS = {
     errEmailNotFound: "We couldn't find an account with that email and password on this device.",
     loginWithPhone: "Phone", loginWithEmail: "Email",
     // Register
-    eduLevelTitle: "What's your education level?",
-    eduLevelDesc: "This decides what Bondus shows you next — high school and university have completely different content.",
-    highSchoolOptTitle: "High School", highSchoolOptDesc: "Grade 11 or 12, preparing for the BAC II exam.",
-    universityOptTitle: "University", universityOptDesc: "Already at university, a high school graduate, or preparing for university entrance.",
     uniGoalsTitle: "What are you looking for?", uniGoalsDesc: "Select everything that applies — you can change this later.",
     uniGoalsWhyWeAsk: "These personalize your University Hub, Discovery matches, and AI Mentor — the more you pick, the sharper the recommendations.",
     uniFieldTitle: "What's your field?", uniFieldDesc: "Pick the closest match — you can change this later.",
@@ -8431,6 +8635,7 @@ const STRINGS = {
     createAccount: "បង្កើតគណនី", login: "ចូលគណនី",
     mascotMsg1: "តោះសិក្សាជាមួយគ្នា! 📚", mascotMsg2: "អ្នកអាចធ្វើវាបាន! 💪", mascotMsg3: "ត្រៀមខ្លួនហើយ ពេលណាក៏បាន!",
     mascotMsg4: "រក្សានិន្នាការឱ្យបន្ត! 🔥", mascotMsg5: "ជំហានតូចៗ ជោគជ័យធំ!", mascotMsg6: "ខ្ញុំជឿជាក់លើអ្នក!",
+    heroAlt: "ទីទុយ BONDUS ចុះចតយន្តហោះរបស់វានៅលើទូរស័ព្ទ",
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
     navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព", navExplore: "ស្វែងរក",
@@ -8525,10 +8730,6 @@ const STRINGS = {
     errEmailNotFound: "យើងរកមិនឃើញគណនីជាមួយអ៊ីមែល និងពាក្យសម្ងាត់នោះនៅលើឧបករណ៍នេះទេ។",
     loginWithPhone: "លេខទូរស័ព្ទ", loginWithEmail: "អ៊ីមែល",
     // Register
-    eduLevelTitle: "តើកម្រិតការសិក្សារបស់អ្នកគឺជាអ្វី?",
-    eduLevelDesc: "នេះកំណត់នូវអ្វីដែល Bondus បង្ហាញអ្នកបន្ទាប់ — ថ្នាក់វិទ្យាល័យ និងសាកលវិទ្យាល័យមានខ្លឹមសារខុសគ្នាទាំងស្រុង។",
-    highSchoolOptTitle: "វិទ្យាល័យ", highSchoolOptDesc: "ថ្នាក់ទី១១ ឬទី១២ រៀបចំសម្រាប់ការប្រឡង បាក់ឌុប។",
-    universityOptTitle: "សាកលវិទ្យាល័យ", universityOptDesc: "កំពុងសិក្សានៅសាកលវិទ្យាល័យ ជាអ្នកបញ្ចប់ការសិក្សាវិទ្យាល័យ ឬកំពុងរៀបចំចូលរៀន។",
     uniGoalsTitle: "តើអ្នកកំពុងស្វែងរកអ្វី?", uniGoalsDesc: "ជ្រើសរើសអ្វីៗគ្រប់យ៉ាងដែលពាក់ព័ន្ធ — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
     uniFieldTitle: "តើជំនាញរបស់អ្នកគឺជាអ្វី?", uniFieldDesc: "ជ្រើសរើសជម្រើសដែលនិងគ្នាបំផុត — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
     uniYearTitle: "តើអ្នកនៅដំណាក់កាលណា?", uniYearDesc: "ដើម្បីឲ្យយើងកែសម្រួលអ្វីដែលបង្ហាញអ្នក។",

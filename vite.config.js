@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { bondusSplash } from './Frontend/splashPlugin.js'
 
 // Tailwind v4 uses the official Vite plugin — no tailwind.config.js needed.
 export default defineConfig(({ mode }) => {
@@ -10,7 +11,8 @@ export default defineConfig(({ mode }) => {
   const ragTarget = loadEnv(mode, process.cwd(), '').RAG_API_PROXY_TARGET || 'http://127.0.0.1:8000'
   const ragPaths = ['/api/query', '/api/ingest', '/api/documents', '/health']
   return {
-    plugins: [react(), tailwindcss()],
+    // bondusSplash writes the loading screen into index.html, so the first load is not a blank white page.
+    plugins: [react(), tailwindcss(), bondusSplash()],
     server: {
       proxy: Object.fromEntries(ragPaths.map((path) => [path, {
         target: ragTarget,
