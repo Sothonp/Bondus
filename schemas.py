@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 SOURCE_NAME_PATTERN = r"^[^\x00-\x1f<>\"|?*]+$"
 
+SubjectId = Literal[
+    "mathematics", "physics", "chemistry", "biology", "khmer_literature", "history",
+    "english", "french", "geography", "earth_science", "morality",
+]
+
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -42,6 +47,9 @@ class QueryRequest(_StrictModel):
     sources: list[str] | None = Field(
         None, max_length=100, description="Restrict retrieval to these document sources"
     )
+    subject: SubjectId | None = Field(
+        None, description="Restrict retrieval to one subject's documents, e.g. physics or french"
+    )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
     continues_math: bool = Field(
         False,
@@ -75,6 +83,7 @@ class SourceChunk(BaseModel):
     text: str
     title: str = ""
     heading: str = ""
+    subject: str | None = None
 
 
 class QueryResponse(BaseModel):

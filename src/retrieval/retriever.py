@@ -9,6 +9,7 @@ import numpy as np
 from src.embeddings.embedder import Embedder
 from src.ingestion.khmer_segment import strip_word_boundaries
 from src.ingestion.latex_guard import unmask_latex
+from src.subjects import subject_of
 from src.vectorstore import InMemoryVectorStore
 
 
@@ -23,6 +24,7 @@ class RetrievedChunk:
     title: str = ""
     heading: str = ""
     stem: str = ""  # opening of the exercise this chunk continues, if any
+    subject: str | None = None
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -61,10 +63,16 @@ class Retriever:
         top_k: int | None = None,
         score_threshold: float | None = None,
         sources: Iterable[str] | None = None,
+        subject: str | None = None,
     ) -> list[RetrievedChunk]:
+        """``subject`` keeps only documents of that subject (see ``src.subjects``),
+        on top of any ``sources`` restriction."""
         query = query.strip()
         if not query or len(self.store) == 0:
             return []
+        if subject is not None:
+            of_subject = self.sources_for_subject(subject)
+            sources = of_subject if sources is None else of_subject & set(sources)
         vector = self.embedder.embed_query(query)
         hits = self.store.search(
             vector,
@@ -83,9 +91,17 @@ class Retriever:
                 title=hit.record.metadata.get("title") or "",
                 heading=hit.record.metadata.get("heading") or "",
                 stem=hit.record.metadata.get("stem") or "",
+                subject=subject_of(hit.record.source, hit.record.metadata.get("title") or ""),
             )
             for hit in hits
         ]
+
+    def sources_for_subject(self, subject: str) -> set[str]:
+        return {
+            source
+            for source, metadata in self.store.source_metadata().items()
+            if subject_of(source, metadata.get("title") or "") == subject
+        }
 
     def fit_context(self, chunks: Sequence[RetrievedChunk]) -> list[RetrievedChunk]:
         """Keep the best chunks that fit within ``max_context_chars``.
