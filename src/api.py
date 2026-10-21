@@ -1350,6 +1350,7 @@ def _source_chunks(context: Sequence[RetrievedChunk]) -> list[SourceChunk]:
             text=chunk.text,
             title=chunk.title,
             heading=chunk.heading,
+            subject=chunk.subject,
         )
         for chunk in context
     ]
@@ -1420,6 +1421,7 @@ async def _retrieve_context(
             payload.top_k,
             payload.score_threshold,
             payload.sources,
+            payload.subject,
         )
     except EmbeddingMismatchError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
