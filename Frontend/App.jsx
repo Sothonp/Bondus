@@ -757,6 +757,10 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-drop{ position:absolute; inset:0; z-index:30; display:grid; place-items:center; padding:24px; text-align:center; color:var(--primary); background:color-mix(in srgb, var(--bg) 85%, transparent); border:2px dashed var(--primary); border-radius:22px; pointer-events:none; }
 .eai-lightbox{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.85); display:grid; place-items:center; padding:24px; cursor:zoom-out; }
 .eai-lightbox img{ max-width:100%; max-height:100%; border-radius:12px; }
+.eai-exam-options{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; padding:0 6px 8px; font-size:13px; color:var(--muted); }
+.eai-exam-options label{ display:flex; align-items:center; gap:6px; }
+.eai-exam-options select{ background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:5px 8px; font:inherit; font-size:13px; max-width:100%; }
+.eai-exam-check input{ accent-color:var(--primary); width:15px; height:15px; }
 .eai-footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:6px; }
 @media (prefers-reduced-motion: reduce){ .eai-spin,.eai-shimmer{ animation:none; } .eai-shimmer{ color:var(--muted); background:none; } }
 /* AI Coach answers: Markdown + KaTeX */
@@ -5236,8 +5240,8 @@ const REVEAL_CHARS_PER_SECOND = 180;
 const REVEAL_CATCHUP_SECONDS = 1;
 const REVEAL_TICK_MS = 40;
 
-async function ragStreamRequest(body, { signal, status }) {
-  const send = () => ragRequest("/api/query/stream", {
+async function ragStreamRequest(path, body, { signal, status }) {
+  const send = () => ragRequest(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
@@ -5259,7 +5263,11 @@ async function ragStreamRequest(body, { signal, status }) {
   }
 }
 
-async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
+/* Streams one reply from a /api/.../stream endpoint into onUpdate at the reading pace above, and
+   asks for more while the model stops at its output limit: next(textSoFar) builds the body of the
+   follow-up request. Resolves to { text, sources, stopReason }; a failure is thrown with what had
+   arrived by then as err.partial (and err.sources) so the caller can keep it. */
+async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, onImages, initialStatus, stageLabels = STAGE_LABELS }) {
   let text = "";   // every delta received so far
   let shown = 0;   // how much of it is on screen
   let sources = [];
@@ -5293,14 +5301,14 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
   });
 
   /* One streamed request, appending what it produces to `text`; returns its stop reason. */
-  const streamOnce = async (body) => {
+  const streamOnce = async (requestBody) => {
     const base = text.length; // a model switch rewinds this request's own output, not the answer so far
     let finished = false;
     let stopReason = null;
-    const res = await ragStreamRequest(JSON.stringify(body), { signal, status });
+    const res = await ragStreamRequest(path, JSON.stringify(requestBody), { signal, status });
     try {
       for await (const event of readNdjson(res)) {
-        if (event.type === "status") status(STAGE_LABELS[event.stage]);
+        if (event.type === "status") status(stageLabels[event.stage]);
         else if (event.type === "images") onImages?.(event.images);
         else if (event.type === "meta") sources = event.sources?.length ? event.sources : sources;
         else if (event.type === "delta") {
@@ -5335,35 +5343,56 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
   };
 
   try {
-    status(images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching);
-    let stopReason = await streamOnce({
-      prompt: t,
-      history: toRagHistory(history),
-      images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
-    });
-    // The photos are already read, so a continuation sends the answer so far instead.
+    status(initialStatus);
+    let stopReason = await streamOnce(body);
     for (let round = 0; TRUNCATED_STOPS.has(stopReason) && round < CONTINUE_ROUNDS && !signal?.aborted; round++) {
-      // The question rides along so retrieval finds the same passages again; on its
-      // own the continuation phrase matches nothing and the server would announce
-      // mid-answer that the curriculum does not cover this.
-      const lang = KHMER_CHAR.test(text) ? "km" : "en";
-      stopReason = await streamOnce({
-        prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
-        history: [
-          ...toRagHistory(history),
-          { role: "user", content: (t || "(photo)").slice(0, 20000) },
-          { role: "assistant", content: text.slice(-CONTINUE_CONTEXT_CHARS) },
-        ],
-        images: [],
-        // The round picks the formula up mid-block, so the server must leave this
-        // round headless instead of repairing it as a whole answer.
-        continues_math: opensInDisplayMath(text),
-      });
+      stopReason = await streamOnce(next(text));
     }
-    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
     await drain();
+    return { text, sources, stopReason };
+  } catch (err) {
+    err.partial = text;
+    err.sources = sources;
+    throw err;
+  } finally {
+    stopPacing();
+  }
+}
+
+async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
+  const first = {
+    prompt: t,
+    history: toRagHistory(history),
+    images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
+  };
+  // The photos are already read, so a continuation sends the answer so far instead.
+  const next = (text) => {
+    // The question rides along so retrieval finds the same passages again; on its
+    // own the continuation phrase matches nothing and the server would announce
+    // mid-answer that the curriculum does not cover this.
+    const lang = KHMER_CHAR.test(text) ? "km" : "en";
+    return {
+      prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
+      history: [
+        ...toRagHistory(history),
+        { role: "user", content: (t || "(photo)").slice(0, 20000) },
+        { role: "assistant", content: text.slice(-CONTINUE_CONTEXT_CHARS) },
+      ],
+      images: [],
+      // The round picks the formula up mid-block, so the server must leave this
+      // round headless instead of repairing it as a whole answer.
+      continues_math: opensInDisplayMath(text),
+    };
+  };
+  try {
+    let { text, sources, stopReason } = await ragStreamReply("/api/query/stream", first, next, {
+      onUpdate, signal, onImages,
+      initialStatus: images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching,
+    });
+    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
     return { text: text || "…", rag: true, sources };
   } catch (err) {
+    const { partial: text = "", sources = [] } = err;
     if (signal?.aborted) {
       return text
         ? { text: `${text}\n\n*(Stopped)*`, rag: true, sources, error: true }
@@ -5376,9 +5405,71 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     }
     if (text) return { text: `${text}\n\n*(The answer was cut off: ${err.message})*`, rag: true, sources, error: true };
     return { text: `Sorry, I couldn't answer that: ${err.message}`, error: true };
-  } finally {
-    stopPacing();
   }
+}
+
+/* Exam Generator: a new mock BAC II paper from /api/exam/stream, modelled on the real past papers
+   of one subject in the server's library, with a worked answer key and marking scheme. One seed
+   per paper picks which past years the model studies, and the continuation rounds send it again
+   so they see the same ones. */
+const EXAM_FOCUS_MAX = 1000;
+const EXAM_STAGE_LABELS = {
+  searching: "Studying past papers…",
+  generating: "Writing your paper and checking its answers (this takes a minute or two)…",
+};
+
+async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam } = {}) {
+  const first = {
+    subject: subjectId(exam.subject),
+    language: exam.language,
+    focus: t.slice(0, EXAM_FOCUS_MAX),
+    answer_key: exam.answerKey,
+    seed: Math.floor(Math.random() * 2 ** 31),
+  };
+  const next = (text) => ({ ...first, partial: text, continues_math: opensInDisplayMath(text) });
+  const meta = { subject: exam.subject };
+  try {
+    let { text, sources, stopReason } = await ragStreamReply("/api/exam/stream", first, next, {
+      onUpdate, signal, initialStatus: EXAM_STAGE_LABELS.searching, stageLabels: EXAM_STAGE_LABELS,
+    });
+    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(The paper ran longer than I can write in one go. Generate it again, or turn the answer key off for a shorter paper.)*";
+    return { text: text || "…", rag: true, sources, exam: meta };
+  } catch (err) {
+    const { partial: text = "", sources = [] } = err;
+    if (signal?.aborted) {
+      return text
+        ? { text: `${text}\n\n*(Stopped)*`, rag: true, sources, exam: meta, error: true }
+        : { text: "Stopped.", error: true };
+    }
+    if (text) return { text: `${text}\n\n*(The paper was cut off: ${err.message})*`, rag: true, sources, exam: meta, error: true };
+    return { text: `Sorry, I couldn't write that paper: ${err.message}`, error: true };
+  }
+}
+
+/* Opens the paper alone in a new window and prints it, so "Save as PDF" gives a clean exam sheet
+   without the app around it. The app's stylesheets (KaTeX's among them) are copied across. */
+const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function printExamPaper(node, title) {
+  const win = window.open("", "_blank");
+  if (!win) return false;
+  const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')].map((el) => el.outerHTML).join("\n");
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8">
+<base href="${escapeHtml(document.baseURI)}"><title>${escapeHtml(title)}</title>${styles}
+<style>
+:root{ --ink:#000; --muted:#444; --line:#bbb; --card:#fff; --bg:#fff; --bg-soft:#f3f3f3; --primary:#1e3a8a; color-scheme:light; }
+html,body{ background:#fff !important; color:#000 !important; }
+body{ margin:0; padding:24px 32px; font-size:14px; line-height:1.6; }
+.eai-md{ max-width:none; }
+.eai-md h2, .eai-md h3{ break-after:avoid; }
+.eai-md .katex-display{ overflow:visible !important; }
+@page{ margin:16mm; }
+</style></head><body><div class="eai-md">${node.innerHTML}</div></body></html>`);
+  win.document.close();
+  win.focus();
+  // KaTeX and Khmer fonts load after the write; print once they have.
+  (win.document.fonts?.ready || Promise.resolve()).then(() => setTimeout(() => win.print(), 200));
+  return true;
 }
 
 async function ragUpload(file) {
@@ -5638,6 +5729,17 @@ const COACH_MODES = {
     intro: "Ask a math question in Khmer or English, or snap a photo of a problem. I'll explain it step by step.",
     reply: ragStudyReply,
     canUpload: true,
+    canStop: true,
+  },
+  exam: {
+    label: "Exam Generator", icon: FileText,
+    subtitle: "New BAC II mock papers, modelled on real past papers, with a worked answer key",
+    suggestions: () => ["A full paper, exactly like the real exam", "A harder paper for a top grade", "Focus on the chapters students find hardest"],
+    placeholder: "Optional: a topic to focus on, e.g. integrals and complex numbers…",
+    intro: "Pick a subject below and I'll write a new mock BAC II paper in the format of the real past papers, then its full answer key and marking scheme. Add a topic to focus on, or just press send.",
+    reply: examPaperReply,
+    canStop: true,
+    allowEmpty: true,
   },
   major: {
     label: "Major Guidance", icon: GraduationCap,
@@ -5782,17 +5884,31 @@ function UserMessage({ m, onOpenImage }) {
   );
 }
 
+/* The years of the real papers a generated paper was modelled on (meta's sources, newest first). */
+const modelledOn = (sources = []) => [...new Set(sources.map((s) => s.heading).filter(Boolean))];
+
 function AssistantMessage({ m, Icon }) {
+  const answerRef = useRef(null);
+  const [printBlocked, setPrintBlocked] = useState(false);
+  const years = m.exam ? modelledOn(m.sources) : [];
   return (
     <div className="flex gap-3">
       <div className="eai-avatar"><Icon size={15} color="#fff" /></div>
       <div className="flex-1 min-w-0 text-[15px] leading-relaxed" style={{ color: m.error ? "var(--ember)" : "var(--ink)" }}>
         {m.rag && !m.text && m.notice ? <StatusLine text={m.notice} />
-          : m.rag ? <RichAnswer text={m.text} streaming={m.streaming} />
+          : m.rag ? <div ref={answerRef}><RichAnswer text={m.text} streaming={m.streaming} /></div>
           : <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>}
         {!m.streaming && m.text && (
           <div className="eai-msg-actions">
             <CopyButton text={m.text} />
+            {m.exam && (
+              <button className="eai-icon-btn sm eai-focus" title="Print or save as PDF" aria-label="Print or save the paper as PDF"
+                onClick={() => setPrintBlocked(!printExamPaper(answerRef.current, `${m.exam.subject} mock paper`))}>
+                <Download size={15} />
+              </button>
+            )}
+            {years.length > 0 && <span className="text-xs eai-muted self-center">Modelled on the {years.join(", ")} BAC II papers</span>}
+            {printBlocked && <span className="text-xs self-center" style={{ color: "var(--ember)" }}>Allow pop-ups to print the paper.</span>}
           </div>
         )}
       </div>
@@ -5804,12 +5920,18 @@ function AssistantMessage({ m, Icon }) {
    grounded in "the Grade 12 curriculum" and Major Guidance in BAC II subjects, so showing either
    to a university student would be exactly the BAC II routing bug this Hub exists to avoid. */
 const COACH_MODE_IDS_UNIVERSITY = ["university"];
-const COACH_MODE_IDS_HIGHSCHOOL = ["study", "major"];
+const COACH_MODE_IDS_HIGHSCHOOL = ["study", "exam", "major"];
 
 function Coach({ p }) {
   const isUni = p.educationLevel === "university";
   const [mode, setMode] = useState(isUni ? "university" : "study");
-  const [msgsByMode, setMsgsByMode] = useState({ study: [], major: [], university: [] });
+  const [msgsByMode, setMsgsByMode] = useState({ study: [], exam: [], major: [], university: [] });
+  const examSubjects = isUni ? [] : fieldSubjects(p.field, p.foreignLanguage);
+  const [examOptions, setExamOptions] = useState(() => ({
+    subject: (p.weak?.[0] && examSubjects.includes(p.weak[0].s) ? p.weak[0].s : examSubjects[0]) || "Mathematics",
+    answerKey: true,
+    language: "km",
+  }));
   const availableModeIds = isUni ? COACH_MODE_IDS_UNIVERSITY : COACH_MODE_IDS_HIGHSCHOOL;
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState([]);
@@ -5842,7 +5964,7 @@ function Coach({ p }) {
   const suggestions = active.suggestions(p);
   const preparing = attachments.some((a) => a.status === "processing");
   const readyAttachments = attachments.filter((a) => a.status === "ready");
-  const canSend = !loading && !preparing && (input.trim() !== "" || readyAttachments.length > 0);
+  const canSend = !loading && !preparing && (input.trim() !== "" || readyAttachments.length > 0 || active.allowEmpty);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs, loading]);
 
@@ -5916,7 +6038,7 @@ function Coach({ p }) {
   const send = (text) => {
     const t = (text ?? input).trim();
     const images = active.canUpload && text === undefined ? readyAttachments : [];
-    if ((!t && !images.length) || loading || (preparing && text === undefined)) return;
+    if ((!t && !images.length && !active.allowEmpty) || loading || (preparing && text === undefined)) return;
     const historyForReply = msgs; // snapshot before the new user message is appended
     const replyMode = mode;
     const stamp = Date.now();
@@ -5931,10 +6053,14 @@ function Coach({ p }) {
     const onImages = (readings) => updateMessage(replyMode, userId, (msg) => ({
       ...msg, readings, historyText: historyTextFor(t, readings),
     }));
+    const exam = mode === "exam" ? { ...examOptions } : null;
+    const shownText = exam
+      ? [`📝 ${exam.subject} mock paper · ${exam.answerKey ? "with answer key" : "questions only"} · ${exam.language === "km" ? "Khmer" : "English"}`, t].filter(Boolean).join("\n")
+      : t;
     setMsgsByMode((m) => ({
       ...m,
       [mode]: [...m[mode], {
-        id: userId, role: "user", text: t,
+        id: userId, role: "user", text: shownText,
         images: images.map((a) => ({ id: a.id, name: a.name, thumb: a.thumb })),
       }],
     }));
@@ -5948,7 +6074,7 @@ function Coach({ p }) {
     // A minimum "thinking" delay keeps the typing indicator feeling natural for the instant
     // scripted mode, without adding extra wait on top of a real (already-slower) API call.
     const minDelay = new Promise((resolve) => setTimeout(resolve, 400));
-    const extras = { images, signal: controller.signal, onImages };
+    const extras = { images, signal: controller.signal, onImages, exam };
     Promise.all([Promise.resolve(active.reply(t, p, historyForReply, upsertReply, extras)), minDelay])
       .then(([reply]) => (typeof reply === "string" ? { text: reply } : reply))
       .catch((err) => ({ text: `Sorry, something went wrong: ${err.message}`, error: true }))
@@ -6075,6 +6201,30 @@ function Coach({ p }) {
 
       <div className="eai-composer-wrap">
         {notice && <p className="text-xs text-center mb-2" style={{ color: "var(--ember)" }} role="status">{notice}</p>}
+        {mode === "exam" && (
+          <div className="eai-exam-options" role="group" aria-label="Paper options">
+            <label>
+              <span>Subject</span>
+              <select className="eai-focus" value={examOptions.subject} disabled={loading}
+                onChange={(e) => setExamOptions((o) => ({ ...o, subject: e.target.value }))}>
+                {examSubjects.map((s) => <option key={s} value={s}>{s} · {subjectLabel(s, "km")}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Language</span>
+              <select className="eai-focus" value={examOptions.language} disabled={loading}
+                onChange={(e) => setExamOptions((o) => ({ ...o, language: e.target.value }))}>
+                <option value="km">ខ្មែរ (Khmer)</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label className="eai-exam-check">
+              <input type="checkbox" checked={examOptions.answerKey} disabled={loading}
+                onChange={(e) => setExamOptions((o) => ({ ...o, answerKey: e.target.checked }))} />
+              <span>Answer key &amp; marking scheme</span>
+            </label>
+          </div>
+        )}
         <div className={`eai-composer${dragging ? " drag" : ""}`}>
           {attachments.length > 0 && (
             <div className="flex gap-2 flex-wrap px-3 pt-3">
@@ -6121,7 +6271,7 @@ function Coach({ p }) {
             </div>
             <div className="flex items-center gap-2">
               {uploading && <span className="text-xs eai-muted flex items-center gap-1"><LoaderCircle size={13} className="eai-spin" /> Indexing…</span>}
-              {loading && active.canUpload
+              {loading && active.canStop
                 ? <button onClick={stop} className="eai-send eai-focus" aria-label="Stop generating" title="Stop"><Square size={13} fill="currentColor" /></button>
                 : <button onClick={() => send()} disabled={!canSend} className="eai-send eai-focus" aria-label="Send" title="Send (Enter)"><ArrowUp size={18} /></button>}
             </div>
