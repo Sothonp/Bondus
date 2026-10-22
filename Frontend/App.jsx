@@ -133,6 +133,10 @@ function getUniExercises(subjectKey) {
 }
 
 const EXAM_YEARS = [2026, 2027, 2028];
+
+/* XP paid the first time an exercise is answered correctly. One constant, so the dashboard's lesson
+   card can never promise a different number than the handlers below actually pay out. */
+const XP_PER_CORRECT = 30;
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
 const MISTAKE_TYPES = [
   "Concept misunderstanding", "Wrong formula", "Calculation error",
@@ -362,7 +366,7 @@ function deriveInsights(p, topicMastery, streak = 0) {
   const plan = [];
   [...allTopics].sort((a, b) => a.score - b.score).slice(0, 2).forEach((pt, i) =>
     plan.push({ id: i + 1, s: pt.subject, task: `${pt.t} — review & practice`, min: 35, why: "Priority topic", done: false }));
-  if (strong[0]) plan.push({ id: 90, s: strong[0].s, task: `${strong[0].s} flash quiz`, min: 15, why: "Spaced revision", done: true });
+  if (strong[0]) plan.push({ id: 90, s: strong[0].s, task: `${strong[0].s} flash quiz`, min: 15, why: "Spaced revision", done: false });
   plan.push({ id: 91, s: "English", task: "Reading passage + 15 vocab", min: 20, why: "Daily habit", done: false });
 
   const recs = [];
@@ -1291,7 +1295,7 @@ function WelcomeHeroCard({ userName, greeting, message, onStartPlan, onAskCoach,
 /* Wide purple "recommended lesson" banner shown on the Dashboard. `imageUrl` is an optional decorative
    background (a handwritten-formula illustration by default) — purely decorative, so it renders with
    an empty alt and is hidden from screen readers. */
-function RecommendedLessonCard({ title, subject, duration, description, xp, imageUrl, onStart, lang = "en" }) {
+function RecommendedLessonCard({ title, subject, duration, description, xpNote, imageUrl, onStart, lang = "en" }) {
   return (
     <div className="eai-lesson-card">
       {imageUrl && <img src={imageUrl} alt="" aria-hidden="true" className="eai-lesson-decor" />}
@@ -1300,7 +1304,7 @@ function RecommendedLessonCard({ title, subject, duration, description, xp, imag
         <div className="min-w-0">
           <div className={`eai-lesson-label ${lang === "km" ? "eai-km" : ""}`}><Star size={16} /> {t(lang, "recommendedNextLesson")}</div>
           <h3 className="eai-lesson-title">{subject}: {title}</h3>
-          <p className={`eai-lesson-desc ${lang === "km" ? "eai-km" : ""}`}>{duration} {t(lang, "lessonWord")} · {description} · +{xp} XP</p>
+          <p className={`eai-lesson-desc ${lang === "km" ? "eai-km" : ""}`}>{[duration && `${duration} ${t(lang, "lessonWord")}`, description, xpNote].filter(Boolean).join(" · ")}</p>
         </div>
         <button onClick={onStart} className={`eai-lesson-btn eai-focus w-full sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
           {t(lang, "startLesson")} <ArrowRight size={16} className="eai-lesson-arrow" />
@@ -2521,7 +2525,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
       {/* Recommended next lesson */}
       <RecommendedLessonCard
         subject={subjectLabel(p.recommendedLesson.subject, lang)} title={topicLabel(p.recommendedLesson.topic, lang)}
-        duration={lang === "km" ? "១២ នាទី" : "12 min"} description={t(lang, "targetsWeakest")} xp={80}
+        description={t(lang, "targetsWeakest")} xpNote={`+${localizeNum(XP_PER_CORRECT, lang)} ${t(lang, "xpPerCorrect")}`}
         imageUrl="/decor/math-formulas.svg" onStart={() => go("practice")} lang={lang}
       />
 
@@ -8519,7 +8523,7 @@ const STRINGS = {
     unlockBannerDesc: "Complete your 20-question diagnostic assessment to receive:",
     startAssessment: "Start Assessment",
     heroMessage: "One small step today keeps the streak alive — here's what's next for you.",
-    recommendedNextLesson: "Recommended next lesson", lessonWord: "lesson", startLesson: "Start lesson",
+    recommendedNextLesson: "Recommended next lesson", lessonWord: "lesson", xpPerCorrect: "XP per correct answer", startLesson: "Start lesson",
     toLevel: "XP to Level", targetsWeakest: "targets your weakest topic",
     exploreSharpen: "Sharpen your weak subjects", exploreBrowseMajors: "Browse majors & entrance prep", exploreStats: "Your full stats & analytics",
     exploreBrowsePast: "Official past exam papers by year",
@@ -8677,7 +8681,7 @@ const STRINGS = {
     unlockBannerDesc: "បំពេញការធ្វើតេស្តវាយតម្លៃ ២០សំណួរ ដើម្បីទទួលបាន៖",
     startAssessment: "ចាប់ផ្តើមតេស្តវាយតម្លៃ",
     heroMessage: "ជំហានតូចមួយថ្ងៃនេះជួយរក្សានិន្នាការឲ្យបន្ត។ នេះជាអ្វីដែលបន្ទាប់សម្រាប់អ្នក។",
-    recommendedNextLesson: "មេរៀនបន្ទាប់ដែលបានណែនាំ", lessonWord: "មេរៀន", startLesson: "ចាប់ផ្តើមមេរៀន",
+    recommendedNextLesson: "មេរៀនបន្ទាប់ដែលបានណែនាំ", lessonWord: "មេរៀន", xpPerCorrect: "XP ក្នុងមួយចម្លើយត្រឹមត្រូវ", startLesson: "ចាប់ផ្តើមមេរៀន",
     toLevel: "XP ទៅកម្រិត", targetsWeakest: "ផ្តោតលើប្រធានបទខ្សោយបំផុតរបស់អ្នក",
     exploreSharpen: "ពង្រឹងមុខវិជ្ជាខ្សោយរបស់អ្នក", exploreBrowseMajors: "រកមើលជំនាញ និងការត្រៀមប្រឡងចូល", exploreStats: "ស្ថិតិ និងការវិភាគពេញលេញរបស់អ្នក",
     exploreBrowsePast: "ក្រដាសប្រឡងផ្លូវការតាមឆ្នាំ",
@@ -9033,7 +9037,7 @@ export default function App() {
     if (!target) return;
     const nowDone = !target.done;
     setPlan((arr) => arr.map((x) => (x.id === id ? { ...x, done: nowDone } : x)));
-    setBonusXp((x) => Math.max(0, x + (nowDone ? 20 : -20)));
+    // The plan is a plain to-do list: ticking a task earns no XP (and un-ticking takes none away).
   };
 
   // Record an answered exercise: bookkeeping for XP (unchanged) + feeding the topic-mastery engine
@@ -9042,7 +9046,7 @@ export default function App() {
     const already = practice[ex.id]?.xpAwarded;
     const xpAwarded = already || result === "correct";
     setPractice((prev) => ({ ...prev, [ex.id]: { status: result === "correct" ? "completed" : "in_progress", result, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (result === "correct" && !already) setBonusXp((x) => x + 30);
+    if (result === "correct" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
     setTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
       correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
     }));
@@ -9052,7 +9056,7 @@ export default function App() {
     const already = practice[ex.id]?.xpAwarded;
     const xpAwarded = already || status === "completed";
     setPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (status === "completed" && !already) setBonusXp((x) => x + 30);
+    if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
   };
   // University-track twins of handleAnswer/handleSetStatus above — same logic, writing to the
   // uniPractice/uniTopicMastery stores instead so BAC-II and university progress never collide.
@@ -9060,7 +9064,7 @@ export default function App() {
     const already = uniPractice[ex.id]?.xpAwarded;
     const xpAwarded = already || result === "correct";
     setUniPractice((prev) => ({ ...prev, [ex.id]: { status: result === "correct" ? "completed" : "in_progress", result, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (result === "correct" && !already) setBonusXp((x) => x + 30);
+    if (result === "correct" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
     setUniTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
       correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
     }));
@@ -9069,7 +9073,7 @@ export default function App() {
     const already = uniPractice[ex.id]?.xpAwarded;
     const xpAwarded = already || status === "completed";
     setUniPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (status === "completed" && !already) setBonusXp((x) => x + 30);
+    if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
   };
 
   if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
