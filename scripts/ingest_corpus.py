@@ -328,6 +328,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             for warning in result.warnings:
                 logger.warning("%s: %s", prefix, warning)
+            # A long OCR run can be killed outright (no KeyboardInterrupt), so
+            # keep each finished file instead of saving only at the end.
+            store.save()
         if not args.no_prune:
             # Only files this script indexed carry a file hash: API uploads stay.
             present = {path.relative_to(data_dir).as_posix() for path in files}

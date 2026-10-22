@@ -961,6 +961,26 @@ class TestKiriOCR:
         assert [[r["text"] for r in line] for line in group_lines(regions)] == [["a", "b"], ["c"], ["d"]]
         assert group_lines([]) == []
 
+    def test_ctc_score_matches_kiris_own(self):
+        torch = pytest.importorskip("torch")
+        kiri_model = pytest.importorskip("kiri_ocr.model")
+        from src.ingestion.khmer_ocr import ctc_alignment_score
+
+        class Tok:
+            dec_pad, dec_bos, dec_eos, blank_id = 0, 1, 2, 0
+
+            def dec_to_ctc_id(self, x):
+                return x - 2
+
+        rng = random.Random(0)
+        torch.manual_seed(0)
+        for _ in range(30):
+            logits = torch.randn(1, rng.randint(1, 40), 10) * 3
+            # Repeated labels exercise the rule that a blank must separate them.
+            seq = [1] + [3 if rng.random() < 0.4 else rng.randint(3, 11) for _ in range(rng.randint(0, 8))] + [2]
+            expected = kiri_model.compute_ctc_alignment_score(logits, seq, Tok())
+            assert ctc_alignment_score(logits, seq, Tok()) == pytest.approx(expected, abs=1e-5)
+
     def test_image_is_transcribed_filtered_and_cached(self, tmp_path):
         results = [
             _region("លំហាត់ទី ១", 10),
