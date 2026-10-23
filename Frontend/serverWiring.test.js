@@ -26,8 +26,9 @@ test("signing in, signing out and creating the account all talk to the server", 
 test("a wrong sign-up or login shows a message, not a crash, and says how long to wait when rate limited", () => {
   assert.match(app, /res && res\.error \? apiErrorText\(lang, res\.error, res\.retryAfter\)/);   // Login
   assert.match(app, /if \(res && res\.error\) \{ setSubmitError\(apiErrorText\(lang, res\.error, res\.retryAfter\)\); if \(res\.step\) setStep\(res\.step\); \}/); // Register
-  // the three places that turn a failed server call into a result for a screen all pass the wait time along
-  assert.equal((app.match(/retryAfter: err\?\.retryAfter \?\? null/g) || []).length, 3);
+  // the four places that turn a failed server call into a result for a screen all pass the wait time along
+  // (sign in, sign up, signing in after a password reset, and entering the dashboard without an assessment)
+  assert.equal((app.match(/retryAfter: err\?\.retryAfter \?\? null/g) || []).length, 4);
 });
 
 test("'too many tries' names the real wait (e.g. 48 minutes) instead of always saying 'a minute'", () => {
@@ -148,4 +149,40 @@ test("while the code is being emailed the student sees the friendly sending card
 test("the plan's subject picker lists the student's real subjects (their chosen foreign language), not the placeholder", () => {
   assert.match(app, /const subjectOptions = fieldSubjects\(p\.field, p\.foreignLanguage\);/);
   assert.doesNotMatch(app, /const subjectOptions = FIELD_SUBJECTS\[p\.field\]/);
+});
+
+test("the diagnostic is built in sections from diagnosticPlan, not from every question of every subject", () => {
+  assert.match(app, /import \{[^}]*buildSections[^}]*\} from "\.\/diagnosticPlan\.js";/);
+  const diag = app.slice(app.indexOf("function Diagnostic("), app.indexOf("function DiagnosticResults("));
+  assert.match(diag, /buildSections\(reg\.field, \(s\) => getExercises\(s, lang\)\)/);
+  assert.match(diag, /locate\(sections, i\)/); // "Section 2 of 4 · Question 5 of 12"
+  assert.match(diag, /t\(lang, "sectionWord"\)/);
+  assert.doesNotMatch(app, /fieldSubjects\(reg\.field, reg\.foreignLanguage\)\.flatMap\(/); // the old queue of every question (about 890 for Science)
+});
+
+test("the diagnostic results list only the subjects the test covered", () => {
+  const results = app.slice(app.indexOf("function DiagnosticResults("), app.indexOf("function Majors("));
+  assert.match(results, /diagnosticSubjects\(reg\.field\)\.map/);
+});
+
+test("a track with no diagnostic (Social Science) goes from sign-up straight to the dashboard", () => {
+  const reg = app.slice(app.indexOf("const handleRegister = async"), app.indexOf('// "Back" from the step-4'));
+  assert.match(reg, /if \(!hasDiagnostic\(reg\.field\)\) return enterDashboard\(reg\);/);
+  // after the account is created or updated, before the assessment screen would be queued
+  assert.ok(reg.indexOf("api.register(") < reg.indexOf("hasDiagnostic(reg.field)"));
+  assert.ok(reg.indexOf("hasDiagnostic(reg.field)") < reg.indexOf("setPendingReg(reg)"));
+});
+
+test("'Explore first' and the Social Science skip share one way into the dashboard, which reports a failure to load the account", () => {
+  const enter = app.slice(app.indexOf("const enterDashboard = async"), app.indexOf("// Completing the diagnostic later"));
+  assert.match(enter, /await loadAccount\(\); setPendingReg\(null\); return null;/);
+  assert.match(enter, /return \{ error: err\?\.code \?\? "server_error", retryAfter: err\?\.retryAfter \?\? null \};/);
+  assert.match(enter, /const built = buildProfile\(reg\);/); // the browser-only mode builds the profile from the answers it was handed, not from state
+  assert.match(enter, /const handleSkipDiagnostic = async \(\) => \{ const res = await enterDashboard\(pendingReg\); if \(res\) flash\(apiErrorKey\(res\.error\)\); \};/);
+});
+
+test("the diagnostic's new 'Section' word exists in both languages, and the coach no longer sends students to a diagnostic that may not exist", () => {
+  assert.equal((app.match(/[\s,{]sectionWord:/g) || []).length, 2);
+  assert.doesNotMatch(app, /complete the diagnostic assessment/);
+  assert.match(app, /answer a few practice questions so I can ground this in your real mastery/);
 });

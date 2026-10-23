@@ -25,6 +25,7 @@ import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
 import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
+import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
 import SubjectIcon from "./SubjectIcon.jsx";
 import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
@@ -3631,14 +3632,13 @@ function AssessmentChoice({ reg, dark, setDark, onStart, onSkip, onBack, lang = 
 
 /* ════════════════════════ Diagnostic test ════════════════════════
    A short, fast-fire assessment run right after registration and before the dashboard exists.
-   No feedback mid-test — like a real diagnostic, you only see results at the end. It seeds the
-   very first real topic-mastery scores; everything the dashboard shows flows from this. */
-function buildDiagnosticQueue(reg, lang = "en") {
-  return fieldSubjects(reg.field, reg.foreignLanguage).flatMap((s) => getExercises(s, lang));
-}
-
+   Science sits it in four sections (Mathematics, Physics, Chemistry, Biology) of a dozen questions
+   each; Social Science has none (diagnosticPlan.js). No feedback mid-test — like a real diagnostic,
+   you only see results at the end. It seeds the very first real topic-mastery scores; everything
+   the dashboard shows flows from this. */
 function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
-  const queue = useMemo(() => buildDiagnosticQueue(reg, lang), [reg.field, reg.foreignLanguage, lang]);
+  const sections = useMemo(() => buildSections(reg.field, (s) => getExercises(s, lang)), [reg.field, lang]);
+  const queue = useMemo(() => sections.flatMap((s) => s.questions), [sections]);
   const [i, setI] = useState(0);
   const [topicMastery, setTopicMastery] = useState({});
   const [choice, setChoice] = useState(null);
@@ -3651,7 +3651,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
   }
 
   const ex = queue[i];
-  const pct = Math.round((i / queue.length) * 100);
+  const where = locate(sections, i); // { section, sections, position, size }
 
   const answer = (confidence) => {
     const correct = gradeAnswer(ex, choice);
@@ -3668,10 +3668,21 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
         <div className="w-full eai-rise" style={{ maxWidth: 640 }}>
           <div className="flex items-center justify-between mb-2">
             <p className={`text-sm font-semibold eai-muted flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}><ClipboardCheck size={15} /> {t(lang, "diagnosticTestWord")}</p>
-            <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "questionWord")} {i + 1} {t(lang, "ofWord")} {queue.length}</p>
+            <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "sectionWord")} {localizeNum(where.section, lang)} {t(lang, "ofWord")} {localizeNum(where.sections, lang)} · {t(lang, "questionWord")} {localizeNum(where.position, lang)} {t(lang, "ofWord")} {localizeNum(where.size, lang)}</p>
           </div>
-          <div className="h-1.5 rounded-full eai-soft mb-6 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--primary)", transition: "width .3s" }} />
+          <div className="flex gap-1.5 mb-6">
+            {sections.map((sec, k) => {
+              const current = k + 1 === where.section;
+              const filled = k + 1 < where.section ? 100 : current ? Math.round(((where.position - 1) / where.size) * 100) : 0;
+              return (
+                <div key={sec.subject} className="flex-1 min-w-0">
+                  <div className="h-1.5 rounded-full eai-soft overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${filled}%`, background: "var(--primary)", transition: "width .3s" }} />
+                  </div>
+                  <p className={`text-[10px] sm:text-xs mt-1 truncate ${current ? "font-semibold" : "eai-muted"} ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sec.subject, lang)}</p>
+                </div>
+              );
+            })}
           </div>
 
           <div className="eai-card p-6 sm:p-8">
@@ -3711,7 +3722,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
 }
 
 function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" }) {
-  const rows = fieldSubjects(reg.field, reg.foreignLanguage).map((s) => {
+  const rows = diagnosticSubjects(reg.field).map((s) => {
     const topics = SUBJECT_TOPICS[s] || [];
     const scores = topics.map((t) => topicMastery[s]?.[t]?.score).filter((x) => x != null);
     const m = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
@@ -5251,7 +5262,7 @@ function majorCoachReply(text, p) {
       const hits = findMajorsForKeywords(top.flatMap((s) => SUBJECT_MAJOR_KEYWORDS[s] || [s.toLowerCase()]));
       return `Based on your strongest subjects (${top.join(", ")}), here's where I'd start looking:\n${hits.length ? hits.map((h) => `• ${h}`).join("\n") : "Browse the Universities tab to explore matching majors."}\n\nOr tell me an interest — engineering, law, business, medicine, IT, design, tourism — and I'll pull real options.`;
     }
-    return `I don't have a strong-subject signal for you yet — complete the diagnostic assessment so I can ground this in your real mastery. In the meantime, tell me a subject you enjoy or an interest area and I'll suggest real majors from Cambodian universities.`;
+    return `I don't have a strong-subject signal for you yet — answer a few practice questions so I can ground this in your real mastery. In the meantime, tell me a subject you enjoy or an interest area and I'll suggest real majors from Cambodian universities.`;
   }
 
   // 4) Fallback
@@ -6927,7 +6938,7 @@ const STRINGS = {
     exploreFirstDesc: "Enter the dashboard without personalization. You can take the assessment later from your dashboard or profile.",
     exploreFirstBtn: "Explore first",
     // Diagnostic
-    diagnosticTestWord: "Diagnostic test", questionWord: "Question",
+    diagnosticTestWord: "Diagnostic test", questionWord: "Question", sectionWord: "Section",
     howSureWereYou: "How sure were you?", confidentWord: "Confident", guessedWord: "I guessed",
     noFeedbackDuringTest: "No feedback during the test — you'll see your results at the end.",
     diagnosticComplete: "Diagnostic complete!", startingPointIs: "Here's your real starting point — overall level is",
@@ -7104,7 +7115,7 @@ const STRINGS = {
     exploreFirstDesc: "ចូលទៅផ្ទាំងគ្រប់គ្រងដោយគ្មានការកំណត់ផ្ទាល់ខ្លួន។ អ្នកអាចធ្វើតេស្តវាយតម្លៃពេលក្រោយពីផ្ទាំងគ្រប់គ្រង ឬប្រវត្តិរូបរបស់អ្នក។",
     exploreFirstBtn: "ស្វែងយល់មុន",
     // Diagnostic
-    diagnosticTestWord: "តេស្តវាយតម្លៃ", questionWord: "សំណួរ",
+    diagnosticTestWord: "តេស្តវាយតម្លៃ", questionWord: "សំណួរ", sectionWord: "ផ្នែក",
     howSureWereYou: "តើអ្នកប្រាកដប៉ុណ្ណា?", confidentWord: "ជឿជាក់", guessedWord: "ខ្ញុំទាយ",
     noFeedbackDuringTest: "គ្មានមតិកែលម្អកំឡុងពេលធ្វើតេស្តទេ — អ្នកនឹងឃើញលទ្ធផលនៅចុងក្រោយ។",
     diagnosticComplete: "តេស្តវាយតម្លៃបានបញ្ចប់!", startingPointIs: "នេះជាចំណុចចាប់ផ្តើមពិតរបស់អ្នក — កម្រិតទាំងមូលគឺ",
@@ -7316,6 +7327,8 @@ export default function App() {
         return { error: err?.code ?? "server_error", step: registrationErrorStep(err), retryAfter: err?.retryAfter ?? null };
       }
     }
+    // A track with no diagnostic (Social Science) has no assessment screen to show: straight to the dashboard.
+    if (!hasDiagnostic(reg.field)) return enterDashboard(reg);
     setPendingReg(reg); setResumeReg(null);
     return null;
   };
@@ -7343,19 +7356,23 @@ export default function App() {
     setPendingReg(null);
     setShowDiagnostic(false);
   };
-  // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
-  const handleSkipDiagnostic = async () => {
+  // Straight to an unpersonalized dashboard with no assessment: "Explore first", or a track that has none (Social Science).
+  // With the server the account already exists, so this only loads it. Resolves to { error, retryAfter } when that fails,
+  // so the caller can say so.
+  const enterDashboard = async (reg) => {
     if (SERVER_MODE) {
-      try { await loadAccount(); setPendingReg(null); }
-      catch (err) { flash(apiErrorKey(err?.code)); }
-      return;
+      try { await loadAccount(); setPendingReg(null); return null; }
+      catch (err) { return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null }; }
     }
-    const built = buildProfile(pendingReg);
+    const built = buildProfile(reg);
     setTopicMastery({});
     setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
     setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
+    return null;
   };
+  // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
+  const handleSkipDiagnostic = async () => { const res = await enterDashboard(pendingReg); if (res) flash(apiErrorKey(res.error)); };
   // Completing the diagnostic later, from the Dashboard banner — updates the existing profile
   // in place instead of building a fresh one.
   const handleLaterDiagnosticComplete = (diagnosticMastery) => {
