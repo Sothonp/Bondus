@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -14,7 +14,7 @@ import {
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Sigma, FlaskConical, Dna, BookText, Languages as LanguagesIcon, Map as MapIcon, Scale, Shirt,
+  Sigma, FlaskConical, Dna, BookText, Languages as LanguagesIcon, Map as MapIcon, Scale, Shirt, Trash2, Mail, MailCheck,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -29,6 +29,15 @@ import StudyOwlScene from "./StudyOwlScene.jsx";
 import SubjectRibbon from "./SubjectRibbon.jsx";
 import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
+import { todaysTasks, addTask, toggleTask, removeTask, remainingSuggestions, MAX_TITLE_LENGTH, MAX_TASKS_PER_DAY } from "./dailyPlan.js";
+import LoadingScreen from "./LoadingScreen.jsx";
+import { createApi } from "./api.js";
+import {
+  userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
+  answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, waitParts, isCodeAlreadySent,
+} from "./serverMapping.js";
+import { createEventQueue } from "./eventQueue.js";
+import { createStateSaver } from "./stateSaver.js";
 import { RewardsContext, useRewards } from "./rewards/RewardsContext.jsx";
 import { OutfitLayers } from "./rewards/itemArt.jsx";
 import { REWARD_STYLES } from "./rewards/rewardStyles.js";
@@ -137,6 +146,12 @@ const EXAM_YEARS = [2026, 2027, 2028];
 /* XP paid the first time an exercise is answered correctly. One constant, so the dashboard's lesson
    card can never promise a different number than the handlers below actually pay out. */
 const XP_PER_CORRECT = 30;
+
+/* The backend (Laravel API, /api/v1). With VITE_API_URL set, students sign in on the server and their progress, XP,
+   streak and daily plan live there. With it unset the app is the old browser-only prototype, unchanged. */
+const api = createApi({ baseUrl: import.meta.env.VITE_API_URL });
+const SERVER_MODE = api.enabled;
+const safeStorage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
 const MISTAKE_TYPES = [
   "Concept misunderstanding", "Wrong formula", "Calculation error",
@@ -2170,27 +2185,38 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   );
 }
 
-function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", setLang }) {
+function Login({ dark, setDark, onBack, onLogin, onCreateInstead, onForgot, lang = "en", setLang }) {
   const [method, setMethod] = useState("phone"); // "phone" | "email"
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [mascotState, setMascotState] = useState("idle");
   const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
   const switchMethod = (m) => { setMethod(m); setError(""); };
-  const submit = () => {
-    const creds = method === "phone" ? { phone: phone.trim() } : { email: email.trim(), password };
-    if (method === "phone" ? !creds.phone : !creds.email || !creds.password) {
-      setError(t(lang, method === "phone" ? "errEnterPhone" : "errEnterEmailPassword")); shake(); return;
+  // The browser-only prototype let a phone number alone sign in; with the server both ways need the password.
+  const needsPassword = SERVER_MODE || method === "email";
+  const submit = async () => {
+    if (busy) return;
+    const creds = method === "phone" ? { phone: phone.trim(), ...(SERVER_MODE ? { password } : {}) } : { email: email.trim(), password };
+    const identifier = method === "phone" ? creds.phone : creds.email;
+    if (!identifier || (needsPassword && !creds.password)) {
+      setError(t(lang, method === "email" ? "errEnterEmailPassword" : SERVER_MODE ? "errEnterPhonePassword" : "errEnterPhone")); shake(); return;
     }
-    if (!onLogin(creds)) { setError(t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound")); shake(); }
+    setBusy(true);
+    try {
+      const res = await onLogin(creds);
+      if (res === true) return;
+      setError(res && res.error ? apiErrorText(lang, res.error, res.retryAfter) : t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound"));
+      shake();
+    } finally { setBusy(false); }
   };
   return (
     <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
       title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}
       footer={
-        <PrimaryButton onClick={submit} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
+        <PrimaryButton onClick={submit} disabled={busy} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
       }>
       <div className="flex gap-1 p-1 rounded-full eai-soft" style={{ width: "fit-content", marginBottom: 18 }}>
         {["phone", "email"].map((m) => (
@@ -2202,31 +2228,188 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
         ))}
       </div>
 
-      {method === "phone" ? (
-        <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
-          <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
-            value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
-            onKeyDown={(e) => e.key === "Enter" && submit()} />
-        </FormField>
-      ) : (
-        <div className="space-y-4">
+      <div className="space-y-4">
+        {method === "phone" ? (
+          <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
+            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
+              value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && submit()} />
+          </FormField>
+        ) : (
           <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
             <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
               value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && submit()} />
           </FormField>
+        )}
+        {needsPassword && (
           <FormField label={t(lang, "passwordLabel")} required>
             <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="current-password"
               value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && submit()} />
           </FormField>
-        </div>
-      )}
-
+        )}
+        {SERVER_MODE && (
+          <div className="text-right" style={{ marginTop: -6 }}>
+            <button type="button" onClick={onForgot} className={`eai-focus text-xs font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>
+              {t(lang, "forgotLink")}
+            </button>
+          </div>
+        )}
+      </div>
 
       <p className={`text-center text-xs eai-muted mt-4 ${lang === "km" ? "eai-km" : ""}`}>
         {t(lang, "noAccountYet")}{" "}
         <button onClick={onCreateInstead} className="eai-focus font-semibold" style={{ color: "var(--primary)" }}>{t(lang, "createOne")}</button>
+      </p>
+    </OnboardingLayout>
+  );
+}
+
+/* The waiting state while a reset code is being emailed (on a slow connection that can take a while): a friendly envelope
+   that floats, three pulsing dots and a calm explanation. It stands still for people who ask for reduced motion. */
+function SendingCard({ lang }) {
+  const still = useReducedMotion();
+  const km = lang === "km" ? "eai-km" : "";
+  return (
+    <div className="flex flex-col items-center text-center py-8 px-2" role="status" aria-live="polite">
+      <div className="relative">
+        <motion.div className="grid place-items-center" style={{ width: 92, height: 92, borderRadius: 28, background: "var(--primary-soft)", boxShadow: "0 14px 30px -16px var(--primary)" }}
+          animate={still ? undefined : { y: [0, -9, 0], rotate: [0, -3, 3, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
+          <Mail size={42} strokeWidth={1.8} style={{ color: "var(--primary)" }} />
+        </motion.div>
+        <motion.span aria-hidden="true" className="absolute rounded-full" style={{ width: 11, height: 11, background: "var(--gold)", top: -5, right: -7 }}
+          animate={still ? undefined : { scale: [1, 1.5, 1], opacity: [1, 0.45, 1] }} transition={{ duration: 1.6, repeat: Infinity }} />
+        <motion.span aria-hidden="true" className="absolute rounded-full" style={{ width: 8, height: 8, background: "var(--ember)", bottom: 2, left: -9 }}
+          animate={still ? undefined : { scale: [1, 1.6, 1], opacity: [0.9, 0.4, 0.9] }} transition={{ duration: 1.9, repeat: Infinity, delay: 0.5 }} />
+      </div>
+      <div className="flex gap-1.5 mt-7" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <motion.span key={i} className="rounded-full" style={{ width: 9, height: 9, background: "var(--primary)" }}
+            animate={still ? { opacity: 0.6 } : { opacity: [0.25, 1, 0.25], scale: [0.8, 1.2, 0.8] }} transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }} />
+        ))}
+      </div>
+      <p className={`eai-display font-extrabold text-lg mt-5 ${km}`}>{t(lang, "forgotSendingTitle")}</p>
+      <p className={`text-sm eai-muted mt-1.5 ${km}`} style={{ maxWidth: 300 }}>{t(lang, "forgotSendingSub")}</p>
+    </div>
+  );
+}
+
+/* Shown on the code screen once the email is on its way: where it went, how long it lasts, and where to look. */
+function CheckEmailCard({ lang, email }) {
+  const still = useReducedMotion();
+  const km = lang === "km" ? "eai-km" : "";
+  return (
+    <motion.div initial={still ? false : { opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      className="flex items-center gap-3.5 p-4 rounded-2xl mb-5" style={{ background: "var(--jade-soft)", border: "1px solid var(--jade)" }}>
+      <motion.div initial={still ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 14, delay: 0.15 }}
+        className="grid place-items-center rounded-2xl flex-shrink-0" style={{ width: 48, height: 48, background: "var(--card)" }}>
+        <MailCheck size={24} style={{ color: "var(--jade)" }} />
+      </motion.div>
+      <div className="min-w-0">
+        <p className={`eai-display font-bold text-sm ${km}`}>{t(lang, "forgotCheckEmailTitle")}</p>
+        <p className={`text-xs eai-muted mt-0.5 ${km}`} style={{ overflowWrap: "anywhere" }}>
+          {t(lang, "forgotCodeSent")} <strong style={{ color: "var(--ink)" }}>{email || "…"}</strong>
+        </p>
+        <p className={`text-xs eai-muted mt-0.5 ${km}`}>{t(lang, "forgotCodeExpires")} {t(lang, "forgotCheckSpam")}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ════════════════════════ Forgot password (server mode) ════════════════════════
+   Step 1: the student gives their phone number or email and the server emails a 6-digit code to the address on the
+   account. Step 2: they type the code and a new password; the server answers with a fresh login, so they land on the
+   dashboard. `onSignedIn` loads the account and resolves to true, or to { error } when that fails. */
+function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLang }) {
+  const [step, setStep] = useState(1);
+  const [login, setLogin] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);       // resetting the password
+  const [sending, setSending] = useState(false);   // the code email is being sent
+  const [cooldown, setCooldown] = useState(0); // seconds until a new code may be requested
+  const [mascotState, setMascotState] = useState("idle");
+  const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
+  const sendCode = async () => {
+    if (sending || !login.trim()) return;
+    setSending(true); setError("");
+    try {
+      const res = await api.forgotPassword({ login: login.trim() });
+      setMaskedEmail(res?.maskedEmail ?? ""); setCode(""); setStep(2); setCooldown(60);
+    } catch (err) {
+      // A code was sent a moment ago (the server sends nothing new and says how long until a new one may be asked
+      // for): just go to the code screen. Anything else is a real problem, e.g. the hourly limit: say how long to wait.
+      if (isCodeAlreadySent(err) && err.retryAfter > 0) { setStep(2); setCooldown(err.retryAfter); }
+      else { setError(apiErrorText(lang, err?.code, err?.retryAfter)); shake(); }
+    }
+    finally { setSending(false); }
+  };
+  const resetPassword = async () => {
+    if (busy) return;
+    if (!/^\d{6}$/.test(code.trim())) { setError(t(lang, "errInvalidCode")); shake(); return; }
+    if (password.length < 8) { setError(t(lang, "errPasswordShort")); shake(); return; }
+    setBusy(true); setError("");
+    try {
+      await api.resetPassword({ login: login.trim(), code: code.trim(), password });
+      const res = await onSignedIn();
+      if (res !== true) { setError(apiErrorText(lang, res?.error, res?.retryAfter)); shake(); }
+    } catch (err) { setError(apiErrorText(lang, err?.code, err?.retryAfter)); shake(); }
+    finally { setBusy(false); }
+  };
+
+  const km = lang === "km" ? "eai-km" : "";
+  return (
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={step === 2 ? () => { setStep(1); setError(""); } : onBack} lang={lang} setLang={setLang} mascotState={mascotState}
+      title={t(lang, "forgotTitle")}
+      description={step === 1 ? t(lang, "forgotDesc") : t(lang, "forgotStep2Desc")}
+      footer={
+        step === 1
+          ? <PrimaryButton onClick={sendCode} disabled={sending || !login.trim()} className={`sm:w-auto ${km}`}>{sending ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <>{t(lang, "forgotSendCode")} <ChevronRight size={16} /></>}</PrimaryButton>
+          : <PrimaryButton onClick={resetPassword} disabled={busy || !code.trim() || !password} className={`sm:w-auto ${km}`}>{t(lang, "forgotResetBtn")} <ChevronRight size={16} /></PrimaryButton>
+      }>
+      {step === 1 ? (
+        sending ? <SendingCard lang={lang} /> : (
+          <FormField label={t(lang, "forgotLoginLabel")} required error={error} lang={lang}>
+            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="username"
+              value={login} onChange={(e) => { setLogin(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && sendCode()} />
+          </FormField>
+        )
+      ) : (
+        <div>
+          <CheckEmailCard lang={lang} email={maskedEmail} />
+          {sending ? <SendingCard lang={lang} /> : (
+        <div className="space-y-4">
+          <FormField label={t(lang, "forgotCodeLabel")} required error={error} lang={lang}>
+            <input className="eai-ob-input eai-focus" placeholder="123456" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
+              value={code} onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && resetPassword()} />
+          </FormField>
+          <FormField label={t(lang, "forgotNewPasswordLabel")} required>
+            <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="new-password"
+              value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && resetPassword()} />
+            <p className={`text-xs eai-muted mt-1.5 ${km}`}>{t(lang, "passwordHint")}</p>
+          </FormField>
+          <button type="button" onClick={sendCode} disabled={sending || cooldown > 0}
+            className={`eai-focus text-xs font-semibold ${km}`} style={{ color: cooldown > 0 ? "var(--muted)" : "var(--primary)", cursor: cooldown > 0 ? "not-allowed" : "pointer" }}>
+            {t(lang, "forgotResend")}{cooldown > 0 ? ` (${cooldown})` : ""}
+          </button>
+        </div>
+          )}
+        </div>
+      )}
+      <p className={`text-center text-xs eai-muted mt-5 ${km}`}>
+        <button onClick={onBack} className="eai-focus font-semibold" style={{ color: "var(--primary)" }}>{t(lang, "backToLogin")}</button>
       </p>
     </OnboardingLayout>
   );
@@ -2253,6 +2436,20 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  // With the server, onComplete creates the account and may answer { error, step } (phone already used, etc.).
+  const finish = async (data) => {
+    if (submitting) return;
+    setSubmitError(""); setSubmitting(true);
+    try {
+      const res = await onComplete(data);
+      if (res && res.error) { setSubmitError(apiErrorText(lang, res.error, res.retryAfter)); if (res.step) setStep(res.step); }
+    } finally { setSubmitting(false); }
+  };
+  const phoneDigits = form.phone.replace(/[\s().-]/g, "").replace(/^\+/, "");
+  const accountOk = Boolean(form.name.trim()) && (!SERVER_MODE || (/^\d{8,15}$/.test(phoneDigits) && form.password.length >= 8));
+  const submitErrorBanner = submitError ? <p className="eai-ob-error mb-4" role="alert"><AlertTriangle size={12} /> {submitError}</p> : null;
   const isUni = form.educationLevel === "university";
 
   // Unlimited multi-select (high-school "subjects to improve").
@@ -2272,10 +2469,11 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         onBack={onBack} lang={lang} setLang={isUni ? undefined : setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}
         footer={
-          <PrimaryButton onClick={() => setStep(2)} disabled={!form.name.trim()} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+          <PrimaryButton onClick={() => setStep(2)} disabled={!accountOk} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
             {isUni ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
           </PrimaryButton>
         }>
+        {submitErrorBanner}
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
             <input className="eai-ob-input eai-focus" placeholder="e.g. Sophea Chan" autoComplete="name"
@@ -2288,10 +2486,12 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           <FormField label={t(lang, "emailLabel")}>
             <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
               value={form.email} onChange={(e) => set("email", e.target.value)} />
+            {SERVER_MODE && <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "emailResetHint")}</p>}
           </FormField>
-          <FormField label={t(lang, "passwordLabel")}>
+          <FormField label={t(lang, "passwordLabel")} required={SERVER_MODE}>
             <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="new-password"
               value={form.password} onChange={(e) => set("password", e.target.value)} />
+            {SERVER_MODE && <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "passwordHint")}</p>}
           </FormField>
           <FormField label={t(lang, "ageLabel")}>
             <input type="number" min="8" max="99" inputMode="numeric" className="eai-ob-input eai-focus" placeholder="18"
@@ -2386,10 +2586,11 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
       title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}
       footer={
-        <PrimaryButton onClick={() => onComplete({ ...form, age: Number(form.age) || null })} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+        <PrimaryButton onClick={() => finish({ ...form, age: Number(form.age) || null })} disabled={submitting} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
           {t(lang, "continueWord")} <ChevronRight size={16} />
         </PrimaryButton>
       }>
+      {submitErrorBanner}
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
           options={EXAM_YEARS.map((y) => ({ value: y, label: String(y) }))} />
@@ -2407,7 +2608,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {form.subjectsToImprove.length === 0 ? (
-              <button onClick={() => onComplete({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
+              <button onClick={() => finish({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
                 className={`eai-ob-text-action eai-focus ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "skipStepWord")}</button>
             ) : (
               <button onClick={clearSubjects} className={`eai-ob-text-action eai-focus ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "clearSelectionWord")}</button>
@@ -2428,48 +2629,26 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 }
 
 /* ════════════════════════ Dashboard ════════════════════════ */
-const PERSONALIZATION_PERKS = {
-  en: ["Personalized study roadmap", "AI recommendations", "Subject mastery analysis", "Adaptive practice questions", "BAC II paper recommendations", "Progress tracking"],
-  km: ["ផែនទីសិក្សាផ្ទាល់ខ្លួន", "អនុសាសន៍ AI", "ការវិភាគសមត្ថភាពមុខវិជ្ជា", "សំណួរអនុវត្តន៍សម្របតាមកម្រិត", "អនុសាសន៍ក្រដាសប្រឡង បាក់ឌុប", "តាមដានវឌ្ឍនភាព"],
-};
-
-function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, onDismissBanner, lang = "en" }) {
+function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask, bonusXp = 0, lang = "en" }) {
   const xp = p.xp + bonusXp;
-  const done = plan.filter((t) => t.done).length;
-  const planPct = plan.length ? Math.round((done / plan.length) * 100) : 0;
+  // "Today's plan" is the student's own list: each day starts empty, older days stay stored but hidden.
+  const tasks = todaysTasks(plan, dateKey());
+  const done = tasks.filter((x) => x.done).length;
+  const planPct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const suggestions = remainingSuggestions(p.plan ?? [], plan, dateKey()).slice(0, 3);
+  const planFull = tasks.length >= MAX_TASKS_PER_DAY;
+  const subjectOptions = FIELD_SUBJECTS[p.field] ?? [];
+  const [draft, setDraft] = useState({ title: "", subject: "", minutes: "" });
+  const canAdd = Boolean(draft.title.trim()) && !planFull;
+  const submitTask = (e) => {
+    e.preventDefault();
+    if (!canAdd) return;
+    onAddPlanTask({ title: draft.title, subject: draft.subject || null, minutes: draft.minutes });
+    setDraft((d) => ({ ...d, title: "", minutes: "" })); // keep the chosen subject: students often add several tasks for one subject
+  };
 
   return (
     <div className="space-y-5 eai-rise">
-      {/* Unlock-personalization banner — only for profiles that explicitly skipped the diagnostic
-          (older saved profiles predate this flag and default to personalized, not undefined). */}
-      {p.isPersonalized === false && !p.bannerDismissed && (
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
-          className="eai-card p-5 relative" style={{ background: "var(--gold-soft)", border: "1px solid var(--gold)" }}>
-          <button onClick={onDismissBanner} aria-label="Dismiss" className="eai-focus absolute top-4 right-4 eai-muted">
-            <XCircle size={18} />
-          </button>
-          <div className="flex items-start gap-3 pr-8">
-            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--card)" }}>
-              <Target size={19} style={{ color: "var(--gold)" }} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className={`eai-display font-bold text-sm ${lang === "km" ? "eai-km" : ""}`}>🎯 {t(lang, "unlockBannerTitle")}</p>
-              <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "unlockBannerDesc")}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-2">
-                {PERSONALIZATION_PERKS[lang === "km" ? "km" : "en"].map((f) => (
-                  <span key={f} className={`text-xs eai-muted flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}>
-                    <CheckCircle2 size={12} style={{ color: "var(--gold)" }} /> {f}
-                  </span>
-                ))}
-              </div>
-              <button onClick={onStartAssessment} className={`eai-btn eai-glass eai-focus mt-3.5 px-4 py-2 text-xs ${lang === "km" ? "eai-km" : ""}`}>
-                {t(lang, "startAssessment")}
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       {/* Hero */}
       <WelcomeHeroCard
         userName={p.name} greeting="សួស្តី" message={t(lang, "heroMessage")}
@@ -2480,22 +2659,64 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
         {/* Daily plan */}
         <div className="eai-card p-6 lg:col-span-2">
           <CardHead title={t(lang, "dashTodayPlan")} kh={lang === "km" ? null : "ផែនការសិក្សាថ្ងៃនេះ"}
-            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{plan.length} {t(lang, "dashDone")}</span>} />
+            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{tasks.length} {t(lang, "dashDone")}</span>} />
           <div className="h-1.5 rounded-full eai-soft mb-4 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${planPct}%`, background: "var(--jade)", transition: "width .3s" }} />
           </div>
-          <div className="space-y-2.5">
-            {plan.map((t) => (
-              <button key={t.id} onClick={() => onTogglePlan(t.id)} className="eai-focus w-full flex items-center gap-3 p-3 rounded-2xl text-left eai-nav border" style={{ borderColor: "var(--line)" }}>
-                {t.done ? <CheckCircle2 size={22} style={{ color: "var(--jade)", flexShrink: 0 }} /> : <Circle size={22} className="eai-muted" style={{ flexShrink: 0 }} />}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold truncate" style={{ textDecoration: t.done ? "line-through" : "none", opacity: t.done ? 0.5 : 1 }}>{t.task}</p>
-                  <p className="text-xs eai-muted">{subjectLabel(t.s, lang)} · {t.why}</p>
-                </div>
-                <span className="text-xs font-bold eai-muted flex items-center gap-1 flex-shrink-0"><Clock size={13} /> {t.min}m</span>
+          <form onSubmit={submitTask} className="flex flex-col sm:flex-row gap-2 mb-4">
+            <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
+              className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
+            <div className="flex gap-2">
+              <select value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+                aria-label={t(lang, "planSubjectOptional")}
+                className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }}>
+                <option value="">{t(lang, "planSubjectOptional")}</option>
+                {subjectOptions.map((s) => <option key={s} value={s}>{subjectLabel(s, lang)}</option>)}
+              </select>
+              <input type="number" min="1" max="600" inputMode="numeric" value={draft.minutes}
+                onChange={(e) => setDraft((d) => ({ ...d, minutes: e.target.value }))}
+                placeholder={t(lang, "planMinutesShort")} aria-label={t(lang, "planMinutesShort")}
+                className={`eai-ob-input eai-focus ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42, width: 84, flexShrink: 0 }} />
+              <button type="submit" disabled={!canAdd}
+                className={`eai-btn eai-glass eai-focus px-4 text-sm flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
+                style={{ opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
+                <Plus size={15} /> {t(lang, "planAdd")}
               </button>
+            </div>
+          </form>
+          <div className="space-y-2.5">
+            {tasks.length === 0 && (
+              <p className={`text-sm eai-muted py-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planEmpty")}</p>
+            )}
+            {tasks.map((task) => (
+              <div key={task.id} className="eai-nav flex items-center gap-2 p-3 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
+                <button onClick={() => onTogglePlan(task.id)} aria-pressed={task.done} className="eai-focus flex-1 min-w-0 flex items-center gap-3 text-left rounded-xl">
+                  {task.done ? <CheckCircle2 size={22} style={{ color: "var(--jade)", flexShrink: 0 }} /> : <Circle size={22} className="eai-muted" style={{ flexShrink: 0 }} />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate" style={{ textDecoration: task.done ? "line-through" : "none", opacity: task.done ? 0.5 : 1 }}>{task.task}</p>
+                    <p className="text-xs eai-muted">{[task.s ? subjectLabel(task.s, lang) : null, task.why === "My task" ? t(lang, "planMyTask") : task.why].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  {task.min ? <span className="text-xs font-bold eai-muted flex items-center gap-1 flex-shrink-0"><Clock size={13} /> {task.min}m</span> : null}
+                </button>
+                <button onClick={() => onRemovePlanTask(task.id)} aria-label={t(lang, "planDeleteTask")} title={t(lang, "planDeleteTask")}
+                  className="eai-focus eai-muted p-1.5 rounded-lg flex-shrink-0"><Trash2 size={16} /></button>
+              </div>
             ))}
           </div>
+          {suggestions.length > 0 && (
+            <div className="mt-4">
+              <p className={`text-xs font-semibold eai-muted mb-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planSuggested")}</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((sg) => (
+                  <button key={sg.id} onClick={() => onAddPlanTask({ title: sg.task, subject: sg.s, minutes: sg.min, why: sg.why })} disabled={planFull}
+                    className="eai-focus eai-soft text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <Plus size={12} /> {sg.task}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Streak + XP + Level */}
@@ -8517,11 +8738,41 @@ const STRINGS = {
     dashGreetingPrefix: "Welcome,",
     dashStartPlan: "Start today's plan", dashAskCoach: "Ask your AI coach",
     dashTodayPlan: "Today's study plan", dashDone: "done",
+    planEmpty: "No tasks yet. Add what you plan to study today.", planAddPlaceholder: "Add a task for today…",
+    planSubjectOptional: "Subject (optional)", planMinutesShort: "Min", planAdd: "Add", planDeleteTask: "Delete task",
+    planSuggested: "Suggested for you", planMyTask: "My task",
+    errInvalidCredentials: "Wrong phone number, email or password.",
+    errEnterPhonePassword: "Enter your phone number and password.",
+    errPhoneTaken: "This phone number already has an account. Try logging in instead.",
+    errEmailTaken: "This email already has an account. Try logging in instead.",
+    errValidation: "Please check the details you entered and try again.",
+    errTooMany: "Too many tries. Please wait a minute and try again.",
+    errTooManyWait: "Too many tries. Please try again in {time}.",
+    errNetwork: "Can't reach the server. Check your internet connection and try again.",
+    errServer: "Something went wrong on our side. Please try again in a moment.",
+    errSession: "Your session ended. Please log in again.",
+    errInvalidCode: "That code is wrong or has expired.",
+    errNoEmail: "We couldn't find an account with an email for that phone number or email, so no code was sent. Check what you typed, or contact Bondus support.",
+    errEmailFailed: "We couldn't send the email right now. Please try again in a moment.",
+    errPlanLimit: "You've reached today's limit of tasks.",
+    errPlanSave: "Couldn't save that task. Please try again.",
+    errSaveProgress: "We couldn't save your progress. Please try again later.",
+    errPasswordShort: "Password must be at least 8 characters.",
+    retryWord: "Try again",
+    passwordHint: "At least 8 characters",
+    emailResetHint: "Add an email so you can reset your password if you forget it.",
+    forgotLink: "Forgot password?", forgotTitle: "Reset your password",
+    forgotDesc: "Enter your phone number or email. We'll email a 6-digit code to the address on your account.",
+    forgotSendCode: "Send code", forgotCodeSent: "We sent a 6-digit code to", forgotCodeExpires: "It expires in 15 minutes.",
+    forgotCodeLabel: "6-digit code", forgotNewPasswordLabel: "New password", forgotResetBtn: "Reset password",
+    forgotResend: "Send a new code", forgotLoginLabel: "Phone number or email", backToLogin: "Back to log in",
+    forgotSendingTitle: "Sending your code…",
+    forgotSendingSub: "This can take up to a minute. Please keep this page open.",
+    forgotCheckEmailTitle: "Check your email",
+    forgotCheckSpam: "Can't see it? Look in your Spam folder.",
+    forgotStep2Desc: "Type the code from the email and choose a new password.",
     dashStreak: "day streak · keep it alive",
     dashExplore: "Explore more",
-    unlockBannerTitle: "Unlock Your Personalized Study Plan",
-    unlockBannerDesc: "Complete your 20-question diagnostic assessment to receive:",
-    startAssessment: "Start Assessment",
     heroMessage: "One small step today keeps the streak alive — here's what's next for you.",
     recommendedNextLesson: "Recommended next lesson", lessonWord: "lesson", xpPerCorrect: "XP per correct answer", startLesson: "Start lesson",
     toLevel: "XP to Level", targetsWeakest: "targets your weakest topic",
@@ -8675,11 +8926,41 @@ const STRINGS = {
     dashGreetingPrefix: "សូមស្វាគមន៍,",
     dashStartPlan: "ចាប់ផ្តើមផែនការថ្ងៃនេះ", dashAskCoach: "សួរគ្រូបង្វឹក AI",
     dashTodayPlan: "ផែនការសិក្សាថ្ងៃនេះ", dashDone: "បានធ្វើរួច",
+    planEmpty: "មិនទាន់មានកិច្ចការទេ។ បន្ថែមអ្វីដែលអ្នកគ្រោងសិក្សាថ្ងៃនេះ។", planAddPlaceholder: "បន្ថែមកិច្ចការសម្រាប់ថ្ងៃនេះ…",
+    planSubjectOptional: "មុខវិជ្ជា (ស្រេចចិត្ត)", planMinutesShort: "នាទី", planAdd: "បន្ថែម", planDeleteTask: "លុបកិច្ចការ",
+    planSuggested: "ណែនាំសម្រាប់អ្នក", planMyTask: "កិច្ចការរបស់ខ្ញុំ",
+    errInvalidCredentials: "លេខទូរស័ព្ទ អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។",
+    errEnterPhonePassword: "សូមបញ្ចូលលេខទូរស័ព្ទ និងពាក្យសម្ងាត់របស់អ្នក។",
+    errPhoneTaken: "លេខទូរស័ព្ទនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
+    errEmailTaken: "អ៊ីមែលនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
+    errValidation: "សូមពិនិត្យព័ត៌មានដែលអ្នកបានបញ្ចូល រួចព្យាយាមម្តងទៀត។",
+    errTooMany: "ព្យាយាមច្រើនដងពេក។ សូមរង់ចាំមួយនាទី រួចព្យាយាមម្តងទៀត។",
+    errTooManyWait: "ព្យាយាមច្រើនដងពេក។ សូមព្យាយាមម្តងទៀតក្នុងរយៈពេល {time}។",
+    errNetwork: "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ។ សូមពិនិត្យអ៊ីនធឺណិតរបស់អ្នក រួចព្យាយាមម្តងទៀត។",
+    errServer: "មានបញ្ហាកើតឡើងនៅខាងយើង។ សូមព្យាយាមម្តងទៀតក្នុងពេលបន្តិចទៀត។",
+    errSession: "សម័យរបស់អ្នកបានផុតកំណត់។ សូមចូលគណនីម្តងទៀត។",
+    errInvalidCode: "លេខកូដមិនត្រឹមត្រូវ ឬបានផុតកំណត់។",
+    errNoEmail: "យើងរកមិនឃើញគណនីដែលមានអ៊ីមែលសម្រាប់លេខទូរស័ព្ទ ឬអ៊ីមែលនេះទេ ដូច្នេះមិនបានផ្ញើលេខកូដឡើយ។ សូមពិនិត្យអ្វីដែលអ្នកបានវាយ ឬទាក់ទងក្រុមគាំទ្រ Bondus។",
+    errEmailFailed: "យើងមិនអាចផ្ញើអ៊ីមែលបានទេនៅពេលនេះ។ សូមព្យាយាមម្តងទៀតក្នុងពេលបន្តិចទៀត។",
+    errPlanLimit: "អ្នកបានដល់ចំនួនកិច្ចការអតិបរមាសម្រាប់ថ្ងៃនេះហើយ។",
+    errPlanSave: "មិនអាចរក្សាទុកកិច្ចការនោះបានទេ។ សូមព្យាយាមម្តងទៀត។",
+    errSaveProgress: "យើងមិនអាចរក្សាទុកវឌ្ឍនភាពរបស់អ្នកបានទេ។ សូមព្យាយាមម្តងទៀតពេលក្រោយ។",
+    errPasswordShort: "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៨តួអក្សរ។",
+    retryWord: "ព្យាយាមម្តងទៀត",
+    passwordHint: "យ៉ាងហោចណាស់ ៨តួអក្សរ",
+    emailResetHint: "បន្ថែមអ៊ីមែល ដើម្បីអាចកំណត់ពាក្យសម្ងាត់ឡើងវិញ ប្រសិនបើអ្នកភ្លេច។",
+    forgotLink: "ភ្លេចពាក្យសម្ងាត់?", forgotTitle: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
+    forgotDesc: "បញ្ចូលលេខទូរស័ព្ទ ឬអ៊ីមែលរបស់អ្នក។ យើងនឹងផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
+    forgotSendCode: "ផ្ញើលេខកូដ", forgotCodeSent: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅ", forgotCodeExpires: "លេខកូដនឹងផុតកំណត់ក្នុងរយៈពេល ១៥នាទី។",
+    forgotCodeLabel: "លេខកូដ ៦ខ្ទង់", forgotNewPasswordLabel: "ពាក្យសម្ងាត់ថ្មី", forgotResetBtn: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
+    forgotResend: "ផ្ញើលេខកូដថ្មី", forgotLoginLabel: "លេខទូរស័ព្ទ ឬអ៊ីមែល", backToLogin: "ត្រឡប់ទៅចូលគណនី",
+    forgotSendingTitle: "កំពុងផ្ញើលេខកូដរបស់អ្នក…",
+    forgotSendingSub: "អាចចំណាយពេលរហូតដល់មួយនាទី។ សូមកុំបិទទំព័រនេះ។",
+    forgotCheckEmailTitle: "សូមពិនិត្យអ៊ីមែលរបស់អ្នក",
+    forgotCheckSpam: "រកមិនឃើញមែនទេ? សូមមើលក្នុងថត Spam។",
+    forgotStep2Desc: "វាយលេខកូដពីអ៊ីមែល ហើយជ្រើសរើសពាក្យសម្ងាត់ថ្មី។",
     dashStreak: "ថ្ងៃជាប់គ្នា · បន្តរក្សា",
     dashExplore: "ស្វែងយល់បន្ថែម",
-    unlockBannerTitle: "ដោះសោផែនការសិក្សាផ្ទាល់ខ្លួនរបស់អ្នក",
-    unlockBannerDesc: "បំពេញការធ្វើតេស្តវាយតម្លៃ ២០សំណួរ ដើម្បីទទួលបាន៖",
-    startAssessment: "ចាប់ផ្តើមតេស្តវាយតម្លៃ",
     heroMessage: "ជំហានតូចមួយថ្ងៃនេះជួយរក្សានិន្នាការឲ្យបន្ត។ នេះជាអ្វីដែលបន្ទាប់សម្រាប់អ្នក។",
     recommendedNextLesson: "មេរៀនបន្ទាប់ដែលបានណែនាំ", lessonWord: "មេរៀន", xpPerCorrect: "XP ក្នុងមួយចម្លើយត្រឹមត្រូវ", startLesson: "ចាប់ផ្តើមមេរៀន",
     toLevel: "XP ទៅកម្រិត", targetsWeakest: "ផ្តោតលើប្រធានបទខ្សោយបំផុតរបស់អ្នក",
@@ -8807,6 +9088,20 @@ const STRINGS = {
   },
 };
 const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
+// "48 minutes", "1 hour 5 minutes" (English) / the same in Khmer digits and words.
+const formatWait = (lang, seconds) => {
+  const w = waitParts(seconds);
+  if (!w) return "";
+  const km = lang === "km";
+  const hours = w.hours ? (km ? `${localizeNum(w.hours, lang)} ម៉ោង` : `${w.hours} ${w.hours === 1 ? "hour" : "hours"}`) : "";
+  const minutes = w.minutes ? (km ? `${localizeNum(w.minutes, lang)} នាទី` : `${w.minutes} ${w.minutes === 1 ? "minute" : "minutes"}`) : "";
+  return [hours, minutes].filter(Boolean).join(" ");
+};
+// A backend error code -> English/Khmer message. For "too many tries" it says how long to wait when the server told us.
+const apiErrorText = (lang, code, retryAfter) =>
+  code === "too_many_requests" && waitParts(retryAfter)
+    ? t(lang, "errTooManyWait").replace("{time}", formatWait(lang, retryAfter))
+    : t(lang, apiErrorKey(code));
 
 const STORAGE_KEY = "bondus_state_v1";
 
@@ -8846,6 +9141,22 @@ function LevelUpToast({ level, show }) {
   );
 }
 
+/* A short message in the corner (a failed save, an expired session). `text` is already translated. */
+function NoticeToast({ text, onClose }) {
+  return (
+    <AnimatePresence>
+      {text && (
+        <motion.button type="button" onClick={onClose} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
+          className="eai-card flex items-center gap-2.5 px-4 py-2.5 text-left"
+          style={{ position: "fixed", top: 72, right: 16, zIndex: 60, boxShadow: "var(--shadow)", borderColor: "var(--ember)", maxWidth: "min(92vw, 380px)" }}>
+          <AlertTriangle size={16} style={{ color: "var(--ember)", flexShrink: 0 }} />
+          <span className="text-sm font-semibold">{text}</span>
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function App() {
   const saved = useRef(loadSaved()).current;
   const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
@@ -8856,7 +9167,7 @@ export default function App() {
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
-  const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
+  const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later — no entry point right now: the Dashboard banner that set it was removed
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
   const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
@@ -8871,6 +9182,20 @@ export default function App() {
   const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
   const [langResults, setLangResults] = useState(saved?.langResults ?? {}); // { [languageName]: { listening, reading, writing, speaking, overall, feedback, completedAt } }
   const [takingLangTest, setTakingLangTest] = useState(null); // language name currently being tested, or null
+  // ── Server mode (VITE_API_URL set): the account, progress, XP, streak and plan live on the Laravel backend ──
+  const [booting, setBooting] = useState(SERVER_MODE && api.hasToken()); // restoring a saved login
+  const [bootError, setBootError] = useState(false);  // the saved login could not be restored because the server was unreachable
+  const [summary, setSummary] = useState(null);       // GET /me/summary: { xp, level, xpToNext, streak, longestStreak, studiedToday, todayMinutes, weekHours }
+  const [notice, setNotice] = useState(null);         // a STRINGS key shown as a toast (a failed save, an expired session)
+  const hydratedRef = useRef(false);                  // true once the account is loaded; progress is only saved after that
+  const serverUserRef = useRef(null);                 // the account created during sign-up, before the dashboard exists
+  const lastSavedRef = useRef("");                    // JSON of the progress the server already has, so loading never triggers a save
+  const prevLevelRef = useRef(null);
+  const planOps = useRef(Promise.resolve());          // plan changes are sent one at a time, in order
+  const planBusy = useRef(0);
+  const planIdMap = useRef(new Map());                // temporary id (task not saved yet) -> server id
+  const saverRef = useRef(null);
+  const queueRef = useRef(null);
   const go = (t) => { setTab(t); setOpen(false); };
 
   // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
@@ -8880,23 +9205,38 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showWelcomeBack]);
 
-  // Persist everything so progress survives a page refresh — this prototype has no backend yet.
+  // Browser-only prototype (no VITE_API_URL): persist everything so progress survives a page refresh.
   useEffect(() => {
-    if (!profile) return;
+    if (SERVER_MODE || !profile) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards }));
   }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards]);
 
-  // Logging out clears the active session but deliberately leaves localStorage alone, so "Log in"
-  // can restore the same account later by matching the phone number used at signup.
-  const handleLogout = () => {
+  // Forget everything about the signed-in student (state, saved-but-unsent work stays in storage under their id).
+  const resetSession = () => {
+    hydratedRef.current = false;
+    saverRef.current?.cancel(); queueRef.current?.setUser(null);
+    serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
+    setSummary(null);
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setTab("dashboard"); setEntry("welcome");
+    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLangResults({}); setTab("dashboard");
   };
+  // Without a server, logging out deliberately leaves localStorage alone (see loadSaved); with one, the token is revoked.
+  const handleLogout = () => { if (SERVER_MODE) api.logout(); resetSession(); setEntry("welcome"); };
 
-  // Matches either a phone number or an email+password against whatever's currently saved in
-  // this browser. Returns true/false so the Login screen can show "account not found" inline
-  // instead of failing silently.
-  const handleLogin = ({ phone, email, password } = {}) => {
+  // With the server: signs in with phone-or-email + password, then loads the account. Without it: matches either a phone
+  // number or an email+password against whatever is saved in this browser. Resolves to true, or to { error } (a server
+  // error code) / false so the Login screen can show a message inline instead of failing silently.
+  const handleLogin = async ({ phone, email, password } = {}) => {
+    if (SERVER_MODE) {
+      try {
+        await api.login({ login: (phone ?? email ?? "").trim(), password });
+        await loadAccount();
+        setShowWelcomeBack(true);
+        return true;
+      } catch (err) {
+        return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null };
+      }
+    }
     const data = loadSaved();
     if (!data?.profile) return false;
     const matched = phone
@@ -8915,12 +9255,19 @@ export default function App() {
     setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
+  // After "Forgot password": the reset already stored a fresh login, so just load the account.
+  const handleSignedIn = async () => {
+    try { await loadAccount(); setShowWelcomeBack(true); return true; }
+    catch (err) { return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null }; }
+  };
 
   // Registration collects answers, then the student chooses to take the diagnostic now or explore
   // first — self-reports alone aren't trusted, but personalization is never required to start.
   // University profiles skip AssessmentChoice/Diagnostic entirely — there's no BAC II mastery
   // engine for them, so the account activates immediately into the University Hub.
-  const handleRegister = (reg) => {
+  // With the server the account is created here (so "phone already used" shows up on the sign-up screen, not after the
+  // whole flow); the dashboard appears once the diagnostic is done or skipped. Resolves to { error, step } on failure.
+  const handleRegister = async (reg) => {
     if (reg.educationLevel === "university") {
       // Register's form keeps these as flat fields (universityGoals/Major/Year); nest them into
       // universityProfile here so UniversityHub, the University Mentor Coach mode and
@@ -8929,57 +9276,88 @@ export default function App() {
       const built = buildProfile({ ...rest, universityProfile: { goals: universityGoals, major: universityMajor, year: universityYear } });
       setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
       setTab("universityHub");
-      return;
+      return null;
+    }
+    if (SERVER_MODE) {
+      try {
+        if (serverUserRef.current && api.hasToken()) {
+          // They went Back from the assessment screen and changed something: update the account created a moment ago.
+          serverUserRef.current = (await api.patchMe(registrationToPatch(reg))).user;
+        } else {
+          serverUserRef.current = (await api.register(registrationToPayload(reg))).user;
+        }
+      } catch (err) {
+        return { error: err?.code ?? "server_error", step: registrationErrorStep(err), retryAfter: err?.retryAfter ?? null };
+      }
     }
     setPendingReg(reg); setResumeReg(null);
+    return null;
   };
   // "Back" from the step-4 AssessmentChoice screen — re-opens Register at step 3 with prior answers intact.
   const handleBackToPreferences = () => { setResumeReg({ form: pendingReg, step: 3 }); setPendingReg(null); };
-  const handleDiagnosticComplete = (diagnosticMastery) => {
+  const handleDiagnosticComplete = async (diagnosticMastery) => {
+    if (SERVER_MODE) {
+      try {
+        await api.patchMe({ hasCompletedDiagnostic: true, isPersonalized: true });
+        const current = await api.getState();
+        await api.putState(stateToSave({ topicMastery: diagnosticMastery }), current?.revision ?? 0);
+        await loadAccount();
+        sendStudy(diagnosticEvent()); // finishing the diagnostic counts as studying today (it starts the streak)
+        setPendingReg(null);
+        setShowDiagnostic(false);
+      } catch (err) {
+        flash(apiErrorKey(err?.code)); // stay on the results screen so "Done" can be pressed again
+      }
+      return;
+    }
     const built = buildProfile(pendingReg);
-    const insights = deriveInsights(built, diagnosticMastery);
     setTopicMastery(diagnosticMastery);
     setProfile({ ...built, hasCompletedDiagnostic: true, isPersonalized: true, bannerDismissed: false });
-    setPlan(insights.plan);
+    setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
     setShowDiagnostic(false);
   };
   // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
-  const handleSkipDiagnostic = () => {
+  const handleSkipDiagnostic = async () => {
+    if (SERVER_MODE) {
+      try { await loadAccount(); setPendingReg(null); }
+      catch (err) { flash(apiErrorKey(err?.code)); }
+      return;
+    }
     const built = buildProfile(pendingReg);
-    const insights = deriveInsights(built, {});
     setTopicMastery({});
     setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
-    setPlan(insights.plan);
+    setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
   };
   // Completing the diagnostic later, from the Dashboard banner — updates the existing profile
   // in place instead of building a fresh one.
   const handleLaterDiagnosticComplete = (diagnosticMastery) => {
     const updated = { ...profile, hasCompletedDiagnostic: true, isPersonalized: true, bannerDismissed: true };
-    const insights = deriveInsights(updated, diagnosticMastery);
     setTopicMastery(diagnosticMastery);
     setProfile(updated);
-    setPlan(insights.plan);
+    setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setRetaking(false);
   };
-  const dismissBanner = () => setProfile((cur) => ({ ...cur, bannerDismissed: true }));
 
   // Real day-streak and weekly study time, computed from actual answered-question timestamps
   // (both tracks) — not static profile fields, so they're 0 until a student actually earns them.
   const streakStats = useMemo(() => computeStreakStats(topicMastery, uniTopicMastery), [topicMastery, uniTopicMastery]);
-  const weeklyStudyHours = useMemo(() => buildWeeklyStudyHours(topicMastery, uniTopicMastery), [topicMastery, uniTopicMastery]);
+  // With the server, streak and weekly hours come from its study ledger (days counted in Phnom Penh time), not from this browser.
+  const liveStreak = summary ? summary.streak : streakStats.streak;
+  const liveLongestStreak = summary ? summary.longestStreak : streakStats.longestStreak;
+  const weeklyStudyHours = useMemo(() => (summary ? summary.weekHours : buildWeeklyStudyHours(topicMastery, uniTopicMastery)), [summary, topicMastery, uniTopicMastery]);
 
   // Live insights recompute from topicMastery on every change — this is what makes weak/strong
   // subjects, the recommended lesson, and exam readiness actually update as the student practices.
-  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery, streakStats.streak) : null), [profile, topicMastery, streakStats.streak]);
+  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery, liveStreak) : null), [profile, topicMastery, liveStreak]);
   const uniInsights = useMemo(
     () => (profile?.educationLevel === "university" ? deriveUniInsights(profile, uniTopicMastery) : null),
     [profile, uniTopicMastery]
   );
   const p = useMemo(
-    () => (profile ? { ...profile, ...insights, streak: streakStats.streak, longestStreak: streakStats.longestStreak, universityInsights: uniInsights } : null),
-    [profile, insights, uniInsights, streakStats]
+    () => (profile ? { ...profile, ...insights, streak: liveStreak, longestStreak: liveLongestStreak, universityInsights: uniInsights } : null),
+    [profile, insights, uniInsights, liveStreak, liveLongestStreak]
   );
 
   // Level up whenever XP crosses the next threshold (can chain multiple levels from one big award).
@@ -9007,6 +9385,105 @@ export default function App() {
     if (profile?.educationLevel === "university" && lang !== "en") setLang("en");
   }, [profile, lang]);
 
+  // ── Server mode plumbing ──────────────────────────────────────────────────────────────────────────────
+  const flash = (key) => setNotice(key); // `key` is a STRINGS key, so the message follows the language toggle
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = setTimeout(() => setNotice(null), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  // The server's numbers replace whatever the screen guessed. A level gained by an answer shows the level-up toast.
+  const applySummary = (sm, { announce = true } = {}) => {
+    setSummary(sm);
+    setProfile((cur) => (cur ? { ...cur, level: sm.level, xp: sm.xp, xpToNext: sm.xpToNext } : cur));
+    if (announce && prevLevelRef.current != null && sm.level > prevLevelRef.current) setLevelUpToast(sm.level);
+    prevLevelRef.current = sm.level;
+  };
+  if (!saverRef.current) saverRef.current = createStateSaver({ api, onError: () => flash("errSaveProgress") });
+  if (!queueRef.current) {
+    // XP shown right after an answer is a guess (bonusXp); once the server confirms (or rejects) the event, the guess is
+    // taken back out and the server's own total is shown.
+    const refund = (ev) => { if (ev._award) setBonusXp((x) => Math.max(0, x - ev._award)); };
+    queueRef.current = createEventQueue({
+      send: ({ _award, ...body }) => api.postStudyEvent(body),
+      storage: safeStorage(),
+      onApplied: (ev, res) => { applySummary(res.summary); refund(ev); },
+      onDropped: refund,
+    });
+  }
+  const sendStudy = (event, award = 0) => { if (SERVER_MODE && event) queueRef.current.push({ ...event, _award: award }); };
+
+  // Fetch the account, progress, XP summary and today's plan from the server and show them. Throws an ApiError on failure.
+  const loadAccount = async () => {
+    const [me, st, sm, pl] = await Promise.all([api.getMe(), api.getState(), api.getSummary(), api.getPlan(dateKey())]);
+    const saved = stateToSave(st?.state && typeof st.state === "object" ? st.state : {});
+    const wardrobe = sanitizeRewards(saved.rewards);
+    saverRef.current.cancel();
+    saverRef.current.setRevision(st?.revision ?? 0);
+    lastSavedRef.current = JSON.stringify(stateToSave({ ...saved, rewards: wardrobe }));
+    planIdMap.current = new Map();
+    queueRef.current.setUser(me.user.id);
+    setProfile(userToProfile(me.user, sm));
+    setTopicMastery(saved.topicMastery); setUniTopicMastery(saved.uniTopicMastery);
+    setPractice(saved.practice); setUniPractice(saved.uniPractice);
+    setLangResults(saved.langResults); setRewards(wardrobe);
+    setPlan((pl?.tasks ?? []).map(taskFromServer));
+    setBonusXp(0);
+    applySummary(sm, { announce: false });
+    hydratedRef.current = true;
+    setTab(me.user.educationLevel === "university" ? "universityHub" : "dashboard");
+    queueRef.current.flush(); // anything left unsent from last time
+    return me.user;
+  };
+  // Restore the saved login when the page opens (or retry after the server could not be reached).
+  const bootAccount = () => {
+    setBootError(false); setBooting(true);
+    return loadAccount()
+      .then(() => setShowWelcomeBack(true))
+      .catch((err) => { if (err?.status === 0 || err?.status >= 500) setBootError(true); else api.clearToken(); })
+      .finally(() => setBooting(false));
+  };
+  useEffect(() => {
+    if (SERVER_MODE && api.hasToken()) bootAccount();
+  }, []);
+  // The token was rejected (expired or revoked): back to the login screen with a short explanation.
+  useEffect(() => {
+    api.onUnauthorized(() => { resetSession(); setEntry("login"); flash("errSession"); });
+  }, []);
+
+  // Save progress to the server a moment after the last change (never right after loading it).
+  useEffect(() => {
+    if (!SERVER_MODE || !hydratedRef.current) return;
+    const state = stateToSave({ topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards });
+    const json = JSON.stringify(state);
+    if (json === lastSavedRef.current) return;
+    lastSavedRef.current = json;
+    saverRef.current.schedule(state);
+  }, [topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards]);
+
+  // Keep the screen in step with the server: a day that rolled over, XP earned on another device, events left unsent.
+  const refreshLive = async () => {
+    try {
+      const [sm, pl] = await Promise.all([api.getSummary(), planBusy.current === 0 ? api.getPlan(dateKey()) : Promise.resolve(null)]);
+      applySummary(sm, { announce: false });
+      if (pl) { const day = pl.date ?? dateKey(); setPlan((arr) => [...arr.filter((x) => x.date !== day), ...(pl.tasks ?? []).map(taskFromServer)]); }
+    } catch { /* offline: keep what is on screen */ }
+  };
+  useEffect(() => {
+    if (!SERVER_MODE) return undefined;
+    const onVisibility = () => {
+      if (!hydratedRef.current) return;
+      if (document.visibilityState === "hidden") { saverRef.current.flush(); queueRef.current.flush(); }
+      else refreshLive();
+    };
+    const onOnline = () => { if (hydratedRef.current) { queueRef.current.flush(); saverRef.current.flush(); } };
+    const timer = setInterval(() => { if (hydratedRef.current) queueRef.current.flush(); }, 20000);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); window.removeEventListener("online", onOnline); };
+  }, []);
+
   // Everything the rewards feature reads and writes, shared through RewardsContext (see rewards/RewardsContext.jsx).
   // Claiming a box pays its XP, any level-up and the new wardrobe in ONE handler, so React batches them into a single
   // render: the level-up effect above then finds nothing left to level and LevelUpToast stays quiet (the reward pop-up
@@ -9019,12 +9496,16 @@ export default function App() {
       if (!profile) return null;
       const out = claimBox({
         rewards, progress: { level: profile.level, xp: profile.xp + bonusXp, xpToNext: profile.xpToNext },
-        longestStreak: streakStats.longestStreak, setKey, total, retried,
+        longestStreak: liveLongestStreak, setKey, total, retried,
       });
       if (!out) return null;
       setBonusXp((x) => x + out.result.xp);
       setProfile((cur) => ({ ...cur, level: out.result.after.level, xpToNext: out.result.after.xpToNext }));
       setRewards(out.rewards);
+      if (SERVER_MODE) {
+        prevLevelRef.current = out.result.after.level; // the reward pop-up already shows this level-up; no second toast
+        sendStudy(boxEvent({ setKey, total, retried, itemId: out.result.itemId }), out.result.xp);
+      }
       return out.result;
     },
     equip: (slot, itemId) => setRewards((r) => equipItem(r, slot, itemId)),
@@ -9032,16 +9513,65 @@ export default function App() {
     openWardrobe: () => go("wardrobe"),
   };
 
+  // The daily plan is the student's own to-do list (rules in dailyPlan.js): ticking a task earns no XP.
+  // With the server, each change shows on screen at once and is then sent in order; a failure undoes it and says so.
+  const planChange = (job) => {
+    planBusy.current += 1;
+    planOps.current = planOps.current.then(job).catch(() => {}).finally(() => { planBusy.current -= 1; });
+    return planOps.current;
+  };
+  const realTaskId = (id) => planIdMap.current.get(id) ?? id;
   const togglePlanTask = (id) => {
     const target = plan.find((x) => x.id === id);
-    if (!target) return;
-    const nowDone = !target.done;
-    setPlan((arr) => arr.map((x) => (x.id === id ? { ...x, done: nowDone } : x)));
-    // The plan is a plain to-do list: ticking a task earns no XP (and un-ticking takes none away).
+    setPlan((arr) => toggleTask(arr, id));
+    if (!SERVER_MODE || !target) return;
+    const done = !target.done;
+    planChange(async () => {
+      const sid = realTaskId(id);
+      if (sid < 0) return; // it never got saved (the add failed)
+      try { await api.patchPlanTask(sid, { done }); }
+      catch { setPlan((arr) => arr.map((x) => (x.id === id || x.id === sid ? { ...x, done: !done } : x))); flash("errPlanSave"); }
+    });
+  };
+  const addPlanTask = (task) => {
+    const date = dateKey();
+    const tempId = -(Date.now() * 1000 + Math.floor(Math.random() * 1000)); // negative: can never clash with a server id
+    const next = addTask(plan, task, date, tempId);
+    if (next === plan) return; // empty title, or today's list is full
+    setPlan(next);
+    if (!SERVER_MODE) return;
+    const added = next[next.length - 1];
+    planChange(async () => {
+      try {
+        const res = await api.addPlanTask({ title: added.task, subject: added.s ?? undefined, minutes: added.min ?? undefined, date });
+        const saved = taskFromServer(res.task);
+        planIdMap.current.set(tempId, saved.id);
+        setPlan((arr) => arr.map((x) => (x.id === tempId ? { ...saved, done: x.done } : x)));
+      } catch (err) {
+        setPlan((arr) => arr.filter((x) => x.id !== tempId));
+        flash(err?.code === "plan_limit_reached" ? "errPlanLimit" : "errPlanSave");
+      }
+    });
+  };
+  const removePlanTask = (id) => {
+    const removed = plan.find((x) => x.id === id);
+    setPlan((arr) => removeTask(arr, id));
+    if (!SERVER_MODE || !removed) return;
+    planChange(async () => {
+      const sid = realTaskId(id);
+      if (sid < 0) return;
+      try { await api.deletePlanTask(sid); }
+      catch (err) {
+        if (err?.status === 404) return; // already gone
+        setPlan((arr) => (arr.some((x) => x.id === sid) ? arr : [...arr, { ...removed, id: sid }]));
+        flash("errPlanSave");
+      }
+    });
   };
 
   // Record an answered exercise: bookkeeping for XP (unchanged) + feeding the topic-mastery engine
   // (new) so the subject's score, weak/strong tag, and every derived recommendation update live.
+  // With the server the XP added here is a guess shown at once; the study event below makes the server the judge.
   const handleAnswer = (ex, result, meta = {}) => {
     const already = practice[ex.id]?.xpAwarded;
     const xpAwarded = already || result === "correct";
@@ -9050,6 +9580,7 @@ export default function App() {
     setTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
       correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
     }));
+    sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
   // Manually set a status (Pending / In progress / Completed). XP is only ever awarded once per exercise.
   const handleSetStatus = (ex, status) => {
@@ -9057,6 +9588,7 @@ export default function App() {
     const xpAwarded = already || status === "completed";
     setPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
     if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
+    sendStudy(statusEvent(ex, status), status === "completed" && !already ? XP_PER_CORRECT : 0);
   };
   // University-track twins of handleAnswer/handleSetStatus above — same logic, writing to the
   // uniPractice/uniTopicMastery stores instead so BAC-II and university progress never collide.
@@ -9068,19 +9600,38 @@ export default function App() {
     setUniTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
       correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
     }));
+    sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
   const handleUniSetStatus = (ex, status) => {
     const already = uniPractice[ex.id]?.xpAwarded;
     const xpAwarded = already || status === "completed";
     setUniPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
     if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
+    sendStudy(statusEvent(ex, status), status === "completed" && !already ? XP_PER_CORRECT : 0);
   };
 
-  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
-  if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
+  // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper
+  // (display: contents keeps that wrapper out of the layout).
+  const noticeToast = notice ? (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ display: "contents" }}>
+      <NoticeToast text={t(lang, notice)} onClose={() => setNotice(null)} />
+    </div>
+  ) : null;
+
+  if (SERVER_MODE && booting) return <LoadingScreen lang={lang} dark={dark} />;
+  if (SERVER_MODE && bootError) return (
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={handleLogout} lang={lang} setLang={setLang}
+      title={t(lang, "errNetwork")} description=""
+      footer={<PrimaryButton onClick={bootAccount} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "retryWord")}</PrimaryButton>}>
+      <span />
+    </OnboardingLayout>
+  );
+  if (pendingReg && !showDiagnostic) return <>{noticeToast}<AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} /></>;
+  if (pendingReg) return <>{noticeToast}<Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} /></>;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
+  if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
+  if (!profile && entry === "forgot" && SERVER_MODE) return <>{noticeToast}<ForgotPassword dark={dark} setDark={setDark} onBack={() => setEntry("login")} onSignedIn={handleSignedIn} lang={lang} setLang={setLang} /></>;
+  if (!profile) return <>{noticeToast}<Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (takingLangTest) return (
     <IeltsDiagnostic
@@ -9093,7 +9644,7 @@ export default function App() {
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";
   const view = {
-    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} lang={lang} />,
+    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
@@ -9113,6 +9664,7 @@ export default function App() {
       <style>{STYLES}</style>
       <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
       <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
+      {noticeToast}
       <div className="flex">
         {open && <div className="fixed inset-0 z-20 lg:hidden" style={{ background: "rgba(0,0,0,.4)" }} onClick={() => setOpen(false)} />}
         <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
