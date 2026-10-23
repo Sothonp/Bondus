@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 SOURCE_NAME_PATTERN = r"^[^\x00-\x1f<>\"|?*]+$"
 
+SubjectId = Literal[
+    "mathematics", "physics", "chemistry", "biology", "khmer_literature", "history",
+    "english", "french", "geography", "earth_science", "morality",
+]
+
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -42,6 +47,9 @@ class QueryRequest(_StrictModel):
     sources: list[str] | None = Field(
         None, max_length=100, description="Restrict retrieval to these document sources"
     )
+    subject: SubjectId | None = Field(
+        None, description="Restrict retrieval to one subject's documents, e.g. physics or french"
+    )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
     continues_math: bool = Field(
         False,
@@ -75,6 +83,7 @@ class SourceChunk(BaseModel):
     text: str
     title: str = ""
     heading: str = ""
+    subject: str | None = None
 
 
 class QueryResponse(BaseModel):
@@ -149,6 +158,30 @@ class QueryStreamError(BaseModel):
     type: Literal["error"] = "error"
     status: int
     detail: str
+
+
+# --- /api/exam/stream -------------------------------------------------------
+# Answers with the same NDJSON events as /api/query/stream; the "meta" event's
+# sources are the past papers the new paper was modelled on, one per paper.
+
+class ExamRequest(_StrictModel):
+    subject: SubjectId
+    language: Literal["km", "en"] = Field(
+        "km", description="Language of the paper and its key (English/French papers stay in that language)"
+    )
+    focus: str = Field("", max_length=1000, description="Optional topic or instruction, e.g. 'integrals'")
+    answer_key: bool = Field(True, description="Follow the paper with a worked answer key and marking scheme")
+    seed: int | None = Field(
+        None, ge=0, le=2**31 - 1,
+        description="Picks which past papers are used; send the same seed to continue the same paper",
+    )
+    partial: str = Field(
+        "", max_length=200_000,
+        description="The paper so far, when a previous round stopped at max_tokens: the model continues it",
+    )
+    continues_math: bool = Field(
+        False, description="The partial paper stops inside a $$ block (see QueryRequest.continues_math)"
+    )
 
 
 # --- /api/ingest ------------------------------------------------------------

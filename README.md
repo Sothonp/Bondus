@@ -242,6 +242,16 @@ Ollama the recursive splitter is used.
 bytes, catalog title and chunking settings, so a re-run indexes only new or
 changed files and removes deleted ones (API uploads are kept). `--force`
 re-indexes everything and `--no-prune` keeps deleted files.
+
+BAC II papers live in `data/<Track>/<subject>/<year>.pdf` (`Science/physics/2019.pdf`).
+The Science track's seven papers are `mathematics`, `physics`, `chemistry`,
+`biology`, `khmer_literature`, `history` and `english` or `french`
+(`src/subjects.py`). New papers can be dropped in as `Science/<year>/Science/<any
+name>.pdf`; `organize_corpus.py` prints where each would go, and with `--apply`
+moves them, titles them in `catalog.json` and sets exact duplicates aside in
+`data/.duplicates/`. A query's `subject` limits retrieval to that subject's
+documents, read from the folder (or file name, or catalog title), so the index
+needs no rebuild for it.
 Maintenance scripts: `reembed_index.py` (switch the embedding backend without
 OCR again), `backfill_ocr.py` (OCR one file page by page within a quota), `show_chunks.py` / `export_chunks.py` (inspect
 chunks).
@@ -265,7 +275,7 @@ http://localhost:8000. With Docker: `docker compose up`, and
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /api/query` | `{prompt, top_k?, score_threshold?, history?, sources?, generate?}` → answer, language, cited source chunks |
+| `POST /api/query` | `{prompt, top_k?, score_threshold?, history?, sources?, subject?, generate?}` → answer, language, cited source chunks (each with its `subject`) |
 | `POST /api/query` / `stream` with `images` | `[{data: base64, mime_type?}]`: photos are read first (`status`/`images` events) |
 | `POST /api/query/stream` | same body; NDJSON events `meta` (sources) → `delta`… (`reset` when another model takes over) → `done` or `error` |
 | `POST /api/ingest` | multipart `file` (or `text`), `source_name?`, `replace?`, `background?` → indexed chunk counts, or `202` + job |

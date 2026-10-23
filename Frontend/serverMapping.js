@@ -27,6 +27,8 @@ export function registrationToPayload(reg) {
     dailyMinutes: reg.dailyMinutes,
     targetUniversity: reg.targetUniversity,
     subjectsToImprove: Array.isArray(reg.subjectsToImprove) ? reg.subjectsToImprove : [],
+    // A Science student sits one foreign language, English or French, chosen at sign-up (the Social Science track lists both).
+    foreignLanguage: reg.field === "science" ? reg.foreignLanguage : undefined,
   });
 }
 

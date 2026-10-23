@@ -35,6 +35,13 @@ test("registration payload is trimmed and leaves out empty optional fields", () 
   assert.equal("universityGoals" in body, false);
 });
 
+test("a Science student's foreign-language choice is sent; a Social Science student's is not", () => {
+  assert.equal(registrationToPayload({ ...form, field: "science", foreignLanguage: "French" }).foreignLanguage, "French");
+  assert.equal("foreignLanguage" in registrationToPayload({ ...form, field: "social_science", foreignLanguage: "French" }), false);
+  assert.equal("foreignLanguage" in registrationToPayload({ ...form, field: "science" }), false); // nothing chosen: the backend default applies
+  assert.equal(registrationToPatch({ ...form, field: "science", foreignLanguage: "English" }).foreignLanguage, "English");
+});
+
 test("an email, a university and an age are sent when given, and a missing age is omitted", () => {
   const body = registrationToPayload({ ...form, email: " a@b.co ", targetUniversity: "RUPP", age: null });
   assert.equal(body.email, "a@b.co");

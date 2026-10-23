@@ -51,6 +51,59 @@ _KHMER_PUNCTUATION = re.compile(r"[\u17D4-\u17DA]+")
 _COLON_IN_WORD = re.compile(r"(?<=[\u1780-\u17D3]):(?=[\u1780-\u17B3])")
 
 
+def ctc_alignment_score(ctc_logits: Any, dec_seq: list[int], tok: Any) -> float:
+    """Kiri's ``compute_ctc_alignment_score`` with each time step done at once.
+
+    Kiri's ``accurate`` decoding rescores every beam with the CTC forward
+    algorithm, which it runs one lattice cell at a time: a few hundred
+    thousand tiny tensor operations per page, most of the page's OCR time on
+    a GPU. This is the same recursion, over the same values in the same
+    order, computed a whole time step per operation. The extra ``-inf``
+    candidates add exactly zero inside ``logsumexp``, so lines decode to the
+    same text and confidence.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    if ctc_logits.dim() == 3:
+        ctc_logits = ctc_logits.squeeze(0)
+    log_probs = F.log_softmax(ctc_logits, dim=-1)
+
+    labels = []
+    for x in dec_seq[1:]:
+        if x == tok.dec_eos:
+            break
+        if x in (tok.dec_pad, tok.dec_bos):
+            continue
+        labels.append(tok.dec_to_ctc_id(x))
+    if not labels:
+        return log_probs[:, tok.blank_id].sum().item() / max(1, log_probs.size(0))
+
+    blank = tok.blank_id
+    ext = [blank]
+    for label in labels:
+        ext.extend((label, blank))
+    size = len(ext)
+    device = log_probs.device
+    emissions = log_probs[:, torch.tensor(ext, device=device)]
+    may_skip = torch.tensor(
+        [s > 1 and ext[s] != blank and ext[s] != ext[s - 2] for s in range(size)], device=device
+    )
+    never = log_probs.new_full((size,), float("-inf"))
+
+    alpha = never.clone()
+    alpha[0] = log_probs[0, blank]
+    alpha[1] = log_probs[0, ext[1]]
+    for t in range(1, log_probs.size(0)):
+        stay = alpha
+        step = torch.cat((never[:1], alpha[:-1]))
+        skip = torch.where(may_skip, torch.cat((never[:2], alpha[:-2])), never)
+        alpha = torch.logsumexp(torch.stack((stay, step, skip)), dim=0) + emissions[t]
+
+    total = torch.logsumexp(torch.stack([alpha[size - 1], alpha[size - 2]]), dim=0)
+    return total.item() / max(1, len(labels))
+
+
 def khmer_words_only(line: str) -> str:
     """Keep only the Khmer words of ``line``, separated by single spaces.
 
@@ -127,8 +180,11 @@ class KiriPageOCR(CachedPageOCR):
         if self._engine_factory is None:
             try:
                 from kiri_ocr import OCR
+                from kiri_ocr import model as kiri_model
             except ImportError as exc:
                 raise OCRError("kiri-ocr is not installed (uv add kiri-ocr)") from exc
+            # Beam rescoring looks the function up at call time.
+            kiri_model.compute_ctc_alignment_score = ctc_alignment_score
             factory = OCR
         else:
             factory = self._engine_factory

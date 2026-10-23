@@ -18,9 +18,10 @@ __pycache__/
 .pytest_cache/
 
 # Generated RAG state (rebuild with scripts/ingest_corpus.py)
+# Everything in storage/ except the committed index the deploys are built with.
+storage/*
+!storage/vector_index/
 storage/vector_index/*
 !storage/vector_index/index.npz
-storage/ocr_cache/
-storage/llama_chunk_cache/
 *.bak
 /data

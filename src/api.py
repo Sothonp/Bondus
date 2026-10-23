@@ -23,7 +23,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from prompts import SYSTEM_PROMPT, build_extractive_answer, build_user_message
+from prompts import (
+    EXAM_CONTINUE,
+    EXAM_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_exam_message,
+    build_extractive_answer,
+    build_user_message,
+)
 from src.answer_format import sanitize_answer
 from schemas import (
     ChatTurn,
@@ -31,6 +38,7 @@ from schemas import (
     DocumentInfo,
     DocumentListResponse,
     ErrorResponse,
+    ExamRequest,
     HealthResponse,
     ImageReadingOut,
     IngestJob,
@@ -49,6 +57,13 @@ from schemas import (
 )
 from src.config import Settings, get_settings
 from src.embeddings.embedder import Embedder, build_embedder
+from src.exam_papers import (
+    as_chunks,
+    choose_reference_papers,
+    describe_format,
+    past_papers,
+    reference_format,
+)
 from src.ingestion import (
     DuplicateSourceError,
     EmptyDocumentError,
@@ -66,6 +81,7 @@ from src.ingestion.llm_chunk import LlamaChunker, build_chunker
 from src.ingestion.image_ocr import HybridImageOCR, ImageInputError, ImageReading, build_image_ocr, decode_image
 from src.ingestion.ocr import CachedPageOCR, PageImage, build_ocr
 from src.retrieval.retriever import RetrievedChunk, Retriever
+from src.subjects import get_subject
 from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
 logger = logging.getLogger("reanmath")
@@ -1176,6 +1192,37 @@ def build_generator(settings: Settings) -> AnswerGenerator:
     )
 
 
+def build_exam_generator(settings: Settings) -> AnswerGenerator:
+    """The chain that writes exam papers: ``exam_llm_order``, reasoning at
+    ``exam_reasoning`` (see Settings), always in priority order."""
+    if settings.resolved_llm_provider == "none":
+        return ExtractiveGenerator()
+    tuned = settings.model_copy(update={
+        "llm_max_tokens": settings.exam_max_tokens,
+        "gemini_thinking_level": settings.exam_reasoning,
+        "groq_reasoning_effort": settings.exam_reasoning,
+        "anthropic_effort": settings.exam_reasoning,
+        "openrouter_disable_reasoning": False,
+    })
+    candidates = [
+        generator for provider in tuned.exam_llm_order_list
+        for generator in _provider_generators(tuned, provider)
+    ]
+    if not candidates:
+        return build_generator(settings)
+    if not settings.llm_fallback:
+        return candidates[0]
+    for candidate in candidates:
+        if isinstance(candidate, (GroqGenerator, OpenAICompatibleGenerator)):
+            candidate.max_retry_wait = 0.0
+    return FallbackGenerator(
+        candidates,
+        rotate=False,
+        cooldown_seconds=settings.llm_cooldown_seconds,
+        max_cooldown_seconds=settings.llm_max_cooldown_seconds,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Application state
 # ---------------------------------------------------------------------------
@@ -1192,6 +1239,7 @@ class RAGState:
     write_lock: asyncio.Lock
     image_ocr: HybridImageOCR | None = None
     chunker: LlamaChunker | None = None
+    exam_generator: AnswerGenerator | None = None  # None: exams use ``generator``
     jobs: OrderedDict[str, IngestJob] = field(default_factory=OrderedDict)
     tasks: set[asyncio.Task] = field(default_factory=set)
 
@@ -1232,6 +1280,8 @@ def build_state(
         segmenter=KhmerSegmenter(settings.khmer_segmenter),
         chunker=build_chunker(settings),
         generator=generator or build_generator(settings),
+        # A generator passed in (a test's) answers exams too.
+        exam_generator=generator or build_exam_generator(settings),
         ocr=ocr if ocr is not None else build_ocr(settings),
         write_lock=asyncio.Lock(),
         image_ocr=build_image_ocr(settings) if image_ocr is _DEFAULT else image_ocr,
@@ -1350,6 +1400,7 @@ def _source_chunks(context: Sequence[RetrievedChunk]) -> list[SourceChunk]:
             text=chunk.text,
             title=chunk.title,
             heading=chunk.heading,
+            subject=chunk.subject,
         )
         for chunk in context
     ]
@@ -1420,10 +1471,43 @@ async def _retrieve_context(
             payload.top_k,
             payload.score_threshold,
             payload.sources,
+            payload.subject,
         )
     except EmbeddingMismatchError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     return language, state.retriever.fit_context(retrieved)
+
+
+# A continuation round sees the paper written so far. The questions at its head
+# are what the answer key must agree with, and the tail is where it resumes, so
+# a long paper keeps both ends.
+EXAM_PARTIAL_HEAD_CHARS = 12000
+EXAM_PARTIAL_TAIL_CHARS = 8000
+
+
+def _exam_message(
+    payload: ExamRequest, papers: Sequence[RetrievedChunk], subject_name: str, paper_format: str
+) -> str:
+    message = build_exam_message(
+        subject_name,
+        papers,
+        payload.language,
+        focus=payload.focus,
+        answer_key=payload.answer_key,
+        paper_format=paper_format,
+    )
+    if not payload.partial:
+        return message
+    partial = payload.partial
+    if len(partial) > EXAM_PARTIAL_HEAD_CHARS + EXAM_PARTIAL_TAIL_CHARS:
+        partial = partial[:EXAM_PARTIAL_HEAD_CHARS] + "\n[…]\n" + partial[-EXAM_PARTIAL_TAIL_CHARS:]
+    # One user turn rather than a history: a provider that must shrink the
+    # prompt drops past papers from it, never the paper being continued.
+    return (
+        f"{message}\n\n<paper_so_far>\n{partial}\n</paper_so_far>\n\n"
+        f"<instruction>{EXAM_CONTINUE[payload.language]} "
+        "Write only what comes after the end of <paper_so_far>.</instruction>"
+    )
 
 
 def _utcnow() -> str:
@@ -1460,6 +1544,84 @@ def _start_job(state: RAGState, source: str, work: Awaitable[IngestResponse]) ->
     state.tasks.add(task)
     task.add_done_callback(state.tasks.discard)
     return job
+
+
+def _line(event) -> str:
+    return event.model_dump_json() + "\n"
+
+
+async def _answer_events(
+    generator: AnswerGenerator,
+    *,
+    started: float,
+    generate: bool = True,
+    continues_math: bool = False,
+    **request,
+) -> AsyncIterator[str]:
+    """The answering half of a streamed response: "generating", the deltas (and
+    resets), then "done" with the repaired text, or "error".
+
+    ``request`` is what ``AnswerGenerator.stream`` takes; ``started`` is when the
+    request arrived, for the reported latencies.
+    """
+    final = GeneratedAnswer(text="", model=generator.model)
+    # The repairs need the whole answer: an unclosed $$ is only visible
+    # once the last delta has arrived, and a formula can be split across
+    # deltas. The deltas still stream; the done event carries the fixed
+    # text for the client to swap in.
+    streamed: list[str] = []
+    # Time to first token is what the student actually experiences as
+    # speed: everything before it is an empty bubble. Logged per answer
+    # so a change of model, thinking level or prompt can be judged.
+    first_token_ms: float | None = None
+    if generate:
+        yield _line(QueryStreamStatus(stage="generating"))
+        try:
+            async for item in stream_answer(generator, **request):
+                if isinstance(item, GeneratedAnswer):
+                    final = item
+                elif isinstance(item, StreamReset):
+                    streamed.clear()  # the answer restarts with another model
+                    yield _line(QueryStreamReset(detail=item.detail))
+                elif item:
+                    if first_token_ms is None:
+                        first_token_ms = round((time.perf_counter() - started) * 1000, 1)
+                        logger.info(
+                            "First token after %.0f ms (%s %s)",
+                            first_token_ms, generator.provider, final.model or generator.model,
+                        )
+                    streamed.append(item)
+                    yield _line(QueryStreamDelta(text=item))
+        except LLMError as exc:
+            yield _line(QueryStreamError(status=exc.status_code, detail=exc.detail))
+            return
+        except Exception:  # noqa: BLE001 - the response has started; report in-band
+            logger.exception("Streaming answer failed")
+            yield _line(QueryStreamError(status=500, detail="Internal error while generating the answer"))
+            return
+    repairs: list[str] = []
+    repaired = ""
+    if final.stop_reason not in QUOTED_STOP_REASONS:
+        repaired, repairs = sanitize_answer(
+            "".join(streamed),
+            opens_in_math=continues_math,
+            may_continue=final.stop_reason in TRUNCATED_STOP_REASONS,
+        )
+        if repairs:
+            logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
+    total_ms = round((time.perf_counter() - started) * 1000, 1)
+    logger.info(
+        "Answer streamed in %.0f ms (first token %s)",
+        total_ms, f"{first_token_ms:.0f} ms" if first_token_ms else "never",
+    )
+    yield _line(QueryStreamDone(
+        provider=final.provider or generator.provider,
+        model=final.model,
+        stop_reason=final.stop_reason,
+        latency_ms=total_ms,
+        first_token_ms=first_token_ms,
+        answer=repaired if repairs else None,
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -1635,98 +1797,113 @@ def create_app(
         images = _decode_images(state, payload)
         generator = state.generator
 
-        def line(event) -> str:
-            return event.model_dump_json() + "\n"
-
         async def events() -> AsyncIterator[str]:
             readings: list[ImageReading] = []
             if images:
-                yield line(QueryStreamStatus(stage="reading_images"))
+                yield _line(QueryStreamStatus(stage="reading_images"))
                 try:
                     readings = await _read_images(state, images)
                 except Exception:  # noqa: BLE001 - the response has started; report in-band
                     logger.exception("Reading attached images failed")
-                    yield line(QueryStreamError(status=500, detail="Could not read the attached images"))
+                    yield _line(QueryStreamError(status=500, detail="Could not read the attached images"))
                     return
-                yield line(QueryStreamImages(images=[_reading_out(r) for r in readings]))
-            yield line(QueryStreamStatus(stage="searching"))
+                yield _line(QueryStreamImages(images=[_reading_out(r) for r in readings]))
+            yield _line(QueryStreamStatus(stage="searching"))
             try:
                 language, context = await _retrieve_context(state, payload, readings)
             except HTTPException as exc:
-                yield line(QueryStreamError(status=exc.status_code, detail=str(exc.detail)))
+                yield _line(QueryStreamError(status=exc.status_code, detail=str(exc.detail)))
                 return
-            yield line(QueryStreamMeta(
+            yield _line(QueryStreamMeta(
                 language=language,
                 grounded=bool(context),
                 sources=_source_chunks(context),
                 provider=generator.provider,
             ))
-            final = GeneratedAnswer(text="", model=generator.model)
-            # The repairs need the whole answer: an unclosed $$ is only visible
-            # once the last delta has arrived, and a formula can be split across
-            # deltas. The deltas still stream; the done event carries the fixed
-            # text for the client to swap in.
-            streamed: list[str] = []
-            # Time to first token is what the student actually experiences as
-            # speed: everything before it is an empty bubble. Logged per answer
-            # so a change of model, thinking level or prompt can be judged.
-            first_token_ms: float | None = None
-            if payload.generate:
-                yield line(QueryStreamStatus(stage="generating"))
-                try:
-                    async for item in stream_answer(
-                        generator,
-                        system=SYSTEM_PROMPT,
-                        history=payload.history,
-                        user_message=build_user_message(payload.prompt, context, language, readings),
-                        chunks=context,
-                        language=language,
-                        message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
-                    ):
-                        if isinstance(item, GeneratedAnswer):
-                            final = item
-                        elif isinstance(item, StreamReset):
-                            streamed.clear()  # the answer restarts with another model
-                            yield line(QueryStreamReset(detail=item.detail))
-                        elif item:
-                            if first_token_ms is None:
-                                first_token_ms = round((time.perf_counter() - started) * 1000, 1)
-                                logger.info(
-                                    "First token after %.0f ms (%s %s)",
-                                    first_token_ms, generator.provider, final.model or generator.model,
-                                )
-                            streamed.append(item)
-                            yield line(QueryStreamDelta(text=item))
-                except LLMError as exc:
-                    yield line(QueryStreamError(status=exc.status_code, detail=exc.detail))
-                    return
-                except Exception:  # noqa: BLE001 - the response has started; report in-band
-                    logger.exception("Streaming answer failed")
-                    yield line(QueryStreamError(status=500, detail="Internal error while generating the answer"))
-                    return
-            repairs: list[str] = []
-            repaired = ""
-            if final.stop_reason not in QUOTED_STOP_REASONS:
-                repaired, repairs = sanitize_answer(
-                    "".join(streamed),
-                    opens_in_math=payload.continues_math,
-                    may_continue=final.stop_reason in TRUNCATED_STOP_REASONS,
-                )
-                if repairs:
-                    logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
-            total_ms = round((time.perf_counter() - started) * 1000, 1)
-            logger.info(
-                "Answer streamed in %.0f ms (first token %s)",
-                total_ms, f"{first_token_ms:.0f} ms" if first_token_ms else "never",
+            async for event in _answer_events(
+                generator,
+                started=started,
+                generate=payload.generate,
+                continues_math=payload.continues_math,
+                system=SYSTEM_PROMPT,
+                history=payload.history,
+                user_message=build_user_message(payload.prompt, context, language, readings),
+                chunks=context,
+                language=language,
+                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
+            ):
+                yield event
+
+        return StreamingResponse(
+            events(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post(
+        "/api/exam/stream",
+        responses={
+            **ERROR_RESPONSES,
+            200: {
+                "content": {"application/x-ndjson": {}},
+                "description": "The same events as /api/query/stream; meta's sources are the "
+                "past papers the new paper is modelled on",
+            },
+        },
+        tags=["exam"],
+    )
+    async def exam_stream(payload: ExamRequest, request: Request) -> StreamingResponse:
+        """A new mock BAC II paper in one subject, modelled on its indexed past papers."""
+        state = get_state(request)
+        started = time.perf_counter()
+        generator = state.exam_generator or state.generator
+        subject = get_subject(payload.subject)
+
+        async def events() -> AsyncIterator[str]:
+            yield _line(QueryStreamStatus(stage="searching"))
+            papers = await run_in_threadpool(past_papers, state.store, payload.subject)
+            chosen = as_chunks(
+                choose_reference_papers(
+                    papers,
+                    budget_chars=settings.exam_reference_chars,
+                    max_papers=settings.exam_reference_papers,
+                    seed=payload.seed,
+                ),
+                payload.subject,
             )
-            yield line(QueryStreamDone(
-                provider=final.provider or generator.provider,
-                model=final.model,
-                stop_reason=final.stop_reason,
-                latency_ms=total_ms,
-                first_token_ms=first_token_ms,
-                answer=repaired if repairs else None,
+            if not chosen:
+                # Without a real paper to copy, the format would be a guess.
+                yield _line(QueryStreamError(
+                    status=404,
+                    detail=f"There are no {subject.en} past papers in the library yet, "
+                    "so there is nothing to model a new paper on.",
+                ))
+                return
+            paper_format = describe_format(reference_format(papers))
+            logger.info(
+                "Exam: %s modelled on %s; format: %s", payload.subject,
+                ", ".join(chunk.heading or chunk.source for chunk in chosen),
+                paper_format.replace("\n", "; ") or "unread",
+            )
+            yield _line(QueryStreamMeta(
+                language=payload.language,
+                grounded=True,
+                sources=_source_chunks(chosen),
+                provider=generator.provider,
             ))
+            name = f"{subject.km} ({subject.en})"
+            async for event in _answer_events(
+                generator,
+                started=started,
+                continues_math=payload.continues_math,
+                system=EXAM_SYSTEM_PROMPT,
+                history=[],
+                user_message=_exam_message(payload, chosen, name, paper_format),
+                chunks=chosen,
+                language=payload.language,
+                message_builder=lambda kept: _exam_message(payload, kept, name, paper_format),
+            ):
+                yield event
 
         return StreamingResponse(
             events(),

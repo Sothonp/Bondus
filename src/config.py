@@ -322,6 +322,26 @@ class Settings(BaseSettings):
     hashing_score_threshold: float = Field(0.15, ge=0.0, le=1.0)
     max_context_chars: int = Field(12000, ge=500)
 
+    # --- Exam generator (/api/exam/stream) ---
+    # Past papers the model reads before writing a new one, and how much of them it sees.
+    exam_reference_papers: int = Field(4, ge=1, le=10)
+    exam_reference_chars: int = Field(16000, ge=2000)
+    # A paper and its answer key are long and every result must be right, so exams
+    # get their own chain, with reasoning turned up: a wrong answer key costs more
+    # than the wait. Groq and Cerebras are left out by default. Their free tiers
+    # cap a request at 8000 tokens, which leaves no room for the past papers, and
+    # a paper written that way came back in the wrong format with wrong answers.
+    # Add them to the end of the list to trade that accuracy for availability. Reasoning is spent from the output budget, so exams get a larger
+    # one: at "high" with 16000 tokens Gemini ran out mid-plan and carried on
+    # thinking in the visible answer.
+    exam_llm_order: str = "anthropic,gemini,openrouter"
+    exam_reasoning: Literal["low", "medium", "high"] = "medium"
+    exam_max_tokens: int = Field(32000, ge=1024, le=64000)
+
+    @property
+    def exam_llm_order_list(self) -> list[str]:
+        return [name.strip() for name in self.exam_llm_order.split(",") if name.strip()]
+
     @field_validator("vector_store_path", "data_dir", "ocr_cache_dir", "frontend_dist_dir", mode="after")
     @classmethod
     def _resolve_relative(cls, value: Path) -> Path:

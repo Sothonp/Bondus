@@ -116,3 +116,8 @@ test("while the code is being emailed the student sees the friendly sending card
   assert.match(app, /<CheckEmailCard lang=\{lang\} email=\{maskedEmail\} \/>/);
   assert.match(app, /useReducedMotion\(\)/); // the animation stands still for people who ask for reduced motion
 });
+
+test("the plan's subject picker lists the student's real subjects (their chosen foreign language), not the placeholder", () => {
+  assert.match(app, /const subjectOptions = fieldSubjects\(p\.field, p\.foreignLanguage\);/);
+  assert.doesNotMatch(app, /const subjectOptions = FIELD_SUBJECTS\[p\.field\]/);
+});
