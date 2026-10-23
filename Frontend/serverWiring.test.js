@@ -37,8 +37,36 @@ test("'too many tries' names the real wait (e.g. 48 minutes) instead of always s
 
 test("on the 'send code' screen a code that is already on its way goes to the code screen, but a rate limit shows the wait", () => {
   const send = app.slice(app.indexOf("const sendCode = async"), app.indexOf("const resetPassword = async"));
-  assert.match(send, /isCodeAlreadySent\(err\) && err\.retryAfter > 0\) \{ setStep\(2\); setCooldown\(err\.retryAfter\); \}/);
+  assert.match(send, /isCodeAlreadySent\(err\) && err\.retryAfter > 0\) \{/);
+  assert.match(send, /setMaskedEmail\(masked\); setStep\(2\); setCooldown\(err\.retryAfter\);/);
   assert.match(send, /setError\(apiErrorText\(lang, err\?\.code, err\?\.retryAfter\)\)/);
+});
+
+test("Back then 'Send code' again inside the resend wait goes to the code screen without asking the server (it would only burn one of the 5 hourly tries)", () => {
+  const send = app.slice(app.indexOf("const sendCode = async"), app.indexOf("const resetPassword = async"));
+  assert.match(app, /const recentCodes = new Map\(\);/);
+  // the check comes BEFORE the request
+  assert.ok(send.indexOf("recentCodes.get(who)") < send.indexOf("api.forgotPassword("), "the recent-code check must run before the request");
+  assert.match(send, /if \(recent && recent\.until > Date\.now\(\)\) \{/);
+  assert.match(send, /recentCodes\.set\(who, \{ until: Date\.now\(\) \+ 60000, masked: res\?\.maskedEmail \?\? "" \}\);/);
+});
+
+test("the code screen never shows 'sent a code to …' with no address, and its countdown uses the page's digits", () => {
+  assert.match(app, /\{email \? <>\{t\(lang, "forgotCodeSent"\)\} <strong[^>]*>\{email\}<\/strong><\/> : t\(lang, "forgotCodeSentGeneric"\)\}/);
+  assert.match(app, /` \(\$\{localizeNum\(cooldown, lang\)\}\)`/);
+});
+
+test("a busy (429) or slow (408) server while restoring a saved login keeps the login and shows the retry screen with the wait", () => {
+  const boot = app.slice(app.indexOf("const bootAccount = () =>"), app.indexOf("useEffect(() => {", app.indexOf("const bootAccount = () =>")));
+  assert.match(boot, /err\?\.status === 0 \|\| err\?\.status === 408 \|\| err\?\.status === 429 \|\| err\?\.status >= 500\) setBootError\(err\)/);
+  assert.match(boot, /else api\.clearToken\(\)/);
+  assert.match(app, /title=\{bootError\.status === 429 \? apiErrorText\(lang, bootError\.code, bootError\.retryAfter\) : t\(lang, "errNetwork"\)\}/);
+});
+
+test("the back arrow on the 'Can't reach the server' screen leaves for the login screen instead of doing nothing", () => {
+  assert.match(app, /const handleLogout = \(\) => \{ if \(SERVER_MODE\) api\.logout\(\); resetSession\(\); setBootError\(false\); setBooting\(false\); setEntry\("welcome"\); \};/);
+  assert.match(app, /const leaveSavedLogin = \(\) => \{ handleLogout\(\); setEntry\("login"\); \};/);
+  assert.match(app, /onBack=\{leaveSavedLogin\}/);
 });
 
 test("every answer and status handler sends a study event, and the XP guess is paired with it", () => {
@@ -103,7 +131,7 @@ test("both languages have every message the server flow can show", () => {
     "errServer", "errSession", "errInvalidCode", "errNoEmail", "errEmailFailed", "errPlanLimit", "errPlanSave", "errSaveProgress",
     "errPasswordShort", "retryWord", "passwordHint", "emailResetHint", "forgotLink", "forgotTitle", "forgotDesc", "forgotSendCode",
     "forgotCodeSent", "forgotCodeExpires", "forgotCodeLabel", "forgotNewPasswordLabel", "forgotResetBtn", "forgotResend",
-    "forgotLoginLabel", "backToLogin", "forgotSendingTitle", "forgotSendingSub", "forgotCheckEmailTitle", "forgotCheckSpam", "forgotStep2Desc",
+    "forgotLoginLabel", "backToLogin", "forgotSendingTitle", "forgotSendingSub", "forgotCodeSentGeneric", "forgotCheckEmailTitle", "forgotCheckSpam", "forgotStep2Desc",
   ];
   for (const key of keys) {
     const hits = app.match(new RegExp(`[\\s,{]${key}:`, "g")) || [];

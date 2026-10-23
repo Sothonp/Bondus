@@ -30,6 +30,19 @@ function browserStorage() {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 }
 
+/* "How long to wait" as whole seconds, or null: a number (or numeric string) of seconds, or an HTTP date, which is the
+   other form the Retry-After header may take. */
+function waitSeconds(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (Number.isFinite(n)) return n > 0 ? Math.ceil(n) : null;
+  if (typeof value === "string") {
+    const at = Date.parse(value);
+    if (Number.isFinite(at)) { const s = Math.ceil((at - Date.now()) / 1000); return s > 0 ? s : null; }
+  }
+  return null;
+}
+
 export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() } = {}) {
   const base = String(baseUrl || "").trim().replace(/\/+$/, "");
   const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
@@ -61,7 +74,11 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     const text = await res.text().catch(() => "");
     let data = null;
     if (text) {
-      try { data = JSON.parse(text); } catch { throw new ApiError(res.status, "bad_response", "The server sent something unexpected"); }
+      try { data = JSON.parse(text); } catch {
+        // A rate limit answered by something in front of the API (a proxy or CDN) is not JSON, but it is still a rate limit.
+        if (res.status === 429) throw new ApiError(429, "too_many_requests", "Too many requests", { retryAfter: waitSeconds(res.headers?.get?.("Retry-After")) });
+        throw new ApiError(res.status, "bad_response", "The server sent something unexpected");
+      }
     } else if (res.ok && res.status !== 204) {
       throw new ApiError(res.status, "bad_response", "The server sent an empty answer");
     }
@@ -71,8 +88,8 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
       if (res.status === 401 && auth && code === "unauthenticated") { setToken(null); unauthorizedHandler(); }
       // How long to wait: the backend puts it in the JSON body (a browser can only read the Retry-After header when the
       // server exposes it to cross-origin pages), so look in both.
-      const waits = [Number(data?.retryAfter), Number(res.headers?.get?.("Retry-After"))].filter((n) => Number.isFinite(n) && n > 0);
-      throw new ApiError(res.status, code, data?.message ?? "Request failed", { errors: data?.errors ?? null, body: data, retryAfter: waits.length ? Math.ceil(waits[0]) : null });
+      const retryAfter = waitSeconds(data?.retryAfter) ?? waitSeconds(res.headers?.get?.("Retry-After"));
+      throw new ApiError(res.status, code, data?.message ?? "Request failed", { errors: data?.errors ?? null, body: data, retryAfter });
     }
     return data;
   }

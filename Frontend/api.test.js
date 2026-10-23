@@ -116,6 +116,24 @@ test("a rate-limit error says how long to wait: from the JSON body, or from the 
   assert.equal(junk.retryAfter, null);
 });
 
+test("a rate limit answered by a proxy or CDN (not JSON) is still a rate limit, with its Retry-After", async () => {
+  const html = await rejects429(() => new Response("<html>Too Many Requests</html>", { status: 429, headers: { "Content-Type": "text/html", "Retry-After": "120" } }));
+  assert.deepEqual([html.status, html.code, html.retryAfter], [429, "too_many_requests", 120]);
+  const plain = await rejects429(() => new Response("slow down", { status: 429, headers: { "Content-Type": "text/plain" } }));
+  assert.deepEqual([plain.code, plain.retryAfter], ["too_many_requests", null]);        // no header: no wait to show
+  // other non-JSON answers are still "the server sent something unexpected"
+  const { api } = make(() => new Response("<html>Bad gateway</html>", { status: 502, headers: { "Content-Type": "text/html" } }));
+  await assert.rejects(() => api.getMe(), (e) => e.code === "bad_response" && e.status === 502);
+});
+
+test("Retry-After may also be an HTTP date", async () => {
+  const inTwoMinutes = new Date(Date.now() + 120_000).toUTCString();
+  const e = await rejects429(() => new Response(JSON.stringify({ code: "too_many_requests" }), { status: 429, headers: { "Content-Type": "application/json", "Retry-After": inTwoMinutes } }));
+  assert.ok(e.retryAfter >= 118 && e.retryAfter <= 121, "retryAfter " + e.retryAfter);
+  const past = await rejects429(() => new Response(JSON.stringify({ code: "too_many_requests" }), { status: 429, headers: { "Content-Type": "application/json", "Retry-After": new Date(Date.now() - 60_000).toUTCString() } }));
+  assert.equal(past.retryAfter, null);               // a date already gone means nothing to wait for
+});
+
 test("a 'code just sent' answer keeps its code and wait so the app can show the code screen", async () => {
   const e = await rejects429(() => json(429, { message: "A code was just sent.", code: "code_recently_sent", retryAfter: 51 }));
   assert.deepEqual([e.code, e.retryAfter], ["code_recently_sent", 51]);

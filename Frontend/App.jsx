@@ -2308,13 +2308,18 @@ function CheckEmailCard({ lang, email }) {
       <div className="min-w-0">
         <p className={`eai-display font-bold text-sm ${km}`}>{t(lang, "forgotCheckEmailTitle")}</p>
         <p className={`text-xs eai-muted mt-0.5 ${km}`} style={{ overflowWrap: "anywhere" }}>
-          {t(lang, "forgotCodeSent")} <strong style={{ color: "var(--ink)" }}>{email || "…"}</strong>
+          {email ? <>{t(lang, "forgotCodeSent")} <strong style={{ color: "var(--ink)" }}>{email}</strong></> : t(lang, "forgotCodeSentGeneric")}
         </p>
         <p className={`text-xs eai-muted mt-0.5 ${km}`}>{t(lang, "forgotCodeExpires")} {t(lang, "forgotCheckSpam")}</p>
       </div>
     </motion.div>
   );
 }
+
+// Logins that were just sent a reset code: login -> { until: the time (ms) the resend wait ends, masked: "ve***@gmail.com" }.
+// Kept outside the screen so going Back and pressing "Send code" again inside the wait goes straight to the code screen
+// instead of asking the server again (which would refuse, but still use up one of the few tries allowed per hour).
+const recentCodes = new Map();
 
 /* ════════════════════════ Forgot password (server mode) ════════════════════════
    Step 1: the student gives their phone number or email and the server emails a 6-digit code to the address on the
@@ -2340,15 +2345,25 @@ function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLan
 
   const sendCode = async () => {
     if (sending || !login.trim()) return;
+    const who = login.trim().toLowerCase();
+    const recent = recentCodes.get(who);
+    if (recent && recent.until > Date.now()) { // a code is already on its way: no new request, just the code screen
+      setMaskedEmail(recent.masked); setStep(2); setCooldown(Math.ceil((recent.until - Date.now()) / 1000));
+      return;
+    }
     setSending(true); setError("");
     try {
       const res = await api.forgotPassword({ login: login.trim() });
+      recentCodes.set(who, { until: Date.now() + 60000, masked: res?.maskedEmail ?? "" });
       setMaskedEmail(res?.maskedEmail ?? ""); setCode(""); setStep(2); setCooldown(60);
     } catch (err) {
       // A code was sent a moment ago (the server sends nothing new and says how long until a new one may be asked
       // for): just go to the code screen. Anything else is a real problem, e.g. the hourly limit: say how long to wait.
-      if (isCodeAlreadySent(err) && err.retryAfter > 0) { setStep(2); setCooldown(err.retryAfter); }
-      else { setError(apiErrorText(lang, err?.code, err?.retryAfter)); shake(); }
+      if (isCodeAlreadySent(err) && err.retryAfter > 0) {
+        const masked = err.body?.maskedEmail ?? recentCodes.get(who)?.masked ?? "";
+        recentCodes.set(who, { until: Date.now() + err.retryAfter * 1000, masked });
+        setMaskedEmail(masked); setStep(2); setCooldown(err.retryAfter);
+      } else { setError(apiErrorText(lang, err?.code, err?.retryAfter)); shake(); }
     }
     finally { setSending(false); }
   };
@@ -2401,7 +2416,7 @@ function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLan
           </FormField>
           <button type="button" onClick={sendCode} disabled={sending || cooldown > 0}
             className={`eai-focus text-xs font-semibold ${km}`} style={{ color: cooldown > 0 ? "var(--muted)" : "var(--primary)", cursor: cooldown > 0 ? "not-allowed" : "pointer" }}>
-            {t(lang, "forgotResend")}{cooldown > 0 ? ` (${cooldown})` : ""}
+            {t(lang, "forgotResend")}{cooldown > 0 ? ` (${localizeNum(cooldown, lang)})` : ""}
           </button>
         </div>
           )}
@@ -6753,13 +6768,13 @@ const STRINGS = {
     errPhoneTaken: "This phone number already has an account. Try logging in instead.",
     errEmailTaken: "This email already has an account. Try logging in instead.",
     errValidation: "Please check the details you entered and try again.",
-    errTooMany: "Too many tries. Please wait a minute and try again.",
+    errTooMany: "Too many tries. Please wait a little and try again.",
     errTooManyWait: "Too many tries. Please try again in {time}.",
     errNetwork: "Can't reach the server. Check your internet connection and try again.",
     errServer: "Something went wrong on our side. Please try again in a moment.",
     errSession: "Your session ended. Please log in again.",
     errInvalidCode: "That code is wrong or has expired.",
-    errNoEmail: "We couldn't find an account with an email for that phone number or email, so no code was sent. Check what you typed, or contact Bondus support.",
+    errNoEmail: "We couldn't find an account with an email for that phone number or email, so no code was sent. Check what you typed. Accounts created without an email can't reset their password yet.",
     errEmailFailed: "We couldn't send the email right now. Please try again in a moment.",
     errPlanLimit: "You've reached today's limit of tasks.",
     errPlanSave: "Couldn't save that task. Please try again.",
@@ -6773,6 +6788,7 @@ const STRINGS = {
     forgotSendCode: "Send code", forgotCodeSent: "We sent a 6-digit code to", forgotCodeExpires: "It expires in 15 minutes.",
     forgotCodeLabel: "6-digit code", forgotNewPasswordLabel: "New password", forgotResetBtn: "Reset password",
     forgotResend: "Send a new code", forgotLoginLabel: "Phone number or email", backToLogin: "Back to log in",
+    forgotCodeSentGeneric: "We sent a 6-digit code to the email on your account.",
     forgotSendingTitle: "Sending your code…",
     forgotSendingSub: "This can take up to a minute. Please keep this page open.",
     forgotCheckEmailTitle: "Check your email",
@@ -6941,13 +6957,13 @@ const STRINGS = {
     errPhoneTaken: "លេខទូរស័ព្ទនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
     errEmailTaken: "អ៊ីមែលនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
     errValidation: "សូមពិនិត្យព័ត៌មានដែលអ្នកបានបញ្ចូល រួចព្យាយាមម្តងទៀត។",
-    errTooMany: "ព្យាយាមច្រើនដងពេក។ សូមរង់ចាំមួយនាទី រួចព្យាយាមម្តងទៀត។",
-    errTooManyWait: "ព្យាយាមច្រើនដងពេក។ សូមព្យាយាមម្តងទៀតក្នុងរយៈពេល {time}។",
+    errTooMany: "ព្យាយាមច្រើនដងពេក។ សូមរង់ចាំបន្តិច រួចព្យាយាមម្តងទៀត។",
+    errTooManyWait: "ព្យាយាមច្រើនដងពេក។ សូមរង់ចាំ {time} រួចព្យាយាមម្តងទៀត។",
     errNetwork: "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ។ សូមពិនិត្យអ៊ីនធឺណិតរបស់អ្នក រួចព្យាយាមម្តងទៀត។",
     errServer: "មានបញ្ហាកើតឡើងនៅខាងយើង។ សូមព្យាយាមម្តងទៀតក្នុងពេលបន្តិចទៀត។",
     errSession: "សម័យរបស់អ្នកបានផុតកំណត់។ សូមចូលគណនីម្តងទៀត។",
     errInvalidCode: "លេខកូដមិនត្រឹមត្រូវ ឬបានផុតកំណត់។",
-    errNoEmail: "យើងរកមិនឃើញគណនីដែលមានអ៊ីមែលសម្រាប់លេខទូរស័ព្ទ ឬអ៊ីមែលនេះទេ ដូច្នេះមិនបានផ្ញើលេខកូដឡើយ។ សូមពិនិត្យអ្វីដែលអ្នកបានវាយ ឬទាក់ទងក្រុមគាំទ្រ Bondus។",
+    errNoEmail: "យើងរកមិនឃើញគណនីដែលមានអ៊ីមែលសម្រាប់លេខទូរស័ព្ទ ឬអ៊ីមែលនេះទេ ដូច្នេះមិនបានផ្ញើលេខកូដឡើយ។ សូមពិនិត្យអ្វីដែលអ្នកបានវាយ។ គណនីដែលបង្កើតដោយគ្មានអ៊ីមែលមិនអាចកំណត់ពាក្យសម្ងាត់ឡើងវិញបានទេ។",
     errEmailFailed: "យើងមិនអាចផ្ញើអ៊ីមែលបានទេនៅពេលនេះ។ សូមព្យាយាមម្តងទៀតក្នុងពេលបន្តិចទៀត។",
     errPlanLimit: "អ្នកបានដល់ចំនួនកិច្ចការអតិបរមាសម្រាប់ថ្ងៃនេះហើយ។",
     errPlanSave: "មិនអាចរក្សាទុកកិច្ចការនោះបានទេ។ សូមព្យាយាមម្តងទៀត។",
@@ -6961,6 +6977,7 @@ const STRINGS = {
     forgotSendCode: "ផ្ញើលេខកូដ", forgotCodeSent: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅ", forgotCodeExpires: "លេខកូដនឹងផុតកំណត់ក្នុងរយៈពេល ១៥នាទី។",
     forgotCodeLabel: "លេខកូដ ៦ខ្ទង់", forgotNewPasswordLabel: "ពាក្យសម្ងាត់ថ្មី", forgotResetBtn: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
     forgotResend: "ផ្ញើលេខកូដថ្មី", forgotLoginLabel: "លេខទូរស័ព្ទ ឬអ៊ីមែល", backToLogin: "ត្រឡប់ទៅចូលគណនី",
+    forgotCodeSentGeneric: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
     forgotSendingTitle: "កំពុងផ្ញើលេខកូដរបស់អ្នក…",
     forgotSendingSub: "អាចចំណាយពេលរហូតដល់មួយនាទី។ សូមកុំបិទទំព័រនេះ។",
     forgotCheckEmailTitle: "សូមពិនិត្យអ៊ីមែលរបស់អ្នក",
@@ -7191,7 +7208,7 @@ export default function App() {
   const [takingLangTest, setTakingLangTest] = useState(null); // language name currently being tested, or null
   // ── Server mode (VITE_API_URL set): the account, progress, XP, streak and plan live on the Laravel backend ──
   const [booting, setBooting] = useState(SERVER_MODE && api.hasToken()); // restoring a saved login
-  const [bootError, setBootError] = useState(false);  // the saved login could not be restored because the server was unreachable
+  const [bootError, setBootError] = useState(false);  // the saved login could not be restored because the server was unreachable or busy (holds the error)
   const [summary, setSummary] = useState(null);       // GET /me/summary: { xp, level, xpToNext, streak, longestStreak, studiedToday, todayMinutes, weekHours }
   const [notice, setNotice] = useState(null);         // a STRINGS key shown as a toast (a failed save, an expired session)
   const hydratedRef = useRef(false);                  // true once the account is loaded; progress is only saved after that
@@ -7228,7 +7245,9 @@ export default function App() {
     setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLangResults({}); setTab("dashboard");
   };
   // Without a server, logging out deliberately leaves localStorage alone (see loadSaved); with one, the token is revoked.
-  const handleLogout = () => { if (SERVER_MODE) api.logout(); resetSession(); setEntry("welcome"); };
+  const handleLogout = () => { if (SERVER_MODE) api.logout(); resetSession(); setBootError(false); setBooting(false); setEntry("welcome"); };
+  // The back arrow on the "Can't reach the server" screen: give up on the saved login and go to the login screen.
+  const leaveSavedLogin = () => { handleLogout(); setEntry("login"); };
 
   // With the server: signs in with phone-or-email + password, then loads the account. Without it: matches either a phone
   // number or an email+password against whatever is saved in this browser. Resolves to true, or to { error } (a server
@@ -7448,7 +7467,11 @@ export default function App() {
     setBootError(false); setBooting(true);
     return loadAccount()
       .then(() => setShowWelcomeBack(true))
-      .catch((err) => { if (err?.status === 0 || err?.status >= 500) setBootError(true); else api.clearToken(); })
+      .catch((err) => {
+        // Server down (0), slow (408), busy (429) or broken (5xx): the saved login is probably still good, so keep it and offer "Try again".
+        if (err?.status === 0 || err?.status === 408 || err?.status === 429 || err?.status >= 500) setBootError(err);
+        else api.clearToken();
+      })
       .finally(() => setBooting(false));
   };
   useEffect(() => {
@@ -7627,8 +7650,8 @@ export default function App() {
 
   if (SERVER_MODE && booting) return <LoadingScreen lang={lang} dark={dark} />;
   if (SERVER_MODE && bootError) return (
-    <OnboardingLayout dark={dark} setDark={setDark} onBack={handleLogout} lang={lang} setLang={setLang}
-      title={t(lang, "errNetwork")} description=""
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={leaveSavedLogin} lang={lang} setLang={setLang}
+      title={bootError.status === 429 ? apiErrorText(lang, bootError.code, bootError.retryAfter) : t(lang, "errNetwork")} description=""
       footer={<PrimaryButton onClick={bootAccount} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "retryWord")}</PrimaryButton>}>
       <span />
     </OnboardingLayout>
