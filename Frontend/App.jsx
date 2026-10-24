@@ -14,7 +14,7 @@ import {
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Shirt, Trash2, Mail, MailCheck,
+  Shirt, Trash2, Mail, MailCheck, School,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -26,6 +26,8 @@ import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUnivers
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
 import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
 import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
+import { useExamSessions } from "./useExamSessions.js";
+import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
 import SubjectIcon from "./SubjectIcon.jsx";
 import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
@@ -2796,7 +2798,7 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
 
 /* ════════════════════════ Browse (field-aware) ════════════════════════ */
 
-function ExamPaperPage({ paper, onBack, lang = "en" }) {
+function ExamPaperPage({ paper, onBack, lang = "en", topSlot = null }) {
   // Localized on every render from the raw subject/year, not baked into a string at click-time —
   // otherwise toggling language while already on this page would leave the title stuck in
   // whichever language was active the moment "View" was clicked.
@@ -2806,6 +2808,7 @@ function ExamPaperPage({ paper, onBack, lang = "en" }) {
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
         <ChevronLeft size={16} /> {t(lang, "allExamsWord")}
       </button>
+      {topSlot}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{title}</h2>
@@ -2868,10 +2871,42 @@ const SUBJECT_DURATION_MIN = {
   },
 };
 
-function Browse({ p, lang = "en" }) {
+function Browse({ p, lang = "en", exam, tr }) {
   const [year, setYear] = useState(2023);
   const [viewingPaper, setViewingPaper] = useState(null);
-  if (viewingPaper) return <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} lang={lang} />;
+  // Timed attempts: "read" = the paper with the running clock, "submit" = adding the photos, "result" = how long it took.
+  const [phase, setPhase] = useState("read");
+  const [finished, setFinished] = useState(null);
+  const [note, setNote] = useState("");
+  const running = exam.current;
+  const paperFor = (subject, y) => { const key = `${subject}-${p.field}-${y}`; return { subject, year: y, pdf: EXAM_PAPER_PDFS[key], images: EXAM_PAPER_IMAGES[key] }; };
+  const startAttempt = (subject, y) => {
+    const res = exam.start({ subject, field: p.field, year: y, student: { name: p.name, grade: p.grade } });
+    if (res.error === "already_running") { setNote(tr("examAlreadyRunning")); return; }
+    if (res.error) { setNote(tr("examErr_generic")); return; }
+    setNote(""); setPhase("read"); setViewingPaper(paperFor(subject, y));
+  };
+  // The attempt closed by itself (official time + 30 minutes) while the student was on the photo screen.
+  useEffect(() => { if (phase === "submit" && !running) { setPhase("read"); setNote(tr("examExpired")); } }, [phase, running]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (phase === "result" && finished) {
+    return <ExamResultCard session={finished} lang={lang} tr={tr} onDone={() => { setFinished(null); setPhase("read"); setViewingPaper(null); }} />;
+  }
+  if (phase === "submit" && running) {
+    return (
+      <SubmitSheet session={running} lang={lang} tr={tr}
+        onAdd={(photo) => exam.addPhoto(running.id, photo)} onRemove={(i) => exam.removePhoto(running.id, i)}
+        onSubmit={() => { const res = exam.submit(running.id); if (res.ok) { setFinished(res.session); setPhase("result"); } return res; }}
+        onBack={() => setPhase("read")} />
+    );
+  }
+  if (viewingPaper) {
+    const mine = running && running.subject === viewingPaper.subject && running.year === viewingPaper.year ? running : null;
+    return (
+      <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} lang={lang}
+        topSlot={mine ? <ExamTimerBar session={mine} now={exam.now} lang={lang} tr={tr} onFinish={() => setPhase("submit")} onCancel={() => exam.cancel(mine.id)} /> : null} />
+    );
+  }
   const diffLabel = (d) => (lang === "km" ? { Easy: "ងាយ", Medium: "មធ្យម", Hard: "ពិបាក" }[d] : d);
   return (
     <div className="space-y-5 eai-rise">
@@ -2881,6 +2916,20 @@ function Browse({ p, lang = "en" }) {
           {p.grade === "university" ? t(lang, "universityEntrance") : bacIILabel(lang)} · {lang === "km" ? `${t(lang, "trackWord")}${FIELD_META[p.field].km}` : `${FIELD_META[p.field].label} ${t(lang, "trackWord")}`} · {t(lang, "officialPapers")} {localizeNum(2010, lang)}–{localizeNum(2026, lang)}
         </p>
       </div>
+      <JoinSchoolCard school={exam.school} lang={lang} tr={tr} lookup={exam.schoolForCode} onJoin={exam.joinSchool} onLeave={exam.leaveSchool} hint={tr("schoolDemoHint")} />
+      {running && (
+        <div className="eai-card p-4 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--primary)" }} data-testid="exam-resume">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="grid place-items-center rounded-2xl" style={{ width: 40, height: 40, background: "var(--primary-soft)", color: "var(--primary)" }}><Timer size={20} /></span>
+            <div className="min-w-0">
+              <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("examRunningTitle")}</p>
+              <p className={`font-bold truncate ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(running.subject, lang)} · {bacIILabel(lang)} {localizeNum(running.year, lang)}</p>
+            </div>
+          </div>
+          <button onClick={() => { setViewingPaper(paperFor(running.subject, running.year)); setPhase("read"); }} className={`eai-btn eai-focus text-sm py-2 px-4 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>{tr("examResume")}</button>
+        </div>
+      )}
+      {note && <p className={`eai-ob-error flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} role="alert"><AlertTriangle size={13} /> {note}</p>}
       <div className="flex gap-2 overflow-x-auto pb-1 eai-scroll">
         {YEARS.map((y) => (
           <button key={y} onClick={() => setYear(y)} className="eai-btn eai-focus px-4 py-2 text-sm flex-shrink-0"
@@ -2911,7 +2960,13 @@ function Browse({ p, lang = "en" }) {
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
               </div>
-              <div className="flex gap-2 mt-4">
+              {hasPaper && (
+                <button onClick={() => startAttempt(sub.s, year)} data-testid={`start-${sub.s}`}
+                  className={`eai-btn eai-focus w-full mt-4 text-sm py-2.5 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                  <Timer size={14} /> {tr("examStartBtn")}
+                </button>
+              )}
+              <div className="flex gap-2 mt-2">
                 {hasPaper ? (
                   <button
                     onClick={() => setViewingPaper({ subject: sub.s, year, pdf, images })}
@@ -6724,6 +6779,10 @@ function SuperBondus({ p, lang = "en" }) {
 }
 
 /* ════════════════════════ Shell ════════════════════════ */
+/* The school's view of the exam times. For now it lives in the browser with a demo school and sample data; once the backend
+   serves real reports it will show only for admin accounts. */
+const SCHOOL_NAV = { id: "schoolReport", label: "School report", labelKm: "របាយការណ៍សាលា", icon: School };
+
 const NAV = [
   { id: "dashboard", label: "Dashboard", labelKm: "ផ្ទាំងគ្រប់គ្រង", icon: LayoutDashboard },
   { id: "browse", label: "Browse exams", labelKm: "រកមើលកម្រងសំណួរ", icon: BookOpen },
@@ -6939,6 +6998,31 @@ const STRINGS = {
     exploreFirstBtn: "Explore first",
     // Diagnostic
     diagnosticTestWord: "Diagnostic test", questionWord: "Question", sectionWord: "Section",
+    // Timed exam attempts
+    examStartBtn: "Start timed attempt", examResume: "Resume", examRunningTitle: "Attempt in progress",
+    examAlreadyRunning: "You already have an attempt running. Finish or cancel it first.",
+    examExpired: "That attempt closed because the time ran out. You can start again.",
+    examElapsed: "Time spent", examLeft: "left", examOverBy: "Over the official time by", examOfficialTime: "Official time",
+    examFinishBtn: "Finish & submit photo", examCancelBtn: "Cancel attempt", examCancelAsk: "Cancel this attempt? It won't be counted.",
+    examCancelYes: "Yes, cancel", examKeepGoing: "Keep going",
+    examSubmitTitle: "Submit your work", examSubmitDesc: "Take a clear photo of each page of your answers. Photograph only your answer sheets. The clock keeps running until you press Submit.",
+    examTakePhoto: "Take photo", examChoosePhoto: "Choose from gallery", examPreparing: "Preparing photo…", examPhotosCount: "{n} of {max} photos",
+    examRemovePhoto: "Remove photo", examSubmitBtn: "Submit and stop the clock", examBackToPaper: "Back to the paper",
+    examErr_generic: "Something went wrong. Please try again.", examErr_not_image: "That file is not a photo.", examErr_invalid_photo: "That photo can't be used.",
+    examErr_too_big: "That photo is too large.", examErr_too_many_photos: "You can send up to 10 photos.", examErr_no_photos: "Add at least one photo first.",
+    examErr_not_running: "This attempt has already ended.",
+    examDoneTitle: "Submitted!", examDoneSpent: "You spent", examDonePhotos: "Photos sent", examDoneBack: "Back to exam papers",
+    schoolJoinTitle: "Join your school", schoolJoinDesc: "Enter the code your school gave you. Your school will then see your exam times.",
+    schoolCodePlaceholder: "School code", schoolJoinBtn: "Join", schoolBadCode: "That code wasn't found. Check it and try again.",
+    schoolConfirmTitle: "Join {name}?", schoolSees: "Your school will see: your name, grade and track, how many minutes you spend on each exam paper, and the photos you submit.",
+    schoolLeaveAnytime: "You can leave any time. Leaving removes you from the school's report.", schoolConfirmBtn: "Yes, join", notNowWord: "Not now",
+    schoolYours: "Your school", schoolLeaveBtn: "Leave school", schoolDemoHint: "Demo: use the code DEMO-001",
+    reportTitle: "School report", reportNoSchool: "Join a school first (in Browse exams) to see its report.",
+    reportAttempts: "Attempts", reportStudents: "Students", reportAvgMin: "Average minutes", reportPerPaper: "Average minutes per exam paper", reportStudentsWord: "students", reportStudentOne: "student",
+    reportEmpty: "No finished attempts yet.", reportStudentCol: "Student", reportGradeCol: "Grade", reportPaperCol: "Paper", reportMinutesCol: "Minutes",
+    reportStatusCol: "Status", reportPhotosCol: "Photos", reportStatus_submitted: "Submitted", reportStatus_expired: "Not submitted",
+    reportSampleBadge: "Sample", reportSampleNote: "Sample data for demonstration. These are not real students.",
+    reportLoadSample: "Load sample class", reportClearSample: "Remove sample class", reportDownloadCsv: "Download spreadsheet", reportViewPhotos: "View", reportClose: "Close",
     howSureWereYou: "How sure were you?", confidentWord: "Confident", guessedWord: "I guessed",
     noFeedbackDuringTest: "No feedback during the test — you'll see your results at the end.",
     diagnosticComplete: "Diagnostic complete!", startingPointIs: "Here's your real starting point — overall level is",
@@ -7116,6 +7200,31 @@ const STRINGS = {
     exploreFirstBtn: "ស្វែងយល់មុន",
     // Diagnostic
     diagnosticTestWord: "តេស្តវាយតម្លៃ", questionWord: "សំណួរ", sectionWord: "ផ្នែក",
+    // Timed exam attempts
+    examStartBtn: "ចាប់ផ្តើមធ្វើជាមួយនាឡិកា", examResume: "បន្តធ្វើ", examRunningTitle: "កំពុងធ្វើវិញ្ញាសា",
+    examAlreadyRunning: "អ្នកមានវិញ្ញាសាកំពុងធ្វើរួចហើយ។ សូមបញ្ចប់ ឬបោះបង់វាជាមុនសិន។",
+    examExpired: "វិញ្ញាសានោះបានបិទដោយសារអស់ម៉ោង។ អ្នកអាចចាប់ផ្តើមម្តងទៀតបាន។",
+    examElapsed: "ពេលវេលាដែលបានប្រើ", examLeft: "នៅសល់", examOverBy: "លើសម៉ោងផ្លូវការ", examOfficialTime: "ម៉ោងផ្លូវការ",
+    examFinishBtn: "បញ្ចប់ និងផ្ញើរូបថត", examCancelBtn: "បោះបង់ការធ្វើ", examCancelAsk: "បោះបង់ការធ្វើនេះ? វានឹងមិនត្រូវបានរាប់ទេ។",
+    examCancelYes: "បាទ/ចាស បោះបង់", examKeepGoing: "បន្តទៀត",
+    examSubmitTitle: "ផ្ញើការងាររបស់អ្នក", examSubmitDesc: "ថតរូបឱ្យច្បាស់នៃទំព័រចម្លើយនីមួយៗ។ ថតតែក្រដាសចម្លើយរបស់អ្នកប៉ុណ្ណោះ។ នាឡិកានៅតែដើររហូតដល់អ្នកចុចផ្ញើ។",
+    examTakePhoto: "ថតរូប", examChoosePhoto: "ជ្រើសរើសពីអាល់ប៊ុម", examPreparing: "កំពុងរៀបចំរូបថត…", examPhotosCount: "រូបថត {n} ក្នុងចំណោម {max}",
+    examRemovePhoto: "លុបរូបថត", examSubmitBtn: "ផ្ញើ ហើយបញ្ឈប់នាឡិកា", examBackToPaper: "ត្រឡប់ទៅវិញ្ញាសា",
+    examErr_generic: "មានបញ្ហាកើតឡើង។ សូមព្យាយាមម្តងទៀត។", examErr_not_image: "ឯកសារនោះមិនមែនជារូបថតទេ។", examErr_invalid_photo: "រូបថតនោះមិនអាចប្រើបានទេ។",
+    examErr_too_big: "រូបថតនោះធំពេក។", examErr_too_many_photos: "អ្នកអាចផ្ញើរូបថតបានអតិបរមា ១០ រូប។", examErr_no_photos: "សូមបន្ថែមរូបថតយ៉ាងហោចណាស់មួយជាមុនសិន។",
+    examErr_not_running: "ការធ្វើនេះបានបញ្ចប់រួចហើយ។",
+    examDoneTitle: "បានផ្ញើរួចហើយ!", examDoneSpent: "អ្នកបានប្រើពេល", examDonePhotos: "រូបថតដែលបានផ្ញើ", examDoneBack: "ត្រឡប់ទៅវិញ្ញាសា",
+    schoolJoinTitle: "ចូលរួមជាមួយសាលារបស់អ្នក", schoolJoinDesc: "បញ្ចូលកូដដែលសាលាបានផ្តល់ឱ្យអ្នក។ បន្ទាប់មកសាលានឹងឃើញពេលវេលាដែលអ្នកប្រើក្នុងការធ្វើវិញ្ញាសា។",
+    schoolCodePlaceholder: "កូដសាលា", schoolJoinBtn: "ចូលរួម", schoolBadCode: "រកមិនឃើញកូដនោះទេ។ សូមពិនិត្យ ហើយព្យាយាមម្តងទៀត។",
+    schoolConfirmTitle: "ចូលរួមជាមួយ {name}?", schoolSees: "សាលារបស់អ្នកនឹងឃើញ៖ ឈ្មោះ ថ្នាក់ និងផ្នែករបស់អ្នក ចំនួននាទីដែលអ្នកប្រើលើវិញ្ញាសានីមួយៗ និងរូបថតដែលអ្នកផ្ញើ។",
+    schoolLeaveAnytime: "អ្នកអាចចាកចេញបានគ្រប់ពេល។ ការចាកចេញនឹងដកអ្នកចេញពីរបាយការណ៍របស់សាលា។", schoolConfirmBtn: "បាទ/ចាស ចូលរួម", notNowWord: "កុំទាន់",
+    schoolYours: "សាលារបស់អ្នក", schoolLeaveBtn: "ចាកចេញពីសាលា", schoolDemoHint: "សាកល្បង៖ ប្រើកូដ DEMO-001",
+    reportTitle: "របាយការណ៍សាលា", reportNoSchool: "សូមចូលរួមជាមួយសាលាជាមុនសិន (នៅក្នុងរកមើលកម្រងសំណួរ) ដើម្បីមើលរបាយការណ៍របស់វា។",
+    reportAttempts: "ចំនួនដែលបានធ្វើ", reportStudents: "សិស្ស", reportAvgMin: "នាទីជាមធ្យម", reportPerPaper: "នាទីជាមធ្យមក្នុងមួយវិញ្ញាសា", reportStudentsWord: "សិស្ស", reportStudentOne: "សិស្ស",
+    reportEmpty: "មិនទាន់មានការធ្វើដែលបានបញ្ចប់នៅឡើយទេ។", reportStudentCol: "សិស្ស", reportGradeCol: "ថ្នាក់", reportPaperCol: "វិញ្ញាសា", reportMinutesCol: "នាទី",
+    reportStatusCol: "ស្ថានភាព", reportPhotosCol: "រូបថត", reportStatus_submitted: "បានផ្ញើ", reportStatus_expired: "មិនបានផ្ញើ",
+    reportSampleBadge: "គំរូ", reportSampleNote: "ទិន្នន័យគំរូសម្រាប់បង្ហាញប៉ុណ្ណោះ។ ទាំងនេះមិនមែនជាសិស្សពិតប្រាកដទេ។",
+    reportLoadSample: "បង្ហាញថ្នាក់គំរូ", reportClearSample: "លុបថ្នាក់គំរូ", reportDownloadCsv: "ទាញយកតារាង", reportViewPhotos: "មើល", reportClose: "បិទ",
     howSureWereYou: "តើអ្នកប្រាកដប៉ុណ្ណា?", confidentWord: "ជឿជាក់", guessedWord: "ខ្ញុំទាយ",
     noFeedbackDuringTest: "គ្មានមតិកែលម្អកំឡុងពេលធ្វើតេស្តទេ — អ្នកនឹងឃើញលទ្ធផលនៅចុងក្រោយ។",
     diagnosticComplete: "តេស្តវាយតម្លៃបានបញ្ចប់!", startingPointIs: "នេះជាចំណុចចាប់ផ្តើមពិតរបស់អ្នក — កម្រិតទាំងមូលគឺ",
@@ -7389,6 +7498,13 @@ export default function App() {
   // With the server, streak and weekly hours come from its study ledger (days counted in Phnom Penh time), not from this browser.
   const liveStreak = summary ? summary.streak : streakStats.streak;
   const liveLongestStreak = summary ? summary.longestStreak : streakStats.longestStreak;
+  // Timed exam attempts and the school report (kept per student on this device until the backend part exists).
+  const exam = useExamSessions({
+    userKey: profile ? `${profile.phone ?? ""}|${profile.name}` : "anon",
+    limitFor: (field, subject) => SUBJECT_DURATION_MIN[field]?.[subject] ?? 180,
+  });
+  const tr = (key) => t(lang, key);
+  const showSchoolReport = !SERVER_MODE;
   const weeklyStudyHours = useMemo(() => (summary ? summary.weekHours : buildWeeklyStudyHours(topicMastery, uniTopicMastery)), [summary, topicMastery, uniTopicMastery]);
 
   // Live insights recompute from topicMastery on every change — this is what makes weak/strong
@@ -7692,7 +7808,8 @@ export default function App() {
   const isUniProfile = profile.educationLevel === "university";
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
-    browse: <Browse p={p} lang={lang} />,
+    browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
+    schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
@@ -7723,7 +7840,7 @@ export default function App() {
             <div><p className="eai-display font-extrabold leading-none">Bondus {isUniProfile ? "University" : "Highschool"}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
-            {(isUniProfile ? UNI_NAV : NAV).map((n) => {
+            {(isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).map((n) => {
               const on = tab === n.id;
               const premiumColor = "var(--gold)";
               return (
@@ -7761,6 +7878,7 @@ export default function App() {
                 <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" effect="climb" />
               </div>
               <div className="flex items-center gap-2 ml-auto">
+                {!isUniProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
                 {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}
