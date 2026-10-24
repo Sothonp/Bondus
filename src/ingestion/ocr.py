@@ -628,6 +628,21 @@ def build_ocr(settings: Settings) -> CachedPageOCR | None:
             khmer_only=True,
             render_scale=settings.kiri_render_scale,
         )
+        # With KIRI_KHMER_ONLY=false, a page every vision engine failed on is
+        # indexed from an unfiltered Kiri reading, which keeps Latin text.
+        fallback = None
+        if not settings.kiri_khmer_only:
+            fallback = KiriPageOCR(
+                settings.kiri_model,
+                mode=settings.ocr_mode,
+                min_chars=settings.ocr_min_chars,
+                cache_dir=settings.ocr_cache_dir,
+                device=settings.kiri_device,
+                decode_method=settings.kiri_decode_method,
+                min_confidence=settings.kiri_min_confidence,
+                khmer_only=False,
+                render_scale=settings.kiri_render_scale,
+            )
         return HybridPageOCR(
             khmer=khmer,
             vision=[
@@ -640,5 +655,6 @@ def build_ocr(settings: Settings) -> CachedPageOCR | None:
             concurrency=settings.ocr_concurrency,
             require_vision=settings.hybrid_require_vision,
             combine=settings.hybrid_combine,
+            fallback=fallback,
         )
     return _build_vision_engine(engine, settings)
