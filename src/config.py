@@ -246,7 +246,9 @@ class Settings(BaseSettings):
     ocr_thinking_level: Literal["minimal", "low", "medium", "high"] = "low"
     ocr_cache_dir: Path = PROJECT_ROOT / "storage" / "ocr_cache"
 
-    # Kiri OCR (local, open source; Khmer words only by default)
+    # Kiri OCR (local, open source; Khmer words only by default). Under
+    # OCR_ENGINE=hybrid, KIRI_KHMER_ONLY=false only changes the reading a page
+    # falls back to when every vision engine fails; the hint stays Khmer only.
     kiri_model: str = "mrrtmob/kiri-ocr"
     kiri_device: str = "cpu"
     kiri_decode_method: Literal["fast", "accurate", "beam"] = "accurate"

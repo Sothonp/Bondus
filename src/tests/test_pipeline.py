@@ -1217,6 +1217,18 @@ class TestHybridOCR:
         assert document.sections == []
         assert any("HYBRID_REQUIRE_VISION" in warning for warning in document.warnings)
 
+    def test_an_unfiltered_fallback_keeps_the_latin_text_of_a_page_with_no_khmer(self, tmp_path):
+        english = [_region("II. Grammar", 10), _region("Choose the correct letter a, b, c or d.", 40)]
+        fallback, _ = _kiri(tmp_path / "fallback", english, khmer_only=False)
+        hybrid, client, _ = self._hybrid(
+            tmp_path, english, [_api_error(400)], fallback=fallback
+        )
+        document = extract_document(make_pdf([""]), "english.pdf", ocr=hybrid)
+
+        assert "Choose the correct letter a, b, c or d." in document.sections[0].text
+        # The vision model's hint is still Khmer only: this page had none.
+        assert "<khmer_reading>" not in client.calls[0]["contents"][1]
+
     def test_a_page_with_no_khmer_is_still_read_by_the_vision_model(self, tmp_path):
         hybrid, client, _ = self._hybrid(tmp_path, [], [OCR_PAGE])
         document = extract_document(make_pdf([""]), "lesson.pdf", ocr=hybrid)

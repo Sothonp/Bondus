@@ -19,7 +19,9 @@ When every vision engine fails, the page falls back to Kiri's Khmer-only
 reading: prose without formulas still retrieves, and a missing page does not.
 That fallback is reported as incomplete so it is never cached, and a re-run
 after a quota resets transcribes the page properly. Set ``require_vision`` to
-fail the page instead.
+fail the page instead. A ``fallback`` engine, when given, is read in place of
+the Khmer-only hint: an unfiltered Kiri keeps the Latin text of a page that has
+no Khmer, such as one of the English paper's.
 
 ``combine`` decides what happens when several vision engines are configured:
 
@@ -153,6 +155,7 @@ class HybridPageOCR(CachedPageOCR):
         concurrency: int = 4,
         require_vision: bool = False,
         combine: Combine = "first",
+        fallback: CachedPageOCR | None = None,
     ) -> None:
         if khmer is None and not vision:
             raise ValueError("HybridPageOCR needs a Khmer engine, a vision engine, or both")
@@ -163,6 +166,7 @@ class HybridPageOCR(CachedPageOCR):
         self.vision = list(vision)
         self.require_vision = require_vision
         self.combine = combine
+        self.fallback = fallback
         # Pages run on a worker pool, so the "this reading is degraded" flag
         # that ``_cacheable`` reads has to be per-thread.
         self._degraded = threading.local()
@@ -198,11 +202,12 @@ class HybridPageOCR(CachedPageOCR):
 
     # -- transcription --------------------------------------------------------
 
-    def _read_khmer(self, payload: PageImage) -> str | None:
-        if self.khmer is None:
+    def _read_khmer(self, payload: PageImage, engine: CachedPageOCR | None = None) -> str | None:
+        engine = engine or self.khmer
+        if engine is None:
             return None
         try:
-            text, _ = self.khmer.transcribe_page(payload)
+            text, _ = engine.transcribe_page(payload)
         except OCRError as exc:
             logger.warning("Khmer OCR failed, reading the page without it: %s", exc)
             return None
@@ -259,6 +264,8 @@ class HybridPageOCR(CachedPageOCR):
             reading = self._read_vision(payload, khmer_text)
             if reading is not None:
                 return reading
+        if self.fallback is not None and not self.require_vision:
+            khmer_text = self._read_khmer(payload, self.fallback) or khmer_text
         if khmer_text is None:
             raise OCRError("No OCR engine could read the page")
         if self.require_vision:
@@ -268,5 +275,5 @@ class HybridPageOCR(CachedPageOCR):
         # rate limit will succeed on a later run. Caching it here would make
         # the formula-less reading permanent.
         self._degraded.value = True
-        logger.warning("Falling back to the Khmer-only reading; this page keeps no formulas")
+        logger.warning("Falling back to Kiri's reading; this page keeps no formulas")
         return khmer_text, False
