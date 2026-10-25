@@ -29,7 +29,7 @@ import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diag
 import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
 import SubjectIcon from "./SubjectIcon.jsx";
-import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES } from "./examPapers.js";
+import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES, newestPaperYear } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
 import SubjectRibbon from "./SubjectRibbon.jsx";
 import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
@@ -2872,7 +2872,7 @@ const SUBJECT_DURATION_MIN = {
 };
 
 function Browse({ p, lang = "en", exam, tr }) {
-  const [year, setYear] = useState(2023);
+  const [year, setYear] = useState(() => newestPaperYear(p.field));
   const [viewingPaper, setViewingPaper] = useState(null);
   // Timed attempts: "read" = the paper with the running clock, "submit" = adding the photos, "result" = how long it took.
   const [phase, setPhase] = useState("read");
@@ -5466,8 +5466,9 @@ async function ragRequest(path, init) {
     return res;
   }
   const detail = (await res.json().catch(() => null))?.detail;
-  // A dev-proxy failure (server down) is a 5xx without a FastAPI error body.
-  if (!detail && res.status >= 500) throw new RagError(UNREACHABLE, 0);
+  // A dev-proxy failure (server down) is a 5xx without a FastAPI error body. With no server address set, a host such as
+  // Vercel answers "404 not found" for /api/query/...: that is the same "no AI server", not an error to show a student.
+  if (!detail && (res.status >= 500 || (!RAG_API && res.status === 404))) throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
   const message = typeof detail === "string" ? detail
     : Array.isArray(detail) ? detail.map((d) => d.msg).join("; ")
     : `Request failed (${res.status})`;

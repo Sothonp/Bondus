@@ -176,3 +176,15 @@ export const EXAM_PAPER_PDFS = {
   "Physics-science-2025": "/exams/science-physics-2025.pdf",
 };
 export const EXAM_PAPER_IMAGES = {};
+
+/* The year the Browse page should open on for a track: the newest one that has at least one paper. Social Science stops at
+   2022 while Science reaches 2025, so a fixed year would open one of them on a page of "Coming soon" cards. */
+export function newestPaperYear(field, pdfs = EXAM_PAPER_PDFS, images = EXAM_PAPER_IMAGES, fallback = 2023) {
+  const ends = new RegExp(`-${field}-(\\d{4})$`);
+  let newest = null;
+  for (const key of [...Object.keys(pdfs), ...Object.keys(images)]) {
+    const m = ends.exec(key);
+    if (m && (newest == null || Number(m[1]) > newest)) newest = Number(m[1]);
+  }
+  return newest ?? fallback;
+}
