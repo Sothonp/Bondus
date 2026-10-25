@@ -1430,7 +1430,6 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
           </div>
         )}
         <div className="w-full">{children}</div>
-        <p className={`eai-ob-footer ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "prototypeFooter")}</p>
       </main>
 
       {footer && (
@@ -6939,7 +6938,7 @@ const STRINGS = {
     backToPlans: "Back to plans", mostPopular: "Most popular",
     prototypePaymentsNote: "Prototype · payments are not connected, no card will be charged",
     // Onboarding shared
-    backWord: "Back", stepWord: "Step", prototypeFooter: "Prototype · no data leaves your browser",
+    backWord: "Back", stepWord: "Step",
     // Login
     loginTitle: "Log in", loginDesc: "Enter the phone number you used when you created your account.",
     phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
@@ -7153,7 +7152,7 @@ const STRINGS = {
     backToPlans: "ត្រឡប់ទៅគម្រោង", mostPopular: "ពេញនិយមបំផុត",
     prototypePaymentsNote: "គំរូសាកល្បង · ការទូទាត់មិនទាន់ភ្ជាប់ទេ គ្មានកាតត្រូវបានគិតលុយ",
     // Onboarding shared
-    backWord: "ត្រឡប់ក្រោយ", stepWord: "ជំហាន", prototypeFooter: "គំរូសាកល្បង · គ្មានទិន្នន័យចេញពីកម្មវិធីរុករករបស់អ្នកទេ",
+    backWord: "ត្រឡប់ក្រោយ", stepWord: "ជំហាន",
     // Login
     loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
     phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
