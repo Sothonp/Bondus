@@ -488,13 +488,14 @@ class GroqGenerator:
 
     @staticmethod
     def estimate_tokens(messages: Sequence[dict]) -> int:
-        """Conservative prompt size: Khmer is about one token per character,
-        other text about one per three (measured on gpt-oss)."""
+        """Conservative prompt size: Khmer is about 0.71 tokens per character,
+        other text about one per 3.9 characters (measured on gpt-oss-120b at
+        Groq); rounded up to 3/4 and 1/3.5."""
         total = 0
         for message in messages:
             content = message["content"]
             khmer = sum(1 for char in content if "\u1780" <= char <= "\u19ff")
-            total += 8 + khmer + (len(content) - khmer) // 3
+            total += 8 + khmer * 3 // 4 + (len(content) - khmer) * 2 // 7
         return total
 
     def _completion_budget(self, messages: Sequence[dict]) -> int | None:
