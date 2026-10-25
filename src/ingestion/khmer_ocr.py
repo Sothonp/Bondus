@@ -32,7 +32,18 @@ from src.ingestion.ocr import CachedPageOCR, OCREngine, OCRError, PageImage
 
 logger = logging.getLogger(__name__)
 
-KIRI_CACHE_VERSION = "2"
+KIRI_CACHE_VERSION = "3"
+
+# Kiri's recogniser scales a line to 48 px high and then crops it to 640 px
+# wide (kiri_ocr.model.ResizeKeepRatioPadNoCrop), so everything past about 13x
+# the line height is dropped without a trace -- the second half of a typical
+# textbook line. Lines wider than this ratio are cut at word gaps into pieces
+# that fit, and each piece is read on its own.
+MAX_LINE_RATIO = 11.0
+# The padding Kiri's own process_document puts around a detected line.
+_REGION_PADDING = 5
+# A column with no pixel darker than this holds no ink.
+_INK_LEVEL = 160
 
 DecodeMethod = Literal["fast", "accurate", "beam"]
 
@@ -119,6 +130,41 @@ def khmer_words_only(line: str) -> str:
         elif runs and _KHMER_PUNCTUATION.fullmatch(run):
             runs.append(run)
     return " ".join(runs)
+
+
+def split_at_gaps(gray: Any, max_ratio: float = MAX_LINE_RATIO) -> list[tuple[int, int]]:
+    """Column spans that cut a line image into pieces no wider than
+    ``max_ratio`` times its height.
+
+    ``gray`` is a 2-D array with dark text on a light background. Each cut goes
+    in the middle of the widest blank gap in the second half of the allowed
+    width (the space between words), or at the column with the least ink when
+    there is no blank column.
+    """
+    import numpy as np
+
+    height, width = gray.shape[:2]
+    limit = max(int(max_ratio * height), 2)
+    ink = (np.asarray(gray) < _INK_LEVEL).sum(axis=0)
+    spans: list[tuple[int, int]] = []
+    start = 0
+    while width - start > limit:
+        low, high = start + limit // 2, start + limit
+        window = ink[low:high]
+        cut, longest, run_start = None, 0, None
+        for offset, value in enumerate(np.append(window, 1)):
+            if value == 0 and run_start is None:
+                run_start = offset
+            elif value != 0 and run_start is not None:
+                if offset - run_start > longest:
+                    longest, cut = offset - run_start, low + (run_start + offset) // 2
+                run_start = None
+        if cut is None:
+            cut = low + int(np.argmin(window))
+        spans.append((start, cut))
+        start = cut
+    spans.append((start, width))
+    return spans
 
 
 def group_lines(results: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -258,7 +304,8 @@ class KiriPageOCR(CachedPageOCR):
                 handle.write(image)
             with self._engine_lock:
                 engine = self._load_engine()
-                return engine.process_document(path, mode="lines")
+                results = engine.process_document(path, mode="lines")
+                return self._reread_long_lines(engine, image, results)
         except OCRError:
             raise
         except Exception as exc:
@@ -268,6 +315,44 @@ class KiriPageOCR(CachedPageOCR):
                 os.unlink(path)
             except OSError:
                 pass
+
+    def _reread_long_lines(self, engine: Any, image: bytes, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Read again, piece by piece, every line too wide for Kiri's input
+        (see ``MAX_LINE_RATIO``); its first reading lost the end of the line."""
+        long_lines = [
+            r for r in results if "box" in r and r["box"][2] > MAX_LINE_RATIO * max(r["box"][3], 1)
+        ]
+        if not long_lines or not hasattr(engine, "recognize_region"):
+            return results
+        import numpy as np
+        from kiri_ocr.model import preprocess_pil
+        from PIL import Image
+
+        page = np.asarray(Image.open(io.BytesIO(image)).convert("L"))
+        page_h, page_w = page.shape
+        for region in long_lines:
+            x, y, w, h = (int(v) for v in region["box"])
+            roi = page[
+                max(0, y - _REGION_PADDING):min(page_h, y + h + _REGION_PADDING),
+                max(0, x - _REGION_PADDING):min(page_w, x + w + _REGION_PADDING),
+            ]
+            if roi.size == 0:
+                continue
+            if roi.mean() < 127:  # light text on a dark background, as Kiri handles it
+                roi = 255 - roi
+            texts, confidences = [], []
+            for left, right in split_at_gaps(roi):
+                text, confidence = engine.recognize_region(
+                    preprocess_pil(engine.cfg, Image.fromarray(np.ascontiguousarray(roi[:, left:right])))
+                )
+                if text.strip():
+                    texts.append(text.strip())
+                    confidences.append(float(confidence))
+            if texts:
+                region["text"] = " ".join(texts)
+                region["confidence"] = sum(confidences) / len(confidences)
+        logger.debug("Kiri OCR: re-read %d long line(s) in pieces", len(long_lines))
+        return results
 
     def text_from_results(self, results: list[dict[str, Any]]) -> str:
         lines: list[str] = []

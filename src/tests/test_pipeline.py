@@ -1,6 +1,7 @@
 """Unit tests for the ingestion, embedding, vector store and retrieval layers."""
 from __future__ import annotations
 
+import io
 import json
 import os
 import random
@@ -961,6 +962,60 @@ class TestKiriOCR:
         assert [[r["text"] for r in line] for line in group_lines(regions)] == [["a", "b"], ["c"], ["d"]]
         assert group_lines([]) == []
 
+    def test_long_line_is_split_at_word_gaps(self):
+        from src.ingestion.khmer_ocr import split_at_gaps
+
+        line = np.full((10, 300), 255, dtype=np.uint8)
+        for left, right in ((0, 70), (80, 150), (165, 230), (240, 300)):  # four "words"
+            line[2:8, left:right] = 0
+        spans = split_at_gaps(line, max_ratio=11.0)
+        assert spans[0][0] == 0 and spans[-1][1] == 300
+        assert all(a[1] == b[0] for a, b in zip(spans, spans[1:])), "pieces are contiguous"
+        assert all(right - left <= 110 for left, right in spans)
+        assert [left for left, _ in spans[1:]] == [75, 157, 235], "cuts fall in the gaps between words"
+        assert split_at_gaps(line[:, :100], max_ratio=11.0) == [(0, 100)], "a short line is not cut"
+
+        solid = np.zeros((10, 300), dtype=np.uint8)
+        assert all(right - left <= 110 for left, right in split_at_gaps(solid, max_ratio=11.0))
+
+    def test_lines_too_wide_for_kiri_are_reread_in_pieces(self, tmp_path):
+        pytest.importorskip("kiri_ocr")
+        from PIL import Image
+
+        from src.ingestion.ocr import PageImage
+
+        class Cfg:  # what kiri_ocr.model.preprocess_pil reads
+            IMG_H, IMG_W = 48, 640
+
+        class Engine(FakeKiriEngine):
+            cfg = Cfg()
+
+            def __init__(self, results, **kwargs):
+                super().__init__(results, **kwargs)
+                self.pieces = 0
+
+            def recognize_region(self, tensor):
+                self.pieces += 1
+                return f"ផ្នែក{'០១២៣៤៥៦៧៨៩'[self.pieces]}", 0.9
+
+        page = np.full((60, 400), 255, dtype=np.uint8)
+        page[10:30, 10:390] = 0
+        buffer = io.BytesIO()
+        Image.fromarray(page).save(buffer, format="PNG")
+        results = [_region("ខ្លី", 40), {"box": [10, 10, 380, 20], "text": "កាត់", "confidence": 0.5}]
+        engines: list[Engine] = []
+
+        def factory(**options):
+            engines.append(Engine([dict(r) for r in results], **options))
+            return engines[-1]
+
+        from src.ingestion.khmer_ocr import KiriPageOCR
+
+        ocr = KiriPageOCR(engine_factory=factory, cache_dir=tmp_path)
+        text = ocr.transcribe(PageImage(buffer.getvalue(), "image/png"))
+        assert engines[0].pieces == 2, "the 19:1 line is read in two pieces; the short one is not re-read"
+        assert text.splitlines() == ["ខ្លី", "ផ្នែក១ ផ្នែក២"]
+
     def test_ctc_score_matches_kiris_own(self):
         torch = pytest.importorskip("torch")
         kiri_model = pytest.importorskip("kiri_ocr.model")
@@ -1204,6 +1259,38 @@ class TestHybridOCR:
         assert hybrid._read_cache(hybrid._cache_key(payload)) is not None, (
             "a complete reading is cached"
         )
+
+    def test_kiri_reads_only_when_a_hintless_vision_engine_fails(self, tmp_path):
+        from src.ingestion.hybrid_ocr import HybridPageOCR
+        from src.ingestion.ocr import CachedPageOCR, OCRError, PageImage
+
+        class Hintless(CachedPageOCR):  # like Surya: reads the image alone
+            engine, model, takes_hint = "surya", "stand-in", False
+
+            def __init__(self, outcome):
+                super().__init__(cache_dir=None)
+                self.outcome = outcome
+
+            def _cache_key(self, payload):
+                return "hintless"
+
+            def _transcribe_uncached(self, payload, hint=None):
+                if isinstance(self.outcome, Exception):
+                    raise self.outcome
+                return self.outcome, False
+
+        page = PageImage(b"page", "image/png")
+        khmer, engines = _kiri(tmp_path, [_region("ដេរីវេ នៃ អនុគមន៍", 10)])
+        hybrid = HybridPageOCR(khmer=khmer, vision=[Hintless("អានដោយ Surya")])
+        assert hybrid.transcribe_page(page) == ("អានដោយ Surya", False)
+        assert engines == [], "Kiri is not loaded when its reading would go unused"
+
+        hybrid = HybridPageOCR(khmer=khmer, vision=[Hintless(OCRError("no reading"))])
+        assert hybrid.transcribe_page(page)[0] == "ដេរីវេ នៃ អនុគមន៍", "Kiri is the fallback"
+
+        hybrid = HybridPageOCR(khmer=khmer, vision=[Hintless(OCRError("no reading"))], require_vision=True)
+        with pytest.raises(OCRError, match="HYBRID_REQUIRE_VISION"):
+            hybrid.transcribe_page(page)
 
     def test_require_vision_fails_the_page_instead_of_indexing_it_without_maths(self, tmp_path):
         hybrid, _, _ = self._hybrid(

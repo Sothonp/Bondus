@@ -259,17 +259,23 @@ class HybridPageOCR(CachedPageOCR):
         # ``hint`` is what a caller passes in; the Khmer reading taken here is
         # the hint the vision model actually gets, so an outer one is ignored.
         self._degraded.value = False
-        khmer_text = self._read_khmer(payload)
+        # Kiri's reading is the vision models' hint and, with ``ensemble``, the
+        # yardstick for picking a reading. When no vision engine reads a hint
+        # (Surya), it is only the fallback, so Kiri runs only if they all fail.
+        hinted = not self.vision or self.combine == "ensemble" or any(e.takes_hint for e in self.vision)
+        khmer_text = self._read_khmer(payload) if hinted else None
         if self.vision:
             reading = self._read_vision(payload, khmer_text)
             if reading is not None:
                 return reading
-        if self.fallback is not None and not self.require_vision:
+            if self.require_vision:
+                raise OCRError("Every vision engine failed and HYBRID_REQUIRE_VISION is set")
+        if self.fallback is not None:
             khmer_text = self._read_khmer(payload, self.fallback) or khmer_text
+        if khmer_text is None and not hinted:
+            khmer_text = self._read_khmer(payload)
         if khmer_text is None:
             raise OCRError("No OCR engine could read the page")
-        if self.require_vision:
-            raise OCRError("Every vision engine failed and HYBRID_REQUIRE_VISION is set")
         # Not cached (see ``_cacheable``): this reading is missing the page's
         # mathematics, and a vision engine that failed on a daily quota or a
         # rate limit will succeed on a later run. Caching it here would make

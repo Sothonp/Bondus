@@ -242,6 +242,13 @@ class SuryaPageOCR(CachedPageOCR):
             return payload.data, _SUFFIXES[payload.mime_type]
         return _render_png(payload.data, self.render_scale), ".png"
 
+    takes_hint = False
+
+    def transcribe_page(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
+        # Surya takes no hint, so its reading is cached under the page alone: a
+        # change to Kiri's reading (the hybrid hint) must not throw it away.
+        return super().transcribe_page(payload, None)
+
     def _transcribe_uncached(self, payload: PageImage, hint: str | None = None) -> tuple[str, bool]:
         # Surya takes no hint: it reads the page image alone.
         image, suffix = self._page_image(payload)

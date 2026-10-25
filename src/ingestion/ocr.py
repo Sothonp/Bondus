@@ -194,6 +194,9 @@ class CachedPageOCR:
 
     engine: OCREngine
     model: str
+    # Whether ``hint`` changes the reading. HybridPageOCR skips reading Kiri up
+    # front for vision engines that ignore it.
+    takes_hint: bool = True
 
     def __init__(
         self,
