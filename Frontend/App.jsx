@@ -14,7 +14,7 @@ import {
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Shirt, Trash2, Mail, MailCheck, School,
+  Shirt, Trash2, Mail, MailCheck, School, ShieldCheck,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -3213,6 +3213,111 @@ function TeacherExerciseSubmissions({ api, exercise, lang, tr, onBack }) {
         <div className="space-y-3">
           {list.map((s) => <TeacherSubmissionListCard key={s.id} submission={s} lang={lang} tr={tr} onOpen={() => open(s.id)} />)}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════ Admin: reviewing teacher sign-ups ════════════════════════ */
+const ADMIN_APPLICATION_FILTERS = ["pending", "approved", "rejected", "all"];
+function AdminTeacherApplications({ api, lang, tr }) {
+  const [status, setStatus] = useState("pending");
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  const km = lang === "km" ? "eai-km" : "";
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    api.getAdminTeacherApplications(status).then((res) => { if (alive) setList(res.applications); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [api, status, reloadKey]);
+
+  const decide = async (id, action) => {
+    setError(""); setBusyId(id);
+    try {
+      await (action === "approve" ? api.approveTeacherApplication(id) : api.rejectTeacherApplication(id));
+      setReloadKey((k) => k + 1);
+    } catch {
+      setError(tr("exErr_generic"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${km}`}>{tr("adminAppsTitle")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${km}`}>{tr("adminAppsDesc")}</p>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {ADMIN_APPLICATION_FILTERS.map((s) => (
+          <button key={s} onClick={() => setStatus(s)} className={`eai-btn eai-focus text-xs font-semibold px-3 py-1.5 rounded-full ${status === s ? "" : "eai-soft"} ${km}`}
+            style={status === s ? { background: "var(--primary)", color: "#fff" } : undefined}>
+            {tr(`adminAppFilter_${s}`)}
+          </button>
+        ))}
+      </div>
+      {error && <p className="eai-ob-error flex items-center gap-1.5" role="alert"><AlertTriangle size={13} /> {error}</p>}
+      {loading ? <p className={`text-sm eai-muted ${km}`}>{tr("exLoading")}</p> : list.length === 0 ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${km}`}>{tr("adminAppsEmpty")}</p></div>
+      ) : (
+        <div className="space-y-3">
+          {list.map((appn) => (
+            <AdminApplicationRow key={appn.id} application={appn} lang={lang} tr={tr} busy={busyId === appn.id}
+              onApprove={() => decide(appn.id, "approve")} onReject={() => decide(appn.id, "reject")} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminApplicationRow({ application, lang, tr, busy, onApprove, onReject }) {
+  const [confirming, setConfirming] = useState(null); // "approve" | "reject" | null
+  const km = lang === "km" ? "eai-km" : "";
+  const pending = application.status === "pending";
+
+  return (
+    <div className="eai-card p-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p className="font-bold">{application.applicantName}</p>
+          <p className="text-xs eai-muted mt-0.5">{application.applicantPhone}</p>
+          <p className="text-sm mt-2">{application.school}</p>
+          <p className="text-xs eai-muted mt-1">{application.subjects.join(", ")}</p>
+        </div>
+        {!pending && (
+          <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${km}`} style={{
+            background: application.status === "approved" ? "var(--primary-soft)" : "var(--ember-soft)",
+            color: application.status === "approved" ? "var(--primary)" : "var(--ember)",
+          }}>
+            {tr(`adminAppFilter_${application.status}`)}
+          </span>
+        )}
+      </div>
+      {pending && (
+        confirming ? (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <span className={`text-xs ${km}`}>{tr(confirming === "approve" ? "adminAppConfirmApprove" : "adminAppConfirmReject")}</span>
+            <button disabled={busy} onClick={confirming === "approve" ? onApprove : onReject} className={`eai-btn eai-focus text-sm py-2 px-3 ${km}`}
+              style={{ background: confirming === "approve" ? "var(--primary)" : "var(--ember)", color: "#fff" }}>
+              {tr("adminAppConfirmYes")}
+            </button>
+            <button disabled={busy} onClick={() => setConfirming(null)} className={`eai-btn eai-focus text-sm py-2 px-3 eai-soft ${km}`}>{tr("exKeepGoing")}</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-4">
+            <button onClick={() => setConfirming("approve")} className={`eai-btn eai-focus text-sm py-2 px-4 flex items-center gap-1.5 ${km}`} style={{ background: "var(--primary)", color: "#fff" }}>
+              <CheckCircle2 size={15} /> {tr("adminAppApproveBtn")}
+            </button>
+            <button onClick={() => setConfirming("reject")} className={`eai-focus text-sm px-3 py-2 eai-muted hover:underline ${km}`}>{tr("adminAppRejectBtn")}</button>
+          </div>
+        )
       )}
     </div>
   );
@@ -7041,6 +7146,11 @@ const TEACHER_NAV = [
   { id: "teacherExercises", label: "My Exercises", labelKm: "លំហាត់របស់ខ្ញុំ", icon: ClipboardCheck },
 ];
 
+/* Sidebar for an admin account -- reviewing teacher sign-ups is the one thing this role does today. */
+const ADMIN_NAV = [
+  { id: "adminTeacherApplications", label: "Teacher Applications", labelKm: "ពាក្យសុំធ្វើជាគ្រូ", icon: ShieldCheck },
+];
+
 /* ════════════════════════ UI localization (English / Khmer) ════════════════════════
    A small, hand-picked dictionary for the highest-traffic screens (nav, welcome, dashboard,
    language hub) rather than a full line-by-line translation of the whole app — t(lang, key)
@@ -7220,6 +7330,14 @@ const STRINGS = {
     myExercisesTitle: "My Exercises", myExercisesDesc: "Post work for your students and review what they submit.",
     myExercisesEmpty: "You haven't posted any exercises yet.",
     exNoSubmissions: "No one has submitted this exercise yet.",
+    // Admin: teacher applications
+    adminAppsTitle: "Teacher Applications", adminAppsDesc: "Review who's applied to become a teacher.",
+    adminAppsEmpty: "No applications here.",
+    adminAppFilter_pending: "Pending", adminAppFilter_approved: "Approved", adminAppFilter_rejected: "Rejected", adminAppFilter_all: "All",
+    adminAppApproveBtn: "Approve", adminAppRejectBtn: "Reject",
+    adminAppConfirmApprove: "Grant this person teacher access?",
+    adminAppConfirmReject: "Reject this application? They can apply again later.",
+    adminAppConfirmYes: "Yes, confirm",
     // Login
     loginTitle: "Log in", loginDesc: "Enter the phone number you used when you created your account.",
     phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
@@ -7482,6 +7600,14 @@ const STRINGS = {
     myExercisesTitle: "លំហាត់របស់ខ្ញុំ", myExercisesDesc: "បង្ហោះការងារសម្រាប់សិស្សរបស់អ្នក ហើយពិនិត្យអ្វីដែលពួកគេដាក់ស្នើ។",
     myExercisesEmpty: "អ្នកមិនទាន់បានបង្ហោះលំហាត់ណាមួយនៅឡើយទេ។",
     exNoSubmissions: "មិនទាន់មាននរណាម្នាក់ដាក់ស្នើលំហាត់នេះនៅឡើយទេ។",
+    // Admin: teacher applications
+    adminAppsTitle: "ពាក្យសុំធ្វើជាគ្រូ", adminAppsDesc: "ពិនិត្យមើលអ្នកដែលបានដាក់ស្នើសុំធ្វើជាគ្រូ។",
+    adminAppsEmpty: "មិនមានពាក្យសុំនៅទីនេះទេ។",
+    adminAppFilter_pending: "កំពុងរង់ចាំ", adminAppFilter_approved: "បានអនុម័ត", adminAppFilter_rejected: "បានបដិសេធ", adminAppFilter_all: "ទាំងអស់",
+    adminAppApproveBtn: "អនុម័ត", adminAppRejectBtn: "បដិសេធ",
+    adminAppConfirmApprove: "ផ្តល់សិទ្ធិគ្រូដល់អ្នកនេះ?",
+    adminAppConfirmReject: "បដិសេធពាក្យសុំនេះ? ពួកគេអាចដាក់ស្នើម្តងទៀតនៅពេលក្រោយ។",
+    adminAppConfirmYes: "បាទ/ចាស៎ បញ្ជាក់",
     // Login
     loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
     phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
@@ -7644,7 +7770,7 @@ export default function App() {
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later — no entry point right now: the Dashboard banner that set it was removed
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
-  const [tab, setTab] = useState(saved?.profile?.role === "teacher" ? "teacherExercises" : saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
+  const [tab, setTab] = useState(saved?.profile?.role === "admin" ? "adminTeacherApplications" : saved?.profile?.role === "teacher" ? "teacherExercises" : saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
   const [dark, setDark] = useState(false);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
@@ -7728,7 +7854,7 @@ export default function App() {
     setBonusXp(data.bonusXp ?? 0);
     setRewards(sanitizeRewards(data.rewards));
     setShowWelcomeBack(true);
-    setTab(data.profile.role === "teacher" ? "teacherExercises" : data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
+    setTab(data.profile.role === "admin" ? "adminTeacherApplications" : data.profile.role === "teacher" ? "teacherExercises" : data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
   // After "Forgot password": the reset already stored a fresh login, so just load the account.
@@ -7935,7 +8061,7 @@ export default function App() {
     setBonusXp(0);
     applySummary(sm, { announce: false });
     hydratedRef.current = true;
-    setTab(me.user.role === "teacher" ? "teacherExercises" : me.user.educationLevel === "university" ? "universityHub" : "dashboard");
+    setTab(me.user.role === "admin" ? "adminTeacherApplications" : me.user.role === "teacher" ? "teacherExercises" : me.user.educationLevel === "university" ? "universityHub" : "dashboard");
     queueRef.current.flush(); // anything left unsent from last time
     return me.user;
   };
@@ -8152,6 +8278,7 @@ export default function App() {
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";
   const isTeacherProfile = profile.role === "teacher";
+  const isAdminProfile = profile.role === "admin";
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
@@ -8159,6 +8286,7 @@ export default function App() {
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     teacherExercises: <TeacherExercises api={api} lang={lang} tr={tr} />,
+    adminTeacherApplications: <AdminTeacherApplications api={api} lang={lang} tr={tr} />,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
@@ -8185,10 +8313,10 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus {isTeacherProfile ? "Teacher" : isUniProfile ? "University" : "Highschool"}</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus {isAdminProfile ? "Admin" : isTeacherProfile ? "Teacher" : isUniProfile ? "University" : "Highschool"}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
-            {(isTeacherProfile ? TEACHER_NAV : isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).map((n) => {
+            {(isAdminProfile ? ADMIN_NAV : isTeacherProfile ? TEACHER_NAV : isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).map((n) => {
               const on = tab === n.id;
               const premiumColor = "var(--gold)";
               return (
@@ -8207,7 +8335,7 @@ export default function App() {
             })}
           </nav>
           <div className="p-3 space-y-2">
-            {!isTeacherProfile && (
+            {!isTeacherProfile && !isAdminProfile && (
               <div className="eai-soft rounded-2xl p-4 text-center">
                 <span className="eai-fx-fire" style={{ display: "block", margin: "0 auto", width: 20 }}><Flame size={20} style={{ color: "var(--ember)" }} /></span>
                 <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
@@ -8222,7 +8350,7 @@ export default function App() {
           <header className="sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
               <button className="lg:hidden eai-focus" onClick={() => setOpen(true)}><Menu size={22} /></button>
-              {!isTeacherProfile && (
+              {!isTeacherProfile && !isAdminProfile && (
                 <div className="hidden sm:flex items-center gap-2">
                   <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
                   <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
@@ -8230,7 +8358,7 @@ export default function App() {
                 </div>
               )}
               <div className="flex items-center gap-2 ml-auto">
-                {!isUniProfile && !isTeacherProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
+                {!isUniProfile && !isTeacherProfile && !isAdminProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
                 {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}

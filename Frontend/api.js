@@ -165,5 +165,10 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     getTeacherSubmission: (exerciseId, submissionId) => get(`/teacher/exercises/${exerciseId}/submissions/${submissionId}`),
     addSubmissionComment: (exerciseId, submissionId, body) =>
       send("POST", `/teacher/exercises/${exerciseId}/submissions/${submissionId}/comments`, { body }),
+
+    // admin-only (requires the admin role): review self-serve "I'm a teacher" sign-ups.
+    getAdminTeacherApplications: (status = "pending") => get(`/admin/teacher-applications?status=${encodeURIComponent(status)}`),
+    approveTeacherApplication: (id) => send("POST", `/admin/teacher-applications/${id}/approve`),
+    rejectTeacherApplication: (id) => send("POST", `/admin/teacher-applications/${id}/reject`),
   };
 }

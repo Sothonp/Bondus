@@ -256,6 +256,18 @@ test("exercises: teacher CRUD, submissions, and comments", async () => {
   ]);
 });
 
+test("admin: list teacher applications by status, approve, and reject", async () => {
+  const { api, calls } = make(() => json(200, {}));
+  await api.getAdminTeacherApplications();
+  assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/admin/teacher-applications?status=pending`]);
+  await api.getAdminTeacherApplications("all");
+  assert.equal(calls[1].url, `${BASE}/admin/teacher-applications?status=all`);
+  await api.approveTeacherApplication(4);
+  assert.deepEqual([calls[2].init.method, calls[2].url], ["POST", `${BASE}/admin/teacher-applications/4/approve`]);
+  await api.rejectTeacherApplication(4);
+  assert.deepEqual([calls[3].init.method, calls[3].url], ["POST", `${BASE}/admin/teacher-applications/4/reject`]);
+});
+
 test("if browser storage is blocked, the session still works in memory", async () => {
   const blocked = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); }, removeItem() { throw new Error("blocked"); } };
   const s = server((url) => (url.endsWith("/login") ? json(200, { user: {}, token: "mem" }) : json(200, { user: {} })));
