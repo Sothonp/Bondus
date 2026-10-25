@@ -39,6 +39,16 @@ export function registrationToPatch(reg) {
   return rest;
 }
 
+/* The teacher sign-up step's answers -> POST /teacher/applications body. Subjects are typed as one
+   comma-separated field (there is no canonical subject list for teachers the way FIELD_SUBJECTS
+   exists for students), split and trimmed here so the server only ever sees a clean array. */
+export function teacherApplicationToPayload(reg) {
+  return {
+    school: String(reg.schoolName ?? "").trim(),
+    subjects: String(reg.subjectsTaught ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+  };
+}
+
 /* Which sign-up screen the problem is on: 1 = account details, 2 = track, null = stay where you are. */
 export function registrationErrorStep(err) {
   if (!err) return null;
@@ -117,6 +127,13 @@ export const API_ERROR_KEYS = {
   payload_too_large: "errServer",
   stale_state: "errServer",
   server_error: "errServer",
+  already_applied: "errAlreadyApplied",
+  already_staff: "errAlreadyStaff",
+  already_running: "errAlreadyRunning",
+  already_submitted: "errAlreadySubmitted",
+  no_photos: "errNoPhotos",
+  too_many_photos: "errTooManyPhotos",
+  not_running: "errNotRunning",
 };
 export const apiErrorKey = (code) => API_ERROR_KEYS[code] ?? "errServer";
 

@@ -60,13 +60,17 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
   async function request(method, path, { body, auth = true } = {}) {
     if (!base) throw new ApiError(0, "api_disabled", "The server address is not configured");
     const headers = { Accept: "application/json" };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    // A FormData body (photo upload) sets its own multipart Content-Type with a browser-generated
+    // boundary and must never be JSON-stringified — everything else keeps the usual JSON contract.
+    const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+    if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
     const token = auth ? readToken() : null;
     if (token) headers.Authorization = `Bearer ${token}`;
 
     let res;
     try {
-      res = await doFetch(base + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      const payload = body === undefined ? undefined : isForm ? body : JSON.stringify(body);
+      res = await doFetch(base + path, { method, headers, body: payload });
     } catch {
       throw new ApiError(0, "network_error", "Could not reach the server");
     }
@@ -133,5 +137,33 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
       const qs = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "")).toString();
       return get(`/exams${qs ? `?${qs}` : ""}`, { auth: false });
     },
+
+    // "I'm a teacher" at sign-up: a pending application, not the role itself — see docs/API.md.
+    applyTeacher: (fields) => send("POST", "/teacher/applications", fields),
+    getTeacherApplicationStatus: () => get("/teacher/applications/me"),
+
+    // exercises: open to any signed-in student — browse, and the attempt lifecycle for one's own work.
+    getExercises: () => get("/exercises"),
+    getExercise: (id) => get(`/exercises/${id}`),
+    startExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt`),
+    getExerciseAttempt: (id) => get(`/exercises/${id}/attempt`),
+    uploadExercisePhoto: (id, file) => {
+      const form = new FormData();
+      form.append("photo", file);
+      return send("POST", `/exercises/${id}/attempt/photos`, form);
+    },
+    removeExercisePhoto: (id, photoId) => send("DELETE", `/exercises/${id}/attempt/photos/${photoId}`),
+    submitExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt/submit`),
+    cancelExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt/cancel`),
+
+    // exercises: teacher-only (requires the approved teacher role) — post work, review submissions.
+    getTeacherExercises: () => get("/teacher/exercises"),
+    createTeacherExercise: (fields) => send("POST", "/teacher/exercises", fields),
+    updateTeacherExercise: (id, fields) => send("PATCH", `/teacher/exercises/${id}`, fields),
+    deleteTeacherExercise: (id) => send("DELETE", `/teacher/exercises/${id}`),
+    getTeacherExerciseSubmissions: (id) => get(`/teacher/exercises/${id}/submissions`),
+    getTeacherSubmission: (exerciseId, submissionId) => get(`/teacher/exercises/${exerciseId}/submissions/${submissionId}`),
+    addSubmissionComment: (exerciseId, submissionId, body) =>
+      send("POST", `/teacher/exercises/${exerciseId}/submissions/${submissionId}/comments`, { body }),
   };
 }

@@ -8,10 +8,15 @@ const BASE = "https://api.example.test/api/v1";
 const memoryStorage = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-/* A fetch that records every call and answers from `reply(url, init)`. */
+/* A fetch that records every call and answers from `reply(url, init)`. A FormData body (photo
+   upload) is kept as-is rather than JSON.parse'd, which would throw. */
 function server(reply) {
   const calls = [];
-  const fetchImpl = async (url, init) => { calls.push({ url, init, body: init.body ? JSON.parse(init.body) : undefined }); return reply(url, init, calls.length); };
+  const fetchImpl = async (url, init) => {
+    const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
+    calls.push({ url, init, body: isForm ? init.body : init.body ? JSON.parse(init.body) : undefined });
+    return reply(url, init, calls.length);
+  };
   return { calls, fetchImpl };
 }
 const make = (reply, opts = {}) => { const s = server(reply); return { ...s, api: createApi({ baseUrl: BASE, fetchImpl: s.fetchImpl, storage: memoryStorage(), ...opts }) }; };
@@ -189,6 +194,66 @@ test("logout clears the token even when the request fails", async () => {
   assert.equal(api.hasToken(), true);
   await api.logout();
   assert.equal(api.hasToken(), false);
+});
+
+test("teacher application: apply and check status", async () => {
+  const { api, calls } = make(() => json(201, { application: { id: 1, status: "pending" } }));
+  await api.applyTeacher({ school: "Bak Touk High School", subjects: ["Mathematics"] });
+  assert.deepEqual([calls[0].init.method, calls[0].url, calls[0].body], [
+    "POST", `${BASE}/teacher/applications`, { school: "Bak Touk High School", subjects: ["Mathematics"] },
+  ]);
+  await api.getTeacherApplicationStatus();
+  assert.deepEqual([calls[1].init.method, calls[1].url], ["GET", `${BASE}/teacher/applications/me`]);
+});
+
+test("exercises: browse, attempt lifecycle, and that a photo upload sends a real FormData body", async () => {
+  const { api, calls } = make(() => json(200, {}));
+  await api.getExercises();
+  assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/exercises`]);
+  await api.getExercise(5);
+  assert.equal(calls[1].url, `${BASE}/exercises/5`);
+  await api.startExerciseAttempt(5);
+  assert.deepEqual([calls[2].init.method, calls[2].url], ["POST", `${BASE}/exercises/5/attempt`]);
+  await api.getExerciseAttempt(5);
+  assert.equal(calls[3].url, `${BASE}/exercises/5/attempt`);
+
+  const fakeFile = new File(["pretend-image-bytes"], "work.jpg", { type: "image/jpeg" });
+  await api.uploadExercisePhoto(5, fakeFile);
+  assert.equal(calls[4].init.method, "POST");
+  assert.equal(calls[4].url, `${BASE}/exercises/5/attempt/photos`);
+  assert.ok(calls[4].body instanceof FormData, "photo upload must send a FormData body");
+  assert.equal(calls[4].body.get("photo"), fakeFile);
+  // A FormData body must never be forced to JSON, and must let the browser set its own boundary.
+  assert.equal(calls[4].init.headers["Content-Type"], undefined);
+
+  await api.removeExercisePhoto(5, 9);
+  assert.deepEqual([calls[5].init.method, calls[5].url], ["DELETE", `${BASE}/exercises/5/attempt/photos/9`]);
+  await api.submitExerciseAttempt(5);
+  assert.equal(calls[6].url, `${BASE}/exercises/5/attempt/submit`);
+  await api.cancelExerciseAttempt(5);
+  assert.equal(calls[7].url, `${BASE}/exercises/5/attempt/cancel`);
+});
+
+test("exercises: teacher CRUD, submissions, and comments", async () => {
+  const { api, calls } = make(() => json(200, {}));
+  await api.getTeacherExercises();
+  assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/teacher/exercises`]);
+  await api.createTeacherExercise({ title: "Essay", instructions: "Write 500 words." });
+  assert.deepEqual([calls[1].init.method, calls[1].url, calls[1].body], [
+    "POST", `${BASE}/teacher/exercises`, { title: "Essay", instructions: "Write 500 words." },
+  ]);
+  await api.updateTeacherExercise(3, { title: "New title" });
+  assert.deepEqual([calls[2].init.method, calls[2].url], ["PATCH", `${BASE}/teacher/exercises/3`]);
+  await api.deleteTeacherExercise(3);
+  assert.deepEqual([calls[3].init.method, calls[3].url], ["DELETE", `${BASE}/teacher/exercises/3`]);
+  await api.getTeacherExerciseSubmissions(3);
+  assert.equal(calls[4].url, `${BASE}/teacher/exercises/3/submissions`);
+  await api.getTeacherSubmission(3, 7);
+  assert.equal(calls[5].url, `${BASE}/teacher/exercises/3/submissions/7`);
+  await api.addSubmissionComment(3, 7, "Good work!");
+  assert.deepEqual([calls[6].init.method, calls[6].url, calls[6].body], [
+    "POST", `${BASE}/teacher/exercises/3/submissions/7/comments`, { body: "Good work!" },
+  ]);
 });
 
 test("if browser storage is blocked, the session still works in memory", async () => {

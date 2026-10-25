@@ -26,9 +26,10 @@ test("signing in, signing out and creating the account all talk to the server", 
 test("a wrong sign-up or login shows a message, not a crash, and says how long to wait when rate limited", () => {
   assert.match(app, /res && res\.error \? apiErrorText\(lang, res\.error, res\.retryAfter\)/);   // Login
   assert.match(app, /if \(res && res\.error\) \{ setSubmitError\(apiErrorText\(lang, res\.error, res\.retryAfter\)\); if \(res\.step\) setStep\(res\.step\); \}/); // Register
-  // the four places that turn a failed server call into a result for a screen all pass the wait time along
-  // (sign in, sign up, signing in after a password reset, and entering the dashboard without an assessment)
-  assert.equal((app.match(/retryAfter: err\?\.retryAfter \?\? null/g) || []).length, 4);
+  // the five places that turn a failed server call into a result for a screen all pass the wait time along
+  // (sign in, sign up, applying as a teacher, signing in after a password reset, and entering the dashboard
+  // without an assessment)
+  assert.equal((app.match(/retryAfter: err\?\.retryAfter \?\? null/g) || []).length, 5);
 });
 
 test("'too many tries' names the real wait (e.g. 48 minutes) instead of always saying 'a minute'", () => {

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
   newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
+  teacherApplicationToPayload,
 } from "./serverMapping.js";
 
 const form = {
@@ -54,6 +55,11 @@ test("the patch version never re-sends the password or education level", () => {
   assert.equal("password" in patch, false);
   assert.equal("educationLevel" in patch, false);
   assert.equal(patch.field, "science");
+});
+
+test("teacher application payload splits and trims the comma-separated subjects", () => {
+  const body = teacherApplicationToPayload({ schoolName: "  Bak Touk High School ", subjectsTaught: "Mathematics,  Physics ,,Chemistry" });
+  assert.deepEqual(body, { school: "Bak Touk High School", subjects: ["Mathematics", "Physics", "Chemistry"] });
 });
 
 test("which sign-up screen shows a server problem", () => {
