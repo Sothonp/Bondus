@@ -1,7 +1,7 @@
 /* Screens for exercises an admin posted (rules: exercises.js). Same split as ExamSessionUi.jsx: pure
    presentational pieces, a translator `tr(key)` and `lang` passed in from App.jsx, nothing imported back
    from App. Students browse by subject (card -> viewer); an admin posts and edits them (form). */
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { X, AlertTriangle, LoaderCircle, Plus, Paperclip, FileText, Image as ImageIcon, Eye, Download, ChevronLeft, Pencil } from "lucide-react";
 import { MAX_EXERCISE_ATTACHMENTS, filesOf, fileCounts } from "./exercises.js";
 import { subjectLabel } from "./subjects.js";
@@ -54,6 +54,33 @@ export function ExerciseCard({ exercise, subject, lang, tr, onOpen, onEdit, onDe
   );
 }
 
+/* A PDF shown in a frame. The API sends X-Frame-Options: SAMEORIGIN, so a browser refuses to put the API's own
+   address in a frame on the web app's page (it shows a "blocked" icon). Fetching the file first and framing the
+   downloaded copy avoids that; the API allows the web app to fetch it (CORS). A failure is a message, never a blank frame. */
+function PdfFrame({ url, title, lang, tr }) {
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    let objectUrl = null;
+    setSrc(null); setFailed(false);
+    fetch(url)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+      .then((blob) => {
+        if (!alive) return;
+        objectUrl = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+        setSrc(objectUrl);
+      })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url]);
+
+  if (failed) return <p className={`text-sm eai-muted ${kmc(lang)}`}>{tr("exPdfFailed")}</p>;
+  if (!src) return <p className={`text-sm eai-muted flex items-center gap-1.5 ${kmc(lang)}`}><LoaderCircle size={14} className="animate-spin" /> {tr("exLoading")}</p>;
+  return <iframe src={`${src}#view=FitH`} title={title} className="w-full block" style={{ height: "88vh", border: "none" }} />;
+}
+
 /* Opens an exercise: a PDF in a frame (with an open-in-new-tab link, since many phone browsers cannot show a
    PDF inside a page), photos inline. Same approach as the exam paper page. */
 export function ExerciseViewer({ exercise, subject, lang, tr, onBack }) {
@@ -75,7 +102,7 @@ export function ExerciseViewer({ exercise, subject, lang, tr, onBack }) {
               className={`eai-btn eai-focus text-sm py-2.5 px-4 text-white inline-flex items-center gap-1.5 ${kmc(lang)}`} style={{ background: "var(--primary)" }}>
               <Download size={15} /> {tr("openPdfBtn")}
             </a>
-            <iframe src={`${f.url}#view=FitH`} title={f.name || title} className="w-full block" style={{ height: "88vh", border: "none" }} />
+            <PdfFrame url={f.url} title={f.name || title} lang={lang} tr={tr} />
           </div>
         ) : (
           <div key={f.id} className="eai-card p-4 sm:p-6">

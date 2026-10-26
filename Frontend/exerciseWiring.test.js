@@ -18,7 +18,7 @@ const defined = (key) => (app.match(new RegExp(`[\\s,{]${key}:`, "g")) || []).le
 const KEYS = [
   "deleteWord",
   "exercisesTitle", "exercisesDesc", "exercisesEmpty", "exLoading", "exLoadError",
-  "exTeacherLabel", "exSchoolLabel", "exUntitled", "exFilePdf", "exFilePhoto", "exFilePhotos",
+  "exTeacherLabel", "exSchoolLabel", "exUntitled", "exFilePdf", "exFilePhoto", "exFilePhotos", "exPdfFailed",
   "adminExercisesTitle", "adminExercisesDesc", "adminExercisesEmpty", "exNoFilesYet", "exDeleteAsk", "exEditBtn",
   "exFormTeacherLabel", "exFormSchoolLabel", "exFormTitleLabel", "exFormRequired", "exFormSave",
   "exFormAttachmentsHint", "exAddAttachment", "exAttachmentsCount", "exFormDone", "exNewExercise",
@@ -109,11 +109,24 @@ test("the subject pills are the four subjects, in a scrolling row like the year 
   assert.match(pills, /subjectLabel\(s, lang\)/);
 });
 
-test("the viewer opens a PDF in a frame with an open-in-new-tab link, and photos inline", () => {
+test("the viewer opens a PDF through a PdfFrame, with an open-in-new-tab link, and photos inline", () => {
   const viewer = ui.slice(ui.indexOf("export function ExerciseViewer("), ui.indexOf("export function ExerciseAttachmentThumb("));
-  assert.match(viewer, /<iframe src=\{`\$\{f\.url\}#view=FitH`\}/);
+  assert.match(viewer, /<PdfFrame url=\{f\.url\}/);
   assert.match(viewer, /target="_blank" rel="noopener noreferrer"/);
   assert.match(viewer, /<img src=\{f\.url\}/);
+  // Never frame the API's address directly: it is sent with X-Frame-Options: SAMEORIGIN, so a browser refuses.
+  assert.doesNotMatch(viewer, /<iframe/);
+});
+
+test("a PDF is fetched and framed as a blob, because the API's own address cannot be framed on the web app's page", () => {
+  const frame = ui.slice(ui.indexOf("function PdfFrame("), ui.indexOf("export function ExerciseViewer("));
+  assert.match(frame, /fetch\(url\)/);
+  assert.match(frame, /URL\.createObjectURL\(new Blob\(\[blob\], \{ type: "application\/pdf" \}\)\)/);
+  assert.match(frame, /URL\.revokeObjectURL\(objectUrl\)/);
+  assert.match(frame, /<iframe src=\{`\$\{src\}#view=FitH`\}/);
+  // While it loads and if it fails the student sees a message, never a blank frame.
+  assert.match(frame, /tr\("exLoading"\)/);
+  assert.match(frame, /tr\("exPdfFailed"\)/);
 });
 
 test("an admin picks a subject pill, then posts, edits or deletes exercises under it", () => {
