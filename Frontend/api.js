@@ -138,10 +138,6 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
       return get(`/exams${qs ? `?${qs}` : ""}`, { auth: false });
     },
 
-    // "I'm a teacher" at sign-up: a pending application, not the role itself — see docs/API.md.
-    applyTeacher: (fields) => send("POST", "/teacher/applications", fields),
-    getTeacherApplicationStatus: () => get("/teacher/applications/me"),
-
     // exercises: open to any signed-in student — browse, and the attempt lifecycle for one's own work.
     getExercises: () => get("/exercises"),
     getExercise: (id) => get(`/exercises/${id}`),
@@ -156,7 +152,7 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     submitExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt/submit`),
     cancelExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt/cancel`),
 
-    // exercises: teacher-only (requires the approved teacher role) — post work, review submissions.
+    // exercises: teacher-only — post work, review submissions.
     getTeacherExercises: () => get("/teacher/exercises"),
     createTeacherExercise: (fields) => send("POST", "/teacher/exercises", fields),
     updateTeacherExercise: (id, fields) => send("PATCH", `/teacher/exercises/${id}`, fields),
@@ -166,9 +162,12 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     addSubmissionComment: (exerciseId, submissionId, body) =>
       send("POST", `/teacher/exercises/${exerciseId}/submissions/${submissionId}/comments`, { body }),
 
-    // admin-only (requires the admin role): review self-serve "I'm a teacher" sign-ups.
-    getAdminTeacherApplications: (status = "pending") => get(`/admin/teacher-applications?status=${encodeURIComponent(status)}`),
-    approveTeacherApplication: (id) => send("POST", `/admin/teacher-applications/${id}/approve`),
-    rejectTeacherApplication: (id) => send("POST", `/admin/teacher-applications/${id}/reject`),
+    // A picture or PDF of the exercise itself, attached by the teacher who posted it.
+    addExerciseAttachment: (exerciseId, file) => {
+      const form = new FormData();
+      form.append("file", file);
+      return send("POST", `/teacher/exercises/${exerciseId}/attachments`, form);
+    },
+    removeExerciseAttachment: (exerciseId, attachmentId) => send("DELETE", `/teacher/exercises/${exerciseId}/attachments/${attachmentId}`),
   };
 }

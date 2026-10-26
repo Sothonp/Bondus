@@ -14,7 +14,7 @@ import {
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Shirt, Trash2, Mail, MailCheck, School, ShieldCheck,
+  Shirt, Trash2, Mail, MailCheck, School,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -30,7 +30,7 @@ import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
 import { useExerciseSessions } from "./useExerciseSessions.js";
 import {
-  ExerciseTimerBar, ExerciseSubmitSheet, ExerciseResultCard, ExerciseListCard,
+  ExerciseTimerBar, ExerciseSubmitSheet, ExerciseResultCard, ExerciseListCard, ExerciseAttachmentThumb,
   TeacherExerciseForm, TeacherExerciseListCard, TeacherSubmissionListCard, TeacherSubmissionDetail, NewExerciseButton,
 } from "./ExerciseUi.jsx";
 import SubjectIcon from "./SubjectIcon.jsx";
@@ -44,7 +44,7 @@ import LoadingScreen from "./LoadingScreen.jsx";
 import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, waitParts, isCodeAlreadySent, teacherApplicationToPayload,
+  answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 import { createEventQueue } from "./eventQueue.js";
 import { createStateSaver } from "./stateSaver.js";
@@ -304,11 +304,9 @@ function buildProfile(reg) {
    the "reassess" half of the assess → identify weakness → recommend → practice → reassess loop —
    call it fresh (useMemo) whenever topicMastery changes and the whole app updates with it. */
 function deriveInsights(p, topicMastery, streak = 0) {
-  // University profiles, and any account with no BAC II track at all (a pending or approved
-  // teacher — pending ones are still role "student" until the owner approves them, so checking
-  // role alone would miss that window), skip the whole mastery engine below and get
-  // empty-but-safe defaults instead — every consumer (Progress, Coach's study/major fallbacks)
-  // can rely on subjects/weak/strong always being arrays.
+  // University profiles, and any account with no BAC II track at all (a teacher has none), skip
+  // the whole mastery engine below and get empty-but-safe defaults instead — every consumer
+  // (Progress, Coach's study/major fallbacks) can rely on subjects/weak/strong always being arrays.
   if (p.educationLevel === "university" || !p.field) {
     return {
       subjects: [], weak: [], strong: [], avg: null,
@@ -2457,7 +2455,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     subjectsToImprove: [], foreignLanguage: FOREIGN_LANGUAGES[0],
     // University fields:
     universityGoals: [], universityMajor: "", universityYear: "",
-    // Teacher fields: a pending application, not the role itself -- see docs/API.md on the backend.
+    // Teacher fields: sent as part of the same registration call that grants the role.
     schoolName: "", subjectsTaught: "",
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -2557,8 +2555,8 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   }
 
   // ── Teacher step 2: school + subjects, then finish (teachers skip the track/preferences steps
-  // entirely -- they have no BAC II profile). Submits the account, then a pending application;
-  // approval only ever happens via the owner's staff:make/teacher:approve commands or the database. ──
+  // entirely -- they have no BAC II profile). One registration call grants the teacher role
+  // immediately; staff:make is only ever needed to promote an existing account by hand. ──
   if (isTeacher && step === 2) {
     const teacherOk = form.schoolName.trim() && form.subjectsTaught.trim();
     return (
@@ -2701,19 +2699,6 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
       </div>
 
 
-    </OnboardingLayout>
-  );
-}
-
-/* Shown right after a teacher application is submitted: the account exists and is signed in (role
-   still "student"), but teacher features stay hidden until the owner approves it (staff:make /
-   teacher:approve / the database — never from a request, see TeacherApplicationController). */
-function TeacherApplicationPending({ dark, setDark, lang, setLang, onLogout }) {
-  return (
-    <OnboardingLayout dark={dark} setDark={setDark} lang={lang} setLang={setLang}
-      title={t(lang, "teacherPendingTitle")} description={t(lang, "teacherPendingDesc")}
-      footer={<SecondaryButton onClick={onLogout} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "logOut")}</SecondaryButton>}>
-      <span />
     </OnboardingLayout>
   );
 }
@@ -3129,6 +3114,11 @@ function ExerciseAttempt({ api, exercise, lang, tr, onBack }) {
         <h2 className={`eai-display text-xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{exercise.title}</h2>
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{exercise.teacherName}</p>
         <p className="text-sm mt-4 whitespace-pre-wrap">{exercise.instructions}</p>
+        {exercise.attachments?.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mt-4">
+            {exercise.attachments.map((a) => <ExerciseAttachmentThumb key={a.id} attachment={a} tr={tr} />)}
+          </div>
+        )}
         {!running && (
           <>
             <button onClick={beginAttempt} className={`eai-btn eai-focus text-sm py-3 px-5 mt-6 flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)", color: "#fff" }}>
@@ -3158,10 +3148,18 @@ function TeacherExercises({ api, lang, tr }) {
   }, [api, reloadKey]);
   const reload = () => setReloadKey((k) => k + 1);
 
-  const create = async (fields) => { await api.createTeacherExercise(fields); setCreating(false); reload(); };
+  const create = async (fields) => (await api.createTeacherExercise(fields)).exercise;
+  const addAttachment = async (exerciseId, file) => (await api.addExerciseAttachment(exerciseId, file)).attachment;
+  const removeAttachment = (exerciseId, attachmentId) => api.removeExerciseAttachment(exerciseId, attachmentId);
   const remove = async (id) => { await api.deleteTeacherExercise(id); reload(); };
+  const closeForm = () => { setCreating(false); reload(); };
 
-  if (creating) return <TeacherExerciseForm lang={lang} tr={tr} onSave={create} onCancel={() => setCreating(false)} />;
+  if (creating) {
+    return (
+      <TeacherExerciseForm lang={lang} tr={tr} onSave={create} onAddAttachment={addAttachment}
+        onRemoveAttachment={removeAttachment} onDone={closeForm} onCancel={closeForm} />
+    );
+  }
   if (selected) return <TeacherExerciseSubmissions api={api} exercise={selected} lang={lang} tr={tr} onBack={() => setSelected(null)} />;
 
   return (
@@ -3213,111 +3211,6 @@ function TeacherExerciseSubmissions({ api, exercise, lang, tr, onBack }) {
         <div className="space-y-3">
           {list.map((s) => <TeacherSubmissionListCard key={s.id} submission={s} lang={lang} tr={tr} onOpen={() => open(s.id)} />)}
         </div>
-      )}
-    </div>
-  );
-}
-
-/* ════════════════════════ Admin: reviewing teacher sign-ups ════════════════════════ */
-const ADMIN_APPLICATION_FILTERS = ["pending", "approved", "rejected", "all"];
-function AdminTeacherApplications({ api, lang, tr }) {
-  const [status, setStatus] = useState("pending");
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [busyId, setBusyId] = useState(null);
-  const [error, setError] = useState("");
-  const km = lang === "km" ? "eai-km" : "";
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    api.getAdminTeacherApplications(status).then((res) => { if (alive) setList(res.applications); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [api, status, reloadKey]);
-
-  const decide = async (id, action) => {
-    setError(""); setBusyId(id);
-    try {
-      await (action === "approve" ? api.approveTeacherApplication(id) : api.rejectTeacherApplication(id));
-      setReloadKey((k) => k + 1);
-    } catch {
-      setError(tr("exErr_generic"));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  return (
-    <div className="space-y-5 eai-rise">
-      <div>
-        <h2 className={`eai-display text-2xl font-extrabold ${km}`}>{tr("adminAppsTitle")}</h2>
-        <p className={`eai-muted text-sm mt-1 ${km}`}>{tr("adminAppsDesc")}</p>
-      </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        {ADMIN_APPLICATION_FILTERS.map((s) => (
-          <button key={s} onClick={() => setStatus(s)} className={`eai-btn eai-focus text-xs font-semibold px-3 py-1.5 rounded-full ${status === s ? "" : "eai-soft"} ${km}`}
-            style={status === s ? { background: "var(--primary)", color: "#fff" } : undefined}>
-            {tr(`adminAppFilter_${s}`)}
-          </button>
-        ))}
-      </div>
-      {error && <p className="eai-ob-error flex items-center gap-1.5" role="alert"><AlertTriangle size={13} /> {error}</p>}
-      {loading ? <p className={`text-sm eai-muted ${km}`}>{tr("exLoading")}</p> : list.length === 0 ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${km}`}>{tr("adminAppsEmpty")}</p></div>
-      ) : (
-        <div className="space-y-3">
-          {list.map((appn) => (
-            <AdminApplicationRow key={appn.id} application={appn} lang={lang} tr={tr} busy={busyId === appn.id}
-              onApprove={() => decide(appn.id, "approve")} onReject={() => decide(appn.id, "reject")} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AdminApplicationRow({ application, lang, tr, busy, onApprove, onReject }) {
-  const [confirming, setConfirming] = useState(null); // "approve" | "reject" | null
-  const km = lang === "km" ? "eai-km" : "";
-  const pending = application.status === "pending";
-
-  return (
-    <div className="eai-card p-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p className="font-bold">{application.applicantName}</p>
-          <p className="text-xs eai-muted mt-0.5">{application.applicantPhone}</p>
-          <p className="text-sm mt-2">{application.school}</p>
-          <p className="text-xs eai-muted mt-1">{application.subjects.join(", ")}</p>
-        </div>
-        {!pending && (
-          <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${km}`} style={{
-            background: application.status === "approved" ? "var(--primary-soft)" : "var(--ember-soft)",
-            color: application.status === "approved" ? "var(--primary)" : "var(--ember)",
-          }}>
-            {tr(`adminAppFilter_${application.status}`)}
-          </span>
-        )}
-      </div>
-      {pending && (
-        confirming ? (
-          <div className="flex flex-wrap items-center gap-2 mt-4">
-            <span className={`text-xs ${km}`}>{tr(confirming === "approve" ? "adminAppConfirmApprove" : "adminAppConfirmReject")}</span>
-            <button disabled={busy} onClick={confirming === "approve" ? onApprove : onReject} className={`eai-btn eai-focus text-sm py-2 px-3 ${km}`}
-              style={{ background: confirming === "approve" ? "var(--primary)" : "var(--ember)", color: "#fff" }}>
-              {tr("adminAppConfirmYes")}
-            </button>
-            <button disabled={busy} onClick={() => setConfirming(null)} className={`eai-btn eai-focus text-sm py-2 px-3 eai-soft ${km}`}>{tr("exKeepGoing")}</button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 mt-4">
-            <button onClick={() => setConfirming("approve")} className={`eai-btn eai-focus text-sm py-2 px-4 flex items-center gap-1.5 ${km}`} style={{ background: "var(--primary)", color: "#fff" }}>
-              <CheckCircle2 size={15} /> {tr("adminAppApproveBtn")}
-            </button>
-            <button onClick={() => setConfirming("reject")} className={`eai-focus text-sm px-3 py-2 eai-muted hover:underline ${km}`}>{tr("adminAppRejectBtn")}</button>
-          </div>
-        )
       )}
     </div>
   );
@@ -7139,16 +7032,11 @@ const UNI_NAV = [
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
 ];
 
-/* Sidebar for an approved teacher account — no BAC II/university profile shape at all, so none of
-   the gamified student tabs (Practice, Progress, Wardrobe, Super Bondus...) apply. Posting and
+/* Sidebar for a teacher account — no BAC II/university profile shape at all, so none of the
+   gamified student tabs (Practice, Progress, Wardrobe, Super Bondus...) apply. Posting and
    reviewing exercises is the one thing a teacher account can do today. */
 const TEACHER_NAV = [
   { id: "teacherExercises", label: "My Exercises", labelKm: "លំហាត់របស់ខ្ញុំ", icon: ClipboardCheck },
-];
-
-/* Sidebar for an admin account -- reviewing teacher sign-ups is the one thing this role does today. */
-const ADMIN_NAV = [
-  { id: "adminTeacherApplications", label: "Teacher Applications", labelKm: "ពាក្យសុំធ្វើជាគ្រូ", icon: ShieldCheck },
 ];
 
 /* ════════════════════════ UI localization (English / Khmer) ════════════════════════
@@ -7193,8 +7081,6 @@ const STRINGS = {
     errPlanSave: "Couldn't save that task. Please try again.",
     errSaveProgress: "We couldn't save your progress. Please try again later.",
     errPasswordShort: "Password must be at least 8 characters.",
-    errAlreadyApplied: "You already have a teacher application under review.",
-    errAlreadyStaff: "Your account already has staff access.",
     errAlreadyRunning: "Finish or cancel your current attempt before starting another.",
     errAlreadySubmitted: "You already submitted this exercise.",
     errNoPhotos: "Add at least one photo before submitting.",
@@ -7293,13 +7179,11 @@ const STRINGS = {
     accountKindTitle: "How will you use Bondus?", accountKindDesc: "This decides what you see next.",
     accountKindStudentTitle: "I'm a student", accountKindStudentDesc: "Grade 11 or 12, preparing for the BAC II exam, or already at university.",
     accountKindTeacherTitle: "I'm a teacher", accountKindTeacherDesc: "Post exercises for your students, and see and comment on their work privately.",
-    teacherDetailsTitle: "Tell us about where you teach", teacherDetailsDesc: "A real person reviews every teacher application before it's approved.",
+    teacherDetailsTitle: "Tell us about where you teach", teacherDetailsDesc: "Your teacher account is ready as soon as you finish this step.",
     schoolNameLabel: "School name", schoolNamePlaceholder: "e.g. Bak Touk High School",
     subjectsTaughtLabel: "Subjects you teach", subjectsTaughtPlaceholder: "e.g. Mathematics, Physics",
     subjectsTaughtHint: "Separate multiple subjects with commas.",
-    teacherApplySubmit: "Submit application",
-    teacherPendingTitle: "Your teacher application is under review",
-    teacherPendingDesc: "We'll let you know once it's approved. This can take a little while — thanks for your patience.",
+    teacherApplySubmit: "Create teacher account",
     // Exercises: teacher-posted work, student photo submission
     exercisesTitle: "Exercises", exercisesDesc: "Work posted by teachers. Pick one, do it on paper, and submit a photo.",
     exercisesEmpty: "No exercises have been posted yet.",
@@ -7323,6 +7207,10 @@ const STRINGS = {
     exFormRequired: "A title and instructions are required.",
     exFormTitleLabel: "Title", exFormInstructionsLabel: "Instructions", exFormTimeLimitLabel: "Time limit (minutes, optional)",
     exFormNoLimit: "No limit", exFormSave: "Post exercise",
+    exFormAttachmentsHint: "Add a picture or PDF of the exercise for students to see (optional).",
+    exAddAttachment: "Attach picture or file", exAttachmentsCount: "{n} of {max} attachments",
+    exErr_too_many_attachments: "Too many attachments for one exercise.",
+    exFormDone: "Done",
     exStatus_running: "In progress", exStatus_submitted: "Submitted", exStatus_expired: "Expired", exStatus_cancelled: "Cancelled",
     exPhotosWord: "photos",
     exNoComments: "No comments yet.", exCommentPlaceholder: "Write a comment…",
@@ -7330,14 +7218,6 @@ const STRINGS = {
     myExercisesTitle: "My Exercises", myExercisesDesc: "Post work for your students and review what they submit.",
     myExercisesEmpty: "You haven't posted any exercises yet.",
     exNoSubmissions: "No one has submitted this exercise yet.",
-    // Admin: teacher applications
-    adminAppsTitle: "Teacher Applications", adminAppsDesc: "Review who's applied to become a teacher.",
-    adminAppsEmpty: "No applications here.",
-    adminAppFilter_pending: "Pending", adminAppFilter_approved: "Approved", adminAppFilter_rejected: "Rejected", adminAppFilter_all: "All",
-    adminAppApproveBtn: "Approve", adminAppRejectBtn: "Reject",
-    adminAppConfirmApprove: "Grant this person teacher access?",
-    adminAppConfirmReject: "Reject this application? They can apply again later.",
-    adminAppConfirmYes: "Yes, confirm",
     // Login
     loginTitle: "Log in", loginDesc: "Enter the phone number you used when you created your account.",
     phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
@@ -7463,8 +7343,6 @@ const STRINGS = {
     errPlanSave: "មិនអាចរក្សាទុកកិច្ចការនោះបានទេ។ សូមព្យាយាមម្តងទៀត។",
     errSaveProgress: "យើងមិនអាចរក្សាទុកវឌ្ឍនភាពរបស់អ្នកបានទេ។ សូមព្យាយាមម្តងទៀតពេលក្រោយ។",
     errPasswordShort: "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៨តួអក្សរ។",
-    errAlreadyApplied: "អ្នកមានពាក្យស្នើសុំគ្រូកំពុងត្រូវបានពិនិត្យរួចហើយ។",
-    errAlreadyStaff: "គណនីរបស់អ្នកមានសិទ្ធិគ្រូរួចហើយ។",
     errAlreadyRunning: "បញ្ចប់ ឬបោះបង់ការប៉ុនប៉ងបច្ចុប្បន្នរបស់អ្នក មុននឹងចាប់ផ្តើមថ្មី។",
     errAlreadySubmitted: "អ្នកបានដាក់ស្នើលំហាត់នេះរួចហើយ។",
     errNoPhotos: "បន្ថែមរូបថតយ៉ាងហោចណាស់មួយ មុននឹងដាក់ស្នើ។",
@@ -7563,13 +7441,11 @@ const STRINGS = {
     accountKindTitle: "តើអ្នកនឹងប្រើ Bondus យ៉ាងដូចម្តេច?", accountKindDesc: "វានេះកំណត់អ្វីដែលអ្នកនឹងឃើញបន្ទាប់។",
     accountKindStudentTitle: "ខ្ញុំជានិស្សិត/សិស្ស", accountKindStudentDesc: "ថ្នាក់ទី១១ ឬ១២ រៀបចំប្រឡងបាក់ឌុប ឬកំពុងសិក្សានៅសាកលវិទ្យាល័យ។",
     accountKindTeacherTitle: "ខ្ញុំជាគ្រូបង្រៀន", accountKindTeacherDesc: "បង្ហោះលំហាត់សម្រាប់សិស្សរបស់អ្នក និងមើល/អធិប្បាយលើការងាររបស់ពួកគេជាឯកជន។",
-    teacherDetailsTitle: "ប្រាប់យើងអំពីកន្លែងដែលអ្នកបង្រៀន", teacherDetailsDesc: "មានមនុស្សពិតពិនិត្យពាក្យស្នើសុំគ្រូគ្រប់ករណី មុននឹងអនុម័ត។",
+    teacherDetailsTitle: "ប្រាប់យើងអំពីកន្លែងដែលអ្នកបង្រៀន", teacherDetailsDesc: "គណនីគ្រូរបស់អ្នកនឹងរួចរាល់ភ្លាមៗបន្ទាប់ពីជំហានចុងក្រោយនេះ។",
     schoolNameLabel: "ឈ្មោះសាលា", schoolNamePlaceholder: "ឧទាហរណ៍៖ វិទ្យាល័យបាក់ទូក",
     subjectsTaughtLabel: "មុខវិជ្ជាដែលអ្នកបង្រៀន", subjectsTaughtPlaceholder: "ឧទាហរណ៍៖ គណិតវិទ្យា, រូបវិទ្យា",
     subjectsTaughtHint: "ញែកមុខវិជ្ជាច្រើនដោយសញ្ញាក្បៀស (,)។",
-    teacherApplySubmit: "ដាក់ស្នើពាក្យ",
-    teacherPendingTitle: "ពាក្យស្នើសុំគ្រូរបស់អ្នកកំពុងត្រូវបានពិនិត្យ",
-    teacherPendingDesc: "យើងនឹងជូនដំណឹងអ្នកនៅពេលវាត្រូវបានអនុម័ត។ វាអាចចំណាយពេលបន្តិច — សូមអរគុណចំពោះការអត់ធ្មត់របស់អ្នក។",
+    teacherApplySubmit: "បង្កើតគណនីគ្រូ",
     // Exercises: teacher-posted work, student photo submission
     exercisesTitle: "លំហាត់គ្រូ", exercisesDesc: "លំហាត់ដែលបង្ហោះដោយគ្រូ។ ជ្រើសរើសមួយ ធ្វើវានៅលើក្រដាស ហើយដាក់ស្នើរូបថត។",
     exercisesEmpty: "មិនទាន់មានលំហាត់ត្រូវបានបង្ហោះនៅឡើយទេ។",
@@ -7593,6 +7469,10 @@ const STRINGS = {
     exFormRequired: "ត្រូវការចំណងជើង និងការណែនាំ។",
     exFormTitleLabel: "ចំណងជើង", exFormInstructionsLabel: "ការណែនាំ", exFormTimeLimitLabel: "ពេលកំណត់ (នាទី, មិនចាំបាច់)",
     exFormNoLimit: "មិនកំណត់ពេល", exFormSave: "បង្ហោះលំហាត់",
+    exFormAttachmentsHint: "បញ្ចូលរូបថត ឬឯកសារ PDF នៃលំហាត់ សម្រាប់សិស្សមើល (មិនចាំបាច់)។",
+    exAddAttachment: "ភ្ជាប់រូបថត ឬឯកសារ", exAttachmentsCount: "{n} នៃ {max} ឯកសារភ្ជាប់",
+    exErr_too_many_attachments: "ឯកសារភ្ជាប់ច្រើនពេកសម្រាប់លំហាត់មួយ។",
+    exFormDone: "បានហើយ",
     exStatus_running: "កំពុងធ្វើ", exStatus_submitted: "បានដាក់ស្នើ", exStatus_expired: "ផុតកំណត់", exStatus_cancelled: "បានបោះបង់",
     exPhotosWord: "រូបថត",
     exNoComments: "មិនទាន់មានមតិនៅឡើយទេ។", exCommentPlaceholder: "សរសេរមតិ…",
@@ -7600,14 +7480,6 @@ const STRINGS = {
     myExercisesTitle: "លំហាត់របស់ខ្ញុំ", myExercisesDesc: "បង្ហោះការងារសម្រាប់សិស្សរបស់អ្នក ហើយពិនិត្យអ្វីដែលពួកគេដាក់ស្នើ។",
     myExercisesEmpty: "អ្នកមិនទាន់បានបង្ហោះលំហាត់ណាមួយនៅឡើយទេ។",
     exNoSubmissions: "មិនទាន់មាននរណាម្នាក់ដាក់ស្នើលំហាត់នេះនៅឡើយទេ។",
-    // Admin: teacher applications
-    adminAppsTitle: "ពាក្យសុំធ្វើជាគ្រូ", adminAppsDesc: "ពិនិត្យមើលអ្នកដែលបានដាក់ស្នើសុំធ្វើជាគ្រូ។",
-    adminAppsEmpty: "មិនមានពាក្យសុំនៅទីនេះទេ។",
-    adminAppFilter_pending: "កំពុងរង់ចាំ", adminAppFilter_approved: "បានអនុម័ត", adminAppFilter_rejected: "បានបដិសេធ", adminAppFilter_all: "ទាំងអស់",
-    adminAppApproveBtn: "អនុម័ត", adminAppRejectBtn: "បដិសេធ",
-    adminAppConfirmApprove: "ផ្តល់សិទ្ធិគ្រូដល់អ្នកនេះ?",
-    adminAppConfirmReject: "បដិសេធពាក្យសុំនេះ? ពួកគេអាចដាក់ស្នើម្តងទៀតនៅពេលក្រោយ។",
-    adminAppConfirmYes: "បាទ/ចាស៎ បញ្ជាក់",
     // Login
     loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
     phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
@@ -7765,12 +7637,11 @@ export default function App() {
   const [entry, setEntry] = useState("welcome"); // "welcome" | "login" | "create" — which pre-account screen to show when there's no active profile yet
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
-  const [pendingTeacherReview, setPendingTeacherReview] = useState(false); // just applied as a teacher; account exists (role still "student") but is gated on the owner's review
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later — no entry point right now: the Dashboard banner that set it was removed
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
-  const [tab, setTab] = useState(saved?.profile?.role === "admin" ? "adminTeacherApplications" : saved?.profile?.role === "teacher" ? "teacherExercises" : saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
+  const [tab, setTab] = useState(saved?.profile?.role === "teacher" ? "teacherExercises" : saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
   const [dark, setDark] = useState(false);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
@@ -7817,7 +7688,7 @@ export default function App() {
     saverRef.current?.cancel(); queueRef.current?.setUser(null);
     serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
     setSummary(null);
-    setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false); setPendingTeacherReview(false);
+    setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
     setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLangResults({}); setTab("dashboard");
   };
   // Without a server, logging out deliberately leaves localStorage alone (see loadSaved); with one, the token is revoked.
@@ -7854,7 +7725,7 @@ export default function App() {
     setBonusXp(data.bonusXp ?? 0);
     setRewards(sanitizeRewards(data.rewards));
     setShowWelcomeBack(true);
-    setTab(data.profile.role === "admin" ? "adminTeacherApplications" : data.profile.role === "teacher" ? "teacherExercises" : data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
+    setTab(data.profile.role === "teacher" ? "teacherExercises" : data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
   // After "Forgot password": the reset already stored a fresh login, so just load the account.
@@ -7871,14 +7742,12 @@ export default function App() {
   // whole flow); the dashboard appears once the diagnostic is done or skipped. Resolves to { error, step } on failure.
   const handleRegister = async (reg) => {
     if (reg.accountKind === "teacher") {
-      // No local-prototype equivalent: a pending application the owner reviews only means anything
-      // with a real backend. Shown as a normal network error if somehow reached without one.
+      // No local-prototype equivalent: a teacher account only means anything with a real backend.
+      // Shown as a normal network error if somehow reached without one.
       if (!SERVER_MODE) return { error: "api_disabled" };
       try {
         serverUserRef.current = (await api.register(registrationToPayload(reg))).user;
-        await api.applyTeacher(teacherApplicationToPayload(reg));
         await loadAccount();
-        setPendingTeacherReview(true);
         return null;
       } catch (err) {
         return { error: err?.code ?? "server_error", step: registrationErrorStep(err), retryAfter: err?.retryAfter ?? null };
@@ -8061,7 +7930,7 @@ export default function App() {
     setBonusXp(0);
     applySummary(sm, { announce: false });
     hydratedRef.current = true;
-    setTab(me.user.role === "admin" ? "adminTeacherApplications" : me.user.role === "teacher" ? "teacherExercises" : me.user.educationLevel === "university" ? "universityHub" : "dashboard");
+    setTab(me.user.role === "teacher" ? "teacherExercises" : me.user.educationLevel === "university" ? "universityHub" : "dashboard");
     queueRef.current.flush(); // anything left unsent from last time
     return me.user;
   };
@@ -8265,7 +8134,6 @@ export default function App() {
   if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
   if (!profile && entry === "forgot" && SERVER_MODE) return <>{noticeToast}<ForgotPassword dark={dark} setDark={setDark} onBack={() => setEntry("login")} onSignedIn={handleSignedIn} lang={lang} setLang={setLang} /></>;
   if (!profile) return <>{noticeToast}<Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
-  if (pendingTeacherReview && profile.role !== "teacher") return <>{noticeToast}<TeacherApplicationPending dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogout={handleLogout} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (takingLangTest) return (
     <IeltsDiagnostic
@@ -8278,7 +8146,6 @@ export default function App() {
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";
   const isTeacherProfile = profile.role === "teacher";
-  const isAdminProfile = profile.role === "admin";
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
@@ -8286,7 +8153,6 @@ export default function App() {
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     teacherExercises: <TeacherExercises api={api} lang={lang} tr={tr} />,
-    adminTeacherApplications: <AdminTeacherApplications api={api} lang={lang} tr={tr} />,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
@@ -8313,10 +8179,10 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus {isAdminProfile ? "Admin" : isTeacherProfile ? "Teacher" : isUniProfile ? "University" : "Highschool"}</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus {isTeacherProfile ? "Teacher" : isUniProfile ? "University" : "Highschool"}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
-            {(isAdminProfile ? ADMIN_NAV : isTeacherProfile ? TEACHER_NAV : isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).map((n) => {
+            {(isTeacherProfile ? TEACHER_NAV : isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).map((n) => {
               const on = tab === n.id;
               const premiumColor = "var(--gold)";
               return (
@@ -8335,7 +8201,7 @@ export default function App() {
             })}
           </nav>
           <div className="p-3 space-y-2">
-            {!isTeacherProfile && !isAdminProfile && (
+            {!isTeacherProfile && (
               <div className="eai-soft rounded-2xl p-4 text-center">
                 <span className="eai-fx-fire" style={{ display: "block", margin: "0 auto", width: 20 }}><Flame size={20} style={{ color: "var(--ember)" }} /></span>
                 <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
@@ -8350,7 +8216,7 @@ export default function App() {
           <header className="sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
               <button className="lg:hidden eai-focus" onClick={() => setOpen(true)}><Menu size={22} /></button>
-              {!isTeacherProfile && !isAdminProfile && (
+              {!isTeacherProfile && (
                 <div className="hidden sm:flex items-center gap-2">
                   <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
                   <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
@@ -8358,7 +8224,7 @@ export default function App() {
                 </div>
               )}
               <div className="flex items-center gap-2 ml-auto">
-                {!isUniProfile && !isTeacherProfile && !isAdminProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
+                {!isUniProfile && !isTeacherProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
                 {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}

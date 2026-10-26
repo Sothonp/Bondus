@@ -2,8 +2,8 @@
    Same split as ExamSessionUi.jsx: pure presentational pieces, a translator `tr(key)` and `lang`
    passed in from App.jsx, nothing imported back from App. */
 import React, { useRef, useState } from "react";
-import { Timer, Camera, ImagePlus, X, CheckCircle2, AlertTriangle, LoaderCircle, MessageCircle, Send, Plus, Users } from "lucide-react";
-import { formatClock, elapsedSeconds, remainingSeconds, MAX_PHOTOS } from "./exerciseSessions.js";
+import { Timer, Camera, ImagePlus, X, CheckCircle2, AlertTriangle, LoaderCircle, MessageCircle, Send, Plus, Users, Paperclip, FileText } from "lucide-react";
+import { formatClock, elapsedSeconds, remainingSeconds, MAX_PHOTOS, MAX_EXERCISE_ATTACHMENTS } from "./exerciseSessions.js";
 import { shrinkImage } from "./imageUtils.js";
 
 const KM_DIGITS = ["០", "១", "២", "៣", "៤", "៥", "៦", "៧", "៨", "៩"];
@@ -165,24 +165,110 @@ export function ExerciseListCard({ exercise, lang, tr, onOpen }) {
   );
 }
 
-/** Create or edit a posted exercise (teacher only). */
-export function TeacherExerciseForm({ initial, lang, tr, onSave, onCancel }) {
+/** One attachment: an image shown inline, a PDF as a clickable icon+name. onRemove omitted means read-only. */
+export function ExerciseAttachmentThumb({ attachment, tr, onRemove }) {
+  const isPdf = attachment.mimeType === "application/pdf";
+  return (
+    <div className="relative rounded-xl overflow-hidden border" style={{ borderColor: "var(--line)", aspectRatio: "3 / 4", background: "var(--bg-soft)" }}>
+      {isPdf ? (
+        <a href={attachment.url} target="_blank" rel="noreferrer" className="w-full h-full flex flex-col items-center justify-center gap-1 text-center p-1.5">
+          <FileText size={22} />
+          <span className="text-[10px] truncate w-full px-1">{attachment.name || "PDF"}</span>
+        </a>
+      ) : (
+        <a href={attachment.url} target="_blank" rel="noreferrer"><img src={attachment.url} alt="" className="w-full h-full object-cover" /></a>
+      )}
+      {onRemove && (
+        <button onClick={onRemove} aria-label={tr("exRemovePhoto")} title={tr("exRemovePhoto")} className="eai-focus absolute top-1 right-1 grid place-items-center rounded-full" style={{ width: 24, height: 24, background: "rgba(0,0,0,.6)", color: "#fff" }}><X size={14} /></button>
+      )}
+    </div>
+  );
+}
+
+/** Create a posted exercise (teacher only): title/instructions/time limit, then -- once saved -- attach a
+    picture or PDF of the exercise itself for students to see. */
+export function TeacherExerciseForm({ initial, lang, tr, onSave, onAddAttachment, onRemoveAttachment, onDone, onCancel }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [instructions, setInstructions] = useState(initial?.instructions ?? "");
   const [timeLimitMinutes, setTimeLimitMinutes] = useState(initial?.timeLimitMinutes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [exercise, setExercise] = useState(null); // set once saved -- switches the form to the attachments step
+  const [attachments, setAttachments] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
   const save = async () => {
     setError("");
     if (!title.trim() || !instructions.trim()) { setError(tr("exFormRequired")); return; }
     setBusy(true);
     try {
-      await onSave({ title: title.trim(), instructions: instructions.trim(), timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : null });
+      const saved = await onSave({ title: title.trim(), instructions: instructions.trim(), timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : null });
+      setExercise(saved);
+      setAttachments(saved.attachments ?? []);
     } catch (err) {
       setError(errorText(tr, err?.code ?? "generic"));
     } finally { setBusy(false); }
   };
+
+  const pickFiles = async (e) => {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length) return;
+    setError(""); setUploading(true);
+    let have = attachments.length;
+    try {
+      for (const file of files) {
+        if (have >= MAX_EXERCISE_ATTACHMENTS) { setError(errorText(tr, "too_many_attachments")); break; }
+        let toUpload = file;
+        if (file.type.startsWith("image/")) {
+          try {
+            const shrunk = await shrinkImage(file);
+            toUpload = new File([shrunk.blob], file.name || `exercise-${Date.now()}.jpg`, { type: "image/jpeg" });
+          } catch (err) { setError(errorText(tr, err?.message)); continue; }
+        }
+        try {
+          const attachment = await onAddAttachment(exercise.id, toUpload);
+          setAttachments((list) => [...list, attachment]);
+        } catch (err) { setError(errorText(tr, err?.code ?? "generic")); break; }
+        have += 1;
+      }
+    } finally { setUploading(false); }
+  };
+
+  const removeAttachment = async (id) => {
+    setError("");
+    try { await onRemoveAttachment(exercise.id, id); setAttachments((list) => list.filter((a) => a.id !== id)); }
+    catch (err) { setError(errorText(tr, err?.code ?? "generic")); }
+  };
+
+  if (exercise) {
+    return (
+      <div className="eai-card p-5 space-y-4">
+        <div>
+          <h3 className="font-bold">{exercise.title}</h3>
+          <p className={`text-xs eai-muted mt-1 ${kmc(lang)}`}>{tr("exFormAttachmentsHint")}</p>
+        </div>
+        <div className="flex flex-wrap gap-2.5 items-center">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading || attachments.length >= MAX_EXERCISE_ATTACHMENTS}
+            className={`eai-btn eai-glass eai-focus text-sm py-2.5 px-4 flex items-center gap-1.5 disabled:opacity-50 ${kmc(lang)}`}>
+            <Paperclip size={16} /> {tr("exAddAttachment")}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={pickFiles} />
+          <span className={`text-xs eai-muted flex items-center gap-1.5 ${kmc(lang)}`} aria-live="polite">
+            {uploading ? <><LoaderCircle size={13} className="animate-spin" /> {tr("exUploading")}</> : fill(tr("exAttachmentsCount"), { n: loc(attachments.length, lang), max: loc(MAX_EXERCISE_ATTACHMENTS, lang) })}
+          </span>
+        </div>
+        {attachments.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+            {attachments.map((a) => <ExerciseAttachmentThumb key={a.id} attachment={a} tr={tr} onRemove={() => removeAttachment(a.id)} />)}
+          </div>
+        )}
+        {error && <p className={`eai-ob-error flex items-center gap-1.5 ${kmc(lang)}`} role="alert"><AlertTriangle size={13} /> {error}</p>}
+        <button onClick={onDone} className={`eai-btn eai-focus text-sm py-2.5 px-4 ${kmc(lang)}`} style={btnPrimary}>{tr("exFormDone")}</button>
+      </div>
+    );
+  }
 
   return (
     <div className="eai-card p-5 space-y-4">

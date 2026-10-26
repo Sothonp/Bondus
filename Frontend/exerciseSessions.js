@@ -12,6 +12,9 @@ import { elapsedSeconds as examElapsedSeconds, remainingSeconds as examRemaining
 
 export { formatClock };
 export const MAX_PHOTOS = 10;
+// A picture or PDF of the exercise itself, attached by the teacher who posted it (config/bondus.php's
+// exercises.max_attachments on the backend -- keep the two in sync).
+export const MAX_EXERCISE_ATTACHMENTS = 5;
 
 function toClockShape(submission, timeLimitMinutes) {
   return {

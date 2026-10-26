@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
   newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
-  teacherApplicationToPayload,
 } from "./serverMapping.js";
 
 const form = {
@@ -57,9 +56,22 @@ test("the patch version never re-sends the password or education level", () => {
   assert.equal(patch.field, "science");
 });
 
-test("teacher application payload splits and trims the comma-separated subjects", () => {
-  const body = teacherApplicationToPayload({ schoolName: "  Bak Touk High School ", subjectsTaught: "Mathematics,  Physics ,,Chemistry" });
-  assert.deepEqual(body, { school: "Bak Touk High School", subjects: ["Mathematics", "Physics", "Chemistry"] });
+test("a teacher sign-up's registration payload carries accountKind, school, and the split/trimmed subjects", () => {
+  const body = registrationToPayload({
+    ...form, field: undefined, accountKind: "teacher",
+    schoolName: "  Bak Touk High School ", subjectsTaught: "Mathematics,  Physics ,,Chemistry",
+  });
+  assert.equal(body.accountKind, "teacher");
+  assert.equal(body.school, "Bak Touk High School");
+  assert.deepEqual(body.subjectsTaught, ["Mathematics", "Physics", "Chemistry"]);
+  assert.equal(body.field, undefined);
+});
+
+test("a student's registration payload never carries accountKind, school, or subjectsTaught", () => {
+  const body = registrationToPayload(form);
+  assert.equal(body.accountKind, undefined);
+  assert.equal(body.school, undefined);
+  assert.equal(body.subjectsTaught, undefined);
 });
 
 test("which sign-up screen shows a server problem", () => {

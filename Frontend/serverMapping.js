@@ -11,8 +11,12 @@ export function userToProfile(user, summary) {
   return profile;
 }
 
-/* Register form answers -> POST /register body. Empty optional fields are left out so the server's defaults apply. */
+/* Register form answers -> POST /register body. Empty optional fields are left out so the server's defaults apply.
+   A teacher sign-up grants the role immediately (no approval step) -- subjects are typed as one
+   comma-separated field (there is no canonical subject list for teachers the way FIELD_SUBJECTS
+   exists for students), split and trimmed here so the server only ever sees a clean array. */
 export function registrationToPayload(reg) {
+  const isTeacher = reg.accountKind === "teacher";
   return compact({
     name: String(reg.name ?? "").trim(),
     phone: String(reg.phone ?? "").trim(),
@@ -29,24 +33,17 @@ export function registrationToPayload(reg) {
     subjectsToImprove: Array.isArray(reg.subjectsToImprove) ? reg.subjectsToImprove : [],
     // A Science student sits one foreign language, English or French, chosen at sign-up (the Social Science track lists both).
     foreignLanguage: reg.field === "science" ? reg.foreignLanguage : undefined,
+    accountKind: isTeacher ? "teacher" : undefined,
+    school: isTeacher ? String(reg.schoolName ?? "").trim() : undefined,
+    subjectsTaught: isTeacher ? String(reg.subjectsTaught ?? "").split(",").map((s) => s.trim()).filter(Boolean) : undefined,
   });
 }
 
 /* The same answers as a PATCH /me body — used when the student goes Back and edits after the account already exists.
    The password is never re-sent. */
 export function registrationToPatch(reg) {
-  const { password, educationLevel, ...rest } = registrationToPayload(reg);
+  const { password, educationLevel, accountKind, school, subjectsTaught, ...rest } = registrationToPayload(reg);
   return rest;
-}
-
-/* The teacher sign-up step's answers -> POST /teacher/applications body. Subjects are typed as one
-   comma-separated field (there is no canonical subject list for teachers the way FIELD_SUBJECTS
-   exists for students), split and trimmed here so the server only ever sees a clean array. */
-export function teacherApplicationToPayload(reg) {
-  return {
-    school: String(reg.schoolName ?? "").trim(),
-    subjects: String(reg.subjectsTaught ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-  };
 }
 
 /* Which sign-up screen the problem is on: 1 = account details, 2 = track, null = stay where you are. */
@@ -127,8 +124,6 @@ export const API_ERROR_KEYS = {
   payload_too_large: "errServer",
   stale_state: "errServer",
   server_error: "errServer",
-  already_applied: "errAlreadyApplied",
-  already_staff: "errAlreadyStaff",
   already_running: "errAlreadyRunning",
   already_submitted: "errAlreadySubmitted",
   no_photos: "errNoPhotos",

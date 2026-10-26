@@ -196,16 +196,6 @@ test("logout clears the token even when the request fails", async () => {
   assert.equal(api.hasToken(), false);
 });
 
-test("teacher application: apply and check status", async () => {
-  const { api, calls } = make(() => json(201, { application: { id: 1, status: "pending" } }));
-  await api.applyTeacher({ school: "Bak Touk High School", subjects: ["Mathematics"] });
-  assert.deepEqual([calls[0].init.method, calls[0].url, calls[0].body], [
-    "POST", `${BASE}/teacher/applications`, { school: "Bak Touk High School", subjects: ["Mathematics"] },
-  ]);
-  await api.getTeacherApplicationStatus();
-  assert.deepEqual([calls[1].init.method, calls[1].url], ["GET", `${BASE}/teacher/applications/me`]);
-});
-
 test("exercises: browse, attempt lifecycle, and that a photo upload sends a real FormData body", async () => {
   const { api, calls } = make(() => json(200, {}));
   await api.getExercises();
@@ -256,16 +246,18 @@ test("exercises: teacher CRUD, submissions, and comments", async () => {
   ]);
 });
 
-test("admin: list teacher applications by status, approve, and reject", async () => {
+test("exercises: a teacher attaches a picture or PDF to their own posted exercise", async () => {
   const { api, calls } = make(() => json(200, {}));
-  await api.getAdminTeacherApplications();
-  assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/admin/teacher-applications?status=pending`]);
-  await api.getAdminTeacherApplications("all");
-  assert.equal(calls[1].url, `${BASE}/admin/teacher-applications?status=all`);
-  await api.approveTeacherApplication(4);
-  assert.deepEqual([calls[2].init.method, calls[2].url], ["POST", `${BASE}/admin/teacher-applications/4/approve`]);
-  await api.rejectTeacherApplication(4);
-  assert.deepEqual([calls[3].init.method, calls[3].url], ["POST", `${BASE}/admin/teacher-applications/4/reject`]);
+  const fakeFile = new File(["pretend-pdf-bytes"], "worksheet.pdf", { type: "application/pdf" });
+  await api.addExerciseAttachment(3, fakeFile);
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].url, `${BASE}/teacher/exercises/3/attachments`);
+  assert.ok(calls[0].body instanceof FormData, "attachment upload must send a FormData body");
+  assert.equal(calls[0].body.get("file"), fakeFile);
+  assert.equal(calls[0].init.headers["Content-Type"], undefined);
+
+  await api.removeExerciseAttachment(3, 9);
+  assert.deepEqual([calls[1].init.method, calls[1].url], ["DELETE", `${BASE}/teacher/exercises/3/attachments/9`]);
 });
 
 test("if browser storage is blocked, the session still works in memory", async () => {

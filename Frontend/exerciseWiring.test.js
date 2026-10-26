@@ -16,8 +16,7 @@ const KEYS = [
   "accountKindTeacherTitle", "accountKindTeacherDesc",
   "teacherDetailsTitle", "teacherDetailsDesc", "schoolNameLabel", "schoolNamePlaceholder",
   "subjectsTaughtLabel", "subjectsTaughtPlaceholder", "subjectsTaughtHint", "teacherApplySubmit",
-  "teacherPendingTitle", "teacherPendingDesc",
-  "errAlreadyApplied", "errAlreadyStaff", "errAlreadyRunning", "errAlreadySubmitted",
+  "errAlreadyRunning", "errAlreadySubmitted",
   "errNoPhotos", "errTooManyPhotos", "errNotRunning",
   "exercisesTitle", "exercisesDesc", "exercisesEmpty", "exLoading", "exStartBtn",
   "exErr_already_running", "exErr_already_submitted", "exErr_no_photos", "exErr_too_many_photos",
@@ -26,7 +25,8 @@ const KEYS = [
   "exSubmitTitle", "exSubmitDesc", "exTakePhoto", "exChoosePhoto", "exUploading", "exPhotosCount",
   "exRemovePhoto", "exSubmitBtn", "exBackToExercise", "exDoneTitle", "exDonePhotos", "exDoneBack",
   "exTeacherComments", "exSubmissionCount", "exFormRequired", "exFormTitleLabel", "exFormInstructionsLabel",
-  "exFormTimeLimitLabel", "exFormNoLimit", "exFormSave",
+  "exFormTimeLimitLabel", "exFormNoLimit", "exFormSave", "exFormAttachmentsHint", "exFormDone",
+  "exAddAttachment", "exAttachmentsCount", "exErr_too_many_attachments",
   "exStatus_running", "exStatus_submitted", "exStatus_expired", "exStatus_cancelled",
   "exPhotosWord", "exNoComments", "exCommentPlaceholder", "exNewExercise",
   "myExercisesTitle", "myExercisesDesc", "myExercisesEmpty", "exNoSubmissions",
@@ -50,17 +50,18 @@ test("registration offers a student/teacher choice before account details, and t
   assert.match(register, /finish\(\{ \.\.\.form, age: Number\(form\.age\) \|\| null \}\)/);
 });
 
-test("a teacher sign-up registers the account, applies, loads it, and is gated behind review until approved", () => {
+test("a teacher sign-up registers the account with the teacher role granted immediately, no review step", () => {
   const handler = app.slice(app.indexOf("const handleRegister = async"), app.indexOf("const handleBackToPreferences ="));
   assert.match(handler, /if \(reg\.accountKind === "teacher"\) \{/);
   assert.match(handler, /api\.register\(registrationToPayload\(reg\)\)/);
-  assert.match(handler, /api\.applyTeacher\(teacherApplicationToPayload\(reg\)\)/);
   assert.match(handler, /await loadAccount\(\);/);
-  assert.match(handler, /setPendingTeacherReview\(true\);/);
-  assert.match(app, /if \(pendingTeacherReview && profile\.role !== "teacher"\) return .*<TeacherApplicationPending/);
+  // There is no pending-review gate or application endpoint left to call.
+  assert.doesNotMatch(app, /applyTeacher/);
+  assert.doesNotMatch(app, /pendingTeacherReview/);
+  assert.doesNotMatch(app, /TeacherApplicationPending/);
 });
 
-test("the sidebar swaps to a teacher-only nav for an approved teacher account, and students get an Exercises tab", () => {
+test("the sidebar swaps to a teacher-only nav for a teacher account, and students get an Exercises tab", () => {
   assert.match(app, /const TEACHER_NAV = \[/);
   assert.match(app, /\{ id: "exercises", label: "Exercises"/);
   assert.match(app, /const isTeacherProfile = profile\.role === "teacher";/);
@@ -74,4 +75,21 @@ test("exercise submission relies on the server for status, not a local store, an
   assert.match(ui, /import \{ shrinkImage \} from "\.\/imageUtils\.js";/);
   assert.match(ui, /await shrinkImage\(file\)/);
   assert.match(ui, /new File\(\[shrunk\.blob\], `photo-\$\{Date\.now\(\)\}\.jpg`, \{ type: "image\/jpeg" \}\)/);
+});
+
+test("posting an exercise lets the teacher attach a picture or PDF afterward, and students see it on the exercise itself", () => {
+  const form = ui.slice(ui.indexOf("export function TeacherExerciseForm("), ui.lastIndexOf("export function TeacherExerciseListCard("));
+  assert.match(form, /accept="image\/\*,application\/pdf" multiple/);
+  // Only images go through shrinkImage; a PDF is uploaded as-is.
+  assert.match(form, /if \(file\.type\.startsWith\("image\/"\)\) \{/);
+  assert.match(form, /onAddAttachment\(exercise\.id, toUpload\)/);
+  assert.match(form, /onRemoveAttachment\(exercise\.id, id\)/);
+
+  const teacherExercises = app.slice(app.indexOf("function TeacherExercises("), app.indexOf("/* One of the teacher's own exercises"));
+  assert.match(teacherExercises, /const create = async \(fields\) => \(await api\.createTeacherExercise\(fields\)\)\.exercise;/);
+  assert.match(teacherExercises, /api\.addExerciseAttachment\(exerciseId, file\)/);
+  assert.match(teacherExercises, /api\.removeExerciseAttachment\(exerciseId, attachmentId\)/);
+
+  assert.match(app, /exercise\.attachments\?\.length > 0 && \(/);
+  assert.match(app, /exercise\.attachments\.map\(\(a\) => <ExerciseAttachmentThumb key=\{a\.id\} attachment=\{a\} tr=\{tr\} \/>\)/);
 });
