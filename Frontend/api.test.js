@@ -196,68 +196,53 @@ test("logout clears the token even when the request fails", async () => {
   assert.equal(api.hasToken(), false);
 });
 
-test("exercises: browse, attempt lifecycle, and that a photo upload sends a real FormData body", async () => {
+test("exercises: students browse by subject, and a subject goes into the query string", async () => {
   const { api, calls } = make(() => json(200, {}));
   await api.getExercises();
   assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/exercises`]);
+  await api.getExercises("physics");
+  assert.deepEqual([calls[1].init.method, calls[1].url], ["GET", `${BASE}/exercises?subject=physics`]);
   await api.getExercise(5);
-  assert.equal(calls[1].url, `${BASE}/exercises/5`);
-  await api.startExerciseAttempt(5);
-  assert.deepEqual([calls[2].init.method, calls[2].url], ["POST", `${BASE}/exercises/5/attempt`]);
-  await api.getExerciseAttempt(5);
-  assert.equal(calls[3].url, `${BASE}/exercises/5/attempt`);
-
-  const fakeFile = new File(["pretend-image-bytes"], "work.jpg", { type: "image/jpeg" });
-  await api.uploadExercisePhoto(5, fakeFile);
-  assert.equal(calls[4].init.method, "POST");
-  assert.equal(calls[4].url, `${BASE}/exercises/5/attempt/photos`);
-  assert.ok(calls[4].body instanceof FormData, "photo upload must send a FormData body");
-  assert.equal(calls[4].body.get("photo"), fakeFile);
-  // A FormData body must never be forced to JSON, and must let the browser set its own boundary.
-  assert.equal(calls[4].init.headers["Content-Type"], undefined);
-
-  await api.removeExercisePhoto(5, 9);
-  assert.deepEqual([calls[5].init.method, calls[5].url], ["DELETE", `${BASE}/exercises/5/attempt/photos/9`]);
-  await api.submitExerciseAttempt(5);
-  assert.equal(calls[6].url, `${BASE}/exercises/5/attempt/submit`);
-  await api.cancelExerciseAttempt(5);
-  assert.equal(calls[7].url, `${BASE}/exercises/5/attempt/cancel`);
+  assert.equal(calls[2].url, `${BASE}/exercises/5`);
 });
 
-test("exercises: teacher CRUD, submissions, and comments", async () => {
+test("exercises: the teacher and timed-attempt calls no longer exist", () => {
+  const { api } = make(() => json(200, {}));
+  for (const gone of [
+    "startExerciseAttempt", "getExerciseAttempt", "uploadExercisePhoto", "removeExercisePhoto", "submitExerciseAttempt", "cancelExerciseAttempt",
+    "getTeacherExercises", "createTeacherExercise", "updateTeacherExercise", "deleteTeacherExercise",
+    "getTeacherExerciseSubmissions", "getTeacherSubmission", "addSubmissionComment",
+  ]) assert.equal(api[gone], undefined, `${gone} should be gone`);
+});
+
+test("exercises: an admin lists, posts, edits and deletes exercises under /admin", async () => {
   const { api, calls } = make(() => json(200, {}));
-  await api.getTeacherExercises();
-  assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/teacher/exercises`]);
-  await api.createTeacherExercise({ title: "Essay", instructions: "Write 500 words." });
-  assert.deepEqual([calls[1].init.method, calls[1].url, calls[1].body], [
-    "POST", `${BASE}/teacher/exercises`, { title: "Essay", instructions: "Write 500 words." },
-  ]);
-  await api.updateTeacherExercise(3, { title: "New title" });
-  assert.deepEqual([calls[2].init.method, calls[2].url], ["PATCH", `${BASE}/teacher/exercises/3`]);
-  await api.deleteTeacherExercise(3);
-  assert.deepEqual([calls[3].init.method, calls[3].url], ["DELETE", `${BASE}/teacher/exercises/3`]);
-  await api.getTeacherExerciseSubmissions(3);
-  assert.equal(calls[4].url, `${BASE}/teacher/exercises/3/submissions`);
-  await api.getTeacherSubmission(3, 7);
-  assert.equal(calls[5].url, `${BASE}/teacher/exercises/3/submissions/7`);
-  await api.addSubmissionComment(3, 7, "Good work!");
-  assert.deepEqual([calls[6].init.method, calls[6].url, calls[6].body], [
-    "POST", `${BASE}/teacher/exercises/3/submissions/7/comments`, { body: "Good work!" },
-  ]);
+  await api.getAdminExercises();
+  assert.deepEqual([calls[0].init.method, calls[0].url], ["GET", `${BASE}/admin/exercises`]);
+  await api.getAdminExercises("biology");
+  assert.equal(calls[1].url, `${BASE}/admin/exercises?subject=biology`);
+  const fields = { subject: "physics", teacherName: "Mr. Sok", schoolName: "Bak Touk High School", title: "Waves" };
+  await api.createAdminExercise(fields);
+  assert.deepEqual([calls[2].init.method, calls[2].url, calls[2].body], ["POST", `${BASE}/admin/exercises`, fields]);
+  await api.updateAdminExercise(3, { schoolName: "New School" });
+  assert.deepEqual([calls[3].init.method, calls[3].url, calls[3].body], ["PATCH", `${BASE}/admin/exercises/3`, { schoolName: "New School" }]);
+  await api.deleteAdminExercise(3);
+  assert.deepEqual([calls[4].init.method, calls[4].url], ["DELETE", `${BASE}/admin/exercises/3`]);
 });
 
-test("exercises: a teacher attaches a picture or PDF to their own posted exercise", async () => {
+test("exercises: an admin attaches a picture or PDF as a real FormData body, and removes it", async () => {
   const { api, calls } = make(() => json(200, {}));
   const fakeFile = new File(["pretend-pdf-bytes"], "worksheet.pdf", { type: "application/pdf" });
   await api.addExerciseAttachment(3, fakeFile);
   assert.equal(calls[0].init.method, "POST");
-  assert.equal(calls[0].url, `${BASE}/teacher/exercises/3/attachments`);
+  assert.equal(calls[0].url, `${BASE}/admin/exercises/3/attachments`);
   assert.ok(calls[0].body instanceof FormData, "attachment upload must send a FormData body");
   assert.equal(calls[0].body.get("file"), fakeFile);
+  // A FormData body must never be forced to JSON, and must let the browser set its own boundary.
   assert.equal(calls[0].init.headers["Content-Type"], undefined);
 
   await api.removeExerciseAttachment(3, 9);
-  assert.deepEqual([calls[1].init.method, calls[1].url], ["DELETE", `${BASE}/teacher/exercises/3/attachments/9`]);
+  assert.deepEqual([calls[1].init.method, calls[1].url], ["DELETE", `${BASE}/admin/exercises/3/attachments/9`]);
 });
 
 test("if browser storage is blocked, the session still works in memory", async () => {

@@ -56,22 +56,10 @@ test("the patch version never re-sends the password or education level", () => {
   assert.equal(patch.field, "science");
 });
 
-test("a teacher sign-up's registration payload carries accountKind, school, and the split/trimmed subjects", () => {
-  const body = registrationToPayload({
-    ...form, field: undefined, accountKind: "teacher",
-    schoolName: "  Bak Touk High School ", subjectsTaught: "Mathematics,  Physics ,,Chemistry",
-  });
-  assert.equal(body.accountKind, "teacher");
-  assert.equal(body.school, "Bak Touk High School");
-  assert.deepEqual(body.subjectsTaught, ["Mathematics", "Physics", "Chemistry"]);
-  assert.equal(body.field, undefined);
-});
-
-test("a student's registration payload never carries accountKind, school, or subjectsTaught", () => {
-  const body = registrationToPayload(form);
-  assert.equal(body.accountKind, undefined);
-  assert.equal(body.school, undefined);
-  assert.equal(body.subjectsTaught, undefined);
+test("a sign-up payload never carries teacher fields, whatever the form holds: everyone signs up as a student", () => {
+  const body = registrationToPayload({ ...form, accountKind: "teacher", schoolName: "Bak Touk High School", subjectsTaught: "Mathematics, Physics" });
+  for (const key of ["accountKind", "school", "subjectsTaught"]) assert.equal(body[key], undefined, `${key} should not be sent`);
+  assert.equal(body.field, "science");
 });
 
 test("which sign-up screen shows a server problem", () => {

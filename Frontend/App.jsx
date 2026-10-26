@@ -9,7 +9,7 @@ import {
   Eye, Clock, Moon, Sun, Menu, Send, Brain, CheckCircle2, Circle,
   Award, ArrowUpRight, ArrowDownRight, Lightbulb, Star, BarChart3,
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
-  ClipboardCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
+  ClipboardCheck, ShieldCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
   ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
@@ -28,11 +28,8 @@ import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, sub
 import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
 import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
-import { useExerciseSessions } from "./useExerciseSessions.js";
-import {
-  ExerciseTimerBar, ExerciseSubmitSheet, ExerciseResultCard, ExerciseListCard, ExerciseAttachmentThumb,
-  TeacherExerciseForm, TeacherExerciseListCard, TeacherSubmissionListCard, TeacherSubmissionDetail, NewExerciseButton,
-} from "./ExerciseUi.jsx";
+import { ExerciseCard, ExerciseViewer, AdminExerciseForm, NewExerciseButton } from "./ExerciseUi.jsx";
+import { EXERCISE_SUBJECTS, canBrowseExercises, isAdmin } from "./exercises.js";
 import SubjectIcon from "./SubjectIcon.jsx";
 import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES, newestPaperYear } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
@@ -2444,9 +2441,8 @@ function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLan
    `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
    goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
 function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
-  const [step, setStep] = useState(initialStep ?? 0);
+  const [step, setStep] = useState(initialStep ?? 1);
   const [form, setForm] = useState(initialForm ?? {
-    accountKind: "student", // "student" | "teacher" -- chosen at step 0, frontend-only (never sent as a users column)
     name: "", phone: "", email: "", password: "", age: "",
     educationLevel: "highschool", // new sign-ups are always high school; "university" only survives on already-saved profiles
     // High-school (BAC II) fields:
@@ -2455,8 +2451,6 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     subjectsToImprove: [], foreignLanguage: FOREIGN_LANGUAGES[0],
     // University fields:
     universityGoals: [], universityMajor: "", universityYear: "",
-    // Teacher fields: sent as part of the same registration call that grants the role.
-    schoolName: "", subjectsTaught: "",
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
@@ -2475,7 +2469,6 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
   const accountOk = Boolean(form.name.trim()) && (!SERVER_MODE || (/^\d{8,15}$/.test(phoneDigits) && form.password.length >= 8));
   const submitErrorBanner = submitError ? <p className="eai-ob-error mb-4" role="alert"><AlertTriangle size={12} /> {submitError}</p> : null;
   const isUni = form.educationLevel === "university";
-  const isTeacher = form.accountKind === "teacher";
 
   // Unlimited multi-select (high-school "subjects to improve").
   const toggleImprove = (id) => setForm((f) => ({
@@ -2487,32 +2480,15 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     ...f, universityGoals: f.universityGoals.includes(id) ? f.universityGoals.filter((x) => x !== id) : [...f.universityGoals, id],
   }));
 
-  // ── Step 0: student or teacher ──
-  if (step === 0) {
-    return (
-      <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang}
-        title={t(lang, "accountKindTitle")} description={t(lang, "accountKindDesc")}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <OnboardingOptionCard variant="primary" icon={GraduationCap}
-            title={t(lang, "accountKindStudentTitle")} description={t(lang, "accountKindStudentDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("accountKind", "student"); setStep(1); }} />
-          <OnboardingOptionCard variant="secondary" icon={School}
-            title={t(lang, "accountKindTeacherTitle")} description={t(lang, "accountKindTeacherDesc")}
-            buttonLabel={t(lang, "continueWord")} onClick={() => { set("accountKind", "teacher"); setStep(1); }} />
-        </div>
-      </OnboardingLayout>
-    );
-  }
-
-  // ── Step 1: account details (shared layout; grade/target only shown for high-school students) ──
+  // ── Step 1: account details (shared layout; grade/target only shown for high school) ──
   if (step === 1) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
-        onBack={() => setStep(0)} lang={lang} setLang={isUni ? undefined : setLang}
+        onBack={onBack} lang={lang} setLang={isUni ? undefined : setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}
         footer={
           <PrimaryButton onClick={() => setStep(2)} disabled={!accountOk} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
-            {isUni || isTeacher ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
+            {isUni ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
           </PrimaryButton>
         }>
         {submitErrorBanner}
@@ -2539,7 +2515,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
             <input type="number" min="8" max="99" inputMode="numeric" className="eai-ob-input eai-focus" placeholder="18"
               value={form.age} onChange={(e) => set("age", e.target.value)} />
           </FormField>
-          {!isUni && !isTeacher && (
+          {!isUni && (
             <>
               <SelectField label={t(lang, "gradeLevelLabel")} value={form.grade} onChange={(e) => set("grade", e.target.value)}
                 options={[{ value: "11", label: t(lang, "grade11") }, { value: "12", label: t(lang, "grade12") }]} />
@@ -2550,35 +2526,6 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         </div>
 
 
-      </OnboardingLayout>
-    );
-  }
-
-  // ── Teacher step 2: school + subjects, then finish (teachers skip the track/preferences steps
-  // entirely -- they have no BAC II profile). One registration call grants the teacher role
-  // immediately; staff:make is only ever needed to promote an existing account by hand. ──
-  if (isTeacher && step === 2) {
-    const teacherOk = form.schoolName.trim() && form.subjectsTaught.trim();
-    return (
-      <OnboardingLayout dark={dark} setDark={setDark} step={2} onBack={() => setStep(1)} lang={lang} setLang={setLang}
-        title={t(lang, "teacherDetailsTitle")} description={t(lang, "teacherDetailsDesc")}
-        footer={
-          <PrimaryButton onClick={() => finish({ ...form, age: Number(form.age) || null })} disabled={!teacherOk || submitting} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
-            {t(lang, "teacherApplySubmit")} <ChevronRight size={16} />
-          </PrimaryButton>
-        }>
-        {submitErrorBanner}
-        <div className="space-y-5">
-          <FormField label={t(lang, "schoolNameLabel")} required>
-            <input className="eai-ob-input eai-focus" placeholder={t(lang, "schoolNamePlaceholder")} autoComplete="organization"
-              value={form.schoolName} onChange={(e) => set("schoolName", e.target.value)} />
-          </FormField>
-          <FormField label={t(lang, "subjectsTaughtLabel")} required>
-            <input className="eai-ob-input eai-focus" placeholder={t(lang, "subjectsTaughtPlaceholder")}
-              value={form.subjectsTaught} onChange={(e) => set("subjectsTaught", e.target.value)} />
-            <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "subjectsTaughtHint")}</p>
-          </FormField>
-        </div>
       </OnboardingLayout>
     );
   }
@@ -3048,22 +2995,28 @@ function Browse({ p, lang = "en", exam, tr }) {
   );
 }
 
-/* ════════════════════════ Exercises — teacher-posted work, student photo submission ════════════════════════
-   Same timer + photograph-and-submit mechanic as Browse's exam timer above, but server-backed (see
-   useExerciseSessions.js) since a teacher needs to see a specific student's work, which a per-browser
-   store can never do. Open to every signed-in student — no class/join-code grouping, by design. */
+/* ════════════════════════ Exercises — sheets an admin posted, browsed by subject ════════════════════════
+   Laid out like Browse (the exam papers): a row of pills, then a grid of cards. The pills are subjects here
+   instead of years, and each card names the teacher and school the sheet came from. Science track only for
+   now. There are no teacher accounts; an admin posts everything (see AdminExercises below). */
 function Exercises({ api, lang, tr }) {
+  const [subject, setSubject] = useState(EXERCISE_SUBJECTS[0]);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null); // the exercise object itself (already have it from the list — no need to re-fetch)
+  const [failed, setFailed] = useState(false);
+  const [viewing, setViewing] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    api.getExercises().then((res) => { if (alive) setList(res.exercises); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    setLoading(true); setFailed(false);
+    api.getExercises(subjectId(subject))
+      .then((res) => { if (alive) setList(res.exercises); })
+      .catch(() => { if (alive) { setList([]); setFailed(true); } })
+      .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [api]);
+  }, [api, subject]);
 
-  if (selected) return <ExerciseAttempt api={api} exercise={selected} lang={lang} tr={tr} onBack={() => setSelected(null)} />;
+  if (viewing) return <ExerciseViewer exercise={viewing} subject={subject} lang={lang} tr={tr} onBack={() => setViewing(null)} />;
 
   return (
     <div className="space-y-5 eai-rise">
@@ -3071,145 +3024,98 @@ function Exercises({ api, lang, tr }) {
         <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesTitle")}</h2>
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesDesc")}</p>
       </div>
-      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : list.length === 0 ? (
+      <SubjectPills subject={subject} onPick={setSubject} lang={lang} />
+      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : failed ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
+      ) : list.length === 0 ? (
         <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesEmpty")}</p></div>
       ) : (
-        <div className="space-y-3">
-          {list.map((ex) => <ExerciseListCard key={ex.id} exercise={ex} lang={lang} tr={tr} onOpen={() => setSelected(ex)} />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {list.map((ex) => <ExerciseCard key={ex.id} exercise={ex} subject={subject} lang={lang} tr={tr} onOpen={() => setViewing(ex)} />)}
         </div>
       )}
     </div>
   );
 }
 
-/* One exercise: instructions, the timer once started, then the photo-submit sheet, then the result
-   (with any teacher comments once they arrive). `submission.status` from the server is the source of
-   truth; `phase` only tracks the local "show the submit sheet now" step on top of it. */
-function ExerciseAttempt({ api, exercise, lang, tr, onBack }) {
-  const { submission, now, loading, start, submit, cancel, addPhoto, removePhoto } = useExerciseSessions({ api, exerciseId: exercise.id });
-  const [phase, setPhase] = useState("read");
-  const [startError, setStartError] = useState("");
-
-  const beginAttempt = async () => {
-    setStartError("");
-    try { await start(); } catch (err) { setStartError(err?.code === "already_running" ? tr("exErr_already_running") : tr("exErr_generic")); }
-  };
-
-  if (loading) return <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p>;
-
-  if (submission?.status === "submitted" && phase !== "submit") {
-    return <ExerciseResultCard exercise={exercise} submission={submission} lang={lang} tr={tr} onDone={onBack} />;
-  }
-
-  if (submission?.status === "running" && phase === "submit") {
-    return <ExerciseSubmitSheet submission={submission} lang={lang} tr={tr} onAdd={addPhoto} onRemove={removePhoto} onSubmit={submit} onBack={() => setPhase("read")} />;
-  }
-
-  const running = submission?.status === "running";
+/* The subject pills at the top of both exercise screens: same look as the year pills in Browse. */
+function SubjectPills({ subject, onPick, lang }) {
   return (
-    <div className="space-y-5 eai-rise">
-      <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {tr("exercisesTitle")}</button>
-      {running && <ExerciseTimerBar submission={submission} timeLimitMinutes={exercise.timeLimitMinutes} now={now} lang={lang} tr={tr} onFinish={() => setPhase("submit")} onCancel={cancel} />}
-      <div className="eai-card p-6">
-        <h2 className={`eai-display text-xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{exercise.title}</h2>
-        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{exercise.teacherName}</p>
-        <p className="text-sm mt-4 whitespace-pre-wrap">{exercise.instructions}</p>
-        {exercise.attachments?.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mt-4">
-            {exercise.attachments.map((a) => <ExerciseAttachmentThumb key={a.id} attachment={a} tr={tr} />)}
-          </div>
-        )}
-        {!running && (
-          <>
-            <button onClick={beginAttempt} className={`eai-btn eai-focus text-sm py-3 px-5 mt-6 flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)", color: "#fff" }}>
-              <Timer size={16} /> {tr("exStartBtn")}
-            </button>
-            {startError && <p className="eai-ob-error mt-3 flex items-center gap-1.5" role="alert"><AlertTriangle size={13} /> {startError}</p>}
-          </>
-        )}
-      </div>
+    <div className="flex gap-2 overflow-x-auto pb-1 eai-scroll">
+      {EXERCISE_SUBJECTS.map((s) => (
+        <button key={s} onClick={() => onPick(s)} className={`eai-btn eai-focus px-4 py-2 text-sm flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
+          style={{ background: s === subject ? "var(--primary)" : "var(--card)", color: s === subject ? "#fff" : "var(--ink)", border: s === subject ? "none" : "1px solid var(--line)" }}>
+          {subjectLabel(s, lang)}
+        </button>
+      ))}
     </div>
   );
 }
 
-/* ════════════════════════ Teacher: posting exercises, reviewing submissions ════════════════════════ */
-function TeacherExercises({ api, lang, tr }) {
+/* ════════════════════════ Admin: posting exercises ════════════════════════
+   The same subject pills; under each, the sheets already posted and a form to add one: the teacher's name, the
+   school, and a PDF or photos. Only an admin account reaches this (the sidebar and the server both check). */
+function AdminExercises({ api, lang, tr }) {
+  const [subject, setSubject] = useState(EXERCISE_SUBJECTS[0]);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [creating, setCreating] = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState(null); // null, or { exercise } -- exercise is the one being edited, absent for a new one
+  const [viewing, setViewing] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    api.getTeacherExercises().then((res) => { if (alive) setList(res.exercises); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    setLoading(true); setFailed(false);
+    api.getAdminExercises(subjectId(subject))
+      .then((res) => { if (alive) setList(res.exercises); })
+      .catch(() => { if (alive) { setList([]); setFailed(true); } })
+      .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [api, reloadKey]);
+  }, [api, subject, reloadKey]);
   const reload = () => setReloadKey((k) => k + 1);
 
-  const create = async (fields) => (await api.createTeacherExercise(fields)).exercise;
+  const save = async (fields) => (form.exercise
+    ? await api.updateAdminExercise(form.exercise.id, fields)
+    : await api.createAdminExercise({ subject: subjectId(subject), ...fields })).exercise;
   const addAttachment = async (exerciseId, file) => (await api.addExerciseAttachment(exerciseId, file)).attachment;
   const removeAttachment = (exerciseId, attachmentId) => api.removeExerciseAttachment(exerciseId, attachmentId);
-  const remove = async (id) => { await api.deleteTeacherExercise(id); reload(); };
-  const closeForm = () => { setCreating(false); reload(); };
+  // Deleting also removes the files, so it asks first.
+  const remove = async (ex) => {
+    if (!window.confirm(tr("exDeleteAsk"))) return;
+    try { await api.deleteAdminExercise(ex.id); } catch { /* the list below shows what is really there */ }
+    reload();
+  };
+  const closeForm = () => { setForm(null); reload(); };
 
-  if (creating) {
+  if (form) {
     return (
-      <TeacherExerciseForm lang={lang} tr={tr} onSave={create} onAddAttachment={addAttachment}
-        onRemoveAttachment={removeAttachment} onDone={closeForm} onCancel={closeForm} />
+      <AdminExerciseForm key={form.exercise?.id ?? "new"} initial={form.exercise} subject={subject} lang={lang} tr={tr}
+        onSave={save} onAddAttachment={addAttachment} onRemoveAttachment={removeAttachment} onDone={closeForm} onCancel={closeForm} />
     );
   }
-  if (selected) return <TeacherExerciseSubmissions api={api} exercise={selected} lang={lang} tr={tr} onBack={() => setSelected(null)} />;
+  if (viewing) return <ExerciseViewer exercise={viewing} subject={subject} lang={lang} tr={tr} onBack={() => setViewing(null)} />;
 
   return (
     <div className="space-y-5 eai-rise">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{tr("myExercisesTitle")}</h2>
-          <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{tr("myExercisesDesc")}</p>
+          <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesTitle")}</h2>
+          <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesDesc")}</p>
         </div>
-        <NewExerciseButton lang={lang} tr={tr} onClick={() => setCreating(true)} />
+        <NewExerciseButton lang={lang} tr={tr} onClick={() => setForm({})} />
       </div>
-      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : list.length === 0 ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("myExercisesEmpty")}</p></div>
+      <SubjectPills subject={subject} onPick={setSubject} lang={lang} />
+      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : failed ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
+      ) : list.length === 0 ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesEmpty")}</p></div>
       ) : (
-        <div className="space-y-3">
-          {list.map((ex) => <TeacherExerciseListCard key={ex.id} exercise={ex} lang={lang} tr={tr} onOpen={() => setSelected(ex)} onDelete={() => remove(ex.id)} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* One of the teacher's own exercises: every student's submission, and (once opened) that
-   submission's photos and comment thread. Visibility is enforced server-side (404 on anything not
-   owned by the signed-in teacher) — nothing here needs to re-check that. */
-function TeacherExerciseSubmissions({ api, exercise, lang, tr, onBack }) {
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [detail, setDetail] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    api.getTeacherExerciseSubmissions(exercise.id).then((res) => { if (alive) setList(res.submissions); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [api, exercise.id]);
-
-  const open = async (submissionId) => { const res = await api.getTeacherSubmission(exercise.id, submissionId); setDetail(res.submission); };
-  const comment = async (body) => { const res = await api.addSubmissionComment(exercise.id, detail.id, body); setDetail((d) => ({ ...d, comments: [res.comment, ...d.comments] })); };
-
-  if (detail) return <TeacherSubmissionDetail submission={detail} lang={lang} tr={tr} onComment={comment} onBack={() => setDetail(null)} />;
-
-  return (
-    <div className="space-y-5 eai-rise">
-      <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {tr("myExercisesTitle")}</button>
-      <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{exercise.title}</h2>
-      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : list.length === 0 ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exNoSubmissions")}</p></div>
-      ) : (
-        <div className="space-y-3">
-          {list.map((s) => <TeacherSubmissionListCard key={s.id} submission={s} lang={lang} tr={tr} onOpen={() => open(s.id)} />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {list.map((ex) => (
+            <ExerciseCard key={ex.id} exercise={ex} subject={subject} lang={lang} tr={tr}
+              onOpen={() => setViewing(ex)} onEdit={() => setForm({ exercise: ex })} onDelete={() => remove(ex)} />
+          ))}
         </div>
       )}
     </div>
@@ -7010,7 +6916,7 @@ const NAV = [
   { id: "dashboard", label: "Dashboard", labelKm: "ផ្ទាំងគ្រប់គ្រង", icon: LayoutDashboard },
   { id: "browse", label: "Browse exams", labelKm: "រកមើលកម្រងសំណួរ", icon: BookOpen },
   { id: "practice", label: "Practice", labelKm: "លំហាត់អនុវត្ត", icon: Target },
-  { id: "exercises", label: "Exercises", labelKm: "លំហាត់គ្រូ", icon: ClipboardCheck },
+  { id: "exercises", label: "Exercises", labelKm: "លំហាត់ពីគ្រូ", icon: ClipboardCheck },
   { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
   { id: "languages", label: "Languages", labelKm: "ភាសាបរទេស", icon: Globe },
@@ -7032,11 +6938,9 @@ const UNI_NAV = [
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
 ];
 
-/* Sidebar for a teacher account — no BAC II/university profile shape at all, so none of the
-   gamified student tabs (Practice, Progress, Wardrobe, Super Bondus...) apply. Posting and
-   reviewing exercises is the one thing a teacher account can do today. */
-const TEACHER_NAV = [
-  { id: "teacherExercises", label: "My Exercises", labelKm: "លំហាត់របស់ខ្ញុំ", icon: ClipboardCheck },
+/* Added to the sidebar for an admin account only (the server checks the role too): posting exercises. */
+const ADMIN_NAV = [
+  { id: "adminExercises", label: "Admin", labelKm: "អ្នកគ្រប់គ្រង", icon: ShieldCheck },
 ];
 
 /* ════════════════════════ UI localization (English / Khmer) ════════════════════════
@@ -7081,11 +6985,6 @@ const STRINGS = {
     errPlanSave: "Couldn't save that task. Please try again.",
     errSaveProgress: "We couldn't save your progress. Please try again later.",
     errPasswordShort: "Password must be at least 8 characters.",
-    errAlreadyRunning: "Finish or cancel your current attempt before starting another.",
-    errAlreadySubmitted: "You already submitted this exercise.",
-    errNoPhotos: "Add at least one photo before submitting.",
-    errTooManyPhotos: "You've reached the photo limit for this attempt.",
-    errNotRunning: "That attempt isn't running anymore.",
     retryWord: "Try again",
     passwordHint: "At least 8 characters",
     emailResetHint: "Add an email so you can reset your password if you forget it.",
@@ -7175,49 +7074,24 @@ const STRINGS = {
     prototypePaymentsNote: "Prototype · payments are not connected, no card will be charged",
     // Onboarding shared
     backWord: "Back", stepWord: "Step", deleteWord: "Delete",
-    // Register: student vs teacher
-    accountKindTitle: "How will you use Bondus?", accountKindDesc: "This decides what you see next.",
-    accountKindStudentTitle: "I'm a student", accountKindStudentDesc: "Grade 11 or 12, preparing for the BAC II exam, or already at university.",
-    accountKindTeacherTitle: "I'm a teacher", accountKindTeacherDesc: "Post exercises for your students, and see and comment on their work privately.",
-    teacherDetailsTitle: "Tell us about where you teach", teacherDetailsDesc: "Your teacher account is ready as soon as you finish this step.",
-    schoolNameLabel: "School name", schoolNamePlaceholder: "e.g. Bak Touk High School",
-    subjectsTaughtLabel: "Subjects you teach", subjectsTaughtPlaceholder: "e.g. Mathematics, Physics",
-    subjectsTaughtHint: "Separate multiple subjects with commas.",
-    teacherApplySubmit: "Create teacher account",
-    // Exercises: teacher-posted work, student photo submission
-    exercisesTitle: "Exercises", exercisesDesc: "Work posted by teachers. Pick one, do it on paper, and submit a photo.",
-    exercisesEmpty: "No exercises have been posted yet.",
-    exLoading: "Loading…", exStartBtn: "Start",
-    exErr_already_running: "Finish or cancel your current attempt before starting another.",
-    exErr_already_submitted: "You already submitted this exercise.",
-    exErr_no_photos: "Add at least one photo before submitting.",
-    exErr_too_many_photos: "You've reached the photo limit for this attempt.",
+    // Exercises: an admin posts sheets by subject, students browse them
+    exercisesTitle: "Exercises", exercisesDesc: "Practice sheets from teachers, by subject. Pick a subject, then open a sheet.",
+    exercisesEmpty: "No exercises for this subject yet.",
+    exLoading: "Loading…", exLoadError: "Couldn't load the exercises. Check your connection and try again.",
+    exTeacherLabel: "Teacher", exSchoolLabel: "School", exUntitled: "Exercise sheet",
+    exFilePdf: "PDF", exFilePhoto: "1 photo", exFilePhotos: "{n} photos",
+    adminExercisesTitle: "Admin · Exercises", adminExercisesDesc: "Post exercise sheets for students. Pick a subject, then add a PDF or photos, with the teacher and school they came from.",
+    adminExercisesEmpty: "Nothing posted for this subject yet.",
+    exNoFilesYet: "No file yet. Students can't see this until you add one.",
+    exDeleteAsk: "Delete this exercise and its files?", exEditBtn: "Edit",
+    exFormTeacherLabel: "Teacher's name", exFormSchoolLabel: "School name", exFormTitleLabel: "Title (optional)",
+    exFormRequired: "Teacher name and school name are required.", exFormSave: "Save and add files",
+    exFormAttachmentsHint: "Add a PDF or photos of the exercise. Students can see it as soon as there is a file.",
+    exAddAttachment: "Attach PDF or photo", exAttachmentsCount: "{n} of {max} files", exFormDone: "Done",
+    exNewExercise: "New exercise", exUploading: "Uploading…", exRemoveFile: "Remove file",
     exErr_not_image: "That file isn't a photo.", exErr_too_big: "That photo is too large.",
     exErr_generic: "Something went wrong. Please try again.",
-    exElapsed: "Elapsed", exOverBy: "Over by", exLeft: "left",
-    exCancelAsk: "Cancel this attempt?", exCancelYes: "Yes, cancel", exKeepGoing: "Keep going",
-    exFinishBtn: "I'm done", exCancelBtn: "Cancel attempt",
-    exSubmitTitle: "Submit your work", exSubmitDesc: "Photograph your answer sheet. You can add up to 10 photos.",
-    exTakePhoto: "Take photo", exChoosePhoto: "Choose photo", exUploading: "Uploading…",
-    exPhotosCount: "{n} of {max} photos", exRemovePhoto: "Remove photo",
-    exSubmitBtn: "Submit", exBackToExercise: "Back to exercise",
-    exDoneTitle: "Submitted!", exDonePhotos: "Photos", exDoneBack: "Back to exercises",
-    exTeacherComments: "Teacher comments",
-    exSubmissionCount: "{n} submissions",
-    exFormRequired: "A title and instructions are required.",
-    exFormTitleLabel: "Title", exFormInstructionsLabel: "Instructions", exFormTimeLimitLabel: "Time limit (minutes, optional)",
-    exFormNoLimit: "No limit", exFormSave: "Post exercise",
-    exFormAttachmentsHint: "Add a picture or PDF of the exercise for students to see (optional).",
-    exAddAttachment: "Attach picture or file", exAttachmentsCount: "{n} of {max} attachments",
-    exErr_too_many_attachments: "Too many attachments for one exercise.",
-    exFormDone: "Done",
-    exStatus_running: "In progress", exStatus_submitted: "Submitted", exStatus_expired: "Expired", exStatus_cancelled: "Cancelled",
-    exPhotosWord: "photos",
-    exNoComments: "No comments yet.", exCommentPlaceholder: "Write a comment…",
-    exNewExercise: "New exercise",
-    myExercisesTitle: "My Exercises", myExercisesDesc: "Post work for your students and review what they submit.",
-    myExercisesEmpty: "You haven't posted any exercises yet.",
-    exNoSubmissions: "No one has submitted this exercise yet.",
+    exErr_too_many_attachments: "Too many files for one exercise.",
     // Login
     loginTitle: "Log in", loginDesc: "Enter the phone number you used when you created your account.",
     phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
@@ -7343,11 +7217,6 @@ const STRINGS = {
     errPlanSave: "មិនអាចរក្សាទុកកិច្ចការនោះបានទេ។ សូមព្យាយាមម្តងទៀត។",
     errSaveProgress: "យើងមិនអាចរក្សាទុកវឌ្ឍនភាពរបស់អ្នកបានទេ។ សូមព្យាយាមម្តងទៀតពេលក្រោយ។",
     errPasswordShort: "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៨តួអក្សរ។",
-    errAlreadyRunning: "បញ្ចប់ ឬបោះបង់ការប៉ុនប៉ងបច្ចុប្បន្នរបស់អ្នក មុននឹងចាប់ផ្តើមថ្មី។",
-    errAlreadySubmitted: "អ្នកបានដាក់ស្នើលំហាត់នេះរួចហើយ។",
-    errNoPhotos: "បន្ថែមរូបថតយ៉ាងហោចណាស់មួយ មុននឹងដាក់ស្នើ។",
-    errTooManyPhotos: "អ្នកបានដល់កម្រិតកំណត់រូបថតសម្រាប់ការប៉ុនប៉ងនេះ។",
-    errNotRunning: "ការប៉ុនប៉ងនោះលែងដំណើរការទៀតហើយ។",
     retryWord: "ព្យាយាមម្តងទៀត",
     passwordHint: "យ៉ាងហោចណាស់ ៨តួអក្សរ",
     emailResetHint: "បន្ថែមអ៊ីមែល ដើម្បីអាចកំណត់ពាក្យសម្ងាត់ឡើងវិញ ប្រសិនបើអ្នកភ្លេច។",
@@ -7437,49 +7306,24 @@ const STRINGS = {
     prototypePaymentsNote: "គំរូសាកល្បង · ការទូទាត់មិនទាន់ភ្ជាប់ទេ គ្មានកាតត្រូវបានគិតលុយ",
     // Onboarding shared
     backWord: "ត្រឡប់ក្រោយ", stepWord: "ជំហាន", deleteWord: "លុប",
-    // Register: student vs teacher
-    accountKindTitle: "តើអ្នកនឹងប្រើ Bondus យ៉ាងដូចម្តេច?", accountKindDesc: "វានេះកំណត់អ្វីដែលអ្នកនឹងឃើញបន្ទាប់។",
-    accountKindStudentTitle: "ខ្ញុំជានិស្សិត/សិស្ស", accountKindStudentDesc: "ថ្នាក់ទី១១ ឬ១២ រៀបចំប្រឡងបាក់ឌុប ឬកំពុងសិក្សានៅសាកលវិទ្យាល័យ។",
-    accountKindTeacherTitle: "ខ្ញុំជាគ្រូបង្រៀន", accountKindTeacherDesc: "បង្ហោះលំហាត់សម្រាប់សិស្សរបស់អ្នក និងមើល/អធិប្បាយលើការងាររបស់ពួកគេជាឯកជន។",
-    teacherDetailsTitle: "ប្រាប់យើងអំពីកន្លែងដែលអ្នកបង្រៀន", teacherDetailsDesc: "គណនីគ្រូរបស់អ្នកនឹងរួចរាល់ភ្លាមៗបន្ទាប់ពីជំហានចុងក្រោយនេះ។",
-    schoolNameLabel: "ឈ្មោះសាលា", schoolNamePlaceholder: "ឧទាហរណ៍៖ វិទ្យាល័យបាក់ទូក",
-    subjectsTaughtLabel: "មុខវិជ្ជាដែលអ្នកបង្រៀន", subjectsTaughtPlaceholder: "ឧទាហរណ៍៖ គណិតវិទ្យា, រូបវិទ្យា",
-    subjectsTaughtHint: "ញែកមុខវិជ្ជាច្រើនដោយសញ្ញាក្បៀស (,)។",
-    teacherApplySubmit: "បង្កើតគណនីគ្រូ",
-    // Exercises: teacher-posted work, student photo submission
-    exercisesTitle: "លំហាត់គ្រូ", exercisesDesc: "លំហាត់ដែលបង្ហោះដោយគ្រូ។ ជ្រើសរើសមួយ ធ្វើវានៅលើក្រដាស ហើយដាក់ស្នើរូបថត។",
-    exercisesEmpty: "មិនទាន់មានលំហាត់ត្រូវបានបង្ហោះនៅឡើយទេ។",
-    exLoading: "កំពុងផ្ទុក…", exStartBtn: "ចាប់ផ្តើម",
-    exErr_already_running: "បញ្ចប់ ឬបោះបង់ការប៉ុនប៉ងបច្ចុប្បន្នរបស់អ្នក មុននឹងចាប់ផ្តើមថ្មី។",
-    exErr_already_submitted: "អ្នកបានដាក់ស្នើលំហាត់នេះរួចហើយ។",
-    exErr_no_photos: "បន្ថែមរូបថតយ៉ាងហោចណាស់មួយ មុននឹងដាក់ស្នើ។",
-    exErr_too_many_photos: "អ្នកបានដល់កម្រិតកំណត់រូបថតសម្រាប់ការប៉ុនប៉ងនេះ។",
+    // Exercises: an admin posts sheets by subject, students browse them (Khmer not yet proofread by a native speaker)
+    exercisesTitle: "លំហាត់ពីគ្រូ", exercisesDesc: "សន្លឹកលំហាត់ពីគ្រូ តាមមុខវិជ្ជា។ ជ្រើសរើសមុខវិជ្ជា រួចបើកសន្លឹកលំហាត់។",
+    exercisesEmpty: "មិនទាន់មានលំហាត់សម្រាប់មុខវិជ្ជានេះនៅឡើយទេ។",
+    exLoading: "កំពុងផ្ទុក…", exLoadError: "មិនអាចផ្ទុកលំហាត់បានទេ។ សូមពិនិត្យអ៊ីនធឺណិតរបស់អ្នក ហើយព្យាយាមម្តងទៀត។",
+    exTeacherLabel: "គ្រូ", exSchoolLabel: "សាលា", exUntitled: "សន្លឹកលំហាត់",
+    exFilePdf: "PDF", exFilePhoto: "រូបថត ១", exFilePhotos: "រូបថត {n}",
+    adminExercisesTitle: "អ្នកគ្រប់គ្រង · លំហាត់", adminExercisesDesc: "បង្ហោះសន្លឹកលំហាត់សម្រាប់សិស្ស។ ជ្រើសរើសមុខវិជ្ជា រួចបន្ថែមឯកសារ PDF ឬរូបថត ជាមួយឈ្មោះគ្រូ និងសាលាដែលលំហាត់នោះមកពី។",
+    adminExercisesEmpty: "មិនទាន់មានអ្វីបានបង្ហោះសម្រាប់មុខវិជ្ជានេះនៅឡើយទេ។",
+    exNoFilesYet: "មិនទាន់មានឯកសារទេ។ សិស្សមិនអាចមើលឃើញរហូតដល់អ្នកបន្ថែមមួយ។",
+    exDeleteAsk: "លុបលំហាត់នេះ និងឯកសាររបស់វា?", exEditBtn: "កែប្រែ",
+    exFormTeacherLabel: "ឈ្មោះគ្រូ", exFormSchoolLabel: "ឈ្មោះសាលា", exFormTitleLabel: "ចំណងជើង (មិនចាំបាច់)",
+    exFormRequired: "ត្រូវការឈ្មោះគ្រូ និងឈ្មោះសាលា។", exFormSave: "រក្សាទុក ហើយបន្ថែមឯកសារ",
+    exFormAttachmentsHint: "បន្ថែមឯកសារ PDF ឬរូបថតនៃលំហាត់។ សិស្សអាចមើលឃើញភ្លាមៗនៅពេលមានឯកសារ។",
+    exAddAttachment: "ភ្ជាប់ PDF ឬរូបថត", exAttachmentsCount: "{n} នៃ {max} ឯកសារ", exFormDone: "បានហើយ",
+    exNewExercise: "លំហាត់ថ្មី", exUploading: "កំពុងផ្ទុកឡើង…", exRemoveFile: "លុបឯកសារ",
     exErr_not_image: "ឯកសារនោះមិនមែនជារូបថតទេ។", exErr_too_big: "រូបថតនោះធំពេក។",
     exErr_generic: "មានអ្វីមួយខុសប្រក្រតី។ សូមព្យាយាមម្តងទៀត។",
-    exElapsed: "ពេលវេលាកន្លងទៅ", exOverBy: "លើសពេល", exLeft: "នៅសល់",
-    exCancelAsk: "បោះបង់ការប៉ុនប៉ងនេះ?", exCancelYes: "បាទ/ចាស៎ បោះបង់", exKeepGoing: "បន្តធ្វើទៅទៀត",
-    exFinishBtn: "ខ្ញុំរួចរាល់ហើយ", exCancelBtn: "បោះបង់ការប៉ុនប៉ង",
-    exSubmitTitle: "ដាក់ស្នើការងាររបស់អ្នក", exSubmitDesc: "ថតរូបសន្លឹកចម្លើយរបស់អ្នក។ អ្នកអាចបន្ថែមរូបថតរហូតដល់ ១០ សន្លឹក។",
-    exTakePhoto: "ថតរូប", exChoosePhoto: "ជ្រើសរើសរូបថត", exUploading: "កំពុងផ្ទុកឡើង…",
-    exPhotosCount: "{n} នៃ {max} រូបថត", exRemovePhoto: "លុបរូបថត",
-    exSubmitBtn: "ដាក់ស្នើ", exBackToExercise: "ត្រឡប់ទៅលំហាត់វិញ",
-    exDoneTitle: "បានដាក់ស្នើរួចរាល់!", exDonePhotos: "រូបថត", exDoneBack: "ត្រឡប់ទៅលំហាត់ទាំងអស់",
-    exTeacherComments: "មតិគ្រូ",
-    exSubmissionCount: "{n} ការដាក់ស្នើ",
-    exFormRequired: "ត្រូវការចំណងជើង និងការណែនាំ។",
-    exFormTitleLabel: "ចំណងជើង", exFormInstructionsLabel: "ការណែនាំ", exFormTimeLimitLabel: "ពេលកំណត់ (នាទី, មិនចាំបាច់)",
-    exFormNoLimit: "មិនកំណត់ពេល", exFormSave: "បង្ហោះលំហាត់",
-    exFormAttachmentsHint: "បញ្ចូលរូបថត ឬឯកសារ PDF នៃលំហាត់ សម្រាប់សិស្សមើល (មិនចាំបាច់)។",
-    exAddAttachment: "ភ្ជាប់រូបថត ឬឯកសារ", exAttachmentsCount: "{n} នៃ {max} ឯកសារភ្ជាប់",
-    exErr_too_many_attachments: "ឯកសារភ្ជាប់ច្រើនពេកសម្រាប់លំហាត់មួយ។",
-    exFormDone: "បានហើយ",
-    exStatus_running: "កំពុងធ្វើ", exStatus_submitted: "បានដាក់ស្នើ", exStatus_expired: "ផុតកំណត់", exStatus_cancelled: "បានបោះបង់",
-    exPhotosWord: "រូបថត",
-    exNoComments: "មិនទាន់មានមតិនៅឡើយទេ។", exCommentPlaceholder: "សរសេរមតិ…",
-    exNewExercise: "លំហាត់ថ្មី",
-    myExercisesTitle: "លំហាត់របស់ខ្ញុំ", myExercisesDesc: "បង្ហោះការងារសម្រាប់សិស្សរបស់អ្នក ហើយពិនិត្យអ្វីដែលពួកគេដាក់ស្នើ។",
-    myExercisesEmpty: "អ្នកមិនទាន់បានបង្ហោះលំហាត់ណាមួយនៅឡើយទេ។",
-    exNoSubmissions: "មិនទាន់មាននរណាម្នាក់ដាក់ស្នើលំហាត់នេះនៅឡើយទេ។",
+    exErr_too_many_attachments: "ឯកសារច្រើនពេកសម្រាប់លំហាត់មួយ។",
     // Login
     loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
     phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
@@ -7641,7 +7485,7 @@ export default function App() {
   const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later — no entry point right now: the Dashboard banner that set it was removed
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
-  const [tab, setTab] = useState(saved?.profile?.role === "teacher" ? "teacherExercises" : saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
+  const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
   const [dark, setDark] = useState(false);
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
@@ -7725,7 +7569,7 @@ export default function App() {
     setBonusXp(data.bonusXp ?? 0);
     setRewards(sanitizeRewards(data.rewards));
     setShowWelcomeBack(true);
-    setTab(data.profile.role === "teacher" ? "teacherExercises" : data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
+    setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
   // After "Forgot password": the reset already stored a fresh login, so just load the account.
@@ -7741,18 +7585,6 @@ export default function App() {
   // With the server the account is created here (so "phone already used" shows up on the sign-up screen, not after the
   // whole flow); the dashboard appears once the diagnostic is done or skipped. Resolves to { error, step } on failure.
   const handleRegister = async (reg) => {
-    if (reg.accountKind === "teacher") {
-      // No local-prototype equivalent: a teacher account only means anything with a real backend.
-      // Shown as a normal network error if somehow reached without one.
-      if (!SERVER_MODE) return { error: "api_disabled" };
-      try {
-        serverUserRef.current = (await api.register(registrationToPayload(reg))).user;
-        await loadAccount();
-        return null;
-      } catch (err) {
-        return { error: err?.code ?? "server_error", step: registrationErrorStep(err), retryAfter: err?.retryAfter ?? null };
-      }
-    }
     if (reg.educationLevel === "university") {
       // Register's form keeps these as flat fields (universityGoals/Major/Year); nest them into
       // universityProfile here so UniversityHub, the University Mentor Coach mode and
@@ -7930,7 +7762,7 @@ export default function App() {
     setBonusXp(0);
     applySummary(sm, { announce: false });
     hydratedRef.current = true;
-    setTab(me.user.role === "teacher" ? "teacherExercises" : me.user.educationLevel === "university" ? "universityHub" : "dashboard");
+    setTab(me.user.educationLevel === "university" ? "universityHub" : "dashboard");
     queueRef.current.flush(); // anything left unsent from last time
     return me.user;
   };
@@ -8145,14 +7977,18 @@ export default function App() {
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";
-  const isTeacherProfile = profile.role === "teacher";
+  // Exercises are for science students (an admin also has the Admin tab).
+  const navItems = [
+    ...(isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).filter((n) => n.id !== "exercises" || canBrowseExercises(p)),
+    ...(isAdmin(profile) ? [...ADMIN_NAV] : []),
+  ];
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
     schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
-    teacherExercises: <TeacherExercises api={api} lang={lang} tr={tr} />,
+    adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
@@ -8179,10 +8015,10 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus {isTeacherProfile ? "Teacher" : isUniProfile ? "University" : "Highschool"}</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus {isUniProfile ? "University" : "Highschool"}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
-            {(isTeacherProfile ? TEACHER_NAV : isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).map((n) => {
+            {navItems.map((n) => {
               const on = tab === n.id;
               const premiumColor = "var(--gold)";
               return (
@@ -8201,13 +8037,11 @@ export default function App() {
             })}
           </nav>
           <div className="p-3 space-y-2">
-            {!isTeacherProfile && (
-              <div className="eai-soft rounded-2xl p-4 text-center">
-                <span className="eai-fx-fire" style={{ display: "block", margin: "0 auto", width: 20 }}><Flame size={20} style={{ color: "var(--ember)" }} /></span>
-                <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
-                <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
-              </div>
-            )}
+            <div className="eai-soft rounded-2xl p-4 text-center">
+              <span className="eai-fx-fire" style={{ display: "block", margin: "0 auto", width: 20 }}><Flame size={20} style={{ color: "var(--ember)" }} /></span>
+              <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
+              <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
+            </div>
             <button onClick={handleLogout} className={`eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "logOut")}</button>
           </div>
         </aside>
@@ -8216,15 +8050,13 @@ export default function App() {
           <header className="sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
               <button className="lg:hidden eai-focus" onClick={() => setOpen(true)}><Menu size={22} /></button>
-              {!isTeacherProfile && (
-                <div className="hidden sm:flex items-center gap-2">
-                  <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
-                  <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
-                  <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" effect="climb" />
-                </div>
-              )}
+              <div className="hidden sm:flex items-center gap-2">
+                <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
+                <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
+                <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" effect="climb" />
+              </div>
               <div className="flex items-center gap-2 ml-auto">
-                {!isUniProfile && !isTeacherProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
+                {!isUniProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
                 {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}

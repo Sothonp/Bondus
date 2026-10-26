@@ -138,36 +138,20 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
       return get(`/exams${qs ? `?${qs}` : ""}`, { auth: false });
     },
 
-    // exercises: open to any signed-in student — browse, and the attempt lifecycle for one's own work.
-    getExercises: () => get("/exercises"),
+    // exercises an admin posted: open to any signed-in student, browsed by subject (e.g. "physics").
+    getExercises: (subject) => get(`/exercises${subject ? `?subject=${encodeURIComponent(subject)}` : ""}`),
     getExercise: (id) => get(`/exercises/${id}`),
-    startExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt`),
-    getExerciseAttempt: (id) => get(`/exercises/${id}/attempt`),
-    uploadExercisePhoto: (id, file) => {
-      const form = new FormData();
-      form.append("photo", file);
-      return send("POST", `/exercises/${id}/attempt/photos`, form);
-    },
-    removeExercisePhoto: (id, photoId) => send("DELETE", `/exercises/${id}/attempt/photos/${photoId}`),
-    submitExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt/submit`),
-    cancelExerciseAttempt: (id) => send("POST", `/exercises/${id}/attempt/cancel`),
 
-    // exercises: teacher-only — post work, review submissions.
-    getTeacherExercises: () => get("/teacher/exercises"),
-    createTeacherExercise: (fields) => send("POST", "/teacher/exercises", fields),
-    updateTeacherExercise: (id, fields) => send("PATCH", `/teacher/exercises/${id}`, fields),
-    deleteTeacherExercise: (id) => send("DELETE", `/teacher/exercises/${id}`),
-    getTeacherExerciseSubmissions: (id) => get(`/teacher/exercises/${id}/submissions`),
-    getTeacherSubmission: (exerciseId, submissionId) => get(`/teacher/exercises/${exerciseId}/submissions/${submissionId}`),
-    addSubmissionComment: (exerciseId, submissionId, body) =>
-      send("POST", `/teacher/exercises/${exerciseId}/submissions/${submissionId}/comments`, { body }),
-
-    // A picture or PDF of the exercise itself, attached by the teacher who posted it.
+    // exercises: admin-only -- post a sheet for a subject (with the teacher and school it came from), then its files.
+    getAdminExercises: (subject) => get(`/admin/exercises${subject ? `?subject=${encodeURIComponent(subject)}` : ""}`),
+    createAdminExercise: (fields) => send("POST", "/admin/exercises", fields),
+    updateAdminExercise: (id, fields) => send("PATCH", `/admin/exercises/${id}`, fields),
+    deleteAdminExercise: (id) => send("DELETE", `/admin/exercises/${id}`),
     addExerciseAttachment: (exerciseId, file) => {
       const form = new FormData();
       form.append("file", file);
-      return send("POST", `/teacher/exercises/${exerciseId}/attachments`, form);
+      return send("POST", `/admin/exercises/${exerciseId}/attachments`, form);
     },
-    removeExerciseAttachment: (exerciseId, attachmentId) => send("DELETE", `/teacher/exercises/${exerciseId}/attachments/${attachmentId}`),
+    removeExerciseAttachment: (exerciseId, attachmentId) => send("DELETE", `/admin/exercises/${exerciseId}/attachments/${attachmentId}`),
   };
 }
