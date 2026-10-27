@@ -125,7 +125,8 @@ The site and the API are hosted apart: the Python server (PyTorch and the
 embedding model) is too big for Netlify or Vercel functions. On Render the
 server is read-only (`ALLOW_WRITES=false`): the index is built on the laptop,
 committed, and baked into the Docker image. The functions call Gemini
-`flash-latest` first and Groq if it fails (`api/_ai.js`).
+(`GEMINI_MODEL`, then each of `GEMINI_FALLBACK_MODELS`, 12 s each) and Groq
+(`GROQ_MODEL`) if all of those fail (`api/_ai.js`).
 
 ### 2. In the app
 
