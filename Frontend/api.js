@@ -114,6 +114,9 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     // accounts
     register: (payload) => send("POST", "/register", payload, { auth: false }).then(remember),
     login: ({ login, password }) => send("POST", "/login", { login, password }, { auth: false }).then(remember),
+    // The credential is the ID token Google's own button hands back client-side -- the backend
+    // verifies it, so this needs no password either way.
+    loginWithGoogle: (credential) => send("POST", "/auth/google", { credential }, { auth: false }).then(remember),
     logout: async () => { try { await send("POST", "/logout"); } catch { /* the session is going away either way */ } setToken(null); },
     getMe: () => get("/me"),
     patchMe: (fields) => send("PATCH", "/me", fields),

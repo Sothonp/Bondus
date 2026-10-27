@@ -55,6 +55,15 @@ test("login remembers the token and the next call carries it; login itself sends
   assert.equal(calls[1].init.headers.Authorization, "Bearer tok_123");
 });
 
+test("loginWithGoogle sends the credential and remembers the token the same way login does", async () => {
+  const { api, calls } = make(() => json(201, { user: { id: 3 }, token: "tok_google" }));
+  await api.loginWithGoogle("the-id-token-jwt");
+  assert.deepEqual([calls[0].init.method, calls[0].url, calls[0].body], [
+    "POST", `${BASE}/auth/google`, { credential: "the-id-token-jwt" },
+  ]);
+  assert.equal(api.hasToken(), true);
+});
+
 test("register stores the token too, and a failed login stores nothing", async () => {
   const ok = make(() => json(201, { user: { id: 2 }, token: "t2" }));
   await ok.api.register({ name: "A", phone: "012345678", password: "secret123", field: "science" });

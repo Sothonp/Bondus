@@ -16,7 +16,6 @@ export function userToProfile(user, summary) {
 export function registrationToPayload(reg) {
   return compact({
     name: String(reg.name ?? "").trim(),
-    phone: String(reg.phone ?? "").trim(),
     password: reg.password,
     field: reg.field,
     email: String(reg.email ?? "").trim(),

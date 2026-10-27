@@ -26,9 +26,30 @@ test("signing in, signing out and creating the account all talk to the server", 
 test("a wrong sign-up or login shows a message, not a crash, and says how long to wait when rate limited", () => {
   assert.match(app, /res && res\.error \? apiErrorText\(lang, res\.error, res\.retryAfter\)/);   // Login
   assert.match(app, /if \(res && res\.error\) \{ setSubmitError\(apiErrorText\(lang, res\.error, res\.retryAfter\)\); if \(res\.step\) setStep\(res\.step\); \}/); // Register
-  // the four places that turn a failed server call into a result for a screen all pass the wait time along
-  // (sign in, sign up, signing in after a password reset, and entering the dashboard without an assessment)
-  assert.equal((app.match(/retryAfter: err\?\.retryAfter \?\? null/g) || []).length, 4);
+  // the five places that turn a failed server call into a result for a screen all pass the wait time along
+  // (sign in, sign up, Google sign-in, signing in after a password reset, and entering the dashboard without an assessment)
+  assert.equal((app.match(/retryAfter: err\?\.retryAfter \?\? null/g) || []).length, 5);
+});
+
+test("Google sign-in is wired on both Login and Register, and a brand-new account resumes onboarding at step 2", () => {
+  assert.match(app, /const GOOGLE_CLIENT_ID = import\.meta\.env\.VITE_GOOGLE_CLIENT_ID;/);
+  assert.match(app, /function GoogleSignInButton\(/);
+
+  const handler = between("const handleGoogleAuth = async", "// After \"Forgot password\"");
+  assert.match(handler, /api\.loginWithGoogle\(credential\)/);
+  assert.match(handler, /serverUserRef\.current = res\.user;/);
+  // No track yet (a brand-new account, or one that never finished onboarding) -- resume at step 2,
+  // never straight into the dashboard with half a profile.
+  assert.match(handler, /if \(!res\.user\.field && res\.user\.educationLevel !== "university"\) \{/);
+  assert.match(handler, /step: 2, _key: Date\.now\(\)/);
+  assert.match(handler, /await loadAccount\(\);/);
+
+  const login = between("function Login(", "function SendingCard(");
+  assert.match(login, /<GoogleSignInButton onCredential=\{handleGoogle\} lang=\{lang\} text="signin_with" \/>/);
+  const register = between("function Register(", "function Dashboard(");
+  assert.match(register, /<GoogleSignInButton onCredential=\{handleGoogle\} lang=\{lang\} text="signup_with" \/>/);
+
+  assert.match(app, /<Register key=\{resumeReg\?\._key \?\? "register"\}/);
 });
 
 test("'too many tries' names the real wait (e.g. 48 minutes) instead of always saying 'a minute'", () => {
@@ -122,13 +143,13 @@ test("the forgot-password screen is reachable from Login and signs the student i
   assert.match(app, /api\.resetPassword\(\{ login: login\.trim\(\), code: code\.trim\(\), password \}\)/);
 });
 
-test("with a server, sign-up needs a phone number and a password of 8+ characters", () => {
-  assert.match(app, /\(!SERVER_MODE \|\| \(\/\^\\d\{8,15\}\$\/\.test\(phoneDigits\) && form\.password\.length >= 8\)\)/);
+test("with a server, sign-up needs a valid email and a password of 8+ characters", () => {
+  assert.match(app, /\(!SERVER_MODE \|\| \(\/\^\[\^\\s@\]\+@\[\^\\s@\]\+\\\.\[\^\\s@\]\+\$\/\.test\(form\.email\.trim\(\)\) && form\.password\.length >= 8\)\)/);
 });
 
 test("both languages have every message the server flow can show", () => {
   const keys = [
-    "errInvalidCredentials", "errTooManyWait", "errEnterPhonePassword", "errPhoneTaken", "errEmailTaken", "errValidation", "errTooMany", "errNetwork",
+    "errInvalidCredentials", "errTooManyWait", "errEnterEmailPassword", "errPhoneTaken", "errEmailTaken", "errValidation", "errTooMany", "errNetwork",
     "errServer", "errSession", "errInvalidCode", "errNoEmail", "errEmailFailed", "errPlanLimit", "errPlanSave", "errSaveProgress",
     "errPasswordShort", "retryWord", "passwordHint", "emailResetHint", "forgotLink", "forgotTitle", "forgotDesc", "forgotSendCode",
     "forgotCodeSent", "forgotCodeExpires", "forgotCodeLabel", "forgotNewPasswordLabel", "forgotResetBtn", "forgotResend",

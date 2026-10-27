@@ -26,7 +26,7 @@ test("the server user becomes the app profile: id -> userId, createdAt dropped, 
 test("registration payload is trimmed and leaves out empty optional fields", () => {
   const body = registrationToPayload(form);
   assert.equal(body.name, "Sophea Chan");
-  assert.equal(body.phone, "016 556 618");        // the server strips spaces itself
+  assert.equal("phone" in body, false);        // phone is no longer collected at sign-up
   assert.equal("email" in body, false);
   assert.equal("targetUniversity" in body, false);
   assert.deepEqual([body.age, body.grade, body.field, body.target, body.targetExamYear, body.dailyMinutes], [17, "12", "science", "A", 2027, 60]);

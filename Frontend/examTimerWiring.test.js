@@ -38,7 +38,7 @@ test("finishing goes through the photo sheet, and submitting shows the result", 
 });
 
 test("the app owns one exam store per student, shows the running chip, and offers the school report page", () => {
-  assert.match(app, /const exam = useExamSessions\(\{\s*userKey: profile \? `\$\{profile\.phone \?\? ""\}\|\$\{profile\.name\}` : "anon",/);
+  assert.match(app, /const exam = useExamSessions\(\{\s*userKey: profile \? `\$\{profile\.email \?\? profile\.phone \?\? ""\}\|\$\{profile\.name\}` : "anon",/);
   assert.match(app, /limitFor: \(field, subject\) => SUBJECT_DURATION_MIN\[field\]\?\.\[subject\] \?\? 180/);
   assert.match(app, /<RunningChip session=\{exam\.current\}/);
   assert.match(app, /schoolReport: <SchoolReportPage report=\{exam\.report\(\)\}/);

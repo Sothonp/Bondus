@@ -152,6 +152,9 @@ const XP_PER_CORRECT = 30;
    streak and daily plan live there. With it unset the app is the old browser-only prototype, unchanged. */
 const api = createApi({ baseUrl: import.meta.env.VITE_API_URL });
 const SERVER_MODE = api.enabled;
+// "Sign in with Google": public by design (also shipped to Google's own GSI script, which this app
+// has no control over). Unset, the Google button simply doesn't render -- email/password still works.
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const safeStorage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
 const MISTAKE_TYPES = [
@@ -2188,30 +2191,82 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   );
 }
 
-function Login({ dark, setDark, onBack, onLogin, onCreateInstead, onForgot, lang = "en", setLang }) {
-  const [method, setMethod] = useState("phone"); // "phone" | "email"
-  const [phone, setPhone] = useState("");
+/* Renders Google's own "Sign in with Google" button into a container div and hands the ID token it
+   returns to `onCredential` (App.jsx's handleGoogleAuth). index.html loads the GSI script async, so
+   this polls briefly for `window.google` rather than assuming it's there yet; if Google's script
+   never loads (blocked, offline, not configured), the button just never appears -- email/password
+   sign-in beside it is unaffected either way. */
+function GoogleSignInButton({ onCredential, lang, text }) {
+  const boxRef = useRef(null);
+  const [ready, setReady] = useState(Boolean(window.google?.accounts?.id));
+  // handleLogin/handleGoogleAuth aren't memoized in App, so a new function arrives every render;
+  // the ref keeps Google's own callback stable while always calling whichever one is current.
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
+
+  useEffect(() => {
+    if (ready || !GOOGLE_CLIENT_ID) return undefined;
+    const poll = setInterval(() => {
+      if (window.google?.accounts?.id) { setReady(true); clearInterval(poll); }
+    }, 150);
+    const giveUp = setTimeout(() => clearInterval(poll), 8000);
+    return () => { clearInterval(poll); clearTimeout(giveUp); };
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready || !boxRef.current) return;
+    window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (resp) => onCredentialRef.current(resp.credential) });
+    boxRef.current.innerHTML = "";
+    window.google.accounts.id.renderButton(boxRef.current, {
+      type: "standard", theme: "outline", size: "large", shape: "rectangular", width: 320,
+      text, locale: lang === "km" ? "km" : "en",
+    });
+  }, [ready, lang, text]);
+
+  if (!GOOGLE_CLIENT_ID) return null;
+  return <div ref={boxRef} style={{ display: "flex", justifyContent: "center" }} />;
+}
+
+/* The "── OR ──" rule between the Google button and the manual email/password fields. */
+function OrDivider({ lang }) {
+  return (
+    <div className="flex items-center gap-3 my-1" aria-hidden="true">
+      <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+      <span className={`text-xs font-semibold eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "orWord")}</span>
+      <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+    </div>
+  );
+}
+
+function Login({ dark, setDark, onBack, onLogin, onGoogleAuth, onCreateInstead, onForgot, lang = "en", setLang }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mascotState, setMascotState] = useState("idle");
   const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
-  const switchMethod = (m) => { setMethod(m); setError(""); };
-  // The browser-only prototype let a phone number alone sign in; with the server both ways need the password.
-  const needsPassword = SERVER_MODE || method === "email";
   const submit = async () => {
     if (busy) return;
-    const creds = method === "phone" ? { phone: phone.trim(), ...(SERVER_MODE ? { password } : {}) } : { email: email.trim(), password };
-    const identifier = method === "phone" ? creds.phone : creds.email;
-    if (!identifier || (needsPassword && !creds.password)) {
-      setError(t(lang, method === "email" ? "errEnterEmailPassword" : SERVER_MODE ? "errEnterPhonePassword" : "errEnterPhone")); shake(); return;
+    const creds = { email: email.trim(), password };
+    if (!creds.email || !creds.password) {
+      setError(t(lang, "errEnterEmailPassword")); shake(); return;
     }
     setBusy(true);
     try {
       const res = await onLogin(creds);
       if (res === true) return;
-      setError(res && res.error ? apiErrorText(lang, res.error, res.retryAfter) : t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound"));
+      setError(res && res.error ? apiErrorText(lang, res.error, res.retryAfter) : t(lang, "errEmailNotFound"));
+      shake();
+    } finally { setBusy(false); }
+  };
+  const handleGoogle = async (credential) => {
+    if (busy) return;
+    setError(""); setBusy(true);
+    try {
+      const res = await onGoogleAuth(credential);
+      // true: signed in, dashboard next. null: a brand-new account, now mid sign-up on its own screen.
+      if (res === true || res === null) return;
+      setError(apiErrorText(lang, res?.error, res?.retryAfter));
       shake();
     } finally { setBusy(false); }
   };
@@ -2221,37 +2276,23 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, onForgot, lang
       footer={
         <PrimaryButton onClick={submit} disabled={busy} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
       }>
-      <div className="flex gap-1 p-1 rounded-full eai-soft" style={{ width: "fit-content", marginBottom: 18 }}>
-        {["phone", "email"].map((m) => (
-          <button key={m} onClick={() => switchMethod(m)}
-            className={`eai-focus text-xs font-semibold px-3.5 py-1.5 rounded-full ${lang === "km" ? "eai-km" : ""}`}
-            style={{ background: method === m ? "var(--card)" : "transparent", color: method === m ? "var(--ink)" : "var(--muted)", boxShadow: method === m ? "var(--shadow)" : "none" }}>
-            {t(lang, m === "phone" ? "loginWithPhone" : "loginWithEmail")}
-          </button>
-        ))}
-      </div>
-
+      {GOOGLE_CLIENT_ID && (
+        <div className="space-y-4 mb-4">
+          <GoogleSignInButton onCredential={handleGoogle} lang={lang} text="signin_with" />
+          <OrDivider lang={lang} />
+        </div>
+      )}
       <div className="space-y-4">
-        {method === "phone" ? (
-          <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
-            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
-              value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && submit()} />
-          </FormField>
-        ) : (
-          <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
-            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
-              value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && submit()} />
-          </FormField>
-        )}
-        {needsPassword && (
-          <FormField label={t(lang, "passwordLabel")} required>
-            <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="current-password"
-              value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && submit()} />
-          </FormField>
-        )}
+        <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
+          <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
+            value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </FormField>
+        <FormField label={t(lang, "passwordLabel")} required>
+          <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="current-password"
+            value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </FormField>
         {SERVER_MODE && (
           <div className="text-right" style={{ marginTop: -6 }}>
             <button type="button" onClick={onForgot} className={`eai-focus text-xs font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>
@@ -2326,8 +2367,9 @@ function CheckEmailCard({ lang, email }) {
 const recentCodes = new Map();
 
 /* ════════════════════════ Forgot password (server mode) ════════════════════════
-   Step 1: the student gives their phone number or email and the server emails a 6-digit code to the address on the
-   account. Step 2: they type the code and a new password; the server answers with a fresh login, so they land on the
+   Step 1: the student gives their email and the server emails a 6-digit code to the address on the
+   account (an older account with only a phone on file can still type it here — the backend resolves
+   either). Step 2: they type the code and a new password; the server answers with a fresh login, so they land on the
    dashboard. `onSignedIn` loads the account and resolves to true, or to { error } when that fails. */
 function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLang }) {
   const [step, setStep] = useState(1);
@@ -2397,7 +2439,7 @@ function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLan
       {step === 1 ? (
         sending ? <SendingCard lang={lang} /> : (
           <FormField label={t(lang, "forgotLoginLabel")} required error={error} lang={lang}>
-            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="username"
+            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="username" inputMode="email"
               value={login} onChange={(e) => { setLogin(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && sendCode()} />
           </FormField>
@@ -2433,17 +2475,11 @@ function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLan
   );
 }
 
-/* ════════════════════════ Registration ════════════════════════
-   Sign-up is high school only: it opens straight on step 1 with no education-level question.
-   High-school steps 1–3 (account details, academic track, learning preferences) are the original
-   BAC II flow, unchanged. The university steps 2–4 below are parked and unreachable from sign-up
-   (nothing sets `educationLevel: "university"` any more); they stay so the parked track keeps compiling.
-   `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
-   goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
-function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
-  const [step, setStep] = useState(initialStep ?? 1);
-  const [form, setForm] = useState(initialForm ?? {
-    name: "", phone: "", email: "", password: "", age: "",
+/* A fresh step-1 form, reused as Register's own default state and by a brand-new Google sign-up
+   (App.jsx's handleGoogleAuth), which already has name/email and needs to resume at step 2. */
+function blankRegisterForm(overrides = {}) {
+  return {
+    name: "", email: "", password: "", age: "",
     educationLevel: "highschool", // new sign-ups are always high school; "university" only survives on already-saved profiles
     // High-school (BAC II) fields:
     grade: "12", field: "", target: "A",
@@ -2451,12 +2487,37 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     subjectsToImprove: [], foreignLanguage: FOREIGN_LANGUAGES[0],
     // University fields:
     universityGoals: [], universityMajor: "", universityYear: "",
-  });
+    ...overrides,
+  };
+}
+
+/* ════════════════════════ Registration ════════════════════════
+   Sign-up is high school only: it opens straight on step 1 with no education-level question.
+   High-school steps 1–3 (account details, academic track, learning preferences) are the original
+   BAC II flow, unchanged. The university steps 2–4 below are parked and unreachable from sign-up
+   (nothing sets `educationLevel: "university"` any more); they stay so the parked track keeps compiling.
+   `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
+   goes "Back" from the step-4 AssessmentChoice screen, or lands here fresh from Google sign-in
+   already past step 1, so their answers (or Google's) aren't lost. */
+function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
+  const [step, setStep] = useState(initialStep ?? 1);
+  const [form, setForm] = useState(initialForm ?? blankRegisterForm());
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  // With the server, onComplete creates the account and may answer { error, step } (phone already used, etc.).
+  const handleGoogle = async (credential) => {
+    if (submitting) return;
+    setSubmitError(""); setSubmitting(true);
+    try {
+      const res = await onGoogleAuth(credential);
+      // true: an existing, already-onboarded account -- signed in. null: handled on its own screen
+      // (a brand-new account resumes right here at step 2, or an existing-but-unfinished one too).
+      if (res === true || res === null) return;
+      setSubmitError(apiErrorText(lang, res?.error, res?.retryAfter));
+    } finally { setSubmitting(false); }
+  };
+  // With the server, onComplete creates the account and may answer { error, step } (email already used, etc.).
   const finish = async (data) => {
     if (submitting) return;
     setSubmitError(""); setSubmitting(true);
@@ -2465,8 +2526,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
       if (res && res.error) { setSubmitError(apiErrorText(lang, res.error, res.retryAfter)); if (res.step) setStep(res.step); }
     } finally { setSubmitting(false); }
   };
-  const phoneDigits = form.phone.replace(/[\s().-]/g, "").replace(/^\+/, "");
-  const accountOk = Boolean(form.name.trim()) && (!SERVER_MODE || (/^\d{8,15}$/.test(phoneDigits) && form.password.length >= 8));
+  const accountOk = Boolean(form.name.trim()) && (!SERVER_MODE || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.password.length >= 8));
   const submitErrorBanner = submitError ? <p className="eai-ob-error mb-4" role="alert"><AlertTriangle size={12} /> {submitError}</p> : null;
   const isUni = form.educationLevel === "university";
 
@@ -2492,16 +2552,18 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           </PrimaryButton>
         }>
         {submitErrorBanner}
+        {GOOGLE_CLIENT_ID && (
+          <div className="space-y-4 mb-5">
+            <GoogleSignInButton onCredential={handleGoogle} lang={lang} text="signup_with" />
+            <OrDivider lang={lang} />
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
             <input className="eai-ob-input eai-focus" placeholder="e.g. Sophea Chan" autoComplete="name"
               value={form.name} onChange={(e) => set("name", e.target.value)} />
           </FormField>
-          <FormField label={t(lang, "phoneNumberLabel")} required>
-            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
-              value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-          </FormField>
-          <FormField label={t(lang, "emailLabel")}>
+          <FormField label={t(lang, "emailLabel")} required>
             <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
               value={form.email} onChange={(e) => set("email", e.target.value)} />
             {SERVER_MODE && <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "emailResetHint")}</p>}
@@ -6968,8 +7030,7 @@ const STRINGS = {
     planEmpty: "No tasks yet. Add what you plan to study today.", planAddPlaceholder: "Add a task for today…",
     planSubjectOptional: "Subject (optional)", planMinutesShort: "Min", planAdd: "Add", planDeleteTask: "Delete task",
     planSuggested: "Suggested for you", planMyTask: "My task",
-    errInvalidCredentials: "Wrong phone number, email or password.",
-    errEnterPhonePassword: "Enter your phone number and password.",
+    errInvalidCredentials: "Wrong email or password.",
     errPhoneTaken: "This phone number already has an account. Try logging in instead.",
     errEmailTaken: "This email already has an account. Try logging in instead.",
     errValidation: "Please check the details you entered and try again.",
@@ -6989,10 +7050,10 @@ const STRINGS = {
     passwordHint: "At least 8 characters",
     emailResetHint: "Add an email so you can reset your password if you forget it.",
     forgotLink: "Forgot password?", forgotTitle: "Reset your password",
-    forgotDesc: "Enter your phone number or email. We'll email a 6-digit code to the address on your account.",
+    forgotDesc: "Enter your email. We'll send a 6-digit code to the address on your account.",
     forgotSendCode: "Send code", forgotCodeSent: "We sent a 6-digit code to", forgotCodeExpires: "It expires in 15 minutes.",
     forgotCodeLabel: "6-digit code", forgotNewPasswordLabel: "New password", forgotResetBtn: "Reset password",
-    forgotResend: "Send a new code", forgotLoginLabel: "Phone number or email", backToLogin: "Back to log in",
+    forgotResend: "Send a new code", forgotLoginLabel: "Email", backToLogin: "Back to log in",
     forgotCodeSentGeneric: "We sent a 6-digit code to the email on your account.",
     forgotSendingTitle: "Sending your code…",
     forgotSendingSub: "This can take up to a minute. Please keep this page open.",
@@ -7094,13 +7155,10 @@ const STRINGS = {
     exErr_generic: "Something went wrong. Please try again.",
     exErr_too_many_attachments: "Too many files for one exercise.",
     // Login
-    loginTitle: "Log in", loginDesc: "Enter the phone number you used when you created your account.",
-    phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
-    errEnterPhone: "Enter the phone number you used to sign up.",
-    errPhoneNotFound: "We couldn't find an account with that phone number on this device.",
+    loginTitle: "Log in", loginDesc: "Enter the email you used when you created your account.",
+    noAccountYet: "Don't have an account yet?", createOne: "Create one", orWord: "OR",
     errEnterEmailPassword: "Enter the email and password you used to sign up.",
     errEmailNotFound: "We couldn't find an account with that email and password on this device.",
-    loginWithPhone: "Phone", loginWithEmail: "Email",
     // Register
     uniGoalsTitle: "What are you looking for?", uniGoalsDesc: "Select everything that applies — you can change this later.",
     uniGoalsWhyWeAsk: "These personalize your University Hub, Discovery matches, and AI Mentor — the more you pick, the sharper the recommendations.",
@@ -7201,8 +7259,7 @@ const STRINGS = {
     planEmpty: "មិនទាន់មានកិច្ចការទេ។ បន្ថែមអ្វីដែលអ្នកគ្រោងសិក្សាថ្ងៃនេះ។", planAddPlaceholder: "បន្ថែមកិច្ចការសម្រាប់ថ្ងៃនេះ…",
     planSubjectOptional: "មុខវិជ្ជា (ស្រេចចិត្ត)", planMinutesShort: "នាទី", planAdd: "បន្ថែម", planDeleteTask: "លុបកិច្ចការ",
     planSuggested: "ណែនាំសម្រាប់អ្នក", planMyTask: "កិច្ចការរបស់ខ្ញុំ",
-    errInvalidCredentials: "លេខទូរស័ព្ទ អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។",
-    errEnterPhonePassword: "សូមបញ្ចូលលេខទូរស័ព្ទ និងពាក្យសម្ងាត់របស់អ្នក។",
+    errInvalidCredentials: "អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។",
     errPhoneTaken: "លេខទូរស័ព្ទនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
     errEmailTaken: "អ៊ីមែលនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
     errValidation: "សូមពិនិត្យព័ត៌មានដែលអ្នកបានបញ្ចូល រួចព្យាយាមម្តងទៀត។",
@@ -7222,10 +7279,10 @@ const STRINGS = {
     passwordHint: "យ៉ាងហោចណាស់ ៨តួអក្សរ",
     emailResetHint: "បន្ថែមអ៊ីមែល ដើម្បីអាចកំណត់ពាក្យសម្ងាត់ឡើងវិញ ប្រសិនបើអ្នកភ្លេច។",
     forgotLink: "ភ្លេចពាក្យសម្ងាត់?", forgotTitle: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
-    forgotDesc: "បញ្ចូលលេខទូរស័ព្ទ ឬអ៊ីមែលរបស់អ្នក។ យើងនឹងផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
+    forgotDesc: "បញ្ចូលអ៊ីមែលរបស់អ្នក។ យើងនឹងផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
     forgotSendCode: "ផ្ញើលេខកូដ", forgotCodeSent: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅ", forgotCodeExpires: "លេខកូដនឹងផុតកំណត់ក្នុងរយៈពេល ១៥នាទី។",
     forgotCodeLabel: "លេខកូដ ៦ខ្ទង់", forgotNewPasswordLabel: "ពាក្យសម្ងាត់ថ្មី", forgotResetBtn: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
-    forgotResend: "ផ្ញើលេខកូដថ្មី", forgotLoginLabel: "លេខទូរស័ព្ទ ឬអ៊ីមែល", backToLogin: "ត្រឡប់ទៅចូលគណនី",
+    forgotResend: "ផ្ញើលេខកូដថ្មី", forgotLoginLabel: "អ៊ីមែល", backToLogin: "ត្រឡប់ទៅចូលគណនី",
     forgotCodeSentGeneric: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
     forgotSendingTitle: "កំពុងផ្ញើលេខកូដរបស់អ្នក…",
     forgotSendingSub: "អាចចំណាយពេលរហូតដល់មួយនាទី។ សូមកុំបិទទំព័រនេះ។",
@@ -7327,13 +7384,10 @@ const STRINGS = {
     exErr_generic: "មានអ្វីមួយខុសប្រក្រតី។ សូមព្យាយាមម្តងទៀត។",
     exErr_too_many_attachments: "ឯកសារច្រើនពេកសម្រាប់លំហាត់មួយ។",
     // Login
-    loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
-    phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
-    errEnterPhone: "សូមបញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើចុះឈ្មោះ។",
-    errPhoneNotFound: "យើងរកមិនឃើញគណនីជាមួយលេខទូរស័ព្ទនោះនៅលើឧបករណ៍នេះទេ។",
+    loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលអ៊ីមែលដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
+    noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី", orWord: "ឬ",
     errEnterEmailPassword: "សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់ដែលអ្នកបានប្រើចុះឈ្មោះ។",
     errEmailNotFound: "យើងរកមិនឃើញគណនីជាមួយអ៊ីមែល និងពាក្យសម្ងាត់នោះនៅលើឧបករណ៍នេះទេ។",
-    loginWithPhone: "លេខទូរស័ព្ទ", loginWithEmail: "អ៊ីមែល",
     // Register
     uniGoalsTitle: "តើអ្នកកំពុងស្វែងរកអ្វី?", uniGoalsDesc: "ជ្រើសរើសអ្វីៗគ្រប់យ៉ាងដែលពាក់ព័ន្ធ — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
     uniFieldTitle: "តើជំនាញរបស់អ្នកគឺជាអ្វី?", uniFieldDesc: "ជ្រើសរើសជម្រើសដែលនិងគ្នាបំផុត — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
@@ -7574,6 +7628,29 @@ export default function App() {
     setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
+  // "Sign in with Google": the credential is an ID token Google's own button already verified
+  // client-side; the backend re-verifies it and creates the account the first time a given Google
+  // identity is seen. A brand-new (or still-mid-onboarding) account has no track yet -- sent straight
+  // into the same step-2 onboarding a manual sign-up walks through, same as going Back from
+  // AssessmentChoice. `_key` forces Register to remount even when it's already on screen (clicking
+  // the Google button from within Register's own step 1 instead of filling it in by hand).
+  const handleGoogleAuth = async (credential) => {
+    if (!SERVER_MODE) return { error: "api_disabled" };
+    try {
+      const res = await api.loginWithGoogle(credential);
+      serverUserRef.current = res.user;
+      if (!res.user.field && res.user.educationLevel !== "university") {
+        setResumeReg({ form: blankRegisterForm({ name: res.user.name, email: res.user.email }), step: 2, _key: Date.now() });
+        setEntry("create");
+        return null;
+      }
+      await loadAccount();
+      setShowWelcomeBack(true);
+      return true;
+    } catch (err) {
+      return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null };
+    }
+  };
   // After "Forgot password": the reset already stored a fresh login, so just load the account.
   const handleSignedIn = async () => {
     try { await loadAccount(); setShowWelcomeBack(true); return true; }
@@ -7584,7 +7661,7 @@ export default function App() {
   // first — self-reports alone aren't trusted, but personalization is never required to start.
   // University profiles skip AssessmentChoice/Diagnostic entirely — there's no BAC II mastery
   // engine for them, so the account activates immediately into the University Hub.
-  // With the server the account is created here (so "phone already used" shows up on the sign-up screen, not after the
+  // With the server the account is created here (so "email already used" shows up on the sign-up screen, not after the
   // whole flow); the dashboard appears once the diagnostic is done or skipped. Resolves to { error, step } on failure.
   const handleRegister = async (reg) => {
     if (reg.educationLevel === "university") {
@@ -7673,7 +7750,7 @@ export default function App() {
   const liveLongestStreak = summary ? summary.longestStreak : streakStats.longestStreak;
   // Timed exam attempts and the school report (kept per student on this device until the backend part exists).
   const exam = useExamSessions({
-    userKey: profile ? `${profile.phone ?? ""}|${profile.name}` : "anon",
+    userKey: profile ? `${profile.email ?? profile.phone ?? ""}|${profile.name}` : "anon",
     limitFor: (field, subject) => SUBJECT_DURATION_MIN[field]?.[subject] ?? 180,
   });
   const tr = (key) => t(lang, key);
@@ -7965,9 +8042,9 @@ export default function App() {
   if (pendingReg && !showDiagnostic) return <>{noticeToast}<AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} /></>;
   if (pendingReg) return <>{noticeToast}<Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} /></>;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
+  if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onGoogleAuth={handleGoogleAuth} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
   if (!profile && entry === "forgot" && SERVER_MODE) return <>{noticeToast}<ForgotPassword dark={dark} setDark={setDark} onBack={() => setEntry("login")} onSignedIn={handleSignedIn} lang={lang} setLang={setLang} /></>;
-  if (!profile) return <>{noticeToast}<Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
+  if (!profile) return <>{noticeToast}<Register key={resumeReg?._key ?? "register"} onComplete={handleRegister} onGoogleAuth={handleGoogleAuth} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (takingLangTest) return (
     <IeltsDiagnostic
