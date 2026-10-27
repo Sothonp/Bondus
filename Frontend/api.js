@@ -109,6 +109,12 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     baseUrl: base,
     hasToken: () => Boolean(readToken()),
     clearToken: () => setToken(null),
+    // Adds the sign-in token to a request for another server of ours (the AI coach), which asks this API whether the
+    // token is valid. Signed out, the request comes back untouched.
+    authorize: (init = {}) => {
+      const token = readToken();
+      return token ? { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } } : init;
+    },
     onUnauthorized: (fn) => { unauthorizedHandler = typeof fn === "function" ? fn : () => {}; },
 
     // accounts

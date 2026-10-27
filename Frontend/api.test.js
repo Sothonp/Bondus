@@ -262,3 +262,20 @@ test("if browser storage is blocked, the session still works in memory", async (
   await api.getMe();
   assert.equal(s.calls[1].init.headers.Authorization, "Bearer mem");
 });
+
+test("authorize adds the sign-in token to a request for another server, and touches nothing when signed out", async () => {
+  // Breaks if: the AI coach never receives the token (every signed-in student is refused), a signed-out request
+  // is sent as "Bearer null", or the token replaces the headers the caller already set.
+  const { api } = make(() => json(200, { user: { id: 1 }, token: "tok_123" }));
+  const init = { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" };
+  assert.deepEqual(api.authorize(init), init);
+
+  await api.login({ login: "a@b.co", password: "secret123" });
+  assert.deepEqual(api.authorize(init), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer tok_123" },
+    body: "{}",
+  });
+  assert.equal(api.authorize({ method: "POST" }).headers.Authorization, "Bearer tok_123"); // an upload sets no headers
+  assert.equal(init.headers.Authorization, undefined); // the caller's object is left alone
+});

@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     # answers, or delete the curriculum. Set ALLOW_WRITES=false there and build
     # the index locally, where this stays true.
     allow_writes: bool = True
+    # The AI routes spend the shared model quota, so on a public deployment only signed-in students may use
+    # them. The coach keeps no accounts: set this to the Laravel API's "who am I" address (for example
+    # https://<api>/api/v1/me) and it asks that API whether the Bearer token the website sent is valid.
+    # Empty (local development, tests) leaves the routes open; /health shows `auth_required` either way.
+    auth_verify_url: str = ""
+    # How long a valid sign-in is remembered, so one chat costs the Laravel API one request a minute at most.
+    # It is also how long a student who just logged out can still use the coach.
+    auth_cache_seconds: int = Field(60, ge=0, le=600)
+    # Per signed-in student, across the AI routes (an answer that runs long makes up to four requests).
+    user_rate_limit_per_minute: int = Field(20, ge=1, le=600)
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"

@@ -32,6 +32,13 @@ from prompts import (
     build_user_message,
 )
 from src.answer_format import sanitize_answer
+from src.auth import (
+    AuthUnavailable,
+    LaravelTokenVerifier,
+    SlidingWindowLimiter,
+    TokenVerifier,
+    bearer_token,
+)
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -1642,6 +1649,7 @@ def create_app(
     generator: AnswerGenerator | None = None,
     ocr: CachedPageOCR | None = None,
     image_ocr: HybridImageOCR | None | object = _DEFAULT,
+    token_verifier: TokenVerifier | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     logging.basicConfig(
@@ -1699,6 +1707,44 @@ def create_app(
 
     writes_only = [Depends(require_writes)]
 
+    verifier: TokenVerifier | None = token_verifier
+    if verifier is None and settings.auth_verify_url:
+        verifier = LaravelTokenVerifier(settings.auth_verify_url, cache_seconds=settings.auth_cache_seconds)
+    limiter = SlidingWindowLimiter(settings.user_rate_limit_per_minute)
+
+    async def require_signed_in(request: Request) -> None:
+        """Refuse the routes that spend model quota unless a signed-in student is asking, and not too often."""
+        if verifier is None:
+            return
+        token = bearer_token(request.headers.get("authorization"))
+        if token is None:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Sign in to use the AI coach.", headers={"WWW-Authenticate": "Bearer"}
+            )
+        try:
+            student = await verifier.verify(token)
+        except AuthUnavailable:
+            logger.warning("Could not check a sign-in", exc_info=True)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Could not check your sign-in just now. Please try again in a moment.",
+            ) from None
+        if student is None:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "Your sign-in has expired. Please sign in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        wait = limiter.hit(student)
+        if wait is not None:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "You are asking very fast. Please wait a moment and try again.",
+                headers={"Retry-After": str(wait)},
+            )
+
+    signed_in = [Depends(require_signed_in)]
+
     @app.exception_handler(LLMError)
     async def _llm_error(_: Request, exc: LLMError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
@@ -1732,11 +1778,14 @@ def create_app(
             default_score_threshold=settings.score_threshold,
             max_upload_mb=settings.max_upload_mb,
             writes_enabled=settings.allow_writes,
+            auth_required=verifier is not None,
             documents=len(state.store.sources()),
             chunks=len(state.store),
         )
 
-    @app.post("/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"])
+    @app.post(
+        "/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"], dependencies=signed_in
+    )
     async def query(payload: QueryRequest, request: Request) -> QueryResponse:
         state = get_state(request)
         started = time.perf_counter()
@@ -1788,6 +1837,7 @@ def create_app(
             },
         },
         tags=["rag"],
+        dependencies=signed_in,
     )
     async def query_stream(payload: QueryRequest, request: Request) -> StreamingResponse:
         """Like /api/query, but progress and the answer arrive as NDJSON events."""
@@ -1851,6 +1901,7 @@ def create_app(
             },
         },
         tags=["exam"],
+        dependencies=signed_in,
     )
     async def exam_stream(payload: ExamRequest, request: Request) -> StreamingResponse:
         """A new mock BAC II paper in one subject, modelled on its indexed past papers."""

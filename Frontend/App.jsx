@@ -5644,7 +5644,8 @@ const UNCONFIGURED =
 async function ragRequest(path, init) {
   let res;
   try {
-    res = await fetch(`${RAG_API}${path}`, init);
+    // The coach only answers signed-in students: it checks this token with the Laravel API.
+    res = await fetch(`${RAG_API}${path}`, api.authorize(init));
   } catch {
     throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
   }

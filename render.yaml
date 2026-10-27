@@ -20,6 +20,11 @@ services:
     envVars:
       - key: CORS_ORIGINS
         sync: false # e.g. https://bondusedu.netlify.app
+      # Only students signed in to the Laravel API may use the AI routes: it vouches for the Bearer token the website
+      # sends. Without this the coach answers anyone who finds its URL, and anyone can drain the model quota.
+      # Deploy the website (which sends the token) before setting it. GET /health then shows auth_required: true.
+      - key: AUTH_VERIFY_URL
+        value: https://bondus-api-wdwp.onrender.com/api/v1/me
       - key: GEMINI_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
