@@ -151,6 +151,9 @@ const XP_PER_CORRECT = 30;
 /* The backend (Laravel API, /api/v1). With VITE_API_URL set, students sign in on the server and their progress, XP,
    streak and daily plan live there. With it unset the app is the old browser-only prototype, unchanged. */
 const api = createApi({ baseUrl: import.meta.env.VITE_API_URL });
+/* The AI functions (/api/major-guidance, /api/university-mentor, /api/ielts-grade) answer only signed-in students:
+   they check this same token with the Laravel API. */
+const aiFetch = (url, init) => fetch(url, api.authorize(init));
 const SERVER_MODE = api.enabled;
 // "Sign in with Google": public by design (also shipped to Google's own GSI script, which this app
 // has no control over). Unset, the Google button simply doesn't render -- email/password still works.
@@ -527,7 +530,7 @@ const roundToHalfBand = (n) => Math.round(n * 2) / 2;
    word-count-based estimate so the flow still produces a result instead of erroring out. */
 async function gradeIeltsResponse(skill, prompt, response) {
   try {
-    const res = await fetch("/api/ielts-grade", {
+    const res = await aiFetch("/api/ielts-grade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ skill, prompt, response }),
@@ -5556,7 +5559,7 @@ function coachReply(text, p) {
    grounded answer instead of an error. */
 async function majorGuidanceReply(t, p, history) {
   try {
-    const res = await fetch("/api/major-guidance", {
+    const res = await aiFetch("/api/major-guidance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -5604,7 +5607,7 @@ function universityCoachReply(text, p) {
 async function universityMentorReply(t, p, history) {
   const up = p.universityProfile || {};
   try {
-    const res = await fetch("/api/university-mentor", {
+    const res = await aiFetch("/api/university-mentor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

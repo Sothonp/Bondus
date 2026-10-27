@@ -126,7 +126,8 @@ embedding model) is too big for Netlify or Vercel functions. On Render the
 server is read-only (`ALLOW_WRITES=false`): the index is built on the laptop,
 committed, and baked into the Docker image. The AI routes answer only signed-in
 students: `AUTH_VERIFY_URL` is the Laravel API's `/me` address, and the server asks it
-whether the Bearer token the site sends is valid (`src/auth.py`). The functions call Gemini
+whether the Bearer token the site sends is valid (`src/auth.py`). The serverless AI
+functions do the same with that variable set on the site host (`api/_auth.js`). They call Gemini
 (`GEMINI_MODEL`, then each of `GEMINI_FALLBACK_MODELS`, 12 s each) and Groq
 (`GROQ_MODEL`) if all of those fail (`api/_ai.js`).
 
