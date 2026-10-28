@@ -69,3 +69,10 @@ def test_subject_guides_cover_known_subjects_and_tracks():
     assert subject_guide("geography") is None and subject_guide(None) is None
     # Thai script once slipped into a pasted Khmer term; the guides must be Khmer/English only.
     assert not any("฀" <= ch <= "๿" for guide in [*SUBJECT_GUIDES.values(), *MATH_GUIDES.values()] for ch in guide)
+
+
+def test_the_physics_guide_keeps_practice_inside_the_bac_ii_scope():
+    from prompts import SUBJECT_GUIDES
+
+    guide = SUBJECT_GUIDES["physics"]
+    assert "BAC II exam scope" in guide and "photoelectric effect" in guide.split("Never examined")[1]

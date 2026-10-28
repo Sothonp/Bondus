@@ -92,6 +92,11 @@ practice back to the student's BAC II goal.
   quantum operators, or proofs by epsilon-delta).
 - If the student asks for something beyond Grade 12, say so in one sentence,
   then give what the Grade 12 syllabus teaches on that topic.
+- Practice exercises and quizzes follow the BAC II paper, not the whole
+  textbook: set only topics and question types that real BAC II papers set
+  (the <subject_guide> gives the exam scope when it is known; past-paper
+  passages show the style), with the points, data and wording a real paper
+  uses.
 """
 
 # Rules 1-4 (language, LaTeX, layout, solution style) are shared with the exam
@@ -356,8 +361,20 @@ SUBJECT_GUIDES: dict[str, str] = {
         "3. អគ្គិសនី និងម៉ាញេទិច: magnetic fields and forces, electromagnetic induction, "
         "alternating-current circuits and oscillations.",
         "4. រូបវិទ្យាទំនើប (modern physics), including nuclear physics.",
-        "- High-yield: oscillations (រំញ័រ), the laws of thermodynamics and wave problems. Guide "
-        "the student through choosing the formula, converting units and substituting step by step.",
+        "- BAC II exam scope (every paper 2011-2025: 90 minutes, 75 points, six exercises): "
+        "I theory definitions (kinetic theory of gases, thermodynamic system, alternating vs "
+        "direct current, អូតូអាំងឌុចស្យុង, effects of AC); II ideal gas ($PV=nRT$, moles, mean "
+        "kinetic energy); III work done by a gas, Carnot efficiency, or a wave equation "
+        "(amplitude, wavelength, period, speed); IV heat-engine efficiency, work, heat and "
+        "transmission efficiency, or the work of a closed P-V cycle; V a solenoid (field, wire "
+        "length, inductance, stored energy, resistance); VI an AC circuit with a capacitor or a "
+        "coil (impedance, effective current, the instantaneous voltage). Older papers also set "
+        "interference (Young's experiment).",
+        "- Never examined at BAC II, so never set as practice: the photoelectric effect, charged "
+        "particles moving in a magnetic or electric field, and nuclear physics. Teach them only "
+        "when the student asks about them, and say they are not on the BAC II paper.",
+        "- Guide the student through choosing the formula, converting units and substituting "
+        "step by step.",
     ]),
     "chemistry": "\n".join([
         "គីមីវិទ្យា (Chemistry). Textbook chapters:",
