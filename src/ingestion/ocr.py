@@ -133,16 +133,6 @@ def page_payload(page: Any, render_scale: float = 2.0) -> PageImage:
     broken layer instead of the glyphs. The one-page PDF is the fallback when
     rendering fails.
     """
-    try:
-        images = list(page.images)
-    except Exception:
-        logger.debug("Could not list page images; sending the page as PDF", exc_info=True)
-        images = []
-    if len(images) == 1:
-        suffix = Path(images[0].name).suffix.lower()
-        if suffix in _IMAGE_TYPES and images[0].data:
-            return PageImage(images[0].data, _IMAGE_TYPES[suffix])
-
     from pypdf import PdfWriter
 
     writer = PdfWriter()
@@ -150,11 +140,48 @@ def page_payload(page: Any, render_scale: float = 2.0) -> PageImage:
     buffer = io.BytesIO()
     writer.write(buffer)
     pdf_bytes = buffer.getvalue()
+
+    try:
+        images = list(page.images)
+    except Exception:
+        logger.debug("Could not list page images; sending the page as PDF", exc_info=True)
+        images = []
+    # A lone image is the page only on a scan. A typeset page with one picture
+    # (a portrait, a logo) is rendered, or its text would never reach OCR.
+    if len(images) == 1 and _image_fills_page(pdf_bytes):
+        suffix = Path(images[0].name).suffix.lower()
+        if suffix in _IMAGE_TYPES and images[0].data:
+            return PageImage(images[0].data, _IMAGE_TYPES[suffix])
     try:
         return PageImage(_render_png(pdf_bytes, render_scale), "image/png")
     except Exception:
         logger.debug("Could not render the page; sending it as PDF", exc_info=True)
         return PageImage(pdf_bytes, "application/pdf")
+
+
+def _image_fills_page(pdf_bytes: bytes, min_share: float = 0.8) -> bool:
+    """Whether the one-page PDF's largest image covers most of the page.
+
+    True when that can't be measured, so a scan keeps being sent as its image.
+    """
+    try:
+        import pypdfium2 as pdfium
+        import pypdfium2.raw as pdfium_raw
+
+        document = pdfium.PdfDocument(pdf_bytes)
+        try:
+            page = document[0]
+            width, height = page.get_size()
+            largest = 0.0
+            for obj in page.get_objects(filter=[pdfium_raw.FPDF_PAGEOBJ_IMAGE], max_depth=3):
+                left, bottom, right, top = obj.get_pos()
+                largest = max(largest, (right - left) * (top - bottom))
+        finally:
+            document.close()
+        return largest >= min_share * width * height
+    except Exception:
+        logger.debug("Could not measure the page image; treating it as a scan", exc_info=True)
+        return True
 
 
 def _render_png(pdf_bytes: bytes, scale: float) -> bytes:
