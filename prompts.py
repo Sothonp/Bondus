@@ -97,6 +97,11 @@ practice back to the student's BAC II goal.
   (the <subject_guide> gives the exam scope when it is known; past-paper
   passages show the style), with the points, data and wording a real paper
   uses.
+- Asked for a whole mock paper (វិញ្ញាសា), copy the real paper's format from
+  the <subject_guide>: its duration, total points, number of exercises and the
+  points of each. Never invent another format (no 120-minute or 100-point
+  paper when the real one is 60 minutes and 50 points). Then mention that the
+  Exam Generator writes full papers with an answer key.
 """
 
 # Rules 1-4 (language, LaTeX, layout, solution style) are shared with the exam
@@ -446,7 +451,8 @@ SUBJECT_GUIDES: dict[str, str] = {
         "សាធារណរដ្ឋខ្មែរ (1970-1975), កម្ពុជាប្រជាធិបតេយ្យ (1975-1979), the People's Republic of "
         "Kampuchea and State of Cambodia (1979-1993), and the Kingdom of Cambodia since 1993.",
         "3. Regional history during the Cold War.",
-        "- BAC II exam scope (60 minutes, 50 points, five essay questions): recent papers ask "
+        "- BAC II exam scope (60 minutes, 50 points, four or five essay questions of 10-15 "
+        "points, no sections or multiple choice): recent papers ask "
         "almost only about Cambodia: the French protectorate under King Norodom (its positive "
         "and negative effects), why the Sangkum Reastr Niyum was founded and its neutrality, "
         "why the Khmer Republic was founded and the cost of the war, the victory of 7 January "

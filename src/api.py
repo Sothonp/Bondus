@@ -82,7 +82,7 @@ from src.ingestion.llm_chunk import LlamaChunker, build_chunker
 from src.ingestion.image_ocr import HybridImageOCR, ImageInputError, ImageReading, build_image_ocr, decode_image
 from src.ingestion.ocr import CachedPageOCR, PageImage, build_ocr
 from src.retrieval.retriever import RetrievedChunk, Retriever
-from src.subjects import get_subject
+from src.subjects import get_subject, subject_named_in
 from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
 logger = logging.getLogger("reanmath")
@@ -1462,7 +1462,7 @@ def _question_language(prompt: str, readings: Sequence[ImageReading]) -> Literal
 def _question_guide(payload: QueryRequest, context: Sequence[RetrievedChunk]) -> str | None:
     """Subject focus notes for the answer: the requested subject, else the one most
     of the retrieved passages come from."""
-    subject = payload.subject
+    subject = payload.subject or subject_named_in(payload.prompt)
     if subject is None and context:
         top, count = Counter(chunk.subject for chunk in context).most_common(1)[0]
         if top is not None and count * 2 > len(context):
@@ -1477,6 +1477,9 @@ async def _retrieve_context(
     # The photo usually *is* the question, so its text drives retrieval too.
     image_text = "\n".join(r.search_text for r in readings if r.has_text)[:MAX_IMAGE_SEARCH_CHARS]
     query = "\n".join(part for part in (payload.prompt, image_text) if part.strip())
+    # A question that names its subject searches only that subject: "make a history
+    # paper" otherwise matches biology and morality papers on the word "paper".
+    subject = payload.subject or subject_named_in(payload.prompt)
     try:
         retrieved = await run_in_threadpool(
             state.retriever.retrieve,
@@ -1484,8 +1487,17 @@ async def _retrieve_context(
             payload.top_k,
             payload.score_threshold,
             payload.sources,
-            payload.subject,
+            subject,
         )
+        if not retrieved and subject != payload.subject:
+            retrieved = await run_in_threadpool(
+                state.retriever.retrieve,
+                query,
+                payload.top_k,
+                payload.score_threshold,
+                payload.sources,
+                payload.subject,
+            )
     except EmbeddingMismatchError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     return language, state.retriever.fit_context(retrieved)

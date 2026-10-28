@@ -80,3 +80,22 @@ def test_the_physics_guide_keeps_practice_inside_the_bac_ii_scope():
         assert "BAC II exam scope" in guide or "Science track paper" in guide
     assert "photoelectric effect" in SUBJECT_GUIDES["physics"].split("Never set as practice")[1]
     assert "Punnett" in SUBJECT_GUIDES["biology"].split("Never set as practice")[1]
+
+
+@pytest.mark.parametrize(
+    "question, expected",
+    [
+        ("បង្កើតវិញ្ញាសាប្រវត្តិវិទ្យា", "history"),
+        ("សង្ខេបប្រវត្តិសាស្ត្រសង្គមរាស្ត្រនិយម", "history"),
+        ("Give me a physics exercise", "physics"),
+        ("passive voice exercise for English", "english"),
+        ("ពន្យល់ដេរីវេជាភាសាអង់គ្លេស", None),
+        ("explain limits in English", None),
+        ("compare physics and chemistry", None),
+        ("គណនាលីមីត", None),
+    ],
+)
+def test_subject_named_in(question, expected):
+    from src.subjects import subject_named_in
+
+    assert subject_named_in(question) == expected

@@ -75,5 +75,29 @@ def subject_of(source: str, title: str = "") -> str | None:
     return None
 
 
+# Other ways students name a subject in a question; titles never use these.
+_QUESTION_KM_NAMES: dict[str, tuple[str, ...]] = {
+    "mathematics": ("គណិត",),
+    "history": ("ប្រវត្តិសាស្ត្រ", "ប្រវត្តិសាស្រ្ត"),
+    "khmer_literature": ("អក្សរសិល្ប៍",),
+}
+# "Answer in English" asks for a language, not about the English subject.
+_IN_LANGUAGE = re.compile(r"ជាភាសា(?:អង់គ្លេស|បារាំង)|\bin (?:english|french)\b", re.IGNORECASE)
+
+
+def subject_named_in(question: str) -> str | None:
+    """The one subject a question names ("បង្កើតវិញ្ញាសាប្រវត្តិវិទ្យា", "a physics
+    exercise"), or None when it names none or several."""
+    text = _IN_LANGUAGE.sub(" ", question)
+    words = set(_WORD.findall(text.lower()))
+    named = {
+        subject.id
+        for subject in SUBJECTS
+        if any(name in text for name in (*subject.km_names, *_QUESTION_KM_NAMES.get(subject.id, ())))
+        or words & {*subject.aliases, subject.en.lower()}
+    }
+    return named.pop() if len(named) == 1 else None
+
+
 def get_subject(subject_id: str) -> Subject:
     return _BY_ID[subject_id]
