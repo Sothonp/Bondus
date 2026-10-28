@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     # How long a valid sign-in is remembered, so one chat costs the Laravel API one request a minute at most.
     # It is also how long a student who just logged out can still use the coach.
     auth_cache_seconds: int = Field(60, ge=0, le=600)
-    # Per signed-in student, across the AI routes (an answer that runs long makes up to four requests).
+    # Per signed-in student, across the AI routes (an answer that runs long makes up to seven requests).
     user_rate_limit_per_minute: int = Field(20, ge=1, le=600)
 
     # --- Answer generation ---

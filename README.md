@@ -31,6 +31,20 @@ npm run build    # production build into dist/
 npm run preview  # preview the production build
 ```
 
+### With the Laravel backend (real accounts)
+
+By default the app is a browser-only prototype. To use the real backend (the separate `bondus-backend` project: sign-up and
+login with a password, forgot-password by email code, progress saved on the server, XP / level / streak counted on the
+server, the student's daily plan):
+
+1. In `bondus-backend`: `php artisan serve --port=8001` (port 8000 is the AI coach server), and set
+   `CORS_ALLOWED_ORIGINS=http://localhost:5173` in its `.env` so the browser may call it.
+2. In this project's `.env.local`: `VITE_API_URL=http://localhost:8001/api/v1`, then restart `npm run dev`.
+
+Leave `VITE_API_URL` empty and nothing changes: the app keeps working exactly as the prototype. For production set it in
+Netlify/Vercel to `https://<api-host>/api/v1` and **redeploy** (Vite bakes it in when it builds). The API contract is
+`docs/API.md` in the backend project; the code that talks to it is `Frontend/api.js`.
+
 ## Science / Social Science tracks
 
 Registration sets the academic track, which decides every subject shown across the
@@ -110,8 +124,12 @@ flowchart TB
 The site and the API are hosted apart: the Python server (PyTorch and the
 embedding model) is too big for Netlify or Vercel functions. On Render the
 server is read-only (`ALLOW_WRITES=false`): the index is built on the laptop,
-committed, and baked into the Docker image. The functions call Gemini
-`flash-latest` first and Groq if it fails (`api/_ai.js`).
+committed, and baked into the Docker image. The AI routes answer only signed-in
+students: `AUTH_VERIFY_URL` is the Laravel API's `/me` address, and the server asks it
+whether the Bearer token the site sends is valid (`src/auth.py`). The serverless AI
+functions do the same with that variable set on the site host (`api/_auth.js`). They call Gemini
+(`GEMINI_MODEL`, then each of `GEMINI_FALLBACK_MODELS`, 12 s each) and Groq
+(`GROQ_MODEL`) if all of those fail (`api/_ai.js`).
 
 ### 2. In the app
 
