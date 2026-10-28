@@ -5889,13 +5889,9 @@ function UserMessage({ m, onOpenImage }) {
   );
 }
 
-/* The years of the real papers a generated paper was modelled on (meta's sources, newest first). */
-const modelledOn = (sources = []) => [...new Set(sources.map((s) => s.heading).filter(Boolean))];
-
 function AssistantMessage({ m, Icon }) {
   const answerRef = useRef(null);
   const [printBlocked, setPrintBlocked] = useState(false);
-  const years = m.exam ? modelledOn(m.sources) : [];
   return (
     <div className="flex gap-3">
       <div className="eai-avatar"><Icon size={15} color="#fff" /></div>
@@ -5912,7 +5908,6 @@ function AssistantMessage({ m, Icon }) {
                 <Download size={15} />
               </button>
             )}
-            {years.length > 0 && <span className="text-xs eai-muted self-center">Modelled on the {years.join(", ")} BAC II papers</span>}
             {printBlocked && <span className="text-xs self-center" style={{ color: "var(--ember)" }}>Allow pop-ups to print the paper.</span>}
           </div>
         )}
