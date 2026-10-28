@@ -125,12 +125,13 @@ class TestChoosingReferences:
 
 @pytest.fixture
 def exam_client(tmp_path):
-    def build(generator: ScriptedGenerator) -> TestClient:
+    def build(generator: ScriptedGenerator, **overrides) -> TestClient:
         settings = Settings(
             _env_file=None,
             embedding_backend="hashing",
             llm_provider="none",
             vector_store_path=tmp_path / "vector_index",
+            **overrides,
         )
         make_store(settings.vector_store_path, build_embedder(settings).name).save()
         return TestClient(create_app(settings, generator=generator))
@@ -148,7 +149,7 @@ def generate(client: TestClient, **body) -> list[dict]:
 class TestExamEndpoint:
     def test_the_paper_streams_after_the_past_papers_it_was_modelled_on(self, exam_client):
         generator = ScriptedGenerator(["វិញ្ញាសាប្រឡងសាកល្បង\n\n", "I. (១០ពិន្ទុ) ..."])
-        sent = generate(exam_client(generator), subject="mathematics", seed=1)
+        sent = generate(exam_client(generator, expose_sources=True), subject="mathematics", seed=1, answer_key=True)
         kinds = [event["type"] for event in sent]
         assert kinds.index("meta") < kinds.index("delta") < kinds.index("done")
         meta = next(event for event in sent if event["type"] == "meta")
@@ -177,6 +178,27 @@ class TestExamEndpoint:
         message = generator.seen[0]["user_message"]
         assert "<paper_so_far>\nI. (១០ពិន្ទុ) សំណួរ\n\nII.\n</paper_so_far>" in message
         assert message.index("<past_papers>") < message.index("<paper_so_far>")
+
+    def test_the_past_papers_stay_on_the_server_by_default(self, exam_client):
+        sent = generate(exam_client(ScriptedGenerator(["ok"])), subject="mathematics", seed=1)
+        meta = next(event for event in sent if event["type"] == "meta")
+        assert meta["sources"] == []
+
+    def test_a_paper_comes_without_answers_by_default(self, exam_client):
+        generator = ScriptedGenerator(["ok"])
+        generate(exam_client(generator), subject="physics")
+        assert "<answer_key>no</answer_key>" in generator.seen[0]["user_message"]
+
+    def test_answers_on_request_send_the_paper_not_a_new_one(self, exam_client):
+        generator = ScriptedGenerator(["## ចម្លើយ"])
+        generate(
+            exam_client(generator), subject="physics", answers_for="II",
+            paper="I. (១០ពិន្ទុ) សំណួរ\n\nII. (១០ពិន្ទុ) លំហាត់",
+        )
+        message = generator.seen[0]["user_message"]
+        assert "<paper>\nI. (១០ពិន្ទុ) សំណួរ\n\nII. (១០ពិន្ទុ) លំហាត់\n</paper>" in message
+        assert "<answers_for>II</answers_for>" in message
+        assert "<past_papers>" not in message and "Write one complete new mock" not in message
 
     def test_a_subject_with_no_past_papers_is_refused_in_band(self, exam_client):
         generator = ScriptedGenerator(["never"])
@@ -222,3 +244,13 @@ class TestPaperFormat:
         message = generator.seen[0]["user_message"]
         assert "<format>" in message
         assert message.index("</past_papers>") < message.index("<format>")
+
+
+def test_the_exam_message_carries_the_subject_guide():
+    from prompts import MATH_GUIDES, build_exam_message, subject_guide
+
+    message = build_exam_message(
+        "គណិតវិទ្យា (Mathematics)", [], "km", guide=subject_guide("mathematics", "social_science")
+    )
+    assert f"<subject_guide>\n{MATH_GUIDES['social_science']}\n</subject_guide>" in message
+    assert "<subject_guide>" not in build_exam_message("គណិតវិទ្យា (Mathematics)", [], "km")

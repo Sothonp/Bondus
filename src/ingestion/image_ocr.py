@@ -357,7 +357,11 @@ class HybridImageOCR:
             warm()
 
     def _read_vision(self, payload: PageImage) -> tuple[str | None, str | None, list[str]]:
+        """The first complete reading. One that was cut off or looped (and so may
+        have lost the end of the exercise) hands over to the next engine, and is
+        used only when no engine reads the whole photo."""
         warnings: list[str] = []
+        partial: tuple[str, str] | None = None
         for engine in self.vision:
             try:
                 text, truncated = engine.transcribe_page(payload)
@@ -370,10 +374,17 @@ class HybridImageOCR:
                 logger.warning("Image OCR with %s rejected: Chinese text", _engine_name(engine))
                 continue
             text, looped = trim_repetition(text)
+            if not text.strip():
+                continue
             if truncated or looped:
                 warnings.append(f"{_engine_name(engine)}: the reading may be incomplete")
-            if text.strip():
-                return text.strip(), _engine_name(engine), warnings
+                logger.warning("Image OCR with %s was incomplete; trying the next engine", _engine_name(engine))
+                if partial is None:
+                    partial = (text.strip(), _engine_name(engine))
+                continue
+            return text.strip(), _engine_name(engine), warnings
+        if partial is not None:
+            return partial[0], partial[1], warnings
         return None, None, warnings
 
     def _read_khmer(self, payload: PageImage) -> tuple[str | None, list[str]]:

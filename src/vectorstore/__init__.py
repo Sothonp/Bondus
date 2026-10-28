@@ -350,7 +350,9 @@ class InMemoryVectorStore:
             descriptor, temp_name = tempfile.mkstemp(dir=self.path, prefix=".index-", suffix=".npz")
             try:
                 with os.fdopen(descriptor, "wb") as handle:
-                    np.savez(
+                    # Compressed: the chunk text shrinks about 7x, which keeps
+                    # the committed index well under GitHub's 100 MB file limit.
+                    np.savez_compressed(
                         handle,
                         vectors=self._vectors,
                         records=np.frombuffer(records_json, dtype=np.uint8),

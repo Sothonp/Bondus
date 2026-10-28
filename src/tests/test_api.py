@@ -159,13 +159,14 @@ class TestReadOnlyServer:
     student searches is built where the corpus is, not through the open API."""
 
     @staticmethod
-    def _client(store_path, *, allow_writes: bool) -> TestClient:
+    def _client(store_path, *, allow_writes: bool, expose_sources: bool = False) -> TestClient:
         settings = Settings(
             _env_file=None,
             embedding_backend="hashing",
             llm_provider="none",
             vector_store_path=store_path,
             allow_writes=allow_writes,
+            expose_sources=expose_sources,
         )
         return TestClient(create_app(settings, generator=ScriptedGenerator(["ok"])))
 
@@ -190,7 +191,7 @@ class TestReadOnlyServer:
 
     def test_reading_still_works(self, store_path):
         """The refusal is about changing the index, not about using it."""
-        with self._client(store_path, allow_writes=False) as c:
+        with self._client(store_path, allow_writes=False, expose_sources=True) as c:
             assert c.get("/api/documents").status_code == 200
             health = c.get("/health")
             assert health.status_code == 200
@@ -209,3 +210,73 @@ class TestReadOnlyServer:
             )
             assert response.status_code == 200, response.text
             assert c.get("/health").json()["writes_enabled"] is True
+
+
+class TestSubjectGuide:
+    def test_a_requested_subject_sends_its_guide(self, store_path):
+        generator = ScriptedGenerator(["ok"])
+        ask(store_path, generator, subject="chemistry")
+        assert "<subject_guide>" in generator.seen[0]["user_message"]
+        assert "ស៊ីនេទិចគីមី" in generator.seen[0]["user_message"]
+
+    def test_the_social_science_track_gets_its_own_maths_syllabus(self, store_path):
+        generator = ScriptedGenerator(["ok"])
+        ask(store_path, generator, subject="mathematics", track="social_science")
+        message = generator.seen[0]["user_message"]
+        assert "Social Science track" in message and "Never teach or set ចំនួនកុំផ្លិច" in message
+
+    def test_no_subject_and_no_passages_sends_no_guide(self, store_path):
+        generator = ScriptedGenerator(["ok"])
+        ask(store_path, generator)
+        assert "<subject_guide>" not in generator.seen[0]["user_message"]
+
+    def test_an_unknown_track_is_rejected(self, store_path):
+        with client(ScriptedGenerator(["ok"]), store_path) as c:
+            response = c.post("/api/query/stream", json={"prompt": "x", "track": "university"})
+        assert response.status_code == 422
+
+
+class TestLibraryStaysPrivate:
+    def test_the_document_list_is_hidden_by_default(self, store_path):
+        with client(ScriptedGenerator(["ok"]), store_path) as c:
+            assert c.get("/api/documents").status_code == 404
+
+    def test_answers_carry_no_passages_by_default(self, store_path):
+        sent = ask(store_path, ScriptedGenerator(["ok"]))
+        meta = next(event for event in sent if event["type"] == "meta")
+        assert meta["sources"] == []
+
+
+class TestFallbackSpeed:
+    def test_a_model_that_never_starts_is_abandoned_for_the_next(self):
+        import asyncio
+
+        from src.api import FallbackGenerator
+
+        class Stalled(ScriptedGenerator):
+            async def stream(self, **kwargs):
+                await asyncio.sleep(60)
+                yield "too late"
+
+        stalled = Stalled([]); stalled.provider = "gemini"; stalled.model = "slow"
+        quick = ScriptedGenerator(["ok"]); quick.provider = "groq"; quick.model = "fast"
+        chain = FallbackGenerator([stalled, quick], first_token_seconds=0.05)
+
+        async def collect():
+            return [item async for item in chain.stream(system="", history=[], user_message="q")]
+
+        items = asyncio.run(asyncio.wait_for(collect(), 5))
+        assert "ok" in items and "too late" not in items
+        assert "gemini:slow" in chain.resting
+
+    def test_the_backup_provider_comes_right_after_the_main_model(self):
+        from src.api import build_generator
+
+        settings = Settings(
+            _env_file=None, llm_provider="gemini", gemini_api_key="g", groq_api_key="gsk_test",
+            gemini_model="gemini-a", gemini_fallback_models="gemini-b,gemini-c",
+            llm_backup_provider="groq",
+        )
+        chain = build_generator(settings).chain
+        assert chain[:2] == ["gemini:gemini-a", f"groq:{settings.groq_model}"]
+        assert chain.index("gemini:gemini-b") > 1

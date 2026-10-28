@@ -5,12 +5,15 @@ Run with:  uv run uvicorn src.api:app --reload
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import itertools
 import json
 import logging
+import re
 import time
 import uuid
-from collections import OrderedDict
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections import Counter, OrderedDict
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -24,13 +27,18 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from prompts import (
+    ALL_MODELS_BUSY,
     EXAM_CONTINUE,
     EXAM_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
+    build_exam_answers_message,
     build_exam_message,
     build_extractive_answer,
     build_user_message,
+    compact_prompt,
+    subject_guide,
 )
+from src.answer_cache import AnswerCache, CachedAnswer, cache_key
 from src.answer_format import sanitize_answer
 from src.auth import (
     AuthUnavailable,
@@ -88,12 +96,13 @@ from src.ingestion.llm_chunk import LlamaChunker, build_chunker
 from src.ingestion.image_ocr import HybridImageOCR, ImageInputError, ImageReading, build_image_ocr, decode_image
 from src.ingestion.ocr import CachedPageOCR, PageImage, build_ocr
 from src.retrieval.retriever import RetrievedChunk, Retriever
-from src.subjects import get_subject
+from src.rate_limit import RateLimiter, client_ip
+from src.subjects import get_subject, subject_named_in
 from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
 logger = logging.getLogger("reanmath")
 
-Provider = Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+Provider = Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +156,8 @@ class OutputGuard:
     """Cleans model output as it streams.
 
     Some models (gpt-oss on Khmer, notably) degenerate into thousands of
-    zero-width spaces. Runs of invisible characters are collapsed to one, and
+    zero-width spaces, and some emit stray replacement characters (U+FFFD), which
+    are dropped. Runs of invisible characters are collapsed to one, and
     a run longer than ``MAX_INVISIBLE_RUN`` aborts the answer so another model
     can take over.
     """
@@ -159,6 +169,10 @@ class OutputGuard:
     def feed(self, text: str) -> str:
         kept: list[str] = []
         for char in text:
+            if char == "\ufffd":
+                # A replacement character is never meant: Nemotron at NVIDIA opens
+                # its answers with one. It would show as a "?" box.
+                continue
             if char in INVISIBLE_CHARS:
                 self.run += 1
                 if self.run > MAX_INVISIBLE_RUN:
@@ -285,9 +299,9 @@ class AnthropicGenerator:
     def _error(self, exc: Exception) -> LLMError:
         anthropic = self._anthropic
         if isinstance(exc, anthropic.AuthenticationError):
-            return LLMError(502, "Anthropic rejected the API key (check ANTHROPIC_API_KEY)")
+            return LLMError(401, "Anthropic rejected the API key (check ANTHROPIC_API_KEY)")
         if isinstance(exc, anthropic.PermissionDeniedError):
-            return LLMError(502, f"Anthropic permission denied: {exc.message}")
+            return LLMError(403, f"Anthropic permission denied: {exc.message}")
         if isinstance(exc, anthropic.NotFoundError):
             return LLMError(502, f"Unknown Anthropic model '{self.model}': {exc.message}")
         if isinstance(exc, anthropic.BadRequestError):
@@ -402,7 +416,7 @@ class GeminiGenerator:
         if isinstance(exc, self._errors.APIError):
             code = exc.code or 502
             if code in (401, 403):
-                return LLMError(502, "Gemini rejected the API key (check GEMINI_API_KEY)")
+                return LLMError(code, "Gemini rejected the API key (check GEMINI_API_KEY)")
             if code == 404:
                 return LLMError(502, f"Unknown Gemini model '{self.model}'")
             if code == 429:
@@ -495,13 +509,14 @@ class GroqGenerator:
 
     @staticmethod
     def estimate_tokens(messages: Sequence[dict]) -> int:
-        """Conservative prompt size: Khmer is about one token per character,
-        other text about one per three (measured on gpt-oss)."""
+        """Conservative prompt size: Khmer is about 0.71 tokens per character,
+        other text about one per 3.9 characters (measured on gpt-oss-120b at
+        Groq); rounded up to 3/4 and 1/3.5."""
         total = 0
         for message in messages:
             content = message["content"]
             khmer = sum(1 for char in content if "\u1780" <= char <= "\u19ff")
-            total += 8 + khmer + (len(content) - khmer) // 3
+            total += 8 + khmer * 3 // 4 + (len(content) - khmer) * 2 // 7
         return total
 
     def _completion_budget(self, messages: Sequence[dict]) -> int | None:
@@ -528,8 +543,11 @@ class GroqGenerator:
         chunks: Sequence[RetrievedChunk] = (),
         message_builder: MessageBuilder | None = None,
     ) -> dict:
-        """The request, shrunk to fit the tokens-per-minute limit: the oldest chat
-        turns go first, then the lowest-ranked passages."""
+        """The request, shrunk to fit the tokens-per-minute limit: the short form
+        of the system prompt, then the oldest chat turns go first, then the
+        lowest-ranked passages."""
+        if self.tokens_per_minute:
+            system = compact_prompt(system)
         all_turns = _normalized_history(history)
         turns = list(all_turns)
         kept = list(chunks)
@@ -568,9 +586,9 @@ class GroqGenerator:
     def _error(self, exc: Exception) -> LLMError:
         groq = self._groq
         if isinstance(exc, groq.AuthenticationError):
-            return LLMError(502, "Groq rejected the API key (check GROQ_API_KEY)")
+            return LLMError(401, "Groq rejected the API key (check GROQ_API_KEY)")
         if isinstance(exc, groq.PermissionDeniedError):
-            return LLMError(502, f"Groq permission denied: {exc.message}")
+            return LLMError(403, f"Groq permission denied: {exc.message}")
         if isinstance(exc, groq.NotFoundError):
             return LLMError(502, f"Unknown Groq model '{self.model}': {exc.message}")
         if isinstance(exc, groq.BadRequestError):
@@ -724,9 +742,9 @@ class OpenAICompatibleGenerator:
         openai = self._openai
         name = self.label
         if isinstance(exc, openai.AuthenticationError):
-            return LLMError(502, f"{name} rejected the API key (check {self.key_env})")
+            return LLMError(401, f"{name} rejected the API key (check {self.key_env})")
         if isinstance(exc, openai.PermissionDeniedError):
-            return LLMError(502, f"{name} permission denied: {exc.message}")
+            return LLMError(403, f"{name} permission denied: {exc.message}")
         if isinstance(exc, openai.NotFoundError):
             return LLMError(
                 502,
@@ -863,6 +881,16 @@ class CerebrasGenerator(OpenAICompatibleGenerator):
     model_env = "CEREBRAS_MODEL"
 
 
+class NvidiaGenerator(OpenAICompatibleGenerator):
+    """NVIDIA's API catalogue: a separate free quota of large open models, slower
+    than Groq or Gemini, so a backstop rather than a first answer."""
+
+    provider: Provider = "nvidia"
+    label = "NVIDIA"
+    key_env = "NVIDIA_API_KEY"
+    model_env = "NVIDIA_MODEL"
+
+
 class ExtractiveGenerator:
     """No LLM: answer with the retrieved passages themselves."""
 
@@ -887,6 +915,20 @@ class ExtractiveGenerator:
         yield answer
 
 
+class UnavailableGenerator:
+    """Every model failed: a friendly note in Khmer and English, not an error."""
+
+    provider: Provider = "none"
+    model = None
+
+    async def generate(self, **kwargs) -> GeneratedAnswer:
+        return GeneratedAnswer(text=ALL_MODELS_BUSY, stop_reason="llm_unavailable")
+
+    async def stream(self, **kwargs) -> AsyncIterator[StreamItem]:
+        yield ALL_MODELS_BUSY
+        yield GeneratedAnswer(text=ALL_MODELS_BUSY, stop_reason="llm_unavailable")
+
+
 # A model that just refused the request, or was asked for more than it allows,
 # is answering about this one question -- it is not out of service, so it keeps
 # its turn in the rotation.
@@ -897,6 +939,10 @@ NO_COOLDOWN_STATUSES = frozenset({413, 422})
 # instead of costing a round-trip every fifteen seconds.
 LASTING_FAILURE_STATUSES = frozenset({402})
 
+# A rejected key will not start working while the server runs: that candidate
+# is dropped until restart, and the log says which key variable to fix.
+DISABLED_STATUSES = frozenset({401, 403})
+
 
 @dataclass
 class ModelHealth:
@@ -906,6 +952,7 @@ class ModelHealth:
     so the next student's question is not spent rediscovering that it is down.
     """
 
+    disabled: bool = False
     cooldown_until: float = 0.0
     failures: int = 0
     detail: str | None = None
@@ -926,7 +973,9 @@ class FallbackGenerator:
     and burns its per-minute quota while the others sit idle.
 
     A stream only switches before its first text arrives; after that the client
-    is told to start over. If every candidate fails, the retrieved passages are
+    is told to start over. A model that has not started answering within
+    ``first_token_seconds`` counts as failed (504), so a stalled provider costs
+    seconds rather than the whole request timeout. If every candidate fails, the retrieved passages are
     returned with a note that the tutor is unavailable.
     """
 
@@ -937,6 +986,9 @@ class FallbackGenerator:
         rotate: bool = False,
         cooldown_seconds: float = 15.0,
         max_cooldown_seconds: float = 300.0,
+        first_token_seconds: float = 0.0,
+        rate_limit_cooldown_seconds: float = 60.0,
+        routes: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         if not candidates:
             raise ValueError("at least one generator is required")
@@ -946,6 +998,10 @@ class FallbackGenerator:
         self.rotate = rotate
         self.cooldown_seconds = cooldown_seconds
         self.max_cooldown_seconds = max_cooldown_seconds
+        self.first_token_seconds = first_token_seconds
+        self.rate_limit_cooldown_seconds = rate_limit_cooldown_seconds
+        # Language ("km", "en") -> providers to try first, in order.
+        self.routes = {language: list(order) for language, order in (routes or {}).items()}
         self._health = [ModelHealth() for _ in self.candidates]
         self._cursor = 0
 
@@ -955,7 +1011,9 @@ class FallbackGenerator:
 
     @staticmethod
     def _name(candidate: AnswerGenerator) -> str:
-        return f"{candidate.provider}:{candidate.model}" if candidate.model else candidate.provider
+        name = f"{candidate.provider}:{candidate.model}" if candidate.model else candidate.provider
+        label = getattr(candidate, "key_label", "")
+        return f"{name}#{label}" if label else name
 
     @property
     def resting(self) -> dict[str, float]:
@@ -964,25 +1022,63 @@ class FallbackGenerator:
         return {
             self._name(candidate): round(health.resting_for(now), 1)
             for candidate, health in zip(self.candidates, self._health)
-            if health.resting_for(now) > 0
+            if health.resting_for(now) > 0 and not health.disabled
         }
 
-    def _order(self) -> list[int]:
+    @property
+    def statuses(self) -> list[dict]:
+        """Every candidate: available, cooling down (with seconds left) or disabled."""
+        now = time.monotonic()
+        result = []
+        for candidate, health in zip(self.candidates, self._health):
+            rest = health.resting_for(now)
+            state = "disabled" if health.disabled else "cooling_down" if rest > 0 else "available"
+            result.append({
+                "name": self._name(candidate),
+                "status": state,
+                "retry_in_seconds": round(rest, 1) if state == "cooling_down" else None,
+                "last_error": health.detail if state != "available" else None,
+            })
+        return result
+
+    def _route(self, ready: list[int], language: str | None) -> list[int]:
+        """``ready`` reordered for the question's language: each provider named in
+        its route takes its turn with the model it would try first (every key of
+        that model), then everything else in the usual order."""
+        order = self.routes.get(language or "")
+        if not order:
+            return ready
+        first: list[int] = []
+        for provider in order:
+            leading = next((i for i in ready if self.candidates[i].provider == provider), None)
+            if leading is None:
+                continue
+            model = self.candidates[leading].model
+            first += [
+                i for i in ready
+                if self.candidates[i].provider == provider and self.candidates[i].model == model
+            ]
+        return first + [i for i in ready if i not in first]
+
+    def _order(self, language: str | None = None) -> list[int]:
         """Candidate indices to try, healthiest first.
 
         Rested models still come last rather than being dropped: a stale
         cooldown must never be the reason a student gets no answer at all.
         """
         now = time.monotonic()
-        ready = [i for i, health in enumerate(self._health) if health.resting_for(now) <= 0]
+        usable = [i for i, health in enumerate(self._health) if not health.disabled]
+        ready = [i for i in usable if self._health[i].resting_for(now) <= 0]
         waiting = sorted(
-            (i for i in range(len(self.candidates)) if self._health[i].resting_for(now) > 0),
+            (i for i in usable if self._health[i].resting_for(now) > 0),
             key=lambda i: self._health[i].cooldown_until,
         )
         if ready and self.rotate:
             start = next((n for n, i in enumerate(ready) if i >= self._cursor), 0)
             ready = ready[start:] + ready[:start]
             self._cursor = (ready[0] + 1) % len(self.candidates)
+        elif ready:
+            ready = self._route(ready, language)
         return ready + waiting
 
     def _cooldown(self, exc: LLMError, failures: int) -> float:
@@ -990,6 +1086,8 @@ class FallbackGenerator:
             return self.max_cooldown_seconds
         if exc.retry_after is not None:
             return min(max(exc.retry_after, 1.0), self.max_cooldown_seconds)
+        if exc.status_code == 429:
+            return self.rate_limit_cooldown_seconds
         return min(self.cooldown_seconds * 2 ** (failures - 1), self.max_cooldown_seconds)
 
     def _recovered(self, index: int) -> None:
@@ -1011,6 +1109,12 @@ class FallbackGenerator:
         health = self._health[index]
         health.failures += 1
         health.detail = exc.detail
+        if exc.status_code in DISABLED_STATUSES:
+            health.disabled = True
+            logger.error(
+                "%s disabled until restart (%d: %s)", self._name(candidate), exc.status_code, exc.detail,
+            )
+            return
         rest = self._cooldown(exc, health.failures)
         health.cooldown_until = time.monotonic() + rest
         logger.warning(
@@ -1019,13 +1123,13 @@ class FallbackGenerator:
         )
 
     @staticmethod
-    def _last_resort(error: LLMError | None) -> ExtractiveGenerator:
-        logger.error("Every configured model failed; answering with retrieved passages")
-        return ExtractiveGenerator(unavailable_reason=error.detail if error else None)
+    def _last_resort(error: LLMError | None) -> "UnavailableGenerator":
+        logger.error("Every configured model failed (last: %s)", error.detail if error else "none tried")
+        return UnavailableGenerator()
 
     async def generate(self, **kwargs) -> GeneratedAnswer:
         error: LLMError | None = None
-        for index in self._order():
+        for index in self._order(kwargs.get("language")):
             candidate = self.candidates[index]
             try:
                 answer = await candidate.generate(**kwargs)
@@ -1041,11 +1145,23 @@ class FallbackGenerator:
 
     async def stream(self, **kwargs) -> AsyncIterator[StreamItem]:
         error: LLMError | None = None
-        for index in self._order():
+        for index in self._order(kwargs.get("language")):
             candidate = self.candidates[index]
             started = False
+            items = stream_answer(candidate, **kwargs).__aiter__()
             try:
-                async for item in stream_answer(candidate, **kwargs):
+                while True:
+                    try:
+                        if started or not self.first_token_seconds:
+                            item = await items.__anext__()
+                        else:
+                            item = await asyncio.wait_for(items.__anext__(), self.first_token_seconds)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        raise LLMError(
+                            504, f"no answer within {self.first_token_seconds:.0f} s"
+                        ) from None
                     if isinstance(item, GeneratedAnswer):
                         item = replace(item, provider=candidate.provider)
                     elif isinstance(item, str):
@@ -1058,6 +1174,8 @@ class FallbackGenerator:
                     # The client already shows part of this answer; tell it to start over.
                     yield StreamReset(detail=exc.detail)
                 continue
+            finally:
+                await items.aclose()
             self._recovered(index)
             return
         fallback = self._last_resort(error)
@@ -1065,11 +1183,12 @@ class FallbackGenerator:
             yield replace(item, provider="none") if isinstance(item, GeneratedAnswer) else item
 
 
-def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenerator]:
-    if provider == "anthropic" and settings.anthropic_api_key is not None:
+def _key_generators(settings: Settings, provider: str, key: str) -> list[AnswerGenerator]:
+    """The generators of ``provider`` for one API key, main model first."""
+    if provider == "anthropic":
         return [
             AnthropicGenerator(
-                settings.anthropic_api_key.get_secret_value(),
+                key,
                 settings.anthropic_model,
                 max_tokens=settings.llm_max_tokens,
                 timeout=settings.llm_timeout_seconds,
@@ -1077,13 +1196,13 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
                 use_fallbacks=settings.anthropic_fallbacks,
             )
         ]
-    if provider == "gemini" and settings.gemini_api_key is not None:
+    if provider == "gemini":
         models = [settings.gemini_model]
         if settings.llm_fallback:
             models += settings.gemini_fallback_model_list
         return [
             GeminiGenerator(
-                settings.gemini_api_key.get_secret_value(),
+                key,
                 model,
                 max_tokens=settings.llm_max_tokens,
                 timeout=settings.llm_timeout_seconds,
@@ -1092,10 +1211,10 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
             )
             for model in models
         ]
-    if provider == "groq" and settings.groq_api_key is not None:
+    if provider == "groq":
         return [
             GroqGenerator(
-                settings.groq_api_key.get_secret_value(),
+                key,
                 settings.groq_model,
                 max_tokens=settings.llm_max_tokens,
                 timeout=settings.llm_timeout_seconds,
@@ -1106,13 +1225,13 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
                 reasoning_effort=settings.groq_reasoning_effort,
             )
         ]
-    if provider == "cerebras" and settings.cerebras_api_key is not None:
+    if provider == "cerebras":
         models = [settings.cerebras_model]
         if settings.llm_fallback:
             models += settings.cerebras_fallback_model_list
         return [
             CerebrasGenerator(
-                settings.cerebras_api_key.get_secret_value(),
+                key,
                 model,
                 base_url=settings.cerebras_base_url,
                 max_tokens=settings.llm_max_tokens,
@@ -1124,13 +1243,28 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
             )
             for model in models
         ]
-    if provider == "openrouter" and settings.openrouter_api_key is not None:
+    if provider == "nvidia":
+        models = [settings.nvidia_model]
+        if settings.llm_fallback:
+            models += settings.nvidia_fallback_model_list
+        return [
+            NvidiaGenerator(
+                key,
+                model,
+                base_url=settings.nvidia_base_url,
+                max_tokens=settings.llm_max_tokens,
+                timeout=settings.llm_timeout_seconds,
+                temperature=settings.nvidia_temperature,
+            )
+            for model in models
+        ]
+    if provider == "openrouter":
         models = [settings.openrouter_model]
         if settings.llm_fallback:
             models += settings.openrouter_fallback_model_list
         return [
             OpenRouterGenerator(
-                settings.openrouter_api_key.get_secret_value(),
+                key,
                 model,
                 base_url=settings.openrouter_base_url,
                 max_tokens=settings.llm_max_tokens,
@@ -1147,13 +1281,13 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
             )
             for model in models
         ]
-    if provider == "sea-lion" and settings.sea_lion_api_key is not None:
+    if provider == "sea-lion":
         if not settings.sea_lion_model:
             logger.error("SEA_LION_API_KEY is set but SEA_LION_MODEL is empty; skipping SEA-LION")
             return []
         return [
             SeaLionGenerator(
-                settings.sea_lion_api_key.get_secret_value(),
+                key,
                 settings.sea_lion_model,
                 base_url=settings.sea_lion_base_url,
                 max_tokens=settings.llm_max_tokens,
@@ -1162,6 +1296,22 @@ def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenera
             )
         ]
     return []
+
+
+def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenerator]:
+    """Every generator of ``provider``: each model with each of its keys, model by
+    model, so a rate-limited key hands the same model over to the next key."""
+    per_key = [_key_generators(settings, provider, key) for key in settings.api_keys(provider)]
+    if len(per_key) > 1:
+        for number, generators in enumerate(per_key, start=1):
+            for generator in generators:
+                generator.key_label = f"key{number}"
+    return [
+        generator
+        for same_model in itertools.zip_longest(*per_key)
+        for generator in same_model
+        if generator is not None
+    ]
 
 
 def build_generator(settings: Settings) -> AnswerGenerator:
@@ -1181,8 +1331,11 @@ def build_generator(settings: Settings) -> AnswerGenerator:
     # the general-purpose hosts go first and SEA-LION last -- it is the slowest,
     # but it is the one trained for Khmer, so it is the right final answer rather
     # than a degraded one.
-    for other in ("anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion"):
-        if other != provider:
+    backup = settings.llm_backup_provider.strip().lower()
+    if backup and backup != provider:
+        candidates[1:1] = _provider_generators(settings, backup)
+    for other in ("anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion"):
+        if other not in (provider, backup):
             candidates += _provider_generators(settings, other)
     if len(candidates) > 1:
         for candidate in candidates:
@@ -1196,6 +1349,9 @@ def build_generator(settings: Settings) -> AnswerGenerator:
         rotate=settings.llm_selection == "rotate",
         cooldown_seconds=settings.llm_cooldown_seconds,
         max_cooldown_seconds=settings.llm_max_cooldown_seconds,
+        first_token_seconds=settings.llm_first_token_seconds,
+        rate_limit_cooldown_seconds=settings.llm_rate_limit_cooldown_seconds,
+        routes={"km": settings.llm_khmer_order_list, "en": settings.llm_other_order_list},
     )
 
 
@@ -1227,6 +1383,8 @@ def build_exam_generator(settings: Settings) -> AnswerGenerator:
         rotate=False,
         cooldown_seconds=settings.llm_cooldown_seconds,
         max_cooldown_seconds=settings.llm_max_cooldown_seconds,
+        first_token_seconds=settings.exam_first_token_seconds,
+        rate_limit_cooldown_seconds=settings.llm_rate_limit_cooldown_seconds,
     )
 
 
@@ -1247,6 +1405,8 @@ class RAGState:
     image_ocr: HybridImageOCR | None = None
     chunker: LlamaChunker | None = None
     exam_generator: AnswerGenerator | None = None  # None: exams use ``generator``
+    answer_cache: AnswerCache | None = None
+    limiter: RateLimiter | None = None
     jobs: OrderedDict[str, IngestJob] = field(default_factory=OrderedDict)
     tasks: set[asyncio.Task] = field(default_factory=set)
 
@@ -1292,6 +1452,14 @@ def build_state(
         ocr=ocr if ocr is not None else build_ocr(settings),
         write_lock=asyncio.Lock(),
         image_ocr=build_image_ocr(settings) if image_ocr is _DEFAULT else image_ocr,
+        answer_cache=(
+            AnswerCache(settings.resolved_answer_cache_path, settings.answer_cache_ttl_seconds)
+            if settings.answer_cache_ttl_seconds else None
+        ),
+        limiter=(
+            RateLimiter(settings.rate_limit_questions, settings.rate_limit_window_seconds)
+            if settings.rate_limit_questions else None
+        ),
     )
 
 
@@ -1396,7 +1564,10 @@ async def _warm_up_image_ocr(state: RAGState) -> None:
     logger.info("Image OCR ready in %.1fs (%s)", time.perf_counter() - started, ", ".join(state.image_ocr.engines))
 
 
-def _source_chunks(context: Sequence[RetrievedChunk]) -> list[SourceChunk]:
+def _source_chunks(context: Sequence[RetrievedChunk], settings: Settings) -> list[SourceChunk]:
+    """The passages behind an answer, for the browser: none unless EXPOSE_SOURCES is on."""
+    if not settings.expose_sources:
+        return []
     return [
         SourceChunk(
             id=chunk.id,
@@ -1464,13 +1635,117 @@ def _question_language(prompt: str, readings: Sequence[ImageReading]) -> Literal
     return detect_language(image_text) if image_text.strip() else "km"
 
 
+RATE_LIMITED = (
+    "សុំទោស ប្អូនសួរច្រើនពេកក្នុងពេលខ្លី។ សូមសម្រាកបន្តិច ហើយសួរម្ដងទៀតក្នុងរយៈពេល {minutes} នាទី។ "
+    "/ You have asked a lot in a short time. Please try again in {minutes} minute(s)."
+)
+
+
+async def rate_limit(request: Request) -> None:
+    """One student (IP address) may ask RATE_LIMIT_QUESTIONS per window."""
+    limiter = get_state(request).limiter
+    if limiter is None:
+        return
+    client = client_ip(request)
+    wait = limiter.retry_after(client)
+    if wait is not None:
+        logger.warning("Rate limited %s for %d s", client, wait)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            RATE_LIMITED.format(minutes=max(1, round(wait / 60))),
+            headers={"Retry-After": str(wait)},
+        )
+
+
+def _answer_cache_key(
+    state: RAGState, payload: QueryRequest, readings: Sequence[ImageReading],
+    language: str, context: Sequence[RetrievedChunk], guide: str | None,
+) -> str | None:
+    """Where this answer is cached, or None when it cannot be: an answer to a
+    question with chat history, photos or a continuation depends on more than
+    the question and its passages."""
+    if state.answer_cache is None or not payload.generate:
+        return None
+    if payload.history or readings or payload.images or payload.continues_math:
+        return None
+    return cache_key(
+        payload.prompt,
+        [chunk.id for chunk in context],
+        language=language,
+        subject=payload.subject,
+        track=payload.track,
+        sources=",".join(payload.sources or []),
+        prompt=hashlib.sha256((SYSTEM_PROMPT + (guide or "")).encode("utf-8")).hexdigest(),
+    )
+
+
+def _cache_answer(state: RAGState, key: str | None, text: str, answer: GeneratedAnswer, provider: str) -> None:
+    """Keep a complete answer from a real model; never a cut-off or fallback note."""
+    if key is None or state.answer_cache is None or not text.strip() or provider == "none":
+        return
+    if answer.stop_reason in TRUNCATED_STOP_REASONS or answer.stop_reason in QUOTED_STOP_REASONS:
+        return
+    state.answer_cache.put(key, CachedAnswer(text, provider, answer.model, answer.stop_reason))
+
+
+# A message in a conversation that is short, or points back at the exercise
+# ("លេខ៥ ដល់ ៦", "បន្ត", "ធ្វើសំណួរទី៥ ឡើងវិញ", "next part") is a
+# follow-up: on its own it matches any subject's papers, so it is searched and
+# guided together with the question before it.
+FOLLOW_UP_MAX_CHARS = 200
+FOLLOW_UP_WORDS = re.compile(
+    r"បន្ត|លេខ\s*[0-9០-៩]|សំណួរទី|លំហាត់ទី|ផ្នែក|ចំណុច|សំណួរបន្ទាប់|ខាងលើ|ម្ដងទៀត|ឡើងវិញ"
+    r"|\b(?:continue|next|part|question\s*\d|the rest|again|above)",
+    re.IGNORECASE,
+)
+MAX_PREVIOUS_QUESTION_CHARS = 1500
+
+
+def _previous_question(payload: QueryRequest) -> str:
+    """The student's last question before this one, when this one is a follow-up."""
+    prompt = payload.prompt.strip()
+    if not payload.history or subject_named_in(prompt):
+        return ""
+    if len(prompt) > FOLLOW_UP_MAX_CHARS and not FOLLOW_UP_WORDS.search(prompt):
+        return ""
+    for turn in reversed(payload.history):
+        if turn.role == "user" and turn.content.strip():
+            return turn.content[:MAX_PREVIOUS_QUESTION_CHARS]
+    return ""
+
+
+def _question_subject(payload: QueryRequest) -> str | None:
+    """The subject picked or named, in this question or, for a follow-up, the last one."""
+    return (
+        payload.subject
+        or subject_named_in(payload.prompt)
+        or subject_named_in(_previous_question(payload))
+    )
+
+
+def _question_guide(payload: QueryRequest, context: Sequence[RetrievedChunk]) -> str | None:
+    """Subject focus notes for the answer: the requested subject, else the one most
+    of the retrieved passages come from."""
+    subject = _question_subject(payload)
+    if subject is None and context:
+        top, count = Counter(chunk.subject for chunk in context).most_common(1)[0]
+        if top is not None and count * 2 > len(context):
+            subject = top
+    return subject_guide(subject, payload.track)
+
+
 async def _retrieve_context(
     state: RAGState, payload: QueryRequest, readings: Sequence[ImageReading] = ()
 ) -> tuple[Literal["km", "en"], list[RetrievedChunk]]:
     language = _question_language(payload.prompt, readings)
     # The photo usually *is* the question, so its text drives retrieval too.
     image_text = "\n".join(r.search_text for r in readings if r.has_text)[:MAX_IMAGE_SEARCH_CHARS]
-    query = "\n".join(part for part in (payload.prompt, image_text) if part.strip())
+    query = "\n".join(
+        part for part in (_previous_question(payload), payload.prompt, image_text) if part.strip()
+    )
+    # A question that names its subject searches only that subject: "make a history
+    # paper" otherwise matches biology and morality papers on the word "paper".
+    subject = _question_subject(payload)
     try:
         retrieved = await run_in_threadpool(
             state.retriever.retrieve,
@@ -1478,8 +1753,17 @@ async def _retrieve_context(
             payload.top_k,
             payload.score_threshold,
             payload.sources,
-            payload.subject,
+            subject,
         )
+        if not retrieved and subject != payload.subject:
+            retrieved = await run_in_threadpool(
+                state.retriever.retrieve,
+                query,
+                payload.top_k,
+                payload.score_threshold,
+                payload.sources,
+                payload.subject,
+            )
     except EmbeddingMismatchError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     return language, state.retriever.fit_context(retrieved)
@@ -1495,14 +1779,25 @@ EXAM_PARTIAL_TAIL_CHARS = 8000
 def _exam_message(
     payload: ExamRequest, papers: Sequence[RetrievedChunk], subject_name: str, paper_format: str
 ) -> str:
-    message = build_exam_message(
-        subject_name,
-        papers,
-        payload.language,
-        focus=payload.focus,
-        answer_key=payload.answer_key,
-        paper_format=paper_format,
-    )
+    guide = subject_guide(payload.subject, payload.track)
+    if payload.answers_for.strip() and payload.paper.strip():
+        message = build_exam_answers_message(
+            subject_name,
+            payload.paper,
+            payload.answers_for,
+            payload.language,
+            guide=guide,
+        )
+    else:
+        message = build_exam_message(
+            subject_name,
+            papers,
+            payload.language,
+            focus=payload.focus,
+            answer_key=payload.answer_key,
+            paper_format=paper_format,
+            guide=guide,
+        )
     if not payload.partial:
         return message
     partial = payload.partial
@@ -1563,10 +1858,12 @@ async def _answer_events(
     started: float,
     generate: bool = True,
     continues_math: bool = False,
+    on_answer: Callable[[str, GeneratedAnswer], None] | None = None,
     **request,
 ) -> AsyncIterator[str]:
     """The answering half of a streamed response: "generating", the deltas (and
-    resets), then "done" with the repaired text, or "error".
+    resets), then "done" with the repaired text, or "error". ``on_answer`` gets
+    the finished text (repaired) and the answer's details, before "done".
 
     ``request`` is what ``AnswerGenerator.stream`` takes; ``started`` is when the
     request arrived, for the reported latencies.
@@ -1618,9 +1915,12 @@ async def _answer_events(
             logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
     total_ms = round((time.perf_counter() - started) * 1000, 1)
     logger.info(
-        "Answer streamed in %.0f ms (first token %s)",
+        "Answer streamed in %.0f ms (first token %s) by %s %s",
         total_ms, f"{first_token_ms:.0f} ms" if first_token_ms else "never",
+        final.provider or generator.provider, final.model or generator.model,
     )
+    if generate and on_answer is not None:
+        on_answer(repaired if repairs else "".join(streamed), final)
     yield _line(QueryStreamDone(
         provider=final.provider or generator.provider,
         model=final.model,
@@ -1766,6 +2066,7 @@ def create_app(
             llm_provider=state.generator.provider,
             llm_model=state.generator.model,
             llm_chain=getattr(state.generator, "chain", []),
+            llm_providers=getattr(state.generator, "statuses", []),
             llm_selection=(
                 ("rotate" if state.generator.rotate else "priority")
                 if isinstance(state.generator, FallbackGenerator)
@@ -1783,24 +2084,34 @@ def create_app(
             chunks=len(state.store),
         )
 
+    asked = [Depends(rate_limit), *signed_in]
+
     @app.post(
-        "/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"], dependencies=signed_in
+        "/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"], dependencies=asked,
     )
     async def query(payload: QueryRequest, request: Request) -> QueryResponse:
         state = get_state(request)
         started = time.perf_counter()
         readings = await _read_images(state, _decode_images(state, payload))
         language, context = await _retrieve_context(state, payload, readings)
+        guide = _question_guide(payload, context)
+        key = _answer_cache_key(state, payload, readings, language, context, guide)
+        cached = state.answer_cache.get(key) if key else None
 
         answer = GeneratedAnswer(text="", stop_reason=None, model=state.generator.model)
-        if payload.generate:
+        if cached is not None:
+            logger.info("Answered from the cache (%s %s)", cached.provider, cached.model)
+            answer = GeneratedAnswer(
+                text=cached.text, stop_reason=cached.stop_reason, model=cached.model, provider=cached.provider,
+            )
+        elif payload.generate:
             answer = await state.generator.generate(
                 system=SYSTEM_PROMPT,
                 history=payload.history,
-                user_message=build_user_message(payload.prompt, context, language, readings),
+                user_message=build_user_message(payload.prompt, context, language, readings, guide),
                 chunks=context,
                 language=language,
-                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
+                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings, guide),
             )
 
         answer_text = answer.text
@@ -1812,12 +2123,14 @@ def create_app(
             )
             if repairs:
                 logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
+        if cached is None:
+            _cache_answer(state, key, answer_text, answer, answer.provider or state.generator.provider)
 
         return QueryResponse(
             answer=answer_text,
             language=language,
             grounded=bool(context),
-            sources=_source_chunks(context),
+            sources=_source_chunks(context, state.settings),
             provider=answer.provider or state.generator.provider,
             model=answer.model,
             stop_reason=answer.stop_reason,
@@ -1837,7 +2150,7 @@ def create_app(
             },
         },
         tags=["rag"],
-        dependencies=signed_in,
+        dependencies=asked,
     )
     async def query_stream(payload: QueryRequest, request: Request) -> StreamingResponse:
         """Like /api/query, but progress and the answer arrive as NDJSON events."""
@@ -1864,23 +2177,39 @@ def create_app(
             except HTTPException as exc:
                 yield _line(QueryStreamError(status=exc.status_code, detail=str(exc.detail)))
                 return
+            guide = _question_guide(payload, context)
             yield _line(QueryStreamMeta(
                 language=language,
                 grounded=bool(context),
-                sources=_source_chunks(context),
+                sources=_source_chunks(context, state.settings),
                 provider=generator.provider,
             ))
+            key = _answer_cache_key(state, payload, readings, language, context, guide)
+            cached = state.answer_cache.get(key) if key else None
+            if cached is not None:
+                logger.info("Answered from the cache (%s %s)", cached.provider, cached.model)
+                yield _line(QueryStreamStatus(stage="generating"))
+                yield _line(QueryStreamDelta(text=cached.text))
+                elapsed = round((time.perf_counter() - started) * 1000, 1)
+                yield _line(QueryStreamDone(
+                    provider=cached.provider, model=cached.model, stop_reason=cached.stop_reason,
+                    latency_ms=elapsed, first_token_ms=elapsed,
+                ))
+                return
             async for event in _answer_events(
                 generator,
                 started=started,
                 generate=payload.generate,
                 continues_math=payload.continues_math,
+                on_answer=lambda text, final: _cache_answer(
+                    state, key, text, final, final.provider or generator.provider
+                ),
                 system=SYSTEM_PROMPT,
                 history=payload.history,
-                user_message=build_user_message(payload.prompt, context, language, readings),
+                user_message=build_user_message(payload.prompt, context, language, readings, guide),
                 chunks=context,
                 language=language,
-                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
+                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings, guide),
             ):
                 yield event
 
@@ -1901,7 +2230,7 @@ def create_app(
             },
         },
         tags=["exam"],
-        dependencies=signed_in,
+        dependencies=asked,
     )
     async def exam_stream(payload: ExamRequest, request: Request) -> StreamingResponse:
         """A new mock BAC II paper in one subject, modelled on its indexed past papers."""
@@ -1939,7 +2268,7 @@ def create_app(
             yield _line(QueryStreamMeta(
                 language=payload.language,
                 grounded=True,
-                sources=_source_chunks(chosen),
+                sources=_source_chunks(chosen, state.settings),
                 provider=generator.provider,
             ))
             name = f"{subject.km} ({subject.en})"
@@ -2043,6 +2372,9 @@ def create_app(
     @app.get("/api/documents", response_model=DocumentListResponse, tags=["documents"])
     async def list_documents(request: Request) -> DocumentListResponse:
         state = get_state(request)
+        if not state.settings.expose_sources:
+            # The library itself is not public: only its answers are.
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
         return DocumentListResponse(
             documents=[DocumentInfo(**vars(summary)) for summary in state.store.sources()],
             total_chunks=len(state.store),

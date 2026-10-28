@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 LLMProvider = Literal[
-    "auto", "anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"
+    "auto", "anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"
 ]
 EmbeddingBackend = Literal["sentence-transformers", "hashing"]
 KhmerSegmenterBackend = Literal["auto", "crf", "regex"]
@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # answers, or delete the curriculum. Set ALLOW_WRITES=false there and build
     # the index locally, where this stays true.
     allow_writes: bool = True
+    # The passages behind an answer (their text, file names and scores) reach the
+    # browser only when this is true. Off by default: on a public site anyone
+    # could read the indexed books through the API. Turn it on locally to debug.
+    expose_sources: bool = False
     # The AI routes spend the shared model quota, so on a public deployment only signed-in students may use
     # them. The coach keeps no accounts: set this to the Laravel API's "who am I" address (for example
     # https://<api>/api/v1/me) and it asks that API whether the Bearer token the website sent is valid.
@@ -63,7 +67,7 @@ class Settings(BaseSettings):
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
-    llm_max_tokens: int = Field(16000, ge=256, le=64000)
+    llm_max_tokens: int = Field(24000, ge=256, le=64000)
     llm_timeout_seconds: float = Field(300.0, gt=0)
     # When the chosen provider fails, try the other configured providers, then
     # answer with the retrieved passages instead of an error.
@@ -82,6 +86,26 @@ class Settings(BaseSettings):
     # every question. A provider that sends `retry-after` sets its own wait.
     llm_cooldown_seconds: float = Field(15.0, ge=0.0)
     llm_max_cooldown_seconds: float = Field(300.0, ge=1.0)
+    # The provider tried right after the main model, before that provider's own
+    # fallback models: with LLM_BACKUP_PROVIDER=groq a failing Gemini model hands
+    # over to Groq at once instead of to three more Gemini models first.
+    llm_backup_provider: str = ""
+    # A streamed answer that has not produced its first words after this many
+    # seconds is abandoned for the next model (0 turns it off). Exams think
+    # before writing, so they get longer.
+    llm_first_token_seconds: float = Field(25.0, ge=0.0)
+    exam_first_token_seconds: float = Field(120.0, ge=0.0)
+    # A model that rate limits without saying how long to wait rests this long.
+    # A timeout or a 5xx rests it for LLM_COOLDOWN_SECONDS (doubling while it
+    # keeps failing); a rejected key (401/403) is not tried again until restart.
+    llm_rate_limit_cooldown_seconds: float = Field(60.0, ge=0.0)
+    # The providers tried first, by the question's language. Each provider named
+    # takes that place with its main model; its other models come after every
+    # named provider, and providers not named keep their usual order behind.
+    # Khmer is nearly every question, so Groq stays second as the fast backup
+    # and SEA-LION, trained for Khmer but slow, comes third.
+    llm_khmer_order: str = "gemini,groq,sea-lion"
+    llm_other_order: str = "groq,cerebras,gemini"
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = Field(
@@ -140,6 +164,17 @@ class Settings(BaseSettings):
     cerebras_min_completion_tokens: int = Field(1500, ge=64, le=64000)
     cerebras_max_retry_wait: float = Field(0.0, ge=0.0, le=120.0)
 
+    # NVIDIA's API catalogue (build.nvidia.com), OpenAI-compatible, keys start
+    # with nvapi-. A separate free quota, but slower than Groq or Gemini
+    # (Nemotron Ultra took about 16 s for a short Khmer derivative), so it is
+    # a backstop near the end of the chain. Its catalogue lists models a free
+    # key cannot reach (404) or that are often overloaded: test before adding.
+    nvidia_api_key: SecretStr | None = None
+    nvidia_model: str = "nvidia/nemotron-3-ultra-550b-a55b"
+    nvidia_fallback_models: str = "deepseek-ai/deepseek-v4.1-flash,google/gemma-4-31b-it"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_temperature: float = Field(0.2, ge=0.0, le=2.0)
+
     # OpenRouter fronts many providers behind one key, so it is the broadest
     # backstop: when Groq, Gemini and Cerebras have all run dry it reaches a
     # different set of hosts entirely. Keys start with `sk-or-`. Models whose id
@@ -177,7 +212,19 @@ class Settings(BaseSettings):
     # SEA-LION (AI Singapore), an open model family trained for Southeast Asian
     # languages including Khmer. The API is OpenAI-compatible, so it is reached
     # with the openai client pointed at SEA_LION_BASE_URL.
-    sea_lion_api_key: SecretStr | None = None
+    sea_lion_api_key: SecretStr | None = Field(
+        None, validation_alias=AliasChoices("sea_lion_api_key", "sealion_api_key")
+    )
+    # More keys per provider, comma separated, used in turn after the main key:
+    # when one key is rate limited the same model is tried with the next.
+    gemini_api_keys: SecretStr | None = None
+    groq_api_keys: SecretStr | None = None
+    cerebras_api_keys: SecretStr | None = None
+    nvidia_api_keys: SecretStr | None = None
+    openrouter_api_keys: SecretStr | None = None
+    sea_lion_api_keys: SecretStr | None = Field(
+        None, validation_alias=AliasChoices("sea_lion_api_keys", "sealion_api_keys")
+    )
     # Verified against the live catalogue on 2026-09-19; `GET {base_url}/models`
     # lists what the key can actually reach, and a wrong id fails at request time
     # rather than at startup. Gemma is the default rather than the newer
@@ -202,6 +249,15 @@ class Settings(BaseSettings):
 
     # --- Storage ---
     vector_store_path: Path = PROJECT_ROOT / "storage" / "vector_index"
+    # Answers to questions asked without chat history or photos are kept this
+    # long (0 turns the cache off), so a common question costs one LLM call. The
+    # file sits beside the index unless a path is given.
+    answer_cache_path: Path | None = None
+    answer_cache_ttl_seconds: int = Field(7 * 24 * 3600, ge=0)
+    # Questions one IP address may ask per window (0 turns the limit off), so a
+    # single student cannot spend the day's quota for everyone.
+    rate_limit_questions: int = Field(30, ge=0)
+    rate_limit_window_seconds: float = Field(600.0, gt=0)
     data_dir: Path = PROJECT_ROOT / "data"
     # Built React app (`npm run build`), served at / when present.
     frontend_dist_dir: Path = PROJECT_ROOT / "dist"
@@ -361,7 +417,7 @@ class Settings(BaseSettings):
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
 
     @field_validator(
-        "anthropic_api_key", "gemini_api_key", "groq_api_key", "cerebras_api_key",
+        "anthropic_api_key", "gemini_api_key", "groq_api_key", "cerebras_api_key", "nvidia_api_key",
         "openrouter_api_key", "sea_lion_api_key", mode="after",
     )
     @classmethod
@@ -398,6 +454,36 @@ class Settings(BaseSettings):
         return list(self._config_warnings)
 
     @property
+    def resolved_answer_cache_path(self) -> Path:
+        if self.answer_cache_path is None:
+            return self.vector_store_path.parent / "answer_cache.sqlite"
+        path = self.answer_cache_path.expanduser()
+        return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()
+
+    @property
+    def llm_khmer_order_list(self) -> list[str]:
+        return [name.strip().lower() for name in self.llm_khmer_order.split(",") if name.strip()]
+
+    @property
+    def llm_other_order_list(self) -> list[str]:
+        return [name.strip().lower() for name in self.llm_other_order.split(",") if name.strip()]
+
+    def api_keys(self, provider: str) -> list[str]:
+        """Every key for ``provider``: the main one, then the extra ``*_API_KEYS``."""
+        field = provider.replace("-", "_")
+        keys = []
+        for name in (f"{field}_api_key", f"{field}_api_keys"):
+            value = getattr(self, name, None)
+            if value is not None:
+                keys += [key.strip() for key in value.get_secret_value().split(",") if key.strip()]
+        if provider == "groq":
+            dropped = [key for key in keys if not key.startswith("gsk_")]
+            if dropped and self.groq_api_key is not None:
+                logger.warning("Ignoring %d GROQ_API_KEYS entries that do not start with 'gsk_'", len(dropped))
+            keys = [key for key in keys if key.startswith("gsk_")]
+        return list(dict.fromkeys(keys))
+
+    @property
     def gemini_fallback_model_list(self) -> list[str]:
         models = [model.strip() for model in self.gemini_fallback_models.split(",") if model.strip()]
         return [model for model in dict.fromkeys(models) if model != self.gemini_model]
@@ -406,6 +492,11 @@ class Settings(BaseSettings):
     def openrouter_fallback_model_list(self) -> list[str]:
         models = [m.strip() for m in self.openrouter_fallback_models.split(",") if m.strip()]
         return [model for model in dict.fromkeys(models) if model != self.openrouter_model]
+
+    @property
+    def nvidia_fallback_model_list(self) -> list[str]:
+        models = [model.strip() for model in self.nvidia_fallback_models.split(",") if model.strip()]
+        return [model for model in dict.fromkeys(models) if model != self.nvidia_model]
 
     @property
     def cerebras_fallback_model_list(self) -> list[str]:
@@ -462,7 +553,7 @@ class Settings(BaseSettings):
     @property
     def resolved_llm_provider(
         self,
-    ) -> Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]:
+    ) -> Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]:
         if self.llm_provider != "auto":
             return self.llm_provider
         if self.anthropic_api_key is not None:
@@ -473,6 +564,8 @@ class Settings(BaseSettings):
             return "groq"
         if self.cerebras_api_key is not None:
             return "cerebras"
+        if self.nvidia_api_key is not None:
+            return "nvidia"
         if self.openrouter_api_key is not None:
             return "openrouter"
         if self.sea_lion_api_key is not None:

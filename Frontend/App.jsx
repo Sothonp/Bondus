@@ -790,7 +790,6 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-exam-options{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; padding:0 6px 8px; font-size:13px; color:var(--muted); }
 .eai-exam-options label{ display:flex; align-items:center; gap:6px; }
 .eai-exam-options select{ background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:5px 8px; font:inherit; font-size:13px; max-width:100%; }
-.eai-exam-check input{ accent-color:var(--primary); width:15px; height:15px; }
 .eai-footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:6px; }
 @media (prefers-reduced-motion: reduce){ .eai-spin,.eai-shimmer{ animation:none; } .eai-shimmer{ color:var(--muted); background:none; } }
 /* AI Coach answers: Markdown + KaTeX */
@@ -5708,9 +5707,10 @@ const TRUNCATED_STOPS = new Set(["length", "max_tokens", "MAX_TOKENS"]);
 /* A full BAC II exercise runs to six or eight parts, and one model response often
    stops in the middle of part 4. Rather than handing the student half a proof and
    asking them to type "continue", pick the answer up where it stopped and keep
-   streaming into the same message. Three rounds is enough for the longest past
-   paper; past that the note below is honest about the limit. */
-const CONTINUE_ROUNDS = 3;
+   streaming into the same message. Six rounds covers the longest past paper
+   even on a model with a small budget per answer (Groq); past that the note
+   below is honest about the limit. */
+const CONTINUE_ROUNDS = 6;
 const CONTINUE_CONTEXT_CHARS = 12000;
 const CONTINUE_QUERY_CHARS = 800;
 const KHMER_CHAR = /[\u1780-\u17ff]/;
@@ -5861,8 +5861,11 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
 }
 
 async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
+  // The track picks the maths syllabus (the Social Science track has no complex numbers).
+  const track = FIELD_META[p?.field] ? p.field : undefined;
   const first = {
     prompt: t,
+    track,
     history: toRagHistory(history),
     images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
   };
@@ -5874,6 +5877,7 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     const lang = KHMER_CHAR.test(text) ? "km" : "en";
     return {
       prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
+      track,
       history: [
         ...toRagHistory(history),
         { role: "user", content: (t || "(photo)").slice(0, 20000) },
@@ -5919,21 +5923,31 @@ const EXAM_STAGE_LABELS = {
   generating: "Writing your paper and checking its answers (this takes a minute or two)…",
 };
 
+/* A paper comes without answers so the student tries it first; asking for them afterwards
+   ("ចម្លើយ II", "ចម្លើយទាំងអស់", "answer for III") gets the key of the last paper only. */
+const ANSWER_REQUEST = /ចម្លើយ|កំណែ|ដំណោះស្រាយ|\banswers?\b|\bsolutions?\b|\bkey\b/i;
+const lastExamPaper = (messages) => [...messages].reverse().find((m) => m.role === "ai" && m.exam && !m.exam.answers && !m.error && m.text);
+
 async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam } = {}) {
+  const answering = Boolean(exam.paper);
   const first = {
     subject: subjectId(exam.subject),
     language: exam.language,
-    focus: t.slice(0, EXAM_FOCUS_MAX),
-    answer_key: exam.answerKey,
+    focus: answering ? "" : t.slice(0, EXAM_FOCUS_MAX),
+    track: FIELD_META[p?.field] ? p.field : undefined,
+    answer_key: false,
+    ...(answering ? { answers_for: (t || "all").slice(0, 300), paper: exam.paper } : {}),
     seed: Math.floor(Math.random() * 2 ** 31),
   };
   const next = (text) => ({ ...first, partial: text, continues_math: opensInDisplayMath(text) });
-  const meta = { subject: exam.subject };
+  const meta = { subject: exam.subject, answers: answering };
   try {
     let { text, sources, stopReason } = await ragStreamReply("/api/exam/stream", first, next, {
       onUpdate, signal, initialStatus: EXAM_STAGE_LABELS.searching, stageLabels: EXAM_STAGE_LABELS,
     });
-    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(The paper ran longer than I can write in one go. Generate it again, or turn the answer key off for a shorter paper.)*";
+    if (TRUNCATED_STOPS.has(stopReason)) text += (answering
+      ? "\n\n*(The answers ran longer than I can write in one go. Ask for fewer exercises at a time.)*"
+      : "\n\n*(The paper ran longer than I can write in one go. Generate it again.)*");
     return { text: text || "…", rag: true, sources, exam: meta };
   } catch (err) {
     const { partial: text = "", sources = [] } = err;
@@ -6385,13 +6399,9 @@ function UserMessage({ m, onOpenImage }) {
   );
 }
 
-/* The years of the real papers a generated paper was modelled on (meta's sources, newest first). */
-const modelledOn = (sources = []) => [...new Set(sources.map((s) => s.heading).filter(Boolean))];
-
 function AssistantMessage({ m, Icon }) {
   const answerRef = useRef(null);
   const [printBlocked, setPrintBlocked] = useState(false);
-  const years = m.exam ? modelledOn(m.sources) : [];
   return (
     <div className="flex gap-3">
       <div className="eai-avatar"><Icon size={15} color="#fff" /></div>
@@ -6408,7 +6418,7 @@ function AssistantMessage({ m, Icon }) {
                 <Download size={15} />
               </button>
             )}
-            {years.length > 0 && <span className="text-xs eai-muted self-center">Modelled on the {years.join(", ")} BAC II papers</span>}
+            {m.exam && !m.exam.answers && !m.error && <span className="text-xs eai-muted self-center">Try it first, then type “ចម្លើយ II” for one exercise or “ចម្លើយទាំងអស់” for all the answers.</span>}
             {printBlocked && <span className="text-xs self-center" style={{ color: "var(--ember)" }}>Allow pop-ups to print the paper.</span>}
           </div>
         )}
@@ -6430,7 +6440,6 @@ function Coach({ p }) {
   const examSubjects = isUni ? [] : fieldSubjects(p.field, p.foreignLanguage);
   const [examOptions, setExamOptions] = useState(() => ({
     subject: (p.weak?.[0] && examSubjects.includes(p.weak[0].s) ? p.weak[0].s : examSubjects[0]) || "Mathematics",
-    answerKey: true,
     language: "km",
   }));
   const availableModeIds = isUni ? COACH_MODE_IDS_UNIVERSITY : COACH_MODE_IDS_HIGHSCHOOL;
@@ -6554,10 +6563,13 @@ function Coach({ p }) {
     const onImages = (readings) => updateMessage(replyMode, userId, (msg) => ({
       ...msg, readings, historyText: historyTextFor(t, readings),
     }));
-    const exam = mode === "exam" ? { ...examOptions } : null;
-    const shownText = exam
-      ? [`📝 ${exam.subject} mock paper · ${exam.answerKey ? "with answer key" : "questions only"} · ${exam.language === "km" ? "Khmer" : "English"}`, t].filter(Boolean).join("\n")
-      : t;
+    const paper = mode === "exam" && ANSWER_REQUEST.test(t) ? lastExamPaper(msgs) : null;
+    const exam = mode !== "exam" ? null
+      : paper ? { ...examOptions, subject: paper.exam.subject, paper: paper.text }
+      : { ...examOptions };
+    const shownText = !exam ? t
+      : paper ? `🔑 ${t}`
+      : [`📝 ${exam.subject} mock paper · ${exam.language === "km" ? "Khmer" : "English"}`, t].filter(Boolean).join("\n");
     setMsgsByMode((m) => ({
       ...m,
       [mode]: [...m[mode], {
@@ -6718,11 +6730,6 @@ function Coach({ p }) {
                 <option value="km">ខ្មែរ (Khmer)</option>
                 <option value="en">English</option>
               </select>
-            </label>
-            <label className="eai-exam-check">
-              <input type="checkbox" checked={examOptions.answerKey} disabled={loading}
-                onChange={(e) => setExamOptions((o) => ({ ...o, answerKey: e.target.checked }))} />
-              <span>Answer key &amp; marking scheme</span>
             </label>
           </div>
         )}

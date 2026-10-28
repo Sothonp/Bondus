@@ -50,6 +50,9 @@ class QueryRequest(_StrictModel):
     subject: SubjectId | None = Field(
         None, description="Restrict retrieval to one subject's documents, e.g. physics or french"
     )
+    track: Literal["science", "social_science"] | None = Field(
+        None, description="The student's BAC II track; picks the maths syllabus the answer follows"
+    )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
     continues_math: bool = Field(
         False,
@@ -91,7 +94,7 @@ class QueryResponse(BaseModel):
     language: Literal["km", "en"]
     grounded: bool = Field(description="True when at least one chunk passed the threshold")
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
     model: str | None = None
     stop_reason: str | None = None
     latency_ms: float
@@ -107,7 +110,7 @@ class QueryStreamMeta(BaseModel):
     language: Literal["km", "en"]
     grounded: bool
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
 
 
 class QueryStreamStatus(BaseModel):
@@ -137,7 +140,7 @@ class QueryStreamDone(BaseModel):
     first_token_ms: float | None = Field(
         None, description="Time to the first text delta: the wait the student actually sees"
     )
-    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"] | None = Field(
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"] | None = Field(
         None, description="The provider that actually answered (may be a fallback)"
     )
     model: str | None = None
@@ -170,7 +173,18 @@ class ExamRequest(_StrictModel):
         "km", description="Language of the paper and its key (English/French papers stay in that language)"
     )
     focus: str = Field("", max_length=1000, description="Optional topic or instruction, e.g. 'integrals'")
-    answer_key: bool = Field(True, description="Follow the paper with a worked answer key and marking scheme")
+    track: Literal["science", "social_science"] | None = Field(
+        None, description="The student's BAC II track; a Social Science maths paper has no complex numbers"
+    )
+    answer_key: bool = Field(
+        False, description="Follow the paper with a worked answer key and marking scheme"
+    )
+    answers_for: str = Field(
+        "", max_length=300,
+        description="Instead of a new paper, write the answer key of `paper` for these exercises "
+        "(e.g. 'II', 'III.b' or 'all')",
+    )
+    paper: str = Field("", max_length=200_000, description="The mock paper `answers_for` refers to")
     seed: int | None = Field(
         None, ge=0, le=2**31 - 1,
         description="Picks which past papers are used; send the same seed to continue the same paper",
@@ -249,6 +263,13 @@ class DeleteDocumentResponse(BaseModel):
 
 # --- /health ------------------------------------------------------------------
 
+class ProviderStatus(BaseModel):
+    name: str = Field(description="provider:model, with #keyN when a provider has several keys")
+    status: Literal["available", "cooling_down", "disabled"]
+    retry_in_seconds: float | None = None
+    last_error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     active_ingest_jobs: int = 0
@@ -260,9 +281,12 @@ class HealthResponse(BaseModel):
     ocr_enabled: bool
     ocr_engine: Literal["gemini", "kiri", "groq", "hybrid"] | None = None
     ocr_model: str | None = None
-    llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+    llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
     llm_model: str | None = None
     llm_chain: list[str] = Field(default_factory=list, description="provider:model, in fallback order")
+    llm_providers: list[ProviderStatus] = Field(
+        default_factory=list, description="Each model in the chain: available, cooling down or disabled"
+    )
     llm_selection: Literal["rotate", "priority"] | None = Field(
         None, description="how the next question picks among the chain"
     )
