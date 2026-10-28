@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
-    llm_max_tokens: int = Field(16000, ge=256, le=64000)
+    llm_max_tokens: int = Field(24000, ge=256, le=64000)
     llm_timeout_seconds: float = Field(300.0, gt=0)
     # When the chosen provider fails, try the other configured providers, then
     # answer with the retrieved passages instead of an error.

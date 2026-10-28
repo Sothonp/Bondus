@@ -254,8 +254,15 @@ def test_a_long_new_question_is_not_treated_as_a_follow_up():
     from src.api import _previous_question
 
     history = [{"role": "user", "content": "គណិតវិទ្យា"}, {"role": "assistant", "content": "..."}]
-    long_question = "ពន្យល់ពីដំណើរការចម្លងក្រម ADN ទៅ ARNm ក្នុងកោសិកា ហើយប្រាប់ពីតួនាទីរបស់អង់ស៊ីម ARN ប៉ូលីមេរ៉ាស"
+    long_question = (
+        "ពន្យល់ពីដំណើរការចម្លងក្រម ADN ទៅ ARNm ក្នុងកោសិកា ហើយប្រាប់ពីតួនាទីរបស់អង់ស៊ីម ARN ប៉ូលីមេរ៉ាស "
+        "ព្រមទាំងប្រៀបធៀបការសំយោគប្រូតេអ៊ីននៅក្នុងកោសិកាប្រូការ្យូត និងកោសិកាអ៊ឺការ្យូត ដោយលើកឧទាហរណ៍"
+        "អំពីអ័រម៉ូនអាំងស៊ុយលីន និងវិស្វកម្មសេនេទិច"
+    )
+    pointing_back = "ធ្វើសំណួរទី៥ និងទី៦ ឡើងវិញ ព្រោះខ្ញុំមិនទាន់យល់ពីរបៀបរកបន្ទាត់ប៉ះ " * 4
+    assert len(long_question) > 200 and len(pointing_back) > 200
     assert _previous_question(QueryRequest(prompt="លេខ៥", history=history)) == "គណិតវិទ្យា"
+    assert _previous_question(QueryRequest(prompt=pointing_back, history=history)) == "គណិតវិទ្យា"
     assert _previous_question(QueryRequest(prompt=long_question, history=history)) == ""
     assert _previous_question(QueryRequest(prompt="លេខ៥")) == ""
 

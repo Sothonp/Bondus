@@ -9,6 +9,7 @@ import hashlib
 import itertools
 import json
 import logging
+import re
 import time
 import uuid
 from collections import Counter, OrderedDict
@@ -1680,18 +1681,25 @@ def _cache_answer(state: RAGState, key: str | None, text: str, answer: Generated
     state.answer_cache.put(key, CachedAnswer(text, provider, answer.model, answer.stop_reason))
 
 
-# A message this short in a conversation ("លេខ៥ ដល់ ៦", "បន្ត", "next part") is a
+# A message in a conversation that is short, or points back at the exercise
+# ("លេខ៥ ដល់ ៦", "បន្ត", "ធ្វើសំណួរទី៥ ឡើងវិញ", "next part") is a
 # follow-up: on its own it matches any subject's papers, so it is searched and
 # guided together with the question before it.
-FOLLOW_UP_MAX_CHARS = 80
+FOLLOW_UP_MAX_CHARS = 200
+FOLLOW_UP_WORDS = re.compile(
+    r"បន្ត|លេខ\s*[0-9០-៩]|សំណួរទី|លំហាត់ទី|ផ្នែក|ចំណុច|សំណួរបន្ទាប់|ខាងលើ|ម្ដងទៀត|ឡើងវិញ"
+    r"|\b(?:continue|next|part|question\s*\d|the rest|again|above)",
+    re.IGNORECASE,
+)
 MAX_PREVIOUS_QUESTION_CHARS = 1500
 
 
 def _previous_question(payload: QueryRequest) -> str:
     """The student's last question before this one, when this one is a follow-up."""
-    if not payload.history or len(payload.prompt.strip()) > FOLLOW_UP_MAX_CHARS:
+    prompt = payload.prompt.strip()
+    if not payload.history or subject_named_in(prompt):
         return ""
-    if subject_named_in(payload.prompt):
+    if len(prompt) > FOLLOW_UP_MAX_CHARS and not FOLLOW_UP_WORDS.search(prompt):
         return ""
     for turn in reversed(payload.history):
         if turn.role == "user" and turn.content.strip():

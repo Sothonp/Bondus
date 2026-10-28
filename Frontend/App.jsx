@@ -5206,9 +5206,10 @@ const TRUNCATED_STOPS = new Set(["length", "max_tokens", "MAX_TOKENS"]);
 /* A full BAC II exercise runs to six or eight parts, and one model response often
    stops in the middle of part 4. Rather than handing the student half a proof and
    asking them to type "continue", pick the answer up where it stopped and keep
-   streaming into the same message. Three rounds is enough for the longest past
-   paper; past that the note below is honest about the limit. */
-const CONTINUE_ROUNDS = 3;
+   streaming into the same message. Six rounds covers the longest past paper
+   even on a model with a small budget per answer (Groq); past that the note
+   below is honest about the limit. */
+const CONTINUE_ROUNDS = 6;
 const CONTINUE_CONTEXT_CHARS = 12000;
 const CONTINUE_QUERY_CHARS = 800;
 const KHMER_CHAR = /[\u1780-\u17ff]/;
