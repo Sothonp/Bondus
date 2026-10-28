@@ -389,6 +389,11 @@ SUBJECT_GUIDES: dict[str, str] = {
         "- " + _NEVER_SET + "the photoelectric effect, charged particles moving in a magnetic "
         "or electric field, and nuclear physics. Teach them only when the student asks, and "
         "say they are not on the BAC II paper.",
+        "- Spell the terms as the BAC II papers do: សូលេណូអ៊ីត (solenoid), អាំប៉េដង់ "
+        "(impedance), អាំងឌុចតង់ (inductance), អូតូអាំងឌុចស្យុង (self-induction), តង់ស្យុងឆ្លាស់ "
+        "/ ចរន្តឆ្លាស់ (alternating voltage / current), កុងដង់សាទ័រ, បូប៊ីន, មាឌ (volume), "
+        "កម្មន្ត (work), ទិន្នផលកម្តៅ (thermal efficiency), ឧស្ម័នបរិសុទ្ធ (ideal gas), "
+        "តម្លៃប្រសិទ្ធ (effective value).",
         "- Guide the student through choosing the formula, converting units and substituting "
         "step by step.",
     ]),
