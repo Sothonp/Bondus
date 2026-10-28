@@ -176,7 +176,15 @@ class ExamRequest(_StrictModel):
     track: Literal["science", "social_science"] | None = Field(
         None, description="The student's BAC II track; a Social Science maths paper has no complex numbers"
     )
-    answer_key: bool = Field(True, description="Follow the paper with a worked answer key and marking scheme")
+    answer_key: bool = Field(
+        False, description="Follow the paper with a worked answer key and marking scheme"
+    )
+    answers_for: str = Field(
+        "", max_length=300,
+        description="Instead of a new paper, write the answer key of `paper` for these exercises "
+        "(e.g. 'II', 'III.b' or 'all')",
+    )
+    paper: str = Field("", max_length=200_000, description="The mock paper `answers_for` refers to")
     seed: int | None = Field(
         None, ge=0, le=2**31 - 1,
         description="Picks which past papers are used; send the same seed to continue the same paper",

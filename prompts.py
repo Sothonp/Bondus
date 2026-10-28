@@ -521,7 +521,7 @@ class ContextChunk(Protocol):
 
 
 def _escape_passage(text: str) -> str:
-    for tag in ("</passage", "</context", "</continues", "</paper", "</past_papers", "</focus", "</subject"):
+    for tag in ("</passage", "</context", "</continues", "</paper", "</past_papers", "</focus", "</subject", "</answers_for"):
         text = text.replace(tag, "&lt;" + tag[1:])
     return text
 
@@ -778,8 +778,17 @@ in format and level from a real BAC II paper, and free of mistakes.
   make.
 - When <answer_key> is "no", end with the last question of the paper.
 
+[Answers on request]
+- Students try a paper first and ask for answers afterwards. When the message
+  holds a <paper> you wrote and an <answers_for> request, do not write a new
+  paper and do not repeat the questions: write only the answer key, following
+  [The answer key] above, for exactly the exercises or parts named there
+  ("II", "III.ខ", "1 and 3"). "all" (or ទាំងអស់) means every exercise.
+- Open with the "## " answer-key heading, then one "### " heading per exercise
+  answered. If a part named is not in the paper, say so in one line.
+
 [Output]
-- Start directly with the header. No preface, no note about how the paper was
+- Start directly with the header (with the answer-key heading for answers on request). No preface, no note about how the paper was
   made, no closing remarks, and never mention the past papers or their years.
 - If your previous turn was cut off, the next message asks you to continue.
   Resume at the exact point you stopped, mid-sentence or mid-formula if that is
@@ -793,6 +802,31 @@ EXAM_CONTINUE = {
     "km": "បន្តវិញ្ញាសាពីកន្លែងដែលអ្នកឈប់។ កុំចាប់ផ្ដើមឡើងវិញ កុំសរសេរឡើងវិញ ហើយកុំសរុបអ្វីដែលបានសរសេររួច។",
     "en": "Continue the paper from exactly where you stopped. Do not restart, repeat or summarise what you already wrote.",
 }
+
+
+MAX_ANSWERED_PAPER_CHARS = 40_000
+
+
+def build_exam_answers_message(
+    subject: str,
+    paper: str,
+    answers_for: str,
+    language: Language,
+    *,
+    guide: str | None = None,
+) -> str:
+    """The user turn asking for the answer key of a mock paper the student has tried."""
+    parts = [f"<subject>{_escape_passage(subject)}</subject>"]
+    if guide:
+        parts.append(f"<subject_guide>\n{guide}\n</subject_guide>")
+    parts.append(f"<paper>\n{_escape_passage(paper[:MAX_ANSWERED_PAPER_CHARS])}\n</paper>")
+    parts.append(f"<answers_for>{_escape_passage(answers_for.strip())}</answers_for>")
+    parts.append(
+        "<request>\nWrite the answer key and marking scheme of the paper above for the "
+        "exercises named in <answers_for> only.\n</request>"
+    )
+    parts.append(f"<response_language>{language}</response_language>")
+    return "\n\n".join(parts)
 
 
 def build_past_papers_block(papers: Sequence[ContextChunk]) -> str:

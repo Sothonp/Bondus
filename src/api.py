@@ -27,6 +27,7 @@ from prompts import (
     EXAM_CONTINUE,
     EXAM_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
+    build_exam_answers_message,
     build_exam_message,
     build_extractive_answer,
     build_user_message,
@@ -1391,7 +1392,10 @@ async def _warm_up_image_ocr(state: RAGState) -> None:
     logger.info("Image OCR ready in %.1fs (%s)", time.perf_counter() - started, ", ".join(state.image_ocr.engines))
 
 
-def _source_chunks(context: Sequence[RetrievedChunk]) -> list[SourceChunk]:
+def _source_chunks(context: Sequence[RetrievedChunk], settings: Settings) -> list[SourceChunk]:
+    """The passages behind an answer, for the browser: none unless EXPOSE_SOURCES is on."""
+    if not settings.expose_sources:
+        return []
     return [
         SourceChunk(
             id=chunk.id,
@@ -1513,15 +1517,25 @@ EXAM_PARTIAL_TAIL_CHARS = 8000
 def _exam_message(
     payload: ExamRequest, papers: Sequence[RetrievedChunk], subject_name: str, paper_format: str
 ) -> str:
-    message = build_exam_message(
-        subject_name,
-        papers,
-        payload.language,
-        focus=payload.focus,
-        answer_key=payload.answer_key,
-        paper_format=paper_format,
-        guide=subject_guide(payload.subject, payload.track),
-    )
+    guide = subject_guide(payload.subject, payload.track)
+    if payload.answers_for.strip() and payload.paper.strip():
+        message = build_exam_answers_message(
+            subject_name,
+            payload.paper,
+            payload.answers_for,
+            payload.language,
+            guide=guide,
+        )
+    else:
+        message = build_exam_message(
+            subject_name,
+            papers,
+            payload.language,
+            focus=payload.focus,
+            answer_key=payload.answer_key,
+            paper_format=paper_format,
+            guide=guide,
+        )
     if not payload.partial:
         return message
     partial = payload.partial
@@ -1795,7 +1809,7 @@ def create_app(
             answer=answer_text,
             language=language,
             grounded=bool(context),
-            sources=_source_chunks(context),
+            sources=_source_chunks(context, state.settings),
             provider=answer.provider or state.generator.provider,
             model=answer.model,
             stop_reason=answer.stop_reason,
@@ -1845,7 +1859,7 @@ def create_app(
             yield _line(QueryStreamMeta(
                 language=language,
                 grounded=bool(context),
-                sources=_source_chunks(context),
+                sources=_source_chunks(context, state.settings),
                 provider=generator.provider,
             ))
             async for event in _answer_events(
@@ -1916,7 +1930,7 @@ def create_app(
             yield _line(QueryStreamMeta(
                 language=payload.language,
                 grounded=True,
-                sources=_source_chunks(chosen),
+                sources=_source_chunks(chosen, state.settings),
                 provider=generator.provider,
             ))
             name = f"{subject.km} ({subject.en})"
@@ -2020,6 +2034,9 @@ def create_app(
     @app.get("/api/documents", response_model=DocumentListResponse, tags=["documents"])
     async def list_documents(request: Request) -> DocumentListResponse:
         state = get_state(request)
+        if not state.settings.expose_sources:
+            # The library itself is not public: only its answers are.
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
         return DocumentListResponse(
             documents=[DocumentInfo(**vars(summary)) for summary in state.store.sources()],
             total_chunks=len(state.store),

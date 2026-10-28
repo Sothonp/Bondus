@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # answers, or delete the curriculum. Set ALLOW_WRITES=false there and build
     # the index locally, where this stays true.
     allow_writes: bool = True
+    # The passages behind an answer (their text, file names and scores) reach the
+    # browser only when this is true. Off by default: on a public site anyone
+    # could read the indexed books through the API. Turn it on locally to debug.
+    expose_sources: bool = False
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"

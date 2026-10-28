@@ -159,13 +159,14 @@ class TestReadOnlyServer:
     student searches is built where the corpus is, not through the open API."""
 
     @staticmethod
-    def _client(store_path, *, allow_writes: bool) -> TestClient:
+    def _client(store_path, *, allow_writes: bool, expose_sources: bool = False) -> TestClient:
         settings = Settings(
             _env_file=None,
             embedding_backend="hashing",
             llm_provider="none",
             vector_store_path=store_path,
             allow_writes=allow_writes,
+            expose_sources=expose_sources,
         )
         return TestClient(create_app(settings, generator=ScriptedGenerator(["ok"])))
 
@@ -190,7 +191,7 @@ class TestReadOnlyServer:
 
     def test_reading_still_works(self, store_path):
         """The refusal is about changing the index, not about using it."""
-        with self._client(store_path, allow_writes=False) as c:
+        with self._client(store_path, allow_writes=False, expose_sources=True) as c:
             assert c.get("/api/documents").status_code == 200
             health = c.get("/health")
             assert health.status_code == 200
@@ -233,3 +234,14 @@ class TestSubjectGuide:
         with client(ScriptedGenerator(["ok"]), store_path) as c:
             response = c.post("/api/query/stream", json={"prompt": "x", "track": "university"})
         assert response.status_code == 422
+
+
+class TestLibraryStaysPrivate:
+    def test_the_document_list_is_hidden_by_default(self, store_path):
+        with client(ScriptedGenerator(["ok"]), store_path) as c:
+            assert c.get("/api/documents").status_code == 404
+
+    def test_answers_carry_no_passages_by_default(self, store_path):
+        sent = ask(store_path, ScriptedGenerator(["ok"]))
+        meta = next(event for event in sent if event["type"] == "meta")
+        assert meta["sources"] == []
