@@ -106,7 +106,7 @@ def test_the_compact_prompt_keeps_the_rules_and_drops_the_bulk():
 
     assert compact_prompt(SYSTEM_PROMPT) == COMPACT_SYSTEM_PROMPT
     assert compact_prompt("other") == "other"
-    for rule in ("How much to answer", "[Scope — strict]", "4. Solution style", "6. Attached images"):
+    for rule in ("How much to answer", "[Scope — strict]", "Solution style", "Attached images"):
         assert rule in COMPACT_SYSTEM_PROMPT
     assert "GeoGebra)" not in COMPACT_SYSTEM_PROMPT
     assert len(COMPACT_SYSTEM_PROMPT) < len(SYSTEM_PROMPT) * 0.9
