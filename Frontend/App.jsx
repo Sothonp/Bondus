@@ -45,6 +45,7 @@ import {
 } from "./serverMapping.js";
 import { createEventQueue } from "./eventQueue.js";
 import { createStateSaver } from "./stateSaver.js";
+import { useTheme } from "./theme.js";
 import { RewardsContext, useRewards } from "./rewards/RewardsContext.jsx";
 import { OutfitLayers } from "./rewards/itemArt.jsx";
 import { REWARD_STYLES } from "./rewards/rewardStyles.js";
@@ -7553,7 +7554,7 @@ export default function App() {
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
   const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useTheme(); // follows the device until the student picks; the pick is remembered (theme.js)
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
   const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
