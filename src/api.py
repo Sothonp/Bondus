@@ -1680,10 +1680,38 @@ def _cache_answer(state: RAGState, key: str | None, text: str, answer: Generated
     state.answer_cache.put(key, CachedAnswer(text, provider, answer.model, answer.stop_reason))
 
 
+# A message this short in a conversation ("លេខ៥ ដល់ ៦", "បន្ត", "next part") is a
+# follow-up: on its own it matches any subject's papers, so it is searched and
+# guided together with the question before it.
+FOLLOW_UP_MAX_CHARS = 80
+MAX_PREVIOUS_QUESTION_CHARS = 1500
+
+
+def _previous_question(payload: QueryRequest) -> str:
+    """The student's last question before this one, when this one is a follow-up."""
+    if not payload.history or len(payload.prompt.strip()) > FOLLOW_UP_MAX_CHARS:
+        return ""
+    if subject_named_in(payload.prompt):
+        return ""
+    for turn in reversed(payload.history):
+        if turn.role == "user" and turn.content.strip():
+            return turn.content[:MAX_PREVIOUS_QUESTION_CHARS]
+    return ""
+
+
+def _question_subject(payload: QueryRequest) -> str | None:
+    """The subject picked or named, in this question or, for a follow-up, the last one."""
+    return (
+        payload.subject
+        or subject_named_in(payload.prompt)
+        or subject_named_in(_previous_question(payload))
+    )
+
+
 def _question_guide(payload: QueryRequest, context: Sequence[RetrievedChunk]) -> str | None:
     """Subject focus notes for the answer: the requested subject, else the one most
     of the retrieved passages come from."""
-    subject = payload.subject or subject_named_in(payload.prompt)
+    subject = _question_subject(payload)
     if subject is None and context:
         top, count = Counter(chunk.subject for chunk in context).most_common(1)[0]
         if top is not None and count * 2 > len(context):
@@ -1697,10 +1725,12 @@ async def _retrieve_context(
     language = _question_language(payload.prompt, readings)
     # The photo usually *is* the question, so its text drives retrieval too.
     image_text = "\n".join(r.search_text for r in readings if r.has_text)[:MAX_IMAGE_SEARCH_CHARS]
-    query = "\n".join(part for part in (payload.prompt, image_text) if part.strip())
+    query = "\n".join(
+        part for part in (_previous_question(payload), payload.prompt, image_text) if part.strip()
+    )
     # A question that names its subject searches only that subject: "make a history
     # paper" otherwise matches biology and morality papers on the word "paper".
-    subject = payload.subject or subject_named_in(payload.prompt)
+    subject = _question_subject(payload)
     try:
         retrieved = await run_in_threadpool(
             state.retriever.retrieve,

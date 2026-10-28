@@ -223,3 +223,60 @@ def test_stray_replacement_characters_are_dropped():
     from src.api import OutputGuard
 
     assert OutputGuard("m").feed("\ufffdដេរីវេ") == "ដេរីវេ"
+
+
+# --- follow-ups and photos --------------------------------------------------------
+
+class RecordingGenerator(CountingGenerator):
+    def __init__(self) -> None:
+        super().__init__()
+        self.messages: list[str] = []
+
+    async def stream(self, **kwargs):
+        self.messages.append(kwargs["user_message"])
+        async for item in super().stream(**kwargs):
+            yield item
+
+
+def test_a_short_follow_up_keeps_the_previous_questions_subject(make_client):
+    generator = RecordingGenerator()
+    history = [
+        {"role": "user", "content": "ដោះស្រាយលំហាត់គណិតវិទ្យា៖ គេមានអនុគមន៍ f(x) = x^2 ... ១. ... ៦. ..."},
+        {"role": "assistant", "content": "១. ... ២. ... ៣. ... ៤. ..."},
+    ]
+    with make_client(generator) as client:
+        stream(client, "លេខ5 ដល់ លេខ៦", history=history)
+    assert "<subject_guide>\nMathematics" in generator.messages[0]
+
+
+def test_a_long_new_question_is_not_treated_as_a_follow_up():
+    from schemas import QueryRequest
+    from src.api import _previous_question
+
+    history = [{"role": "user", "content": "គណិតវិទ្យា"}, {"role": "assistant", "content": "..."}]
+    long_question = "ពន្យល់ពីដំណើរការចម្លងក្រម ADN ទៅ ARNm ក្នុងកោសិកា ហើយប្រាប់ពីតួនាទីរបស់អង់ស៊ីម ARN ប៉ូលីមេរ៉ាស"
+    assert _previous_question(QueryRequest(prompt="លេខ៥", history=history)) == "គណិតវិទ្យា"
+    assert _previous_question(QueryRequest(prompt=long_question, history=history)) == ""
+    assert _previous_question(QueryRequest(prompt="លេខ៥")) == ""
+
+
+def test_an_incomplete_photo_reading_hands_over_to_the_next_engine():
+    from src.ingestion.image_ocr import HybridImageOCR
+
+    class Engine:
+        def __init__(self, name: str, text: str, truncated: bool) -> None:
+            self.engine, self.model, self.result = name, name, (text, truncated)
+
+        def transcribe_page(self, payload):
+            return self.result
+
+    ocr = HybridImageOCR(khmer=None, vision=[
+        Engine("groq", "១. ... ២. ... ៣. ... ៤.", truncated=True),
+        Engine("gemini", "១. ... ២. ... ៣. ... ៤. ... ៥. ... ៦. ...", truncated=False),
+    ])
+    text, engine, warnings = ocr._read_vision(object())
+    assert engine == "gemini:gemini" and "៦." in text
+    assert any("incomplete" in w for w in warnings)
+
+    alone = HybridImageOCR(khmer=None, vision=[Engine("groq", "១. ... ៤.", truncated=True)])
+    assert alone._read_vision(object())[0] == "១. ... ៤.", "a partial reading beats none"
