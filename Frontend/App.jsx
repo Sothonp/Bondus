@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -9,12 +9,12 @@ import {
   Eye, Clock, Moon, Sun, Menu, Send, Brain, CheckCircle2, Circle,
   Award, ArrowUpRight, ArrowDownRight, Lightbulb, Star, BarChart3,
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
-  ClipboardCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
+  ClipboardCheck, ShieldCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
   ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
   Headphones, Mic, Volume2, PlayCircle,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Shirt,
+  Shirt, Trash2, Mail, MailCheck, School,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -25,12 +25,26 @@ import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
 import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
+import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
+import { useExamSessions } from "./useExamSessions.js";
+import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
+import { ExerciseCard, ExerciseViewer, AdminExerciseForm, NewExerciseButton } from "./ExerciseUi.jsx";
+import { EXERCISE_SUBJECTS, canBrowseExercises, isAdmin } from "./exercises.js";
 import SubjectIcon from "./SubjectIcon.jsx";
-import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES } from "./examPapers.js";
+import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES, newestPaperYear } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
 import SubjectRibbon from "./SubjectRibbon.jsx";
 import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
+import { todaysTasks, addTask, toggleTask, removeTask, remainingSuggestions, MAX_TITLE_LENGTH, MAX_TASKS_PER_DAY } from "./dailyPlan.js";
+import LoadingScreen from "./LoadingScreen.jsx";
+import { createApi } from "./api.js";
+import {
+  userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
+  answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, waitParts, isCodeAlreadySent,
+} from "./serverMapping.js";
+import { createEventQueue } from "./eventQueue.js";
+import { createStateSaver } from "./stateSaver.js";
 import { RewardsContext, useRewards } from "./rewards/RewardsContext.jsx";
 import { OutfitLayers } from "./rewards/itemArt.jsx";
 import { REWARD_STYLES } from "./rewards/rewardStyles.js";
@@ -129,6 +143,22 @@ function getUniExercises(subjectKey) {
 }
 
 const EXAM_YEARS = [2026, 2027, 2028];
+
+/* XP paid the first time an exercise is answered correctly. One constant, so the dashboard's lesson
+   card can never promise a different number than the handlers below actually pay out. */
+const XP_PER_CORRECT = 30;
+
+/* The backend (Laravel API, /api/v1). With VITE_API_URL set, students sign in on the server and their progress, XP,
+   streak and daily plan live there. With it unset the app is the old browser-only prototype, unchanged. */
+const api = createApi({ baseUrl: import.meta.env.VITE_API_URL });
+/* The AI functions (/api/major-guidance, /api/university-mentor, /api/ielts-grade) answer only signed-in students:
+   they check this same token with the Laravel API. */
+const aiFetch = (url, init) => fetch(url, api.authorize(init));
+const SERVER_MODE = api.enabled;
+// "Sign in with Google": public by design (also shipped to Google's own GSI script, which this app
+// has no control over). Unset, the Google button simply doesn't render -- email/password still works.
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const safeStorage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
 const MISTAKE_TYPES = [
   "Concept misunderstanding", "Wrong formula", "Calculation error",
@@ -277,10 +307,10 @@ function buildProfile(reg) {
    the "reassess" half of the assess → identify weakness → recommend → practice → reassess loop —
    call it fresh (useMemo) whenever topicMastery changes and the whole app updates with it. */
 function deriveInsights(p, topicMastery, streak = 0) {
-  // University profiles never had a BAC II track (p.field), so they skip the whole mastery
-  // engine below and get empty-but-safe defaults instead — every consumer (Progress, Coach's
-  // study/major fallbacks) can rely on subjects/weak/strong always being arrays.
-  if (p.educationLevel === "university") {
+  // University profiles, and any account with no BAC II track at all (a teacher has none), skip
+  // the whole mastery engine below and get empty-but-safe defaults instead — every consumer
+  // (Progress, Coach's study/major fallbacks) can rely on subjects/weak/strong always being arrays.
+  if (p.educationLevel === "university" || !p.field) {
     return {
       subjects: [], weak: [], strong: [], avg: null,
       prediction: { A: 0, B: 0, C: 0, D: 0, E: 0 }, gradeRange: "—",
@@ -357,7 +387,7 @@ function deriveInsights(p, topicMastery, streak = 0) {
   const plan = [];
   [...allTopics].sort((a, b) => a.score - b.score).slice(0, 2).forEach((pt, i) =>
     plan.push({ id: i + 1, s: pt.subject, task: `${pt.t} — review & practice`, min: 35, why: "Priority topic", done: false }));
-  if (strong[0]) plan.push({ id: 90, s: strong[0].s, task: `${strong[0].s} flash quiz`, min: 15, why: "Spaced revision", done: true });
+  if (strong[0]) plan.push({ id: 90, s: strong[0].s, task: `${strong[0].s} flash quiz`, min: 15, why: "Spaced revision", done: false });
   plan.push({ id: 91, s: "English", task: "Reading passage + 15 vocab", min: 20, why: "Daily habit", done: false });
 
   const recs = [];
@@ -500,7 +530,7 @@ const roundToHalfBand = (n) => Math.round(n * 2) / 2;
    word-count-based estimate so the flow still produces a result instead of erroring out. */
 async function gradeIeltsResponse(skill, prompt, response) {
   try {
-    const res = await fetch("/api/ielts-grade", {
+    const res = await aiFetch("/api/ielts-grade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ skill, prompt, response }),
@@ -1289,7 +1319,7 @@ function WelcomeHeroCard({ userName, greeting, message, onStartPlan, onAskCoach,
 /* Wide purple "recommended lesson" banner shown on the Dashboard. `imageUrl` is an optional decorative
    background (a handwritten-formula illustration by default) — purely decorative, so it renders with
    an empty alt and is hidden from screen readers. */
-function RecommendedLessonCard({ title, subject, duration, description, xp, imageUrl, onStart, lang = "en" }) {
+function RecommendedLessonCard({ title, subject, duration, description, xpNote, imageUrl, onStart, lang = "en" }) {
   return (
     <div className="eai-lesson-card">
       {imageUrl && <img src={imageUrl} alt="" aria-hidden="true" className="eai-lesson-decor" />}
@@ -1298,7 +1328,7 @@ function RecommendedLessonCard({ title, subject, duration, description, xp, imag
         <div className="min-w-0">
           <div className={`eai-lesson-label ${lang === "km" ? "eai-km" : ""}`}><Star size={16} /> {t(lang, "recommendedNextLesson")}</div>
           <h3 className="eai-lesson-title">{subject}: {title}</h3>
-          <p className={`eai-lesson-desc ${lang === "km" ? "eai-km" : ""}`}>{duration} {t(lang, "lessonWord")} · {description} · +{xp} XP</p>
+          <p className={`eai-lesson-desc ${lang === "km" ? "eai-km" : ""}`}>{[duration && `${duration} ${t(lang, "lessonWord")}`, description, xpNote].filter(Boolean).join(" · ")}</p>
         </div>
         <button onClick={onStart} className={`eai-lesson-btn eai-focus w-full sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
           {t(lang, "startLesson")} <ArrowRight size={16} className="eai-lesson-arrow" />
@@ -1407,7 +1437,6 @@ function OnboardingLayout({ dark, setDark, step, stepLabels, stepLabelsKm, title
           </div>
         )}
         <div className="w-full">{children}</div>
-        <p className={`eai-ob-footer ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "prototypeFooter")}</p>
       </main>
 
       {footer && (
@@ -2164,59 +2193,116 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   );
 }
 
-function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", setLang }) {
-  const [method, setMethod] = useState("phone"); // "phone" | "email"
-  const [phone, setPhone] = useState("");
+/* Renders Google's own "Sign in with Google" button into a container div and hands the ID token it
+   returns to `onCredential` (App.jsx's handleGoogleAuth). index.html loads the GSI script async, so
+   this polls briefly for `window.google` rather than assuming it's there yet; if Google's script
+   never loads (blocked, offline, not configured), the button just never appears -- email/password
+   sign-in beside it is unaffected either way. */
+function GoogleSignInButton({ onCredential, lang, text }) {
+  const boxRef = useRef(null);
+  const [ready, setReady] = useState(Boolean(window.google?.accounts?.id));
+  // handleLogin/handleGoogleAuth aren't memoized in App, so a new function arrives every render;
+  // the ref keeps Google's own callback stable while always calling whichever one is current.
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
+
+  useEffect(() => {
+    if (ready || !GOOGLE_CLIENT_ID) return undefined;
+    const poll = setInterval(() => {
+      if (window.google?.accounts?.id) { setReady(true); clearInterval(poll); }
+    }, 150);
+    const giveUp = setTimeout(() => clearInterval(poll), 8000);
+    return () => { clearInterval(poll); clearTimeout(giveUp); };
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready || !boxRef.current) return;
+    window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (resp) => onCredentialRef.current(resp.credential) });
+    boxRef.current.innerHTML = "";
+    window.google.accounts.id.renderButton(boxRef.current, {
+      type: "standard", theme: "outline", size: "large", shape: "rectangular", width: 320,
+      text, locale: lang === "km" ? "km" : "en",
+    });
+  }, [ready, lang, text]);
+
+  if (!GOOGLE_CLIENT_ID) return null;
+  return <div ref={boxRef} style={{ display: "flex", justifyContent: "center" }} />;
+}
+
+/* The "── OR ──" rule between the Google button and the manual email/password fields. */
+function OrDivider({ lang }) {
+  return (
+    <div className="flex items-center gap-3 my-1" aria-hidden="true">
+      <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+      <span className={`text-xs font-semibold eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "orWord")}</span>
+      <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+    </div>
+  );
+}
+
+function Login({ dark, setDark, onBack, onLogin, onGoogleAuth, onCreateInstead, onForgot, lang = "en", setLang }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [mascotState, setMascotState] = useState("idle");
   const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
-  const switchMethod = (m) => { setMethod(m); setError(""); };
-  const submit = () => {
-    const creds = method === "phone" ? { phone: phone.trim() } : { email: email.trim(), password };
-    if (method === "phone" ? !creds.phone : !creds.email || !creds.password) {
-      setError(t(lang, method === "phone" ? "errEnterPhone" : "errEnterEmailPassword")); shake(); return;
+  const submit = async () => {
+    if (busy) return;
+    const creds = { email: email.trim(), password };
+    if (!creds.email || !creds.password) {
+      setError(t(lang, "errEnterEmailPassword")); shake(); return;
     }
-    if (!onLogin(creds)) { setError(t(lang, method === "phone" ? "errPhoneNotFound" : "errEmailNotFound")); shake(); }
+    setBusy(true);
+    try {
+      const res = await onLogin(creds);
+      if (res === true) return;
+      setError(res && res.error ? apiErrorText(lang, res.error, res.retryAfter) : t(lang, "errEmailNotFound"));
+      shake();
+    } finally { setBusy(false); }
+  };
+  const handleGoogle = async (credential) => {
+    if (busy) return;
+    setError(""); setBusy(true);
+    try {
+      const res = await onGoogleAuth(credential);
+      // true: signed in, dashboard next. null: a brand-new account, now mid sign-up on its own screen.
+      if (res === true || res === null) return;
+      setError(apiErrorText(lang, res?.error, res?.retryAfter));
+      shake();
+    } finally { setBusy(false); }
   };
   return (
     <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
       title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}
       footer={
-        <PrimaryButton onClick={submit} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
+        <PrimaryButton onClick={submit} disabled={busy} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
       }>
-      <div className="flex gap-1 p-1 rounded-full eai-soft" style={{ width: "fit-content", marginBottom: 18 }}>
-        {["phone", "email"].map((m) => (
-          <button key={m} onClick={() => switchMethod(m)}
-            className={`eai-focus text-xs font-semibold px-3.5 py-1.5 rounded-full ${lang === "km" ? "eai-km" : ""}`}
-            style={{ background: method === m ? "var(--card)" : "transparent", color: method === m ? "var(--ink)" : "var(--muted)", boxShadow: method === m ? "var(--shadow)" : "none" }}>
-            {t(lang, m === "phone" ? "loginWithPhone" : "loginWithEmail")}
-          </button>
-        ))}
-      </div>
-
-      {method === "phone" ? (
-        <FormField label={t(lang, "phoneNumberLabel")} required error={error} lang={lang}>
-          <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
-            value={phone} onChange={(e) => { setPhone(e.target.value); setError(""); }}
-            onKeyDown={(e) => e.key === "Enter" && submit()} />
-        </FormField>
-      ) : (
-        <div className="space-y-4">
-          <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
-            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
-              value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && submit()} />
-          </FormField>
-          <FormField label={t(lang, "passwordLabel")} required>
-            <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="current-password"
-              value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && submit()} />
-          </FormField>
+      {GOOGLE_CLIENT_ID && (
+        <div className="space-y-4 mb-4">
+          <GoogleSignInButton onCredential={handleGoogle} lang={lang} text="signin_with" />
+          <OrDivider lang={lang} />
         </div>
       )}
-
+      <div className="space-y-4">
+        <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
+          <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
+            value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </FormField>
+        <FormField label={t(lang, "passwordLabel")} required>
+          <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="current-password"
+            value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </FormField>
+        {SERVER_MODE && (
+          <div className="text-right" style={{ marginTop: -6 }}>
+            <button type="button" onClick={onForgot} className={`eai-focus text-xs font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>
+              {t(lang, "forgotLink")}
+            </button>
+          </div>
+        )}
+      </div>
 
       <p className={`text-center text-xs eai-muted mt-4 ${lang === "km" ? "eai-km" : ""}`}>
         {t(lang, "noAccountYet")}{" "}
@@ -2226,17 +2312,176 @@ function Login({ dark, setDark, onBack, onLogin, onCreateInstead, lang = "en", s
   );
 }
 
-/* ════════════════════════ Registration ════════════════════════
-   Sign-up is high school only: it opens straight on step 1 with no education-level question.
-   High-school steps 1–3 (account details, academic track, learning preferences) are the original
-   BAC II flow, unchanged. The university steps 2–4 below are parked and unreachable from sign-up
-   (nothing sets `educationLevel: "university"` any more); they stay so the parked track keeps compiling.
-   `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
-   goes "Back" from the step-4 AssessmentChoice screen, so their answers aren't lost. */
-function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
-  const [step, setStep] = useState(initialStep ?? 1);
-  const [form, setForm] = useState(initialForm ?? {
-    name: "", phone: "", email: "", password: "", age: "",
+/* The waiting state while a reset code is being emailed (on a slow connection that can take a while): a friendly envelope
+   that floats, three pulsing dots and a calm explanation. It stands still for people who ask for reduced motion. */
+function SendingCard({ lang }) {
+  const still = useReducedMotion();
+  const km = lang === "km" ? "eai-km" : "";
+  return (
+    <div className="flex flex-col items-center text-center py-8 px-2" role="status" aria-live="polite">
+      <div className="relative">
+        <motion.div className="grid place-items-center" style={{ width: 92, height: 92, borderRadius: 28, background: "var(--primary-soft)", boxShadow: "0 14px 30px -16px var(--primary)" }}
+          animate={still ? undefined : { y: [0, -9, 0], rotate: [0, -3, 3, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
+          <Mail size={42} strokeWidth={1.8} style={{ color: "var(--primary)" }} />
+        </motion.div>
+        <motion.span aria-hidden="true" className="absolute rounded-full" style={{ width: 11, height: 11, background: "var(--gold)", top: -5, right: -7 }}
+          animate={still ? undefined : { scale: [1, 1.5, 1], opacity: [1, 0.45, 1] }} transition={{ duration: 1.6, repeat: Infinity }} />
+        <motion.span aria-hidden="true" className="absolute rounded-full" style={{ width: 8, height: 8, background: "var(--ember)", bottom: 2, left: -9 }}
+          animate={still ? undefined : { scale: [1, 1.6, 1], opacity: [0.9, 0.4, 0.9] }} transition={{ duration: 1.9, repeat: Infinity, delay: 0.5 }} />
+      </div>
+      <div className="flex gap-1.5 mt-7" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <motion.span key={i} className="rounded-full" style={{ width: 9, height: 9, background: "var(--primary)" }}
+            animate={still ? { opacity: 0.6 } : { opacity: [0.25, 1, 0.25], scale: [0.8, 1.2, 0.8] }} transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }} />
+        ))}
+      </div>
+      <p className={`eai-display font-extrabold text-lg mt-5 ${km}`}>{t(lang, "forgotSendingTitle")}</p>
+      <p className={`text-sm eai-muted mt-1.5 ${km}`} style={{ maxWidth: 300 }}>{t(lang, "forgotSendingSub")}</p>
+    </div>
+  );
+}
+
+/* Shown on the code screen once the email is on its way: where it went, how long it lasts, and where to look. */
+function CheckEmailCard({ lang, email }) {
+  const still = useReducedMotion();
+  const km = lang === "km" ? "eai-km" : "";
+  return (
+    <motion.div initial={still ? false : { opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      className="flex items-center gap-3.5 p-4 rounded-2xl mb-5" style={{ background: "var(--jade-soft)", border: "1px solid var(--jade)" }}>
+      <motion.div initial={still ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 14, delay: 0.15 }}
+        className="grid place-items-center rounded-2xl flex-shrink-0" style={{ width: 48, height: 48, background: "var(--card)" }}>
+        <MailCheck size={24} style={{ color: "var(--jade)" }} />
+      </motion.div>
+      <div className="min-w-0">
+        <p className={`eai-display font-bold text-sm ${km}`}>{t(lang, "forgotCheckEmailTitle")}</p>
+        <p className={`text-xs eai-muted mt-0.5 ${km}`} style={{ overflowWrap: "anywhere" }}>
+          {email ? <>{t(lang, "forgotCodeSent")} <strong style={{ color: "var(--ink)" }}>{email}</strong></> : t(lang, "forgotCodeSentGeneric")}
+        </p>
+        <p className={`text-xs eai-muted mt-0.5 ${km}`}>{t(lang, "forgotCodeExpires")} {t(lang, "forgotCheckSpam")}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+// Logins that were just sent a reset code: login -> { until: the time (ms) the resend wait ends, masked: "ve***@gmail.com" }.
+// Kept outside the screen so going Back and pressing "Send code" again inside the wait goes straight to the code screen
+// instead of asking the server again (which would refuse, but still use up one of the few tries allowed per hour).
+const recentCodes = new Map();
+
+/* ════════════════════════ Forgot password (server mode) ════════════════════════
+   Step 1: the student gives their email and the server emails a 6-digit code to the address on the
+   account (an older account with only a phone on file can still type it here — the backend resolves
+   either). Step 2: they type the code and a new password; the server answers with a fresh login, so they land on the
+   dashboard. `onSignedIn` loads the account and resolves to true, or to { error } when that fails. */
+function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLang }) {
+  const [step, setStep] = useState(1);
+  const [login, setLogin] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);       // resetting the password
+  const [sending, setSending] = useState(false);   // the code email is being sent
+  const [cooldown, setCooldown] = useState(0); // seconds until a new code may be requested
+  const [mascotState, setMascotState] = useState("idle");
+  const shake = () => { setMascotState("sad"); setTimeout(() => setMascotState("idle"), 1200); };
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
+  const sendCode = async () => {
+    if (sending || !login.trim()) return;
+    const who = login.trim().toLowerCase();
+    const recent = recentCodes.get(who);
+    if (recent && recent.until > Date.now()) { // a code is already on its way: no new request, just the code screen
+      setMaskedEmail(recent.masked); setStep(2); setCooldown(Math.ceil((recent.until - Date.now()) / 1000));
+      return;
+    }
+    setSending(true); setError("");
+    try {
+      const res = await api.forgotPassword({ login: login.trim() });
+      recentCodes.set(who, { until: Date.now() + 60000, masked: res?.maskedEmail ?? "" });
+      setMaskedEmail(res?.maskedEmail ?? ""); setCode(""); setStep(2); setCooldown(60);
+    } catch (err) {
+      // A code was sent a moment ago (the server sends nothing new and says how long until a new one may be asked
+      // for): just go to the code screen. Anything else is a real problem, e.g. the hourly limit: say how long to wait.
+      if (isCodeAlreadySent(err) && err.retryAfter > 0) {
+        const masked = err.body?.maskedEmail ?? recentCodes.get(who)?.masked ?? "";
+        recentCodes.set(who, { until: Date.now() + err.retryAfter * 1000, masked });
+        setMaskedEmail(masked); setStep(2); setCooldown(err.retryAfter);
+      } else { setError(apiErrorText(lang, err?.code, err?.retryAfter)); shake(); }
+    }
+    finally { setSending(false); }
+  };
+  const resetPassword = async () => {
+    if (busy) return;
+    if (!/^\d{6}$/.test(code.trim())) { setError(t(lang, "errInvalidCode")); shake(); return; }
+    if (password.length < 8) { setError(t(lang, "errPasswordShort")); shake(); return; }
+    setBusy(true); setError("");
+    try {
+      await api.resetPassword({ login: login.trim(), code: code.trim(), password });
+      const res = await onSignedIn();
+      if (res !== true) { setError(apiErrorText(lang, res?.error, res?.retryAfter)); shake(); }
+    } catch (err) { setError(apiErrorText(lang, err?.code, err?.retryAfter)); shake(); }
+    finally { setBusy(false); }
+  };
+
+  const km = lang === "km" ? "eai-km" : "";
+  return (
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={step === 2 ? () => { setStep(1); setError(""); } : onBack} lang={lang} setLang={setLang} mascotState={mascotState}
+      title={t(lang, "forgotTitle")}
+      description={step === 1 ? t(lang, "forgotDesc") : t(lang, "forgotStep2Desc")}
+      footer={
+        step === 1
+          ? <PrimaryButton onClick={sendCode} disabled={sending || !login.trim()} className={`sm:w-auto ${km}`}>{sending ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <>{t(lang, "forgotSendCode")} <ChevronRight size={16} /></>}</PrimaryButton>
+          : <PrimaryButton onClick={resetPassword} disabled={busy || !code.trim() || !password} className={`sm:w-auto ${km}`}>{t(lang, "forgotResetBtn")} <ChevronRight size={16} /></PrimaryButton>
+      }>
+      {step === 1 ? (
+        sending ? <SendingCard lang={lang} /> : (
+          <FormField label={t(lang, "forgotLoginLabel")} required error={error} lang={lang}>
+            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="username" inputMode="email"
+              value={login} onChange={(e) => { setLogin(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && sendCode()} />
+          </FormField>
+        )
+      ) : (
+        <div>
+          <CheckEmailCard lang={lang} email={maskedEmail} />
+          {sending ? <SendingCard lang={lang} /> : (
+        <div className="space-y-4">
+          <FormField label={t(lang, "forgotCodeLabel")} required error={error} lang={lang}>
+            <input className="eai-ob-input eai-focus" placeholder="123456" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
+              value={code} onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && resetPassword()} />
+          </FormField>
+          <FormField label={t(lang, "forgotNewPasswordLabel")} required>
+            <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="new-password"
+              value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && resetPassword()} />
+            <p className={`text-xs eai-muted mt-1.5 ${km}`}>{t(lang, "passwordHint")}</p>
+          </FormField>
+          <button type="button" onClick={sendCode} disabled={sending || cooldown > 0}
+            className={`eai-focus text-xs font-semibold ${km}`} style={{ color: cooldown > 0 ? "var(--muted)" : "var(--primary)", cursor: cooldown > 0 ? "not-allowed" : "pointer" }}>
+            {t(lang, "forgotResend")}{cooldown > 0 ? ` (${localizeNum(cooldown, lang)})` : ""}
+          </button>
+        </div>
+          )}
+        </div>
+      )}
+      <p className={`text-center text-xs eai-muted mt-5 ${km}`}>
+        <button onClick={onBack} className="eai-focus font-semibold" style={{ color: "var(--primary)" }}>{t(lang, "backToLogin")}</button>
+      </p>
+    </OnboardingLayout>
+  );
+}
+
+/* A fresh step-1 form, reused as Register's own default state and by a brand-new Google sign-up
+   (App.jsx's handleGoogleAuth), which already has name/email and needs to resume at step 2. */
+function blankRegisterForm(overrides = {}) {
+  return {
+    name: "", email: "", password: "", age: "",
     educationLevel: "highschool", // new sign-ups are always high school; "university" only survives on already-saved profiles
     // High-school (BAC II) fields:
     grade: "12", field: "", target: "A",
@@ -2244,9 +2489,47 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     subjectsToImprove: [], foreignLanguage: FOREIGN_LANGUAGES[0],
     // University fields:
     universityGoals: [], universityMajor: "", universityYear: "",
-  });
+    ...overrides,
+  };
+}
+
+/* ════════════════════════ Registration ════════════════════════
+   Sign-up is high school only: it opens straight on step 1 with no education-level question.
+   High-school steps 1–3 (account details, academic track, learning preferences) are the original
+   BAC II flow, unchanged. The university steps 2–4 below are parked and unreachable from sign-up
+   (nothing sets `educationLevel: "university"` any more); they stay so the parked track keeps compiling.
+   `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
+   goes "Back" from the step-4 AssessmentChoice screen, or lands here fresh from Google sign-in
+   already past step 1, so their answers (or Google's) aren't lost. */
+function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
+  const [step, setStep] = useState(initialStep ?? 1);
+  const [form, setForm] = useState(initialForm ?? blankRegisterForm());
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const handleGoogle = async (credential) => {
+    if (submitting) return;
+    setSubmitError(""); setSubmitting(true);
+    try {
+      const res = await onGoogleAuth(credential);
+      // true: an existing, already-onboarded account -- signed in. null: handled on its own screen
+      // (a brand-new account resumes right here at step 2, or an existing-but-unfinished one too).
+      if (res === true || res === null) return;
+      setSubmitError(apiErrorText(lang, res?.error, res?.retryAfter));
+    } finally { setSubmitting(false); }
+  };
+  // With the server, onComplete creates the account and may answer { error, step } (email already used, etc.).
+  const finish = async (data) => {
+    if (submitting) return;
+    setSubmitError(""); setSubmitting(true);
+    try {
+      const res = await onComplete(data);
+      if (res && res.error) { setSubmitError(apiErrorText(lang, res.error, res.retryAfter)); if (res.step) setStep(res.step); }
+    } finally { setSubmitting(false); }
+  };
+  const accountOk = Boolean(form.name.trim()) && (!SERVER_MODE || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.password.length >= 8));
+  const submitErrorBanner = submitError ? <p className="eai-ob-error mb-4" role="alert"><AlertTriangle size={12} /> {submitError}</p> : null;
   const isUni = form.educationLevel === "university";
 
   // Unlimited multi-select (high-school "subjects to improve").
@@ -2266,26 +2549,31 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
         onBack={onBack} lang={lang} setLang={isUni ? undefined : setLang}
         title={t(lang, "createAccountTitle")} description={t(lang, "createAccountDesc")}
         footer={
-          <PrimaryButton onClick={() => setStep(2)} disabled={!form.name.trim()} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+          <PrimaryButton onClick={() => setStep(2)} disabled={!accountOk} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
             {isUni ? t(lang, "continueWord") : t(lang, "continueToTrack")} <ChevronRight size={16} />
           </PrimaryButton>
         }>
+        {submitErrorBanner}
+        {GOOGLE_CLIENT_ID && (
+          <div className="space-y-4 mb-5">
+            <GoogleSignInButton onCredential={handleGoogle} lang={lang} text="signup_with" />
+            <OrDivider lang={lang} />
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
             <input className="eai-ob-input eai-focus" placeholder="e.g. Sophea Chan" autoComplete="name"
               value={form.name} onChange={(e) => set("name", e.target.value)} />
           </FormField>
-          <FormField label={t(lang, "phoneNumberLabel")} required>
-            <input className="eai-ob-input eai-focus" placeholder="016556618" autoComplete="tel" inputMode="tel"
-              value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-          </FormField>
-          <FormField label={t(lang, "emailLabel")}>
+          <FormField label={t(lang, "emailLabel")} required>
             <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
               value={form.email} onChange={(e) => set("email", e.target.value)} />
+            {SERVER_MODE && <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "emailResetHint")}</p>}
           </FormField>
-          <FormField label={t(lang, "passwordLabel")}>
+          <FormField label={t(lang, "passwordLabel")} required={SERVER_MODE}>
             <input type="password" className="eai-ob-input eai-focus" placeholder="••••••••" autoComplete="new-password"
               value={form.password} onChange={(e) => set("password", e.target.value)} />
+            {SERVER_MODE && <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "passwordHint")}</p>}
           </FormField>
           <FormField label={t(lang, "ageLabel")}>
             <input type="number" min="8" max="99" inputMode="numeric" className="eai-ob-input eai-focus" placeholder="18"
@@ -2380,10 +2668,11 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
     <OnboardingLayout dark={dark} setDark={setDark} step={3} onBack={() => setStep(2)} lang={lang} setLang={setLang}
       title={t(lang, "personalizeTitle")} description={t(lang, "personalizeDesc")}
       footer={
-        <PrimaryButton onClick={() => onComplete({ ...form, age: Number(form.age) || null })} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
+        <PrimaryButton onClick={() => finish({ ...form, age: Number(form.age) || null })} disabled={submitting} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>
           {t(lang, "continueWord")} <ChevronRight size={16} />
         </PrimaryButton>
       }>
+      {submitErrorBanner}
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
           options={EXAM_YEARS.map((y) => ({ value: y, label: String(y) }))} />
@@ -2405,7 +2694,7 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {form.subjectsToImprove.length === 0 ? (
-              <button onClick={() => onComplete({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
+              <button onClick={() => finish({ ...form, subjectsToImprove: [], age: Number(form.age) || null })}
                 className={`eai-ob-text-action eai-focus ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "skipStepWord")}</button>
             ) : (
               <button onClick={clearSubjects} className={`eai-ob-text-action eai-focus ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "clearSelectionWord")}</button>
@@ -2426,48 +2715,26 @@ function Register({ onComplete, dark, setDark, initialForm, initialStep, onBack,
 }
 
 /* ════════════════════════ Dashboard ════════════════════════ */
-const PERSONALIZATION_PERKS = {
-  en: ["Personalized study roadmap", "AI recommendations", "Subject mastery analysis", "Adaptive practice questions", "BAC II paper recommendations", "Progress tracking"],
-  km: ["ផែនទីសិក្សាផ្ទាល់ខ្លួន", "អនុសាសន៍ AI", "ការវិភាគសមត្ថភាពមុខវិជ្ជា", "សំណួរអនុវត្តន៍សម្របតាមកម្រិត", "អនុសាសន៍ក្រដាសប្រឡង បាក់ឌុប", "តាមដានវឌ្ឍនភាព"],
-};
-
-function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, onDismissBanner, lang = "en" }) {
+function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask, bonusXp = 0, lang = "en" }) {
   const xp = p.xp + bonusXp;
-  const done = plan.filter((t) => t.done).length;
-  const planPct = plan.length ? Math.round((done / plan.length) * 100) : 0;
+  // "Today's plan" is the student's own list: each day starts empty, older days stay stored but hidden.
+  const tasks = todaysTasks(plan, dateKey());
+  const done = tasks.filter((x) => x.done).length;
+  const planPct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+  const suggestions = remainingSuggestions(p.plan ?? [], plan, dateKey()).slice(0, 3);
+  const planFull = tasks.length >= MAX_TASKS_PER_DAY;
+  const subjectOptions = fieldSubjects(p.field, p.foreignLanguage); // the subjects this student sits: their chosen foreign language, not the "Foreign Language" placeholder
+  const [draft, setDraft] = useState({ title: "", subject: "", minutes: "" });
+  const canAdd = Boolean(draft.title.trim()) && !planFull;
+  const submitTask = (e) => {
+    e.preventDefault();
+    if (!canAdd) return;
+    onAddPlanTask({ title: draft.title, subject: draft.subject || null, minutes: draft.minutes });
+    setDraft((d) => ({ ...d, title: "", minutes: "" })); // keep the chosen subject: students often add several tasks for one subject
+  };
 
   return (
     <div className="space-y-5 eai-rise">
-      {/* Unlock-personalization banner — only for profiles that explicitly skipped the diagnostic
-          (older saved profiles predate this flag and default to personalized, not undefined). */}
-      {p.isPersonalized === false && !p.bannerDismissed && (
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
-          className="eai-card p-5 relative" style={{ background: "var(--gold-soft)", border: "1px solid var(--gold)" }}>
-          <button onClick={onDismissBanner} aria-label="Dismiss" className="eai-focus absolute top-4 right-4 eai-muted">
-            <XCircle size={18} />
-          </button>
-          <div className="flex items-start gap-3 pr-8">
-            <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--card)" }}>
-              <Target size={19} style={{ color: "var(--gold)" }} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className={`eai-display font-bold text-sm ${lang === "km" ? "eai-km" : ""}`}>🎯 {t(lang, "unlockBannerTitle")}</p>
-              <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "unlockBannerDesc")}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-2">
-                {PERSONALIZATION_PERKS[lang === "km" ? "km" : "en"].map((f) => (
-                  <span key={f} className={`text-xs eai-muted flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}>
-                    <CheckCircle2 size={12} style={{ color: "var(--gold)" }} /> {f}
-                  </span>
-                ))}
-              </div>
-              <button onClick={onStartAssessment} className={`eai-btn eai-glass eai-focus mt-3.5 px-4 py-2 text-xs ${lang === "km" ? "eai-km" : ""}`}>
-                {t(lang, "startAssessment")}
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       {/* Hero */}
       <WelcomeHeroCard
         userName={p.name} greeting="សួស្តី" message={t(lang, "heroMessage")}
@@ -2478,22 +2745,64 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
         {/* Daily plan */}
         <div className="eai-card p-6 lg:col-span-2">
           <CardHead title={t(lang, "dashTodayPlan")} kh={lang === "km" ? null : "ផែនការសិក្សាថ្ងៃនេះ"}
-            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{plan.length} {t(lang, "dashDone")}</span>} />
+            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{tasks.length} {t(lang, "dashDone")}</span>} />
           <div className="h-1.5 rounded-full eai-soft mb-4 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${planPct}%`, background: "var(--jade)", transition: "width .3s" }} />
           </div>
-          <div className="space-y-2.5">
-            {plan.map((t) => (
-              <button key={t.id} onClick={() => onTogglePlan(t.id)} className="eai-focus w-full flex items-center gap-3 p-3 rounded-2xl text-left eai-nav border" style={{ borderColor: "var(--line)" }}>
-                {t.done ? <CheckCircle2 size={22} style={{ color: "var(--jade)", flexShrink: 0 }} /> : <Circle size={22} className="eai-muted" style={{ flexShrink: 0 }} />}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold truncate" style={{ textDecoration: t.done ? "line-through" : "none", opacity: t.done ? 0.5 : 1 }}>{t.task}</p>
-                  <p className="text-xs eai-muted">{subjectLabel(t.s, lang)} · {t.why}</p>
-                </div>
-                <span className="text-xs font-bold eai-muted flex items-center gap-1 flex-shrink-0"><Clock size={13} /> {t.min}m</span>
+          <form onSubmit={submitTask} className="flex flex-col sm:flex-row gap-2 mb-4">
+            <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
+              className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
+            <div className="flex gap-2">
+              <select value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+                aria-label={t(lang, "planSubjectOptional")}
+                className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }}>
+                <option value="">{t(lang, "planSubjectOptional")}</option>
+                {subjectOptions.map((s) => <option key={s} value={s}>{subjectLabel(s, lang)}</option>)}
+              </select>
+              <input type="number" min="1" max="600" inputMode="numeric" value={draft.minutes}
+                onChange={(e) => setDraft((d) => ({ ...d, minutes: e.target.value }))}
+                placeholder={t(lang, "planMinutesShort")} aria-label={t(lang, "planMinutesShort")}
+                className={`eai-ob-input eai-focus ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42, width: 84, flexShrink: 0 }} />
+              <button type="submit" disabled={!canAdd}
+                className={`eai-btn eai-glass eai-focus px-4 text-sm flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
+                style={{ opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
+                <Plus size={15} /> {t(lang, "planAdd")}
               </button>
+            </div>
+          </form>
+          <div className="space-y-2.5">
+            {tasks.length === 0 && (
+              <p className={`text-sm eai-muted py-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planEmpty")}</p>
+            )}
+            {tasks.map((task) => (
+              <div key={task.id} className="eai-nav flex items-center gap-2 p-3 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
+                <button onClick={() => onTogglePlan(task.id)} aria-pressed={task.done} className="eai-focus flex-1 min-w-0 flex items-center gap-3 text-left rounded-xl">
+                  {task.done ? <CheckCircle2 size={22} style={{ color: "var(--jade)", flexShrink: 0 }} /> : <Circle size={22} className="eai-muted" style={{ flexShrink: 0 }} />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate" style={{ textDecoration: task.done ? "line-through" : "none", opacity: task.done ? 0.5 : 1 }}>{task.task}</p>
+                    <p className="text-xs eai-muted">{[task.s ? subjectLabel(task.s, lang) : null, task.why === "My task" ? t(lang, "planMyTask") : task.why].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  {task.min ? <span className="text-xs font-bold eai-muted flex items-center gap-1 flex-shrink-0"><Clock size={13} /> {task.min}m</span> : null}
+                </button>
+                <button onClick={() => onRemovePlanTask(task.id)} aria-label={t(lang, "planDeleteTask")} title={t(lang, "planDeleteTask")}
+                  className="eai-focus eai-muted p-1.5 rounded-lg flex-shrink-0"><Trash2 size={16} /></button>
+              </div>
             ))}
           </div>
+          {suggestions.length > 0 && (
+            <div className="mt-4">
+              <p className={`text-xs font-semibold eai-muted mb-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planSuggested")}</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((sg) => (
+                  <button key={sg.id} onClick={() => onAddPlanTask({ title: sg.task, subject: sg.s, minutes: sg.min, why: sg.why })} disabled={planFull}
+                    className="eai-focus eai-soft text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <Plus size={12} /> {sg.task}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Streak + XP + Level */}
@@ -2523,7 +2832,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
       {/* Recommended next lesson */}
       <RecommendedLessonCard
         subject={subjectLabel(p.recommendedLesson.subject, lang)} title={topicLabel(p.recommendedLesson.topic, lang)}
-        duration={lang === "km" ? "១២ នាទី" : "12 min"} description={t(lang, "targetsWeakest")} xp={80}
+        description={t(lang, "targetsWeakest")} xpNote={`+${localizeNum(XP_PER_CORRECT, lang)} ${t(lang, "xpPerCorrect")}`}
         imageUrl="/decor/math-formulas.svg" onStart={() => go("practice")} lang={lang}
       />
 
@@ -2554,7 +2863,7 @@ function Dashboard({ p, go, plan, onTogglePlan, bonusXp = 0, onStartAssessment, 
 
 /* ════════════════════════ Browse (field-aware) ════════════════════════ */
 
-function ExamPaperPage({ paper, onBack, lang = "en" }) {
+function ExamPaperPage({ paper, onBack, lang = "en", topSlot = null }) {
   // Localized on every render from the raw subject/year, not baked into a string at click-time —
   // otherwise toggling language while already on this page would leave the title stuck in
   // whichever language was active the moment "View" was clicked.
@@ -2564,6 +2873,7 @@ function ExamPaperPage({ paper, onBack, lang = "en" }) {
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
         <ChevronLeft size={16} /> {t(lang, "allExamsWord")}
       </button>
+      {topSlot}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{title}</h2>
@@ -2626,10 +2936,42 @@ const SUBJECT_DURATION_MIN = {
   },
 };
 
-function Browse({ p, lang = "en" }) {
-  const [year, setYear] = useState(2023);
+function Browse({ p, lang = "en", exam, tr }) {
+  const [year, setYear] = useState(() => newestPaperYear(p.field));
   const [viewingPaper, setViewingPaper] = useState(null);
-  if (viewingPaper) return <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} lang={lang} />;
+  // Timed attempts: "read" = the paper with the running clock, "submit" = adding the photos, "result" = how long it took.
+  const [phase, setPhase] = useState("read");
+  const [finished, setFinished] = useState(null);
+  const [note, setNote] = useState("");
+  const running = exam.current;
+  const paperFor = (subject, y) => { const key = `${subject}-${p.field}-${y}`; return { subject, year: y, pdf: EXAM_PAPER_PDFS[key], images: EXAM_PAPER_IMAGES[key] }; };
+  const startAttempt = (subject, y) => {
+    const res = exam.start({ subject, field: p.field, year: y, student: { name: p.name, grade: p.grade } });
+    if (res.error === "already_running") { setNote(tr("examAlreadyRunning")); return; }
+    if (res.error) { setNote(tr("examErr_generic")); return; }
+    setNote(""); setPhase("read"); setViewingPaper(paperFor(subject, y));
+  };
+  // The attempt closed by itself (official time + 30 minutes) while the student was on the photo screen.
+  useEffect(() => { if (phase === "submit" && !running) { setPhase("read"); setNote(tr("examExpired")); } }, [phase, running]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (phase === "result" && finished) {
+    return <ExamResultCard session={finished} lang={lang} tr={tr} onDone={() => { setFinished(null); setPhase("read"); setViewingPaper(null); }} />;
+  }
+  if (phase === "submit" && running) {
+    return (
+      <SubmitSheet session={running} lang={lang} tr={tr}
+        onAdd={(photo) => exam.addPhoto(running.id, photo)} onRemove={(i) => exam.removePhoto(running.id, i)}
+        onSubmit={() => { const res = exam.submit(running.id); if (res.ok) { setFinished(res.session); setPhase("result"); } return res; }}
+        onBack={() => setPhase("read")} />
+    );
+  }
+  if (viewingPaper) {
+    const mine = running && running.subject === viewingPaper.subject && running.year === viewingPaper.year ? running : null;
+    return (
+      <ExamPaperPage paper={viewingPaper} onBack={() => setViewingPaper(null)} lang={lang}
+        topSlot={mine ? <ExamTimerBar session={mine} now={exam.now} lang={lang} tr={tr} onFinish={() => setPhase("submit")} onCancel={() => exam.cancel(mine.id)} /> : null} />
+    );
+  }
   const diffLabel = (d) => (lang === "km" ? { Easy: "ងាយ", Medium: "មធ្យម", Hard: "ពិបាក" }[d] : d);
   return (
     <div className="space-y-5 eai-rise">
@@ -2639,6 +2981,20 @@ function Browse({ p, lang = "en" }) {
           {p.grade === "university" ? t(lang, "universityEntrance") : bacIILabel(lang)} · {lang === "km" ? `${t(lang, "trackWord")}${FIELD_META[p.field].km}` : `${FIELD_META[p.field].label} ${t(lang, "trackWord")}`} · {t(lang, "officialPapers")} {localizeNum(2010, lang)}–{localizeNum(2026, lang)}
         </p>
       </div>
+      <JoinSchoolCard school={exam.school} lang={lang} tr={tr} lookup={exam.schoolForCode} onJoin={exam.joinSchool} onLeave={exam.leaveSchool} hint={tr("schoolDemoHint")} />
+      {running && (
+        <div className="eai-card p-4 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--primary)" }} data-testid="exam-resume">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="grid place-items-center rounded-2xl" style={{ width: 40, height: 40, background: "var(--primary-soft)", color: "var(--primary)" }}><Timer size={20} /></span>
+            <div className="min-w-0">
+              <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("examRunningTitle")}</p>
+              <p className={`font-bold truncate ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(running.subject, lang)} · {bacIILabel(lang)} {localizeNum(running.year, lang)}</p>
+            </div>
+          </div>
+          <button onClick={() => { setViewingPaper(paperFor(running.subject, running.year)); setPhase("read"); }} className={`eai-btn eai-focus text-sm py-2 px-4 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>{tr("examResume")}</button>
+        </div>
+      )}
+      {note && <p className={`eai-ob-error flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} role="alert"><AlertTriangle size={13} /> {note}</p>}
       <div className="flex gap-2 overflow-x-auto pb-1 eai-scroll">
         {YEARS.map((y) => (
           <button key={y} onClick={() => setYear(y)} className="eai-btn eai-focus px-4 py-2 text-sm flex-shrink-0"
@@ -2669,7 +3025,13 @@ function Browse({ p, lang = "en" }) {
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
               </div>
-              <div className="flex gap-2 mt-4">
+              {hasPaper && (
+                <button onClick={() => startAttempt(sub.s, year)} data-testid={`start-${sub.s}`}
+                  className={`eai-btn eai-focus w-full mt-4 text-sm py-2.5 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                  <Timer size={14} /> {tr("examStartBtn")}
+                </button>
+              )}
+              <div className="flex gap-2 mt-2">
                 {hasPaper ? (
                   <button
                     onClick={() => setViewingPaper({ subject: sub.s, year, pdf, images })}
@@ -2693,6 +3055,133 @@ function Browse({ p, lang = "en" }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ════════════════════════ Exercises — sheets an admin posted, browsed by subject ════════════════════════
+   Laid out like Browse (the exam papers): a row of pills, then a grid of cards. The pills are subjects here
+   instead of years, and each card names the teacher and school the sheet came from. Science track only for
+   now. There are no teacher accounts; an admin posts everything (see AdminExercises below). */
+function Exercises({ api, lang, tr }) {
+  const [subject, setSubject] = useState(EXERCISE_SUBJECTS[0]);
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [viewing, setViewing] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setFailed(false);
+    api.getExercises(subjectId(subject))
+      .then((res) => { if (alive) setList(res.exercises); })
+      .catch(() => { if (alive) { setList([]); setFailed(true); } })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [api, subject]);
+
+  if (viewing) return <ExerciseViewer exercise={viewing} subject={subject} lang={lang} tr={tr} onBack={() => setViewing(null)} />;
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesTitle")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesDesc")}</p>
+      </div>
+      <SubjectPills subject={subject} onPick={setSubject} lang={lang} />
+      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : failed ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
+      ) : list.length === 0 ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesEmpty")}</p></div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {list.map((ex) => <ExerciseCard key={ex.id} exercise={ex} subject={subject} lang={lang} tr={tr} onOpen={() => setViewing(ex)} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* The subject pills at the top of both exercise screens: same look as the year pills in Browse. */
+function SubjectPills({ subject, onPick, lang }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1 eai-scroll">
+      {EXERCISE_SUBJECTS.map((s) => (
+        <button key={s} onClick={() => onPick(s)} className={`eai-btn eai-focus px-4 py-2 text-sm flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
+          style={{ background: s === subject ? "var(--primary)" : "var(--card)", color: s === subject ? "#fff" : "var(--ink)", border: s === subject ? "none" : "1px solid var(--line)" }}>
+          {subjectLabel(s, lang)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ════════════════════════ Admin: posting exercises ════════════════════════
+   The same subject pills; under each, the sheets already posted and a form to add one: the teacher's name, the
+   school, and a PDF or photos. Only an admin account reaches this (the sidebar and the server both check). */
+function AdminExercises({ api, lang, tr }) {
+  const [subject, setSubject] = useState(EXERCISE_SUBJECTS[0]);
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [form, setForm] = useState(null); // null, or { exercise } -- exercise is the one being edited, absent for a new one
+  const [viewing, setViewing] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setFailed(false);
+    api.getAdminExercises(subjectId(subject))
+      .then((res) => { if (alive) setList(res.exercises); })
+      .catch(() => { if (alive) { setList([]); setFailed(true); } })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [api, subject, reloadKey]);
+  const reload = () => setReloadKey((k) => k + 1);
+
+  const save = async (fields) => (form.exercise
+    ? await api.updateAdminExercise(form.exercise.id, fields)
+    : await api.createAdminExercise({ subject: subjectId(subject), ...fields })).exercise;
+  const addAttachment = async (exerciseId, file) => (await api.addExerciseAttachment(exerciseId, file)).attachment;
+  const removeAttachment = (exerciseId, attachmentId) => api.removeExerciseAttachment(exerciseId, attachmentId);
+  // Deleting also removes the files, so it asks first.
+  const remove = async (ex) => {
+    if (!window.confirm(tr("exDeleteAsk"))) return;
+    try { await api.deleteAdminExercise(ex.id); } catch { /* the list below shows what is really there */ }
+    reload();
+  };
+  const closeForm = () => { setForm(null); reload(); };
+
+  if (form) {
+    return (
+      <AdminExerciseForm key={form.exercise?.id ?? "new"} initial={form.exercise} subject={subject} lang={lang} tr={tr}
+        onSave={save} onAddAttachment={addAttachment} onRemoveAttachment={removeAttachment} onDone={closeForm} onCancel={closeForm} />
+    );
+  }
+  if (viewing) return <ExerciseViewer exercise={viewing} subject={subject} lang={lang} tr={tr} onBack={() => setViewing(null)} />;
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesTitle")}</h2>
+          <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesDesc")}</p>
+        </div>
+        <NewExerciseButton lang={lang} tr={tr} onClick={() => setForm({})} />
+      </div>
+      <SubjectPills subject={subject} onPick={setSubject} lang={lang} />
+      {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : failed ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
+      ) : list.length === 0 ? (
+        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesEmpty")}</p></div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {list.map((ex) => (
+            <ExerciseCard key={ex.id} exercise={ex} subject={subject} lang={lang} tr={tr}
+              onOpen={() => setViewing(ex)} onEdit={() => setForm({ exercise: ex })} onDelete={() => remove(ex)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3390,14 +3879,13 @@ function AssessmentChoice({ reg, dark, setDark, onStart, onSkip, onBack, lang = 
 
 /* ════════════════════════ Diagnostic test ════════════════════════
    A short, fast-fire assessment run right after registration and before the dashboard exists.
-   No feedback mid-test — like a real diagnostic, you only see results at the end. It seeds the
-   very first real topic-mastery scores; everything the dashboard shows flows from this. */
-function buildDiagnosticQueue(reg, lang = "en") {
-  return fieldSubjects(reg.field, reg.foreignLanguage).flatMap((s) => getExercises(s, lang));
-}
-
+   Science sits it in four sections (Mathematics, Physics, Chemistry, Biology) of a dozen questions
+   each; Social Science has none (diagnosticPlan.js). No feedback mid-test — like a real diagnostic,
+   you only see results at the end. It seeds the very first real topic-mastery scores; everything
+   the dashboard shows flows from this. */
 function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
-  const queue = useMemo(() => buildDiagnosticQueue(reg, lang), [reg.field, reg.foreignLanguage, lang]);
+  const sections = useMemo(() => buildSections(reg.field, (s) => getExercises(s, lang)), [reg.field, lang]);
+  const queue = useMemo(() => sections.flatMap((s) => s.questions), [sections]);
   const [i, setI] = useState(0);
   const [topicMastery, setTopicMastery] = useState({});
   const [choice, setChoice] = useState(null);
@@ -3410,7 +3898,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
   }
 
   const ex = queue[i];
-  const pct = Math.round((i / queue.length) * 100);
+  const where = locate(sections, i); // { section, sections, position, size }
 
   const answer = (confidence) => {
     const correct = gradeAnswer(ex, choice);
@@ -3427,10 +3915,21 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
         <div className="w-full eai-rise" style={{ maxWidth: 640 }}>
           <div className="flex items-center justify-between mb-2">
             <p className={`text-sm font-semibold eai-muted flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}><ClipboardCheck size={15} /> {t(lang, "diagnosticTestWord")}</p>
-            <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "questionWord")} {i + 1} {t(lang, "ofWord")} {queue.length}</p>
+            <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "sectionWord")} {localizeNum(where.section, lang)} {t(lang, "ofWord")} {localizeNum(where.sections, lang)} · {t(lang, "questionWord")} {localizeNum(where.position, lang)} {t(lang, "ofWord")} {localizeNum(where.size, lang)}</p>
           </div>
-          <div className="h-1.5 rounded-full eai-soft mb-6 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--primary)", transition: "width .3s" }} />
+          <div className="flex gap-1.5 mb-6">
+            {sections.map((sec, k) => {
+              const current = k + 1 === where.section;
+              const filled = k + 1 < where.section ? 100 : current ? Math.round(((where.position - 1) / where.size) * 100) : 0;
+              return (
+                <div key={sec.subject} className="flex-1 min-w-0">
+                  <div className="h-1.5 rounded-full eai-soft overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${filled}%`, background: "var(--primary)", transition: "width .3s" }} />
+                  </div>
+                  <p className={`text-[10px] sm:text-xs mt-1 truncate ${current ? "font-semibold" : "eai-muted"} ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(sec.subject, lang)}</p>
+                </div>
+              );
+            })}
           </div>
 
           <div className="eai-card p-6 sm:p-8">
@@ -3470,7 +3969,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
 }
 
 function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" }) {
-  const rows = fieldSubjects(reg.field, reg.foreignLanguage).map((s) => {
+  const rows = diagnosticSubjects(reg.field).map((s) => {
     const topics = SUBJECT_TOPICS[s] || [];
     const scores = topics.map((t) => topicMastery[s]?.[t]?.score).filter((x) => x != null);
     const m = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
@@ -5010,7 +5509,7 @@ function majorCoachReply(text, p) {
       const hits = findMajorsForKeywords(top.flatMap((s) => SUBJECT_MAJOR_KEYWORDS[s] || [s.toLowerCase()]));
       return `Based on your strongest subjects (${top.join(", ")}), here's where I'd start looking:\n${hits.length ? hits.map((h) => `• ${h}`).join("\n") : "Browse the Universities tab to explore matching majors."}\n\nOr tell me an interest — engineering, law, business, medicine, IT, design, tourism — and I'll pull real options.`;
     }
-    return `I don't have a strong-subject signal for you yet — complete the diagnostic assessment so I can ground this in your real mastery. In the meantime, tell me a subject you enjoy or an interest area and I'll suggest real majors from Cambodian universities.`;
+    return `I don't have a strong-subject signal for you yet — answer a few practice questions so I can ground this in your real mastery. In the meantime, tell me a subject you enjoy or an interest area and I'll suggest real majors from Cambodian universities.`;
   }
 
   // 4) Fallback
@@ -5059,7 +5558,7 @@ function coachReply(text, p) {
    grounded answer instead of an error. */
 async function majorGuidanceReply(t, p, history) {
   try {
-    const res = await fetch("/api/major-guidance", {
+    const res = await aiFetch("/api/major-guidance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -5107,7 +5606,7 @@ function universityCoachReply(text, p) {
 async function universityMentorReply(t, p, history) {
   const up = p.universityProfile || {};
   try {
-    const res = await fetch("/api/university-mentor", {
+    const res = await aiFetch("/api/university-mentor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -5147,7 +5646,8 @@ const UNCONFIGURED =
 async function ragRequest(path, init) {
   let res;
   try {
-    res = await fetch(`${RAG_API}${path}`, init);
+    // The coach only answers signed-in students: it checks this token with the Laravel API.
+    res = await fetch(`${RAG_API}${path}`, api.authorize(init));
   } catch {
     throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
   }
@@ -5159,8 +5659,9 @@ async function ragRequest(path, init) {
     return res;
   }
   const detail = (await res.json().catch(() => null))?.detail;
-  // A dev-proxy failure (server down) is a 5xx without a FastAPI error body.
-  if (!detail && res.status >= 500) throw new RagError(UNREACHABLE, 0);
+  // A dev-proxy failure (server down) is a 5xx without a FastAPI error body. With no server address set, a host such as
+  // Vercel answers "404 not found" for /api/query/...: that is the same "no AI server", not an error to show a student.
+  if (!detail && (res.status >= 500 || (!RAG_API && res.status === 404))) throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
   const message = typeof detail === "string" ? detail
     : Array.isArray(detail) ? detail.map((d) => d.msg).join("; ")
     : `Request failed (${res.status})`;
@@ -6480,10 +6981,15 @@ function SuperBondus({ p, lang = "en" }) {
 }
 
 /* ════════════════════════ Shell ════════════════════════ */
+/* The school's view of the exam times. For now it lives in the browser with a demo school and sample data; once the backend
+   serves real reports it will show only for admin accounts. */
+const SCHOOL_NAV = { id: "schoolReport", label: "School report", labelKm: "របាយការណ៍សាលា", icon: School };
+
 const NAV = [
   { id: "dashboard", label: "Dashboard", labelKm: "ផ្ទាំងគ្រប់គ្រង", icon: LayoutDashboard },
   { id: "browse", label: "Browse exams", labelKm: "រកមើលកម្រងសំណួរ", icon: BookOpen },
   { id: "practice", label: "Practice", labelKm: "លំហាត់អនុវត្ត", icon: Target },
+  { id: "exercises", label: "Exercises", labelKm: "លំហាត់ពីគ្រូ", icon: ClipboardCheck },
   { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
   { id: "languages", label: "Languages", labelKm: "ភាសាបរទេស", icon: Globe },
@@ -6503,6 +7009,11 @@ const UNI_NAV = [
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
   { id: "wardrobe", label: "Wardrobe", labelKm: "បន្ទប់ស្លៀកពាក់", icon: Shirt },
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
+];
+
+/* Added to the sidebar for an admin account only (the server checks the role too): posting exercises. */
+const ADMIN_NAV = [
+  { id: "adminExercises", label: "Admin", labelKm: "អ្នកគ្រប់គ្រង", icon: ShieldCheck },
 ];
 
 /* ════════════════════════ UI localization (English / Khmer) ════════════════════════
@@ -6527,13 +7038,43 @@ const STRINGS = {
     dashGreetingPrefix: "Welcome,",
     dashStartPlan: "Start today's plan", dashAskCoach: "Ask your AI coach",
     dashTodayPlan: "Today's study plan", dashDone: "done",
+    planEmpty: "No tasks yet. Add what you plan to study today.", planAddPlaceholder: "Add a task for today…",
+    planSubjectOptional: "Subject (optional)", planMinutesShort: "Min", planAdd: "Add", planDeleteTask: "Delete task",
+    planSuggested: "Suggested for you", planMyTask: "My task",
+    errInvalidCredentials: "Wrong email or password.",
+    errPhoneTaken: "This phone number already has an account. Try logging in instead.",
+    errEmailTaken: "This email already has an account. Try logging in instead.",
+    errValidation: "Please check the details you entered and try again.",
+    errTooMany: "Too many tries. Please wait a little and try again.",
+    errTooManyWait: "Too many tries. Please try again in {time}.",
+    errNetwork: "Can't reach the server. Check your internet connection and try again.",
+    errServer: "Something went wrong on our side. Please try again in a moment.",
+    errSession: "Your session ended. Please log in again.",
+    errInvalidCode: "That code is wrong or has expired.",
+    errNoEmail: "We couldn't find an account with an email for that phone number or email, so no code was sent. Check what you typed. Accounts created without an email can't reset their password yet.",
+    errEmailFailed: "We couldn't send the email right now. Please try again in a moment.",
+    errPlanLimit: "You've reached today's limit of tasks.",
+    errPlanSave: "Couldn't save that task. Please try again.",
+    errSaveProgress: "We couldn't save your progress. Please try again later.",
+    errPasswordShort: "Password must be at least 8 characters.",
+    retryWord: "Try again",
+    passwordHint: "At least 8 characters",
+    emailResetHint: "Add an email so you can reset your password if you forget it.",
+    forgotLink: "Forgot password?", forgotTitle: "Reset your password",
+    forgotDesc: "Enter your email. We'll send a 6-digit code to the address on your account.",
+    forgotSendCode: "Send code", forgotCodeSent: "We sent a 6-digit code to", forgotCodeExpires: "It expires in 15 minutes.",
+    forgotCodeLabel: "6-digit code", forgotNewPasswordLabel: "New password", forgotResetBtn: "Reset password",
+    forgotResend: "Send a new code", forgotLoginLabel: "Email", backToLogin: "Back to log in",
+    forgotCodeSentGeneric: "We sent a 6-digit code to the email on your account.",
+    forgotSendingTitle: "Sending your code…",
+    forgotSendingSub: "This can take up to a minute. Please keep this page open.",
+    forgotCheckEmailTitle: "Check your email",
+    forgotCheckSpam: "Can't see it? Look in your Spam folder.",
+    forgotStep2Desc: "Type the code from the email and choose a new password.",
     dashStreak: "day streak · keep it alive",
     dashExplore: "Explore more",
-    unlockBannerTitle: "Unlock Your Personalized Study Plan",
-    unlockBannerDesc: "Complete your 20-question diagnostic assessment to receive:",
-    startAssessment: "Start Assessment",
     heroMessage: "One small step today keeps the streak alive — here's what's next for you.",
-    recommendedNextLesson: "Recommended next lesson", lessonWord: "lesson", startLesson: "Start lesson",
+    recommendedNextLesson: "Recommended next lesson", lessonWord: "lesson", xpPerCorrect: "XP per correct answer", startLesson: "Start lesson",
     toLevel: "XP to Level", targetsWeakest: "targets your weakest topic",
     exploreSharpen: "Sharpen your weak subjects", exploreBrowseMajors: "Browse majors & entrance prep", exploreStats: "Your full stats & analytics",
     exploreBrowsePast: "Official past exam papers by year",
@@ -6604,15 +7145,31 @@ const STRINGS = {
     backToPlans: "Back to plans", mostPopular: "Most popular",
     prototypePaymentsNote: "Prototype · payments are not connected, no card will be charged",
     // Onboarding shared
-    backWord: "Back", stepWord: "Step", prototypeFooter: "Prototype · no data leaves your browser",
+    backWord: "Back", stepWord: "Step", deleteWord: "Delete",
+    // Exercises: an admin posts sheets by subject, students browse them
+    exercisesTitle: "Exercises", exercisesDesc: "Practice sheets from teachers, by subject. Pick a subject, then open a sheet.",
+    exercisesEmpty: "No exercises for this subject yet.",
+    exLoading: "Loading…", exLoadError: "Couldn't load the exercises. Check your connection and try again.",
+    exTeacherLabel: "Teacher", exSchoolLabel: "School", exUntitled: "Exercise sheet",
+    exFilePdf: "PDF", exFilePhoto: "1 photo", exFilePhotos: "{n} photos",
+    exPdfFailed: "Couldn't show this PDF here. Tap \"Open PDF\" above to read it.",
+    adminExercisesTitle: "Admin · Exercises", adminExercisesDesc: "Post exercise sheets for students. Pick a subject, then add a PDF or photos, with the teacher and school they came from.",
+    adminExercisesEmpty: "Nothing posted for this subject yet.",
+    exNoFilesYet: "No file yet. Students can't see this until you add one.",
+    exDeleteAsk: "Delete this exercise and its files?", exEditBtn: "Edit",
+    exFormTeacherLabel: "Teacher's name", exFormSchoolLabel: "School name", exFormTitleLabel: "Title (optional)",
+    exFormRequired: "Teacher name and school name are required.", exFormSave: "Save and add files",
+    exFormAttachmentsHint: "Add a PDF or photos of the exercise. Students can see it as soon as there is a file.",
+    exAddAttachment: "Attach PDF or photo", exAttachmentsCount: "{n} of {max} files", exFormDone: "Done",
+    exNewExercise: "New exercise", exUploading: "Uploading…", exRemoveFile: "Remove file",
+    exErr_not_image: "That file isn't a photo.", exErr_too_big: "That photo is too large.",
+    exErr_generic: "Something went wrong. Please try again.",
+    exErr_too_many_attachments: "Too many files for one exercise.",
     // Login
-    loginTitle: "Log in", loginDesc: "Enter the phone number you used when you created your account.",
-    phoneNumberLabel: "Phone number", noAccountYet: "Don't have an account yet?", createOne: "Create one",
-    errEnterPhone: "Enter the phone number you used to sign up.",
-    errPhoneNotFound: "We couldn't find an account with that phone number on this device.",
+    loginTitle: "Log in", loginDesc: "Enter the email you used when you created your account.",
+    noAccountYet: "Don't have an account yet?", createOne: "Create one", orWord: "OR",
     errEnterEmailPassword: "Enter the email and password you used to sign up.",
     errEmailNotFound: "We couldn't find an account with that email and password on this device.",
-    loginWithPhone: "Phone", loginWithEmail: "Email",
     // Register
     uniGoalsTitle: "What are you looking for?", uniGoalsDesc: "Select everything that applies — you can change this later.",
     uniGoalsWhyWeAsk: "These personalize your University Hub, Discovery matches, and AI Mentor — the more you pick, the sharper the recommendations.",
@@ -6663,7 +7220,32 @@ const STRINGS = {
     exploreFirstDesc: "Enter the dashboard without personalization. You can take the assessment later from your dashboard or profile.",
     exploreFirstBtn: "Explore first",
     // Diagnostic
-    diagnosticTestWord: "Diagnostic test", questionWord: "Question",
+    diagnosticTestWord: "Diagnostic test", questionWord: "Question", sectionWord: "Section",
+    // Timed exam attempts
+    examStartBtn: "Start timed attempt", examResume: "Resume", examRunningTitle: "Attempt in progress",
+    examAlreadyRunning: "You already have an attempt running. Finish or cancel it first.",
+    examExpired: "That attempt closed because the time ran out. You can start again.",
+    examElapsed: "Time spent", examLeft: "left", examOverBy: "Over the official time by", examOfficialTime: "Official time",
+    examFinishBtn: "Finish & submit photo", examCancelBtn: "Cancel attempt", examCancelAsk: "Cancel this attempt? It won't be counted.",
+    examCancelYes: "Yes, cancel", examKeepGoing: "Keep going",
+    examSubmitTitle: "Submit your work", examSubmitDesc: "Take a clear photo of each page of your answers. Photograph only your answer sheets. The clock keeps running until you press Submit.",
+    examTakePhoto: "Take photo", examChoosePhoto: "Choose from gallery", examPreparing: "Preparing photo…", examPhotosCount: "{n} of {max} photos",
+    examRemovePhoto: "Remove photo", examSubmitBtn: "Submit and stop the clock", examBackToPaper: "Back to the paper",
+    examErr_generic: "Something went wrong. Please try again.", examErr_not_image: "That file is not a photo.", examErr_invalid_photo: "That photo can't be used.",
+    examErr_too_big: "That photo is too large.", examErr_too_many_photos: "You can send up to 10 photos.", examErr_no_photos: "Add at least one photo first.",
+    examErr_not_running: "This attempt has already ended.",
+    examDoneTitle: "Submitted!", examDoneSpent: "You spent", examDonePhotos: "Photos sent", examDoneBack: "Back to exam papers",
+    schoolJoinTitle: "Join your school", schoolJoinDesc: "Enter the code your school gave you. Your school will then see your exam times.",
+    schoolCodePlaceholder: "School code", schoolJoinBtn: "Join", schoolBadCode: "That code wasn't found. Check it and try again.",
+    schoolConfirmTitle: "Join {name}?", schoolSees: "Your school will see: your name, grade and track, how many minutes you spend on each exam paper, and the photos you submit.",
+    schoolLeaveAnytime: "You can leave any time. Leaving removes you from the school's report.", schoolConfirmBtn: "Yes, join", notNowWord: "Not now",
+    schoolYours: "Your school", schoolLeaveBtn: "Leave school", schoolDemoHint: "Demo: use the code DEMO-001",
+    reportTitle: "School report", reportNoSchool: "Join a school first (in Browse exams) to see its report.",
+    reportAttempts: "Attempts", reportStudents: "Students", reportAvgMin: "Average minutes", reportPerPaper: "Average minutes per exam paper", reportStudentsWord: "students", reportStudentOne: "student",
+    reportEmpty: "No finished attempts yet.", reportStudentCol: "Student", reportGradeCol: "Grade", reportPaperCol: "Paper", reportMinutesCol: "Minutes",
+    reportStatusCol: "Status", reportPhotosCol: "Photos", reportStatus_submitted: "Submitted", reportStatus_expired: "Not submitted",
+    reportSampleBadge: "Sample", reportSampleNote: "Sample data for demonstration. These are not real students.",
+    reportLoadSample: "Load sample class", reportClearSample: "Remove sample class", reportDownloadCsv: "Download spreadsheet", reportViewPhotos: "View", reportClose: "Close",
     howSureWereYou: "How sure were you?", confidentWord: "Confident", guessedWord: "I guessed",
     noFeedbackDuringTest: "No feedback during the test — you'll see your results at the end.",
     diagnosticComplete: "Diagnostic complete!", startingPointIs: "Here's your real starting point — overall level is",
@@ -6685,13 +7267,43 @@ const STRINGS = {
     dashGreetingPrefix: "សូមស្វាគមន៍,",
     dashStartPlan: "ចាប់ផ្តើមផែនការថ្ងៃនេះ", dashAskCoach: "សួរគ្រូបង្វឹក AI",
     dashTodayPlan: "ផែនការសិក្សាថ្ងៃនេះ", dashDone: "បានធ្វើរួច",
+    planEmpty: "មិនទាន់មានកិច្ចការទេ។ បន្ថែមអ្វីដែលអ្នកគ្រោងសិក្សាថ្ងៃនេះ។", planAddPlaceholder: "បន្ថែមកិច្ចការសម្រាប់ថ្ងៃនេះ…",
+    planSubjectOptional: "មុខវិជ្ជា (ស្រេចចិត្ត)", planMinutesShort: "នាទី", planAdd: "បន្ថែម", planDeleteTask: "លុបកិច្ចការ",
+    planSuggested: "ណែនាំសម្រាប់អ្នក", planMyTask: "កិច្ចការរបស់ខ្ញុំ",
+    errInvalidCredentials: "អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។",
+    errPhoneTaken: "លេខទូរស័ព្ទនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
+    errEmailTaken: "អ៊ីមែលនេះមានគណនីរួចហើយ។ សូមព្យាយាមចូលគណនីជំនួសវិញ។",
+    errValidation: "សូមពិនិត្យព័ត៌មានដែលអ្នកបានបញ្ចូល រួចព្យាយាមម្តងទៀត។",
+    errTooMany: "ព្យាយាមច្រើនដងពេក។ សូមរង់ចាំបន្តិច រួចព្យាយាមម្តងទៀត។",
+    errTooManyWait: "ព្យាយាមច្រើនដងពេក។ សូមរង់ចាំ {time} រួចព្យាយាមម្តងទៀត។",
+    errNetwork: "មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ។ សូមពិនិត្យអ៊ីនធឺណិតរបស់អ្នក រួចព្យាយាមម្តងទៀត។",
+    errServer: "មានបញ្ហាកើតឡើងនៅខាងយើង។ សូមព្យាយាមម្តងទៀតក្នុងពេលបន្តិចទៀត។",
+    errSession: "សម័យរបស់អ្នកបានផុតកំណត់។ សូមចូលគណនីម្តងទៀត។",
+    errInvalidCode: "លេខកូដមិនត្រឹមត្រូវ ឬបានផុតកំណត់។",
+    errNoEmail: "យើងរកមិនឃើញគណនីដែលមានអ៊ីមែលសម្រាប់លេខទូរស័ព្ទ ឬអ៊ីមែលនេះទេ ដូច្នេះមិនបានផ្ញើលេខកូដឡើយ។ សូមពិនិត្យអ្វីដែលអ្នកបានវាយ។ គណនីដែលបង្កើតដោយគ្មានអ៊ីមែលមិនអាចកំណត់ពាក្យសម្ងាត់ឡើងវិញបានទេ។",
+    errEmailFailed: "យើងមិនអាចផ្ញើអ៊ីមែលបានទេនៅពេលនេះ។ សូមព្យាយាមម្តងទៀតក្នុងពេលបន្តិចទៀត។",
+    errPlanLimit: "អ្នកបានដល់ចំនួនកិច្ចការអតិបរមាសម្រាប់ថ្ងៃនេះហើយ។",
+    errPlanSave: "មិនអាចរក្សាទុកកិច្ចការនោះបានទេ។ សូមព្យាយាមម្តងទៀត។",
+    errSaveProgress: "យើងមិនអាចរក្សាទុកវឌ្ឍនភាពរបស់អ្នកបានទេ។ សូមព្យាយាមម្តងទៀតពេលក្រោយ។",
+    errPasswordShort: "ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៨តួអក្សរ។",
+    retryWord: "ព្យាយាមម្តងទៀត",
+    passwordHint: "យ៉ាងហោចណាស់ ៨តួអក្សរ",
+    emailResetHint: "បន្ថែមអ៊ីមែល ដើម្បីអាចកំណត់ពាក្យសម្ងាត់ឡើងវិញ ប្រសិនបើអ្នកភ្លេច។",
+    forgotLink: "ភ្លេចពាក្យសម្ងាត់?", forgotTitle: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
+    forgotDesc: "បញ្ចូលអ៊ីមែលរបស់អ្នក។ យើងនឹងផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
+    forgotSendCode: "ផ្ញើលេខកូដ", forgotCodeSent: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅ", forgotCodeExpires: "លេខកូដនឹងផុតកំណត់ក្នុងរយៈពេល ១៥នាទី។",
+    forgotCodeLabel: "លេខកូដ ៦ខ្ទង់", forgotNewPasswordLabel: "ពាក្យសម្ងាត់ថ្មី", forgotResetBtn: "កំណត់ពាក្យសម្ងាត់ឡើងវិញ",
+    forgotResend: "ផ្ញើលេខកូដថ្មី", forgotLoginLabel: "អ៊ីមែល", backToLogin: "ត្រឡប់ទៅចូលគណនី",
+    forgotCodeSentGeneric: "យើងបានផ្ញើលេខកូដ ៦ខ្ទង់ទៅអ៊ីមែលនៅលើគណនីរបស់អ្នក។",
+    forgotSendingTitle: "កំពុងផ្ញើលេខកូដរបស់អ្នក…",
+    forgotSendingSub: "អាចចំណាយពេលរហូតដល់មួយនាទី។ សូមកុំបិទទំព័រនេះ។",
+    forgotCheckEmailTitle: "សូមពិនិត្យអ៊ីមែលរបស់អ្នក",
+    forgotCheckSpam: "រកមិនឃើញមែនទេ? សូមមើលក្នុងថត Spam។",
+    forgotStep2Desc: "វាយលេខកូដពីអ៊ីមែល ហើយជ្រើសរើសពាក្យសម្ងាត់ថ្មី។",
     dashStreak: "ថ្ងៃជាប់គ្នា · បន្តរក្សា",
     dashExplore: "ស្វែងយល់បន្ថែម",
-    unlockBannerTitle: "ដោះសោផែនការសិក្សាផ្ទាល់ខ្លួនរបស់អ្នក",
-    unlockBannerDesc: "បំពេញការធ្វើតេស្តវាយតម្លៃ ២០សំណួរ ដើម្បីទទួលបាន៖",
-    startAssessment: "ចាប់ផ្តើមតេស្តវាយតម្លៃ",
     heroMessage: "ជំហានតូចមួយថ្ងៃនេះជួយរក្សានិន្នាការឲ្យបន្ត។ នេះជាអ្វីដែលបន្ទាប់សម្រាប់អ្នក។",
-    recommendedNextLesson: "មេរៀនបន្ទាប់ដែលបានណែនាំ", lessonWord: "មេរៀន", startLesson: "ចាប់ផ្តើមមេរៀន",
+    recommendedNextLesson: "មេរៀនបន្ទាប់ដែលបានណែនាំ", lessonWord: "មេរៀន", xpPerCorrect: "XP ក្នុងមួយចម្លើយត្រឹមត្រូវ", startLesson: "ចាប់ផ្តើមមេរៀន",
     toLevel: "XP ទៅកម្រិត", targetsWeakest: "ផ្តោតលើប្រធានបទខ្សោយបំផុតរបស់អ្នក",
     exploreSharpen: "ពង្រឹងមុខវិជ្ជាខ្សោយរបស់អ្នក", exploreBrowseMajors: "រកមើលជំនាញ និងការត្រៀមប្រឡងចូល", exploreStats: "ស្ថិតិ និងការវិភាគពេញលេញរបស់អ្នក",
     exploreBrowsePast: "ក្រដាសប្រឡងផ្លូវការតាមឆ្នាំ",
@@ -6762,15 +7374,31 @@ const STRINGS = {
     backToPlans: "ត្រឡប់ទៅគម្រោង", mostPopular: "ពេញនិយមបំផុត",
     prototypePaymentsNote: "គំរូសាកល្បង · ការទូទាត់មិនទាន់ភ្ជាប់ទេ គ្មានកាតត្រូវបានគិតលុយ",
     // Onboarding shared
-    backWord: "ត្រឡប់ក្រោយ", stepWord: "ជំហាន", prototypeFooter: "គំរូសាកល្បង · គ្មានទិន្នន័យចេញពីកម្មវិធីរុករករបស់អ្នកទេ",
+    backWord: "ត្រឡប់ក្រោយ", stepWord: "ជំហាន", deleteWord: "លុប",
+    // Exercises: an admin posts sheets by subject, students browse them (Khmer not yet proofread by a native speaker)
+    exercisesTitle: "លំហាត់ពីគ្រូ", exercisesDesc: "សន្លឹកលំហាត់ពីគ្រូ តាមមុខវិជ្ជា។ ជ្រើសរើសមុខវិជ្ជា រួចបើកសន្លឹកលំហាត់។",
+    exercisesEmpty: "មិនទាន់មានលំហាត់សម្រាប់មុខវិជ្ជានេះនៅឡើយទេ។",
+    exLoading: "កំពុងផ្ទុក…", exLoadError: "មិនអាចផ្ទុកលំហាត់បានទេ។ សូមពិនិត្យអ៊ីនធឺណិតរបស់អ្នក ហើយព្យាយាមម្តងទៀត។",
+    exTeacherLabel: "គ្រូ", exSchoolLabel: "សាលា", exUntitled: "សន្លឹកលំហាត់",
+    exFilePdf: "PDF", exFilePhoto: "រូបថត ១", exFilePhotos: "រូបថត {n}",
+    exPdfFailed: "មិនអាចបង្ហាញឯកសារ PDF នេះនៅទីនេះបានទេ។ សូមចុច «បើកឯកសារ PDF» ខាងលើដើម្បីអាន។",
+    adminExercisesTitle: "អ្នកគ្រប់គ្រង · លំហាត់", adminExercisesDesc: "បង្ហោះសន្លឹកលំហាត់សម្រាប់សិស្ស។ ជ្រើសរើសមុខវិជ្ជា រួចបន្ថែមឯកសារ PDF ឬរូបថត ជាមួយឈ្មោះគ្រូ និងសាលាដែលលំហាត់នោះមកពី។",
+    adminExercisesEmpty: "មិនទាន់មានអ្វីបានបង្ហោះសម្រាប់មុខវិជ្ជានេះនៅឡើយទេ។",
+    exNoFilesYet: "មិនទាន់មានឯកសារទេ។ សិស្សមិនអាចមើលឃើញរហូតដល់អ្នកបន្ថែមមួយ។",
+    exDeleteAsk: "លុបលំហាត់នេះ និងឯកសាររបស់វា?", exEditBtn: "កែប្រែ",
+    exFormTeacherLabel: "ឈ្មោះគ្រូ", exFormSchoolLabel: "ឈ្មោះសាលា", exFormTitleLabel: "ចំណងជើង (មិនចាំបាច់)",
+    exFormRequired: "ត្រូវការឈ្មោះគ្រូ និងឈ្មោះសាលា។", exFormSave: "រក្សាទុក ហើយបន្ថែមឯកសារ",
+    exFormAttachmentsHint: "បន្ថែមឯកសារ PDF ឬរូបថតនៃលំហាត់។ សិស្សអាចមើលឃើញភ្លាមៗនៅពេលមានឯកសារ។",
+    exAddAttachment: "ភ្ជាប់ PDF ឬរូបថត", exAttachmentsCount: "{n} នៃ {max} ឯកសារ", exFormDone: "បានហើយ",
+    exNewExercise: "លំហាត់ថ្មី", exUploading: "កំពុងផ្ទុកឡើង…", exRemoveFile: "លុបឯកសារ",
+    exErr_not_image: "ឯកសារនោះមិនមែនជារូបថតទេ។", exErr_too_big: "រូបថតនោះធំពេក។",
+    exErr_generic: "មានអ្វីមួយខុសប្រក្រតី។ សូមព្យាយាមម្តងទៀត។",
+    exErr_too_many_attachments: "ឯកសារច្រើនពេកសម្រាប់លំហាត់មួយ។",
     // Login
-    loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
-    phoneNumberLabel: "លេខទូរស័ព្ទ", noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី",
-    errEnterPhone: "សូមបញ្ចូលលេខទូរស័ព្ទដែលអ្នកបានប្រើចុះឈ្មោះ។",
-    errPhoneNotFound: "យើងរកមិនឃើញគណនីជាមួយលេខទូរស័ព្ទនោះនៅលើឧបករណ៍នេះទេ។",
+    loginTitle: "ចូលគណនី", loginDesc: "បញ្ចូលអ៊ីមែលដែលអ្នកបានប្រើនៅពេលបង្កើតគណនី។",
+    noAccountYet: "មិនទាន់មានគណនីមែនទេ?", createOne: "បង្កើតគណនីថ្មី", orWord: "ឬ",
     errEnterEmailPassword: "សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់ដែលអ្នកបានប្រើចុះឈ្មោះ។",
     errEmailNotFound: "យើងរកមិនឃើញគណនីជាមួយអ៊ីមែល និងពាក្យសម្ងាត់នោះនៅលើឧបករណ៍នេះទេ។",
-    loginWithPhone: "លេខទូរស័ព្ទ", loginWithEmail: "អ៊ីមែល",
     // Register
     uniGoalsTitle: "តើអ្នកកំពុងស្វែងរកអ្វី?", uniGoalsDesc: "ជ្រើសរើសអ្វីៗគ្រប់យ៉ាងដែលពាក់ព័ន្ធ — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
     uniFieldTitle: "តើជំនាញរបស់អ្នកគឺជាអ្វី?", uniFieldDesc: "ជ្រើសរើសជម្រើសដែលនិងគ្នាបំផុត — អ្នកអាចផ្លាស់ប្តូរពេលក្រោយបាន។",
@@ -6809,7 +7437,32 @@ const STRINGS = {
     exploreFirstDesc: "ចូលទៅផ្ទាំងគ្រប់គ្រងដោយគ្មានការកំណត់ផ្ទាល់ខ្លួន។ អ្នកអាចធ្វើតេស្តវាយតម្លៃពេលក្រោយពីផ្ទាំងគ្រប់គ្រង ឬប្រវត្តិរូបរបស់អ្នក។",
     exploreFirstBtn: "ស្វែងយល់មុន",
     // Diagnostic
-    diagnosticTestWord: "តេស្តវាយតម្លៃ", questionWord: "សំណួរ",
+    diagnosticTestWord: "តេស្តវាយតម្លៃ", questionWord: "សំណួរ", sectionWord: "ផ្នែក",
+    // Timed exam attempts
+    examStartBtn: "ចាប់ផ្តើមធ្វើជាមួយនាឡិកា", examResume: "បន្តធ្វើ", examRunningTitle: "កំពុងធ្វើវិញ្ញាសា",
+    examAlreadyRunning: "អ្នកមានវិញ្ញាសាកំពុងធ្វើរួចហើយ។ សូមបញ្ចប់ ឬបោះបង់វាជាមុនសិន។",
+    examExpired: "វិញ្ញាសានោះបានបិទដោយសារអស់ម៉ោង។ អ្នកអាចចាប់ផ្តើមម្តងទៀតបាន។",
+    examElapsed: "ពេលវេលាដែលបានប្រើ", examLeft: "នៅសល់", examOverBy: "លើសម៉ោងផ្លូវការ", examOfficialTime: "ម៉ោងផ្លូវការ",
+    examFinishBtn: "បញ្ចប់ និងផ្ញើរូបថត", examCancelBtn: "បោះបង់ការធ្វើ", examCancelAsk: "បោះបង់ការធ្វើនេះ? វានឹងមិនត្រូវបានរាប់ទេ។",
+    examCancelYes: "បាទ/ចាស បោះបង់", examKeepGoing: "បន្តទៀត",
+    examSubmitTitle: "ផ្ញើការងាររបស់អ្នក", examSubmitDesc: "ថតរូបឱ្យច្បាស់នៃទំព័រចម្លើយនីមួយៗ។ ថតតែក្រដាសចម្លើយរបស់អ្នកប៉ុណ្ណោះ។ នាឡិកានៅតែដើររហូតដល់អ្នកចុចផ្ញើ។",
+    examTakePhoto: "ថតរូប", examChoosePhoto: "ជ្រើសរើសពីអាល់ប៊ុម", examPreparing: "កំពុងរៀបចំរូបថត…", examPhotosCount: "រូបថត {n} ក្នុងចំណោម {max}",
+    examRemovePhoto: "លុបរូបថត", examSubmitBtn: "ផ្ញើ ហើយបញ្ឈប់នាឡិកា", examBackToPaper: "ត្រឡប់ទៅវិញ្ញាសា",
+    examErr_generic: "មានបញ្ហាកើតឡើង។ សូមព្យាយាមម្តងទៀត។", examErr_not_image: "ឯកសារនោះមិនមែនជារូបថតទេ។", examErr_invalid_photo: "រូបថតនោះមិនអាចប្រើបានទេ។",
+    examErr_too_big: "រូបថតនោះធំពេក។", examErr_too_many_photos: "អ្នកអាចផ្ញើរូបថតបានអតិបរមា ១០ រូប។", examErr_no_photos: "សូមបន្ថែមរូបថតយ៉ាងហោចណាស់មួយជាមុនសិន។",
+    examErr_not_running: "ការធ្វើនេះបានបញ្ចប់រួចហើយ។",
+    examDoneTitle: "បានផ្ញើរួចហើយ!", examDoneSpent: "អ្នកបានប្រើពេល", examDonePhotos: "រូបថតដែលបានផ្ញើ", examDoneBack: "ត្រឡប់ទៅវិញ្ញាសា",
+    schoolJoinTitle: "ចូលរួមជាមួយសាលារបស់អ្នក", schoolJoinDesc: "បញ្ចូលកូដដែលសាលាបានផ្តល់ឱ្យអ្នក។ បន្ទាប់មកសាលានឹងឃើញពេលវេលាដែលអ្នកប្រើក្នុងការធ្វើវិញ្ញាសា។",
+    schoolCodePlaceholder: "កូដសាលា", schoolJoinBtn: "ចូលរួម", schoolBadCode: "រកមិនឃើញកូដនោះទេ។ សូមពិនិត្យ ហើយព្យាយាមម្តងទៀត។",
+    schoolConfirmTitle: "ចូលរួមជាមួយ {name}?", schoolSees: "សាលារបស់អ្នកនឹងឃើញ៖ ឈ្មោះ ថ្នាក់ និងផ្នែករបស់អ្នក ចំនួននាទីដែលអ្នកប្រើលើវិញ្ញាសានីមួយៗ និងរូបថតដែលអ្នកផ្ញើ។",
+    schoolLeaveAnytime: "អ្នកអាចចាកចេញបានគ្រប់ពេល។ ការចាកចេញនឹងដកអ្នកចេញពីរបាយការណ៍របស់សាលា។", schoolConfirmBtn: "បាទ/ចាស ចូលរួម", notNowWord: "កុំទាន់",
+    schoolYours: "សាលារបស់អ្នក", schoolLeaveBtn: "ចាកចេញពីសាលា", schoolDemoHint: "សាកល្បង៖ ប្រើកូដ DEMO-001",
+    reportTitle: "របាយការណ៍សាលា", reportNoSchool: "សូមចូលរួមជាមួយសាលាជាមុនសិន (នៅក្នុងរកមើលកម្រងសំណួរ) ដើម្បីមើលរបាយការណ៍របស់វា។",
+    reportAttempts: "ចំនួនដែលបានធ្វើ", reportStudents: "សិស្ស", reportAvgMin: "នាទីជាមធ្យម", reportPerPaper: "នាទីជាមធ្យមក្នុងមួយវិញ្ញាសា", reportStudentsWord: "សិស្ស", reportStudentOne: "សិស្ស",
+    reportEmpty: "មិនទាន់មានការធ្វើដែលបានបញ្ចប់នៅឡើយទេ។", reportStudentCol: "សិស្ស", reportGradeCol: "ថ្នាក់", reportPaperCol: "វិញ្ញាសា", reportMinutesCol: "នាទី",
+    reportStatusCol: "ស្ថានភាព", reportPhotosCol: "រូបថត", reportStatus_submitted: "បានផ្ញើ", reportStatus_expired: "មិនបានផ្ញើ",
+    reportSampleBadge: "គំរូ", reportSampleNote: "ទិន្នន័យគំរូសម្រាប់បង្ហាញប៉ុណ្ណោះ។ ទាំងនេះមិនមែនជាសិស្សពិតប្រាកដទេ។",
+    reportLoadSample: "បង្ហាញថ្នាក់គំរូ", reportClearSample: "លុបថ្នាក់គំរូ", reportDownloadCsv: "ទាញយកតារាង", reportViewPhotos: "មើល", reportClose: "បិទ",
     howSureWereYou: "តើអ្នកប្រាកដប៉ុណ្ណា?", confidentWord: "ជឿជាក់", guessedWord: "ខ្ញុំទាយ",
     noFeedbackDuringTest: "គ្មានមតិកែលម្អកំឡុងពេលធ្វើតេស្តទេ — អ្នកនឹងឃើញលទ្ធផលនៅចុងក្រោយ។",
     diagnosticComplete: "តេស្តវាយតម្លៃបានបញ្ចប់!", startingPointIs: "នេះជាចំណុចចាប់ផ្តើមពិតរបស់អ្នក — កម្រិតទាំងមូលគឺ",
@@ -6817,6 +7470,20 @@ const STRINGS = {
   },
 };
 const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
+// "48 minutes", "1 hour 5 minutes" (English) / the same in Khmer digits and words.
+const formatWait = (lang, seconds) => {
+  const w = waitParts(seconds);
+  if (!w) return "";
+  const km = lang === "km";
+  const hours = w.hours ? (km ? `${localizeNum(w.hours, lang)} ម៉ោង` : `${w.hours} ${w.hours === 1 ? "hour" : "hours"}`) : "";
+  const minutes = w.minutes ? (km ? `${localizeNum(w.minutes, lang)} នាទី` : `${w.minutes} ${w.minutes === 1 ? "minute" : "minutes"}`) : "";
+  return [hours, minutes].filter(Boolean).join(" ");
+};
+// A backend error code -> English/Khmer message. For "too many tries" it says how long to wait when the server told us.
+const apiErrorText = (lang, code, retryAfter) =>
+  code === "too_many_requests" && waitParts(retryAfter)
+    ? t(lang, "errTooManyWait").replace("{time}", formatWait(lang, retryAfter))
+    : t(lang, apiErrorKey(code));
 
 const STORAGE_KEY = "bondus_state_v1";
 
@@ -6856,6 +7523,22 @@ function LevelUpToast({ level, show }) {
   );
 }
 
+/* A short message in the corner (a failed save, an expired session). `text` is already translated. */
+function NoticeToast({ text, onClose }) {
+  return (
+    <AnimatePresence>
+      {text && (
+        <motion.button type="button" onClick={onClose} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
+          className="eai-card flex items-center gap-2.5 px-4 py-2.5 text-left"
+          style={{ position: "fixed", top: 72, right: 16, zIndex: 60, boxShadow: "var(--shadow)", borderColor: "var(--ember)", maxWidth: "min(92vw, 380px)" }}>
+          <AlertTriangle size={16} style={{ color: "var(--ember)", flexShrink: 0 }} />
+          <span className="text-sm font-semibold">{text}</span>
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function App() {
   const saved = useRef(loadSaved()).current;
   const isReturningUser = useRef(Boolean(saved?.profile)).current; // profile already existed in this browser on load — i.e. "logged in" automatically
@@ -6866,7 +7549,7 @@ export default function App() {
   const [pendingReg, setPendingReg] = useState(null); // registration answers, awaiting the assessment-choice screen
   const [resumeReg, setResumeReg] = useState(null); // { form, step } — re-opens Register at a given step when going Back from AssessmentChoice
   const [showDiagnostic, setShowDiagnostic] = useState(false); // true once they pick "Start Personalized Assessment"
-  const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later, from the Dashboard banner
+  const [retaking, setRetaking] = useState(false); // true while completing the diagnostic later — no entry point right now: the Dashboard banner that set it was removed
   const [topicMastery, setTopicMastery] = useState(saved?.topicMastery ?? {}); // { [subject]: { [topic]: { history, score, lastPracticedAt } } }
   const [uniTopicMastery, setUniTopicMastery] = useState(saved?.uniTopicMastery ?? {}); // same shape as topicMastery, keyed by "{major}::{courseTitle}" subjects — see deriveUniInsights
   const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
@@ -6881,6 +7564,20 @@ export default function App() {
   const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
   const [langResults, setLangResults] = useState(saved?.langResults ?? {}); // { [languageName]: { listening, reading, writing, speaking, overall, feedback, completedAt } }
   const [takingLangTest, setTakingLangTest] = useState(null); // language name currently being tested, or null
+  // ── Server mode (VITE_API_URL set): the account, progress, XP, streak and plan live on the Laravel backend ──
+  const [booting, setBooting] = useState(SERVER_MODE && api.hasToken()); // restoring a saved login
+  const [bootError, setBootError] = useState(false);  // the saved login could not be restored because the server was unreachable or busy (holds the error)
+  const [summary, setSummary] = useState(null);       // GET /me/summary: { xp, level, xpToNext, streak, longestStreak, studiedToday, todayMinutes, weekHours }
+  const [notice, setNotice] = useState(null);         // a STRINGS key shown as a toast (a failed save, an expired session)
+  const hydratedRef = useRef(false);                  // true once the account is loaded; progress is only saved after that
+  const serverUserRef = useRef(null);                 // the account created during sign-up, before the dashboard exists
+  const lastSavedRef = useRef("");                    // JSON of the progress the server already has, so loading never triggers a save
+  const prevLevelRef = useRef(null);
+  const planOps = useRef(Promise.resolve());          // plan changes are sent one at a time, in order
+  const planBusy = useRef(0);
+  const planIdMap = useRef(new Map());                // temporary id (task not saved yet) -> server id
+  const saverRef = useRef(null);
+  const queueRef = useRef(null);
   const go = (t) => { setTab(t); setOpen(false); };
 
   // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
@@ -6890,23 +7587,40 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showWelcomeBack]);
 
-  // Persist everything so progress survives a page refresh — this prototype has no backend yet.
+  // Browser-only prototype (no VITE_API_URL): persist everything so progress survives a page refresh.
   useEffect(() => {
-    if (!profile) return;
+    if (SERVER_MODE || !profile) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards }));
   }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards]);
 
-  // Logging out clears the active session but deliberately leaves localStorage alone, so "Log in"
-  // can restore the same account later by matching the phone number used at signup.
-  const handleLogout = () => {
+  // Forget everything about the signed-in student (state, saved-but-unsent work stays in storage under their id).
+  const resetSession = () => {
+    hydratedRef.current = false;
+    saverRef.current?.cancel(); queueRef.current?.setUser(null);
+    serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
+    setSummary(null);
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setTab("dashboard"); setEntry("welcome");
+    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLangResults({}); setTab("dashboard");
   };
+  // Without a server, logging out deliberately leaves localStorage alone (see loadSaved); with one, the token is revoked.
+  const handleLogout = () => { if (SERVER_MODE) api.logout(); resetSession(); setBootError(false); setBooting(false); setEntry("welcome"); };
+  // The back arrow on the "Can't reach the server" screen: give up on the saved login and go to the login screen.
+  const leaveSavedLogin = () => { handleLogout(); setEntry("login"); };
 
-  // Matches either a phone number or an email+password against whatever's currently saved in
-  // this browser. Returns true/false so the Login screen can show "account not found" inline
-  // instead of failing silently.
-  const handleLogin = ({ phone, email, password } = {}) => {
+  // With the server: signs in with phone-or-email + password, then loads the account. Without it: matches either a phone
+  // number or an email+password against whatever is saved in this browser. Resolves to true, or to { error } (a server
+  // error code) / false so the Login screen can show a message inline instead of failing silently.
+  const handleLogin = async ({ phone, email, password } = {}) => {
+    if (SERVER_MODE) {
+      try {
+        await api.login({ login: (phone ?? email ?? "").trim(), password });
+        await loadAccount();
+        setShowWelcomeBack(true);
+        return true;
+      } catch (err) {
+        return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null };
+      }
+    }
     const data = loadSaved();
     if (!data?.profile) return false;
     const matched = phone
@@ -6925,12 +7639,42 @@ export default function App() {
     setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
     return true;
   };
+  // "Sign in with Google": the credential is an ID token Google's own button already verified
+  // client-side; the backend re-verifies it and creates the account the first time a given Google
+  // identity is seen. A brand-new (or still-mid-onboarding) account has no track yet -- sent straight
+  // into the same step-2 onboarding a manual sign-up walks through, same as going Back from
+  // AssessmentChoice. `_key` forces Register to remount even when it's already on screen (clicking
+  // the Google button from within Register's own step 1 instead of filling it in by hand).
+  const handleGoogleAuth = async (credential) => {
+    if (!SERVER_MODE) return { error: "api_disabled" };
+    try {
+      const res = await api.loginWithGoogle(credential);
+      serverUserRef.current = res.user;
+      if (!res.user.field && res.user.educationLevel !== "university") {
+        setResumeReg({ form: blankRegisterForm({ name: res.user.name, email: res.user.email }), step: 2, _key: Date.now() });
+        setEntry("create");
+        return null;
+      }
+      await loadAccount();
+      setShowWelcomeBack(true);
+      return true;
+    } catch (err) {
+      return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null };
+    }
+  };
+  // After "Forgot password": the reset already stored a fresh login, so just load the account.
+  const handleSignedIn = async () => {
+    try { await loadAccount(); setShowWelcomeBack(true); return true; }
+    catch (err) { return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null }; }
+  };
 
   // Registration collects answers, then the student chooses to take the diagnostic now or explore
   // first — self-reports alone aren't trusted, but personalization is never required to start.
   // University profiles skip AssessmentChoice/Diagnostic entirely — there's no BAC II mastery
   // engine for them, so the account activates immediately into the University Hub.
-  const handleRegister = (reg) => {
+  // With the server the account is created here (so "email already used" shows up on the sign-up screen, not after the
+  // whole flow); the dashboard appears once the diagnostic is done or skipped. Resolves to { error, step } on failure.
+  const handleRegister = async (reg) => {
     if (reg.educationLevel === "university") {
       // Register's form keeps these as flat fields (universityGoals/Major/Year); nest them into
       // universityProfile here so UniversityHub, the University Mentor Coach mode and
@@ -6939,57 +7683,101 @@ export default function App() {
       const built = buildProfile({ ...rest, universityProfile: { goals: universityGoals, major: universityMajor, year: universityYear } });
       setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
       setTab("universityHub");
-      return;
+      return null;
     }
+    if (SERVER_MODE) {
+      try {
+        if (serverUserRef.current && api.hasToken()) {
+          // They went Back from the assessment screen and changed something: update the account created a moment ago.
+          serverUserRef.current = (await api.patchMe(registrationToPatch(reg))).user;
+        } else {
+          serverUserRef.current = (await api.register(registrationToPayload(reg))).user;
+        }
+      } catch (err) {
+        return { error: err?.code ?? "server_error", step: registrationErrorStep(err), retryAfter: err?.retryAfter ?? null };
+      }
+    }
+    // A track with no diagnostic (Social Science) has no assessment screen to show: straight to the dashboard.
+    if (!hasDiagnostic(reg.field)) return enterDashboard(reg);
     setPendingReg(reg); setResumeReg(null);
+    return null;
   };
   // "Back" from the step-4 AssessmentChoice screen — re-opens Register at step 3 with prior answers intact.
   const handleBackToPreferences = () => { setResumeReg({ form: pendingReg, step: 3 }); setPendingReg(null); };
-  const handleDiagnosticComplete = (diagnosticMastery) => {
+  const handleDiagnosticComplete = async (diagnosticMastery) => {
+    if (SERVER_MODE) {
+      try {
+        await api.patchMe({ hasCompletedDiagnostic: true, isPersonalized: true });
+        const current = await api.getState();
+        await api.putState(stateToSave({ topicMastery: diagnosticMastery }), current?.revision ?? 0);
+        await loadAccount();
+        sendStudy(diagnosticEvent()); // finishing the diagnostic counts as studying today (it starts the streak)
+        setPendingReg(null);
+        setShowDiagnostic(false);
+      } catch (err) {
+        flash(apiErrorKey(err?.code)); // stay on the results screen so "Done" can be pressed again
+      }
+      return;
+    }
     const built = buildProfile(pendingReg);
-    const insights = deriveInsights(built, diagnosticMastery);
     setTopicMastery(diagnosticMastery);
     setProfile({ ...built, hasCompletedDiagnostic: true, isPersonalized: true, bannerDismissed: false });
-    setPlan(insights.plan);
+    setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
     setShowDiagnostic(false);
   };
-  // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
-  const handleSkipDiagnostic = () => {
-    const built = buildProfile(pendingReg);
-    const insights = deriveInsights(built, {});
+  // Straight to an unpersonalized dashboard with no assessment: "Explore first", or a track that has none (Social Science).
+  // With the server the account already exists, so this only loads it. Resolves to { error, retryAfter } when that fails,
+  // so the caller can say so.
+  const enterDashboard = async (reg) => {
+    if (SERVER_MODE) {
+      try { await loadAccount(); setPendingReg(null); return null; }
+      catch (err) { return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null }; }
+    }
+    const built = buildProfile(reg);
     setTopicMastery({});
     setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
-    setPlan(insights.plan);
+    setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
+    return null;
   };
+  // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
+  const handleSkipDiagnostic = async () => { const res = await enterDashboard(pendingReg); if (res) flash(apiErrorKey(res.error)); };
   // Completing the diagnostic later, from the Dashboard banner — updates the existing profile
   // in place instead of building a fresh one.
   const handleLaterDiagnosticComplete = (diagnosticMastery) => {
     const updated = { ...profile, hasCompletedDiagnostic: true, isPersonalized: true, bannerDismissed: true };
-    const insights = deriveInsights(updated, diagnosticMastery);
     setTopicMastery(diagnosticMastery);
     setProfile(updated);
-    setPlan(insights.plan);
+    setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setRetaking(false);
   };
-  const dismissBanner = () => setProfile((cur) => ({ ...cur, bannerDismissed: true }));
 
   // Real day-streak and weekly study time, computed from actual answered-question timestamps
   // (both tracks) — not static profile fields, so they're 0 until a student actually earns them.
   const streakStats = useMemo(() => computeStreakStats(topicMastery, uniTopicMastery), [topicMastery, uniTopicMastery]);
-  const weeklyStudyHours = useMemo(() => buildWeeklyStudyHours(topicMastery, uniTopicMastery), [topicMastery, uniTopicMastery]);
+  // With the server, streak and weekly hours come from its study ledger (days counted in Phnom Penh time), not from this browser.
+  const liveStreak = summary ? summary.streak : streakStats.streak;
+  const liveLongestStreak = summary ? summary.longestStreak : streakStats.longestStreak;
+  // Timed exam attempts and the school report (kept per student on this device until the backend part exists).
+  const exam = useExamSessions({
+    userKey: profile ? `${profile.email ?? profile.phone ?? ""}|${profile.name}` : "anon",
+    limitFor: (field, subject) => SUBJECT_DURATION_MIN[field]?.[subject] ?? 180,
+  });
+  const tr = (key) => t(lang, key);
+  const showSchoolReport = !SERVER_MODE;
+  const weeklyStudyHours = useMemo(() => (summary ? summary.weekHours : buildWeeklyStudyHours(topicMastery, uniTopicMastery)), [summary, topicMastery, uniTopicMastery]);
 
   // Live insights recompute from topicMastery on every change — this is what makes weak/strong
   // subjects, the recommended lesson, and exam readiness actually update as the student practices.
-  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery, streakStats.streak) : null), [profile, topicMastery, streakStats.streak]);
+  const insights = useMemo(() => (profile ? deriveInsights(profile, topicMastery, liveStreak) : null), [profile, topicMastery, liveStreak]);
   const uniInsights = useMemo(
     () => (profile?.educationLevel === "university" ? deriveUniInsights(profile, uniTopicMastery) : null),
     [profile, uniTopicMastery]
   );
   const p = useMemo(
-    () => (profile ? { ...profile, ...insights, streak: streakStats.streak, longestStreak: streakStats.longestStreak, universityInsights: uniInsights } : null),
-    [profile, insights, uniInsights, streakStats]
+    () => (profile ? { ...profile, ...insights, streak: liveStreak, longestStreak: liveLongestStreak, universityInsights: uniInsights } : null),
+    [profile, insights, uniInsights, liveStreak, liveLongestStreak]
   );
 
   // Level up whenever XP crosses the next threshold (can chain multiple levels from one big award).
@@ -7017,6 +7805,109 @@ export default function App() {
     if (profile?.educationLevel === "university" && lang !== "en") setLang("en");
   }, [profile, lang]);
 
+  // ── Server mode plumbing ──────────────────────────────────────────────────────────────────────────────
+  const flash = (key) => setNotice(key); // `key` is a STRINGS key, so the message follows the language toggle
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = setTimeout(() => setNotice(null), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  // The server's numbers replace whatever the screen guessed. A level gained by an answer shows the level-up toast.
+  const applySummary = (sm, { announce = true } = {}) => {
+    setSummary(sm);
+    setProfile((cur) => (cur ? { ...cur, level: sm.level, xp: sm.xp, xpToNext: sm.xpToNext } : cur));
+    if (announce && prevLevelRef.current != null && sm.level > prevLevelRef.current) setLevelUpToast(sm.level);
+    prevLevelRef.current = sm.level;
+  };
+  if (!saverRef.current) saverRef.current = createStateSaver({ api, onError: () => flash("errSaveProgress") });
+  if (!queueRef.current) {
+    // XP shown right after an answer is a guess (bonusXp); once the server confirms (or rejects) the event, the guess is
+    // taken back out and the server's own total is shown.
+    const refund = (ev) => { if (ev._award) setBonusXp((x) => Math.max(0, x - ev._award)); };
+    queueRef.current = createEventQueue({
+      send: ({ _award, ...body }) => api.postStudyEvent(body),
+      storage: safeStorage(),
+      onApplied: (ev, res) => { applySummary(res.summary); refund(ev); },
+      onDropped: refund,
+    });
+  }
+  const sendStudy = (event, award = 0) => { if (SERVER_MODE && event) queueRef.current.push({ ...event, _award: award }); };
+
+  // Fetch the account, progress, XP summary and today's plan from the server and show them. Throws an ApiError on failure.
+  const loadAccount = async () => {
+    const [me, st, sm, pl] = await Promise.all([api.getMe(), api.getState(), api.getSummary(), api.getPlan(dateKey())]);
+    const saved = stateToSave(st?.state && typeof st.state === "object" ? st.state : {});
+    const wardrobe = sanitizeRewards(saved.rewards);
+    saverRef.current.cancel();
+    saverRef.current.setRevision(st?.revision ?? 0);
+    lastSavedRef.current = JSON.stringify(stateToSave({ ...saved, rewards: wardrobe }));
+    planIdMap.current = new Map();
+    queueRef.current.setUser(me.user.id);
+    setProfile(userToProfile(me.user, sm));
+    setTopicMastery(saved.topicMastery); setUniTopicMastery(saved.uniTopicMastery);
+    setPractice(saved.practice); setUniPractice(saved.uniPractice);
+    setLangResults(saved.langResults); setRewards(wardrobe);
+    setPlan((pl?.tasks ?? []).map(taskFromServer));
+    setBonusXp(0);
+    applySummary(sm, { announce: false });
+    hydratedRef.current = true;
+    setTab(me.user.educationLevel === "university" ? "universityHub" : "dashboard");
+    queueRef.current.flush(); // anything left unsent from last time
+    return me.user;
+  };
+  // Restore the saved login when the page opens (or retry after the server could not be reached).
+  const bootAccount = () => {
+    setBootError(false); setBooting(true);
+    return loadAccount()
+      .then(() => setShowWelcomeBack(true))
+      .catch((err) => {
+        // Server down (0), slow (408), busy (429) or broken (5xx): the saved login is probably still good, so keep it and offer "Try again".
+        if (err?.status === 0 || err?.status === 408 || err?.status === 429 || err?.status >= 500) setBootError(err);
+        else api.clearToken();
+      })
+      .finally(() => setBooting(false));
+  };
+  useEffect(() => {
+    if (SERVER_MODE && api.hasToken()) bootAccount();
+  }, []);
+  // The token was rejected (expired or revoked): back to the login screen with a short explanation.
+  useEffect(() => {
+    api.onUnauthorized(() => { resetSession(); setEntry("login"); flash("errSession"); });
+  }, []);
+
+  // Save progress to the server a moment after the last change (never right after loading it).
+  useEffect(() => {
+    if (!SERVER_MODE || !hydratedRef.current) return;
+    const state = stateToSave({ topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards });
+    const json = JSON.stringify(state);
+    if (json === lastSavedRef.current) return;
+    lastSavedRef.current = json;
+    saverRef.current.schedule(state);
+  }, [topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards]);
+
+  // Keep the screen in step with the server: a day that rolled over, XP earned on another device, events left unsent.
+  const refreshLive = async () => {
+    try {
+      const [sm, pl] = await Promise.all([api.getSummary(), planBusy.current === 0 ? api.getPlan(dateKey()) : Promise.resolve(null)]);
+      applySummary(sm, { announce: false });
+      if (pl) { const day = pl.date ?? dateKey(); setPlan((arr) => [...arr.filter((x) => x.date !== day), ...(pl.tasks ?? []).map(taskFromServer)]); }
+    } catch { /* offline: keep what is on screen */ }
+  };
+  useEffect(() => {
+    if (!SERVER_MODE) return undefined;
+    const onVisibility = () => {
+      if (!hydratedRef.current) return;
+      if (document.visibilityState === "hidden") { saverRef.current.flush(); queueRef.current.flush(); }
+      else refreshLive();
+    };
+    const onOnline = () => { if (hydratedRef.current) { queueRef.current.flush(); saverRef.current.flush(); } };
+    const timer = setInterval(() => { if (hydratedRef.current) queueRef.current.flush(); }, 20000);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); window.removeEventListener("online", onOnline); };
+  }, []);
+
   // Everything the rewards feature reads and writes, shared through RewardsContext (see rewards/RewardsContext.jsx).
   // Claiming a box pays its XP, any level-up and the new wardrobe in ONE handler, so React batches them into a single
   // render: the level-up effect above then finds nothing left to level and LevelUpToast stays quiet (the reward pop-up
@@ -7029,12 +7920,16 @@ export default function App() {
       if (!profile) return null;
       const out = claimBox({
         rewards, progress: { level: profile.level, xp: profile.xp + bonusXp, xpToNext: profile.xpToNext },
-        longestStreak: streakStats.longestStreak, setKey, total, retried,
+        longestStreak: liveLongestStreak, setKey, total, retried,
       });
       if (!out) return null;
       setBonusXp((x) => x + out.result.xp);
       setProfile((cur) => ({ ...cur, level: out.result.after.level, xpToNext: out.result.after.xpToNext }));
       setRewards(out.rewards);
+      if (SERVER_MODE) {
+        prevLevelRef.current = out.result.after.level; // the reward pop-up already shows this level-up; no second toast
+        sendStudy(boxEvent({ setKey, total, retried, itemId: out.result.itemId }), out.result.xp);
+      }
       return out.result;
     },
     equip: (slot, itemId) => setRewards((r) => equipItem(r, slot, itemId)),
@@ -7042,31 +7937,82 @@ export default function App() {
     openWardrobe: () => go("wardrobe"),
   };
 
+  // The daily plan is the student's own to-do list (rules in dailyPlan.js): ticking a task earns no XP.
+  // With the server, each change shows on screen at once and is then sent in order; a failure undoes it and says so.
+  const planChange = (job) => {
+    planBusy.current += 1;
+    planOps.current = planOps.current.then(job).catch(() => {}).finally(() => { planBusy.current -= 1; });
+    return planOps.current;
+  };
+  const realTaskId = (id) => planIdMap.current.get(id) ?? id;
   const togglePlanTask = (id) => {
     const target = plan.find((x) => x.id === id);
-    if (!target) return;
-    const nowDone = !target.done;
-    setPlan((arr) => arr.map((x) => (x.id === id ? { ...x, done: nowDone } : x)));
-    setBonusXp((x) => Math.max(0, x + (nowDone ? 20 : -20)));
+    setPlan((arr) => toggleTask(arr, id));
+    if (!SERVER_MODE || !target) return;
+    const done = !target.done;
+    planChange(async () => {
+      const sid = realTaskId(id);
+      if (sid < 0) return; // it never got saved (the add failed)
+      try { await api.patchPlanTask(sid, { done }); }
+      catch { setPlan((arr) => arr.map((x) => (x.id === id || x.id === sid ? { ...x, done: !done } : x))); flash("errPlanSave"); }
+    });
+  };
+  const addPlanTask = (task) => {
+    const date = dateKey();
+    const tempId = -(Date.now() * 1000 + Math.floor(Math.random() * 1000)); // negative: can never clash with a server id
+    const next = addTask(plan, task, date, tempId);
+    if (next === plan) return; // empty title, or today's list is full
+    setPlan(next);
+    if (!SERVER_MODE) return;
+    const added = next[next.length - 1];
+    planChange(async () => {
+      try {
+        const res = await api.addPlanTask({ title: added.task, subject: added.s ?? undefined, minutes: added.min ?? undefined, date });
+        const saved = taskFromServer(res.task);
+        planIdMap.current.set(tempId, saved.id);
+        setPlan((arr) => arr.map((x) => (x.id === tempId ? { ...saved, done: x.done } : x)));
+      } catch (err) {
+        setPlan((arr) => arr.filter((x) => x.id !== tempId));
+        flash(err?.code === "plan_limit_reached" ? "errPlanLimit" : "errPlanSave");
+      }
+    });
+  };
+  const removePlanTask = (id) => {
+    const removed = plan.find((x) => x.id === id);
+    setPlan((arr) => removeTask(arr, id));
+    if (!SERVER_MODE || !removed) return;
+    planChange(async () => {
+      const sid = realTaskId(id);
+      if (sid < 0) return;
+      try { await api.deletePlanTask(sid); }
+      catch (err) {
+        if (err?.status === 404) return; // already gone
+        setPlan((arr) => (arr.some((x) => x.id === sid) ? arr : [...arr, { ...removed, id: sid }]));
+        flash("errPlanSave");
+      }
+    });
   };
 
   // Record an answered exercise: bookkeeping for XP (unchanged) + feeding the topic-mastery engine
   // (new) so the subject's score, weak/strong tag, and every derived recommendation update live.
+  // With the server the XP added here is a guess shown at once; the study event below makes the server the judge.
   const handleAnswer = (ex, result, meta = {}) => {
     const already = practice[ex.id]?.xpAwarded;
     const xpAwarded = already || result === "correct";
     setPractice((prev) => ({ ...prev, [ex.id]: { status: result === "correct" ? "completed" : "in_progress", result, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (result === "correct" && !already) setBonusXp((x) => x + 30);
+    if (result === "correct" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
     setTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
       correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
     }));
+    sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
   // Manually set a status (Pending / In progress / Completed). XP is only ever awarded once per exercise.
   const handleSetStatus = (ex, status) => {
     const already = practice[ex.id]?.xpAwarded;
     const xpAwarded = already || status === "completed";
     setPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (status === "completed" && !already) setBonusXp((x) => x + 30);
+    if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
+    sendStudy(statusEvent(ex, status), status === "completed" && !already ? XP_PER_CORRECT : 0);
   };
   // University-track twins of handleAnswer/handleSetStatus above — same logic, writing to the
   // uniPractice/uniTopicMastery stores instead so BAC-II and university progress never collide.
@@ -7074,23 +8020,42 @@ export default function App() {
     const already = uniPractice[ex.id]?.xpAwarded;
     const xpAwarded = already || result === "correct";
     setUniPractice((prev) => ({ ...prev, [ex.id]: { status: result === "correct" ? "completed" : "in_progress", result, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (result === "correct" && !already) setBonusXp((x) => x + 30);
+    if (result === "correct" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
     setUniTopicMastery((tm) => recordAttempt(tm, ex.subject, ex.topic, {
       correct: result === "correct", difficulty: ex.difficulty, timeSec: meta.timeSec ?? null, mistakeType: meta.mistakeType ?? null, confidence: null, ts: Date.now(),
     }));
+    sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
   const handleUniSetStatus = (ex, status) => {
     const already = uniPractice[ex.id]?.xpAwarded;
     const xpAwarded = already || status === "completed";
     setUniPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (status === "completed" && !already) setBonusXp((x) => x + 30);
+    if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
+    sendStudy(statusEvent(ex, status), status === "completed" && !already ? XP_PER_CORRECT : 0);
   };
 
-  if (pendingReg && !showDiagnostic) return <AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} />;
-  if (pendingReg) return <Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} />;
+  // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper
+  // (display: contents keeps that wrapper out of the layout).
+  const noticeToast = notice ? (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ display: "contents" }}>
+      <NoticeToast text={t(lang, notice)} onClose={() => setNotice(null)} />
+    </div>
+  ) : null;
+
+  if (SERVER_MODE && booting) return <LoadingScreen lang={lang} dark={dark} />;
+  if (SERVER_MODE && bootError) return (
+    <OnboardingLayout dark={dark} setDark={setDark} onBack={leaveSavedLogin} lang={lang} setLang={setLang}
+      title={bootError.status === 429 ? apiErrorText(lang, bootError.code, bootError.retryAfter) : t(lang, "errNetwork")} description=""
+      footer={<PrimaryButton onClick={bootAccount} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "retryWord")}</PrimaryButton>}>
+      <span />
+    </OnboardingLayout>
+  );
+  if (pendingReg && !showDiagnostic) return <>{noticeToast}<AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} /></>;
+  if (pendingReg) return <>{noticeToast}<Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} /></>;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onCreateInstead={() => setEntry("create")} lang={lang} setLang={setLang} />;
-  if (!profile) return <Register onComplete={handleRegister} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} />;
+  if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onGoogleAuth={handleGoogleAuth} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
+  if (!profile && entry === "forgot" && SERVER_MODE) return <>{noticeToast}<ForgotPassword dark={dark} setDark={setDark} onBack={() => setEntry("login")} onSignedIn={handleSignedIn} lang={lang} setLang={setLang} /></>;
+  if (!profile) return <>{noticeToast}<Register key={resumeReg?._key ?? "register"} onComplete={handleRegister} onGoogleAuth={handleGoogleAuth} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (takingLangTest) return (
     <IeltsDiagnostic
@@ -7102,10 +8067,18 @@ export default function App() {
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";
+  // Exercises are for science students (an admin also has the Admin tab).
+  const navItems = [
+    ...(isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).filter((n) => n.id !== "exercises" || canBrowseExercises(p)),
+    ...(isAdmin(profile) ? [...ADMIN_NAV] : []),
+  ];
   const view = {
-    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} bonusXp={bonusXp} onStartAssessment={() => setRetaking(true)} onDismissBanner={dismissBanner} lang={lang} />,
-    browse: <Browse p={p} lang={lang} />,
+    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
+    browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
+    schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
+    exercises: <Exercises api={api} lang={lang} tr={tr} />,
+    adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
@@ -7123,6 +8096,7 @@ export default function App() {
       <style>{STYLES}</style>
       <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
       <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
+      {noticeToast}
       <div className="flex">
         {open && <div className="fixed inset-0 z-20 lg:hidden" style={{ background: "rgba(0,0,0,.4)" }} onClick={() => setOpen(false)} />}
         <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
@@ -7134,7 +8108,7 @@ export default function App() {
             <div><p className="eai-display font-extrabold leading-none">Bondus {isUniProfile ? "University" : "Highschool"}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
-            {(isUniProfile ? UNI_NAV : NAV).map((n) => {
+            {navItems.map((n) => {
               const on = tab === n.id;
               const premiumColor = "var(--gold)";
               return (
@@ -7172,6 +8146,7 @@ export default function App() {
                 <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" effect="climb" />
               </div>
               <div className="flex items-center gap-2 ml-auto">
+                {!isUniProfile && exam.current && <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} />}
                 {!isUniProfile && <LangToggle lang={lang} setLang={setLang} style={{ width: "auto", height: 38 }} />}
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}

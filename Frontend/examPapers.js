@@ -20,8 +20,13 @@
    full worked solutions), from a 2014–2025 compiled Math (Science track) booklet by ស៊ុន ពន្លឺ
    supplied directly by the user. 2020 has no papers in either source (Cambodia's national exam
    was cancelled that year), and 2026 isn't published yet anywhere either source could find —
-   that one stays "Coming soon" until sourced. Every other subject/track still has no papers for
-   2023–2026 for the same reason. */
+   that one stays "Coming soon" until sourced. "Biology-science-2025" was likewise supplied
+   directly by the user (Biology_Science_2025.pdf), as were the Science-track 2025 Chemistry,
+   English, French, History, Khmer Literature and Physics papers, plus the 2024 Biology,
+   Chemistry, English, French, History, Khmer Literature and Physics papers and the 2023
+   Biology, Chemistry, English, French, History, Khmer Literature and Physics papers, and the
+   2021 and 2022 French papers. Every other subject/track still has no papers for 2023–2026
+   for the same reason. */
 export const EXAM_PAPER_PDFS = {
   "Mathematics-science-2017": "/exams/science-math-2017.pdf",
   "Mathematics-science-2023": "/exams/science-math-2023.pdf",
@@ -35,6 +40,9 @@ export const EXAM_PAPER_PDFS = {
   "Biology-science-2019": "/exams/science-biology-2019.pdf",
   "Biology-science-2021": "/exams/science-biology-2021.pdf",
   "Biology-science-2022": "/exams/science-biology-2022.pdf",
+  "Biology-science-2023": "/exams/science-biology-2023.pdf",
+  "Biology-science-2024": "/exams/science-biology-2024.pdf",
+  "Biology-science-2025": "/exams/science-biology-2025.pdf",
   "Chemistry-science-2014": "/exams/science-chemistry-2014.pdf",
   "Chemistry-science-2015": "/exams/science-chemistry-2015.pdf",
   "Chemistry-science-2016": "/exams/science-chemistry-2016.pdf",
@@ -43,6 +51,9 @@ export const EXAM_PAPER_PDFS = {
   "Chemistry-science-2019": "/exams/science-chemistry-2019.pdf",
   "Chemistry-science-2021": "/exams/science-chemistry-2021.pdf",
   "Chemistry-science-2022": "/exams/science-chemistry-2022.pdf",
+  "Chemistry-science-2023": "/exams/science-chemistry-2023.pdf",
+  "Chemistry-science-2024": "/exams/science-chemistry-2024.pdf",
+  "Chemistry-science-2025": "/exams/science-chemistry-2025.pdf",
   "Earth Science-social_science-2016": "/exams/social-earth-science-2016.pdf",
   "Earth Science-social_science-2017": "/exams/social-earth-science-2017.pdf",
   "Earth Science-social_science-2018": "/exams/social-earth-science-2018.pdf",
@@ -57,6 +68,9 @@ export const EXAM_PAPER_PDFS = {
   "English-science-2019": "/exams/science-english-2019.pdf",
   "English-science-2021": "/exams/science-english-2021.pdf",
   "English-science-2022": "/exams/science-english-2022.pdf",
+  "English-science-2023": "/exams/science-english-2023.pdf",
+  "English-science-2024": "/exams/science-english-2024.pdf",
+  "English-science-2025": "/exams/science-english-2025.pdf",
   "English-social_science-2014": "/exams/social-english-2014.pdf",
   "English-social_science-2015": "/exams/social-english-2015.pdf",
   "English-social_science-2016": "/exams/social-english-2016.pdf",
@@ -69,6 +83,11 @@ export const EXAM_PAPER_PDFS = {
   "French-science-2015": "/exams/science-french-2015.pdf",
   "French-science-2016": "/exams/science-french-2016.pdf",
   "French-science-2017": "/exams/science-french-2017.pdf",
+  "French-science-2021": "/exams/science-french-2021.pdf",
+  "French-science-2022": "/exams/science-french-2022.pdf",
+  "French-science-2023": "/exams/science-french-2023.pdf",
+  "French-science-2024": "/exams/science-french-2024.pdf",
+  "French-science-2025": "/exams/science-french-2025.pdf",
   "French-social_science-2014": "/exams/social-french-2014.pdf",
   "French-social_science-2015": "/exams/social-french-2015.pdf",
   "French-social_science-2016": "/exams/social-french-2016.pdf",
@@ -91,6 +110,9 @@ export const EXAM_PAPER_PDFS = {
   "History-science-2019": "/exams/science-history-2019.pdf",
   "History-science-2021": "/exams/science-history-2021.pdf",
   "History-science-2022": "/exams/science-history-2022.pdf",
+  "History-science-2023": "/exams/science-history-2023.pdf",
+  "History-science-2024": "/exams/science-history-2024.pdf",
+  "History-science-2025": "/exams/science-history-2025.pdf",
   "History-social_science-2014": "/exams/social-history-2014.pdf",
   "History-social_science-2015": "/exams/social-history-2015.pdf",
   "History-social_science-2016": "/exams/social-history-2016.pdf",
@@ -107,6 +129,9 @@ export const EXAM_PAPER_PDFS = {
   "Khmer Literature-science-2019": "/exams/science-literature-2019.pdf",
   "Khmer Literature-science-2021": "/exams/science-literature-2021.pdf",
   "Khmer Literature-science-2022": "/exams/science-literature-2022.pdf",
+  "Khmer Literature-science-2023": "/exams/science-literature-2023.pdf",
+  "Khmer Literature-science-2024": "/exams/science-literature-2024.pdf",
+  "Khmer Literature-science-2025": "/exams/science-literature-2025.pdf",
   "Khmer Literature-social_science-2014": "/exams/social-literature-2014.pdf",
   "Khmer Literature-social_science-2015": "/exams/social-literature-2015.pdf",
   "Khmer Literature-social_science-2016": "/exams/social-literature-2016.pdf",
@@ -146,5 +171,20 @@ export const EXAM_PAPER_PDFS = {
   "Physics-science-2019": "/exams/science-physics-2019.pdf",
   "Physics-science-2021": "/exams/science-physics-2021.pdf",
   "Physics-science-2022": "/exams/science-physics-2022.pdf",
+  "Physics-science-2023": "/exams/science-physics-2023.pdf",
+  "Physics-science-2024": "/exams/science-physics-2024.pdf",
+  "Physics-science-2025": "/exams/science-physics-2025.pdf",
 };
 export const EXAM_PAPER_IMAGES = {};
+
+/* The year the Browse page should open on for a track: the newest one that has at least one paper. Social Science stops at
+   2022 while Science reaches 2025, so a fixed year would open one of them on a page of "Coming soon" cards. */
+export function newestPaperYear(field, pdfs = EXAM_PAPER_PDFS, images = EXAM_PAPER_IMAGES, fallback = 2023) {
+  const ends = new RegExp(`-${field}-(\\d{4})$`);
+  let newest = null;
+  for (const key of [...Object.keys(pdfs), ...Object.keys(images)]) {
+    const m = ends.exec(key);
+    if (m && (newest == null || Number(m[1]) > newest)) newest = Number(m[1]);
+  }
+  return newest ?? fallback;
+}

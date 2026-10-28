@@ -16,9 +16,11 @@ const renderMascot = (outfit, propOutfit) => withCtx(outfit, s.h(app.OwlMascot, 
 const renderHero = (outfit) => withCtx(outfit, s.h(hero.default));
 
 const FULL = { hat: "hat-crown", face: "face-round", body: "body-cape", extra: "extra-wings" };
+// OwlMascot's animated parts carry an initial transform="…" (its first pose, before the animation loop runs), so the
+// elements after a mount may have that attribute; StudyOwlScene's have none.
 const EMPTY_MOUNTS = {
-  back:  /<g data-outfit-mount="back"><\/g>(<ellipse cx="-34" cy="-12"|<ellipse cx="0" cy="-78" rx="64" ry="68" fill="url)/,
-  torso: /<g data-outfit-mount="torso"><\/g><g><g><path d="M -96 -258/,
+  back:  /<g data-outfit-mount="back"><\/g>(<ellipse( transform="[^"]*")? cx="-34" cy="-12"|<ellipse cx="0" cy="-78" rx="64" ry="68" fill="url)/,
+  torso: /<g data-outfit-mount="torso"><\/g><g( transform="[^"]*")?><g( transform="[^"]*")?><path d="M -96 -258/,
   face:  /<g data-outfit-mount="face"><\/g><path d="M -108 -190 C/,
   top:   /<g data-outfit-mount="top"><\/g><\/g>/,
 };

@@ -1,12 +1,26 @@
 import { GoogleGenAI } from "@google/genai";
 
 // Fast, cheap Groq-hosted model — used only when Gemini is unavailable or fails.
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-async function callGemini({ apiKey, systemInstruction, contents, maxOutputTokens, temperature, jsonMode }) {
-  const ai = new GoogleGenAI({ apiKey });
+// Gemini models, tried in order until one answers. The same names (and env settings) the AI coach server uses.
+// "gemini-flash-latest" goes last: it is an alias for whichever flash model is newest, which is often overloaded
+// (503) or spends the whole output budget thinking and returns nothing.
+function geminiModels() {
+  const list = [
+    process.env.GEMINI_MODEL || "gemini-3.6-flash",
+    ...(process.env.GEMINI_FALLBACK_MODELS || "gemini-3.8-flash,gemini-3.5-flash,gemini-flash-latest").split(","),
+  ].map((m) => m.trim()).filter(Boolean);
+  return [...new Set(list)];
+}
+
+// A model that hangs must not eat the whole function time limit: after this long, move on to the next one.
+const GEMINI_TIMEOUT_MS = 12000;
+
+async function callGemini({ apiKey, model, systemInstruction, contents, maxOutputTokens, temperature, jsonMode }) {
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: GEMINI_TIMEOUT_MS } });
   const result = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model,
     contents,
     config: {
       systemInstruction,
@@ -56,11 +70,13 @@ export async function generateText({ systemInstruction, contents, maxOutputToken
 
   let lastErr;
   if (geminiKey) {
-    try {
-      return await callGemini({ apiKey: geminiKey, systemInstruction, contents, maxOutputTokens, temperature, jsonMode });
-    } catch (err) {
-      console.error("Gemini API error" + (groqKey ? ", falling back to Groq:" : ":"), err);
-      lastErr = err;
+    for (const model of geminiModels()) {
+      try {
+        return await callGemini({ apiKey: geminiKey, model, systemInstruction, contents, maxOutputTokens, temperature, jsonMode });
+      } catch (err) {
+        console.error(`Gemini API error (${model})${groqKey ? ", trying the next model, then Groq:" : ", trying the next model:"}`, err);
+        lastErr = err;
+      }
     }
   }
   if (groqKey) {

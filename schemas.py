@@ -302,6 +302,9 @@ class HealthResponse(BaseModel):
     writes_enabled: bool = Field(
         True, description="False when the server refuses ingest and delete (ALLOW_WRITES=false)"
     )
+    auth_required: bool = Field(
+        False, description="True when the AI routes refuse anyone not signed in (AUTH_VERIFY_URL is set)"
+    )
     documents: int
     chunks: int
 
