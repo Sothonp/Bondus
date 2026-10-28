@@ -114,6 +114,7 @@ export const API_ERROR_KEYS = {
   bad_response: "errNetwork",
   api_disabled: "errNetwork",
   invalid_code: "errInvalidCode",
+  wrong_password: "errWrongPassword",
   no_email_on_account: "errNoEmail",
   email_failed: "errEmailFailed",
   plan_limit_reached: "errPlanLimit",

@@ -279,3 +279,13 @@ test("authorize adds the sign-in token to a request for another server, and touc
   assert.equal(api.authorize({ method: "POST" }).headers.Authorization, "Bearer tok_123"); // an upload sets no headers
   assert.equal(init.headers.Authorization, undefined); // the caller's object is left alone
 });
+
+test("changePassword sends PUT /me/password with the signed-in token", async () => {
+  const { api, calls } = make((url) => (url.endsWith("/login") ? json(200, { user: { id: 1 }, token: "tok" }) : json(200, { changed: true })));
+  await api.login({ login: "a@b.co", password: "x" });
+  const res = await api.changePassword({ currentPassword: "old-pass-1", password: "new-pass-2" });
+  const call = calls.at(-1);
+  assert.deepEqual(res, { changed: true });
+  assert.deepEqual([call.init.method, call.url, call.body], ["PUT", `${BASE}/me/password`, { currentPassword: "old-pass-1", password: "new-pass-2" }]);
+  assert.equal(call.init.headers.Authorization, "Bearer tok");
+});

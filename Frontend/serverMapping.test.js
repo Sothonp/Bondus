@@ -156,3 +156,7 @@ test("every backend error code has a message key, and unknown codes fall back to
   assert.equal(apiErrorKey("something_new"), "errServer");
   assert.equal(apiErrorKey("phone_taken"), "errPhoneTaken");
 });
+
+test("a wrong current password maps to its own message key", () => {
+  assert.equal(apiErrorKey("wrong_password"), "errWrongPassword");
+});

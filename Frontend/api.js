@@ -128,6 +128,8 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     patchMe: (fields) => send("PATCH", "/me", fields),
     forgotPassword: ({ login }) => send("POST", "/forgot-password", { login }, { auth: false }),
     resetPassword: ({ login, code, password }) => send("POST", "/reset-password", { login, code, password }, { auth: false }).then(remember),
+    // The signed-in student proves their current password; the server signs out every other device and keeps this one.
+    changePassword: ({ currentPassword, password }) => send("PUT", "/me/password", { currentPassword, password }),
 
     // progress
     getState: () => get("/me/state"),
