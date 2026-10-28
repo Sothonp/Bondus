@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 LLMProvider = Literal[
-    "auto", "anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"
+    "auto", "anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"
 ]
 EmbeddingBackend = Literal["sentence-transformers", "hashing"]
 KhmerSegmenterBackend = Literal["auto", "crf", "regex"]
@@ -154,6 +154,17 @@ class Settings(BaseSettings):
     cerebras_min_completion_tokens: int = Field(1500, ge=64, le=64000)
     cerebras_max_retry_wait: float = Field(0.0, ge=0.0, le=120.0)
 
+    # NVIDIA's API catalogue (build.nvidia.com), OpenAI-compatible, keys start
+    # with nvapi-. A separate free quota, but slower than Groq or Gemini
+    # (Nemotron Ultra took about 16 s for a short Khmer derivative), so it is
+    # a backstop near the end of the chain. Its catalogue lists models a free
+    # key cannot reach (404) or that are often overloaded: test before adding.
+    nvidia_api_key: SecretStr | None = None
+    nvidia_model: str = "nvidia/nemotron-3-ultra-550b-a55b"
+    nvidia_fallback_models: str = "deepseek-ai/deepseek-v4.1-flash,google/gemma-4-31b-it"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_temperature: float = Field(0.2, ge=0.0, le=2.0)
+
     # OpenRouter fronts many providers behind one key, so it is the broadest
     # backstop: when Groq, Gemini and Cerebras have all run dry it reaches a
     # different set of hosts entirely. Keys start with `sk-or-`. Models whose id
@@ -199,6 +210,7 @@ class Settings(BaseSettings):
     gemini_api_keys: SecretStr | None = None
     groq_api_keys: SecretStr | None = None
     cerebras_api_keys: SecretStr | None = None
+    nvidia_api_keys: SecretStr | None = None
     openrouter_api_keys: SecretStr | None = None
     sea_lion_api_keys: SecretStr | None = Field(
         None, validation_alias=AliasChoices("sea_lion_api_keys", "sealion_api_keys")
@@ -395,7 +407,7 @@ class Settings(BaseSettings):
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
 
     @field_validator(
-        "anthropic_api_key", "gemini_api_key", "groq_api_key", "cerebras_api_key",
+        "anthropic_api_key", "gemini_api_key", "groq_api_key", "cerebras_api_key", "nvidia_api_key",
         "openrouter_api_key", "sea_lion_api_key", mode="after",
     )
     @classmethod
@@ -472,6 +484,11 @@ class Settings(BaseSettings):
         return [model for model in dict.fromkeys(models) if model != self.openrouter_model]
 
     @property
+    def nvidia_fallback_model_list(self) -> list[str]:
+        models = [model.strip() for model in self.nvidia_fallback_models.split(",") if model.strip()]
+        return [model for model in dict.fromkeys(models) if model != self.nvidia_model]
+
+    @property
     def cerebras_fallback_model_list(self) -> list[str]:
         models = [model.strip() for model in self.cerebras_fallback_models.split(",") if model.strip()]
         return [model for model in dict.fromkeys(models) if model != self.cerebras_model]
@@ -526,7 +543,7 @@ class Settings(BaseSettings):
     @property
     def resolved_llm_provider(
         self,
-    ) -> Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]:
+    ) -> Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]:
         if self.llm_provider != "auto":
             return self.llm_provider
         if self.anthropic_api_key is not None:
@@ -537,6 +554,8 @@ class Settings(BaseSettings):
             return "groq"
         if self.cerebras_api_key is not None:
             return "cerebras"
+        if self.nvidia_api_key is not None:
+            return "nvidia"
         if self.openrouter_api_key is not None:
             return "openrouter"
         if self.sea_lion_api_key is not None:

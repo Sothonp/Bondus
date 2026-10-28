@@ -94,7 +94,7 @@ class QueryResponse(BaseModel):
     language: Literal["km", "en"]
     grounded: bool = Field(description="True when at least one chunk passed the threshold")
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
     model: str | None = None
     stop_reason: str | None = None
     latency_ms: float
@@ -110,7 +110,7 @@ class QueryStreamMeta(BaseModel):
     language: Literal["km", "en"]
     grounded: bool
     sources: list[SourceChunk]
-    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
 
 
 class QueryStreamStatus(BaseModel):
@@ -140,7 +140,7 @@ class QueryStreamDone(BaseModel):
     first_token_ms: float | None = Field(
         None, description="Time to the first text delta: the wait the student actually sees"
     )
-    provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"] | None = Field(
+    provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"] | None = Field(
         None, description="The provider that actually answered (may be a fallback)"
     )
     model: str | None = None
@@ -281,7 +281,7 @@ class HealthResponse(BaseModel):
     ocr_enabled: bool
     ocr_engine: Literal["gemini", "kiri", "groq", "hybrid"] | None = None
     ocr_model: str | None = None
-    llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+    llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
     llm_model: str | None = None
     llm_chain: list[str] = Field(default_factory=list, description="provider:model, in fallback order")
     llm_providers: list[ProviderStatus] = Field(

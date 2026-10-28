@@ -182,7 +182,7 @@ flowchart LR
     Q["Question"] --> C{"Answer cache<br/>(no history,<br/>no photo)"}
     C -- hit --> Z
     C -- miss --> R{"Language"}
-    R -- Khmer --> K["Gemini Flash-Lite → Groq<br/>→ SEA-LION → other Gemini"]
+    R -- Khmer --> K["Gemini Flash-Lite → Groq<br/>→ SEA-LION → other Gemini<br/>→ Cerebras → NVIDIA → OpenRouter"]
     R -- other --> E["Groq → Cerebras<br/>→ Gemini"]
     K & E -. "all fail" .-> X["Friendly note<br/>in Khmer + English"]
     K & E --> O["OutputGuard"] --> Z["sanitize_answer"]

@@ -94,7 +94,7 @@ from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
 logger = logging.getLogger("reanmath")
 
-Provider = Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
+Provider = Literal["anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion", "none"]
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +148,8 @@ class OutputGuard:
     """Cleans model output as it streams.
 
     Some models (gpt-oss on Khmer, notably) degenerate into thousands of
-    zero-width spaces. Runs of invisible characters are collapsed to one, and
+    zero-width spaces, and some emit stray replacement characters (U+FFFD), which
+    are dropped. Runs of invisible characters are collapsed to one, and
     a run longer than ``MAX_INVISIBLE_RUN`` aborts the answer so another model
     can take over.
     """
@@ -160,6 +161,10 @@ class OutputGuard:
     def feed(self, text: str) -> str:
         kept: list[str] = []
         for char in text:
+            if char == "\ufffd":
+                # A replacement character is never meant: Nemotron at NVIDIA opens
+                # its answers with one. It would show as a "?" box.
+                continue
             if char in INVISIBLE_CHARS:
                 self.run += 1
                 if self.run > MAX_INVISIBLE_RUN:
@@ -868,6 +873,16 @@ class CerebrasGenerator(OpenAICompatibleGenerator):
     model_env = "CEREBRAS_MODEL"
 
 
+class NvidiaGenerator(OpenAICompatibleGenerator):
+    """NVIDIA's API catalogue: a separate free quota of large open models, slower
+    than Groq or Gemini, so a backstop rather than a first answer."""
+
+    provider: Provider = "nvidia"
+    label = "NVIDIA"
+    key_env = "NVIDIA_API_KEY"
+    model_env = "NVIDIA_MODEL"
+
+
 class ExtractiveGenerator:
     """No LLM: answer with the retrieved passages themselves."""
 
@@ -1220,6 +1235,21 @@ def _key_generators(settings: Settings, provider: str, key: str) -> list[AnswerG
             )
             for model in models
         ]
+    if provider == "nvidia":
+        models = [settings.nvidia_model]
+        if settings.llm_fallback:
+            models += settings.nvidia_fallback_model_list
+        return [
+            NvidiaGenerator(
+                key,
+                model,
+                base_url=settings.nvidia_base_url,
+                max_tokens=settings.llm_max_tokens,
+                timeout=settings.llm_timeout_seconds,
+                temperature=settings.nvidia_temperature,
+            )
+            for model in models
+        ]
     if provider == "openrouter":
         models = [settings.openrouter_model]
         if settings.llm_fallback:
@@ -1296,7 +1326,7 @@ def build_generator(settings: Settings) -> AnswerGenerator:
     backup = settings.llm_backup_provider.strip().lower()
     if backup and backup != provider:
         candidates[1:1] = _provider_generators(settings, backup)
-    for other in ("anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion"):
+    for other in ("anthropic", "gemini", "groq", "cerebras", "nvidia", "openrouter", "sea-lion"):
         if other not in (provider, backup):
             candidates += _provider_generators(settings, other)
     if len(candidates) > 1:

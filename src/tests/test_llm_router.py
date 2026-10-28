@@ -205,3 +205,21 @@ def test_health_lists_each_provider_status(make_client):
     assert [(p["name"], p["status"]) for p in providers] == [
         ("gemini:g", "available"), ("groq:q", "available"),
     ]
+
+
+def test_nvidia_joins_the_chain_as_a_backstop():
+    settings = Settings(
+        _env_file=None, llm_provider="gemini", gemini_api_key="g", nvidia_api_key="nvapi-test",
+        openrouter_api_key="o", gemini_fallback_models="",
+    )
+    chain = build_generator(settings).chain
+    first_nvidia = next(i for i, name in enumerate(chain) if name.startswith("nvidia:"))
+    first_openrouter = next(i for i, name in enumerate(chain) if name.startswith("openrouter:"))
+    assert chain[0].startswith("gemini:") and first_nvidia < first_openrouter
+    assert f"nvidia:{settings.nvidia_model}" in chain
+
+
+def test_stray_replacement_characters_are_dropped():
+    from src.api import OutputGuard
+
+    assert OutputGuard("m").feed("\ufffdដេរីវេ") == "ដេរីវេ"
