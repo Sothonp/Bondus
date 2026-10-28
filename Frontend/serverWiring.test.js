@@ -93,9 +93,22 @@ test("the back arrow on the 'Can't reach the server' screen leaves for the login
 
 test("every answer and status handler sends a study event, and the XP guess is paired with it", () => {
   assert.equal((app.match(/sendStudy\(answerEvent\(ex, result, meta\), result === "correct" && !already \? XP_PER_CORRECT : 0\)/g) || []).length, 2);
-  assert.equal((app.match(/sendStudy\(statusEvent\(ex, status\), status === "completed" && !already \? XP_PER_CORRECT : 0\)/g) || []).length, 2);
+  assert.equal((app.match(/sendStudy\(statusEvent\(ex, status\)\);/g) || []).length, 2);
   assert.match(app, /sendStudy\(boxEvent\(\{ setKey, total, retried, itemId: out\.result\.itemId \}\), out\.result\.xp\)/);
   assert.match(app, /sendStudy\(diagnosticEvent\(\)\)/);
+});
+
+test("the player sends the answer the student chose, right or wrong, so the server can grade it", () => {
+  assert.match(app, /onAnswer\(ex, "correct", \{ timeSec, answer: choice \}\)/);
+  assert.match(app, /onAnswer\(ex, "incorrect", \{ timeSec: pendingTimeRef\.current, mistakeType, answer: choice \}\)/);
+});
+
+test("ticking Completed by hand pays no XP, on screen or on the server; only a correct answer does", () => {
+  const guesses = app.match(/setBonusXp\(\(x\) => x \+ XP_PER_CORRECT\)/g) || [];
+  const answerGuesses = app.match(/if \(result === "correct" && !already\) setBonusXp\(\(x\) => x \+ XP_PER_CORRECT\)/g) || [];
+  assert.equal(guesses.length, 2, "only the two answer handlers (BAC II and university) may add XP");
+  assert.equal(answerGuesses.length, 2);
+  assert.doesNotMatch(app, /const xpAwarded = already \|\| status === "completed"/);
 });
 
 test("the server's XP replaces the on-screen guess, and an event the server refuses also takes its guess back", () => {

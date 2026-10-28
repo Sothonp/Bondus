@@ -47,3 +47,10 @@ export const nextSetStart = (list, isDone, from) => {
   }
   return null;
 };
+
+/* "Continue where you left off": the first question of the list that is not completed yet, or null when every one is.
+   (A question left unfinished earlier in the list is found before a later one, so nothing is skipped over.) */
+export const firstOpen = (list, isDone) => {
+  const i = list.findIndex((ex) => !isDone(ex));
+  return i < 0 ? null : i;
+};

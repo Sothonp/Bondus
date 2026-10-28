@@ -51,7 +51,9 @@ import { OutfitLayers } from "./rewards/itemArt.jsx";
 import { REWARD_STYLES } from "./rewards/rewardStyles.js";
 import TreasureBox from "./rewards/TreasureBox.jsx";
 import Wardrobe from "./rewards/Wardrobe.jsx";
-import { setIndexes, nextInSet, nextSetStart } from "./practiceFlow.js";
+import { setIndexes, nextInSet, nextSetStart, firstOpen } from "./practiceFlow.js";
+import { practiceMemory } from "./practiceResume.js";
+import { exerciseId, uniExerciseId } from "./exerciseCatalog.js";
 import { CHEER_STRINGS, pickCheer } from "./mascotCheers.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
@@ -138,7 +140,7 @@ const UNI_MASTERY_TOPICS = Object.fromEntries(
 function getUniExercises(subjectKey) {
   const list = UNI_QUIZ_BANK[subjectKey] || [];
   return list.map((r, i) => ({
-    id: `uni:${subjectKey}:${i + 1}`, subject: subjectKey, topic: r.topic, difficulty: r.difficulty,
+    id: uniExerciseId(subjectKey, i), subject: subjectKey, topic: r.topic, difficulty: r.difficulty,
     prompt: r.prompt, options: r.options, answer: r.answer, explanation: r.explanation,
   }));
 }
@@ -3211,7 +3213,7 @@ const EXERCISE_BANK_RAW = RAW_EXERCISES;
 function getExercises(subject, lang = "en") {
   const list = EXERCISE_BANK_RAW[subject] || [];
   return list.map((r, i) => ({
-    id: `${subject}-${i + 1}`, subject, topic: r.topic, difficulty: r.difficulty,
+    id: exerciseId(subject, i), subject, topic: r.topic, difficulty: r.difficulty,
     prompt: lang === "km" ? (r.promptKm || r.prompt) : r.prompt,
     options: lang === "km" && r.optionsKm ? r.optionsKm : r.options,
     answer: lang === "km" && r.answerKm ? r.answerKm : r.answer,
@@ -3265,8 +3267,9 @@ function StatusControl({ status, onChange, lang = "en" }) {
 }
 
 function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
-  const [subject, setSubject] = useState(null);
-  if (subject) return <PracticeSubject p={p} subject={subject} practice={practice} onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setSubject(null)} lang={lang} />;
+  const memory = useMemo(() => practiceMemory(safeStorage(), "bac", p.userId), [p.userId]);
+  const [subject, setSubject] = useState(() => { const s = memory.get()?.subject; return fieldSubjects(p.field, p.foreignLanguage).includes(s) ? s : null; });
+  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setSubject(null)} lang={lang} />;
 
   return (
     <div className="space-y-5 eai-rise">
@@ -3306,14 +3309,14 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
    this session (for the summary) and the "set complete" screen. `progress` is the saved per-exercise
    record (practice / uniPractice); a question counts as done once its status is "completed". Shared by
    PracticeSubject and UniversityPracticeCourse. */
-function useSetSession(list, progress) {
-  const [idx, setIdx] = useState(null); // question on screen (index into `list`); null = the list view
+function useSetSession(list, progress, memory = null) {
+  const [idx, setIdx] = useState(() => { const at = memory ? list.findIndex((e) => e.id === memory.get()?.exId) : -1; return at >= 0 ? at : null; }); // question on screen (index into `list`); null = the list view
   const [reviewing, setReviewing] = useState(false);
   const [isRetry, setIsRetry] = useState(false);
   const [finished, setFinished] = useState(null); // { from } once every question in the set is correct
   const [missed, setMissed] = useState({});
   const isDone = (ex) => progress[ex.id]?.status === "completed";
-  const show = (i) => { setIdx(i); setIsRetry(!isDone(list[i]) && progress[list[i].id]?.result === "incorrect"); };
+  const show = (i) => { memory?.remember(list[i]); setIdx(i); setIsRetry(!isDone(list[i]) && progress[list[i].id]?.result === "incorrect"); };
   const onScreen = idx != null && list[idx] != null;
   const upNext = onScreen ? nextInSet(list, isDone, idx, reviewing) : null;
   const members = onScreen ? setIndexes(list, idx) : [];
@@ -3325,17 +3328,29 @@ function useSetSession(list, progress) {
     canAdvance: upNext !== idx,
     finishing: upNext == null, // nothing left in the set: Next becomes "Finish set"
     advance: () => {
-      if (upNext == null) { setFinished({ from: idx }); setIdx(null); return; }
+      if (upNext == null) { memory?.forget(); setFinished({ from: idx }); setIdx(null); return; }
       if (reviewing && upNext <= idx) setReviewing(false); // the review pass is over; only retries are left
       show(upNext);
     },
-    exit: () => setIdx(null),
+    exit: () => { memory?.forget(); setIdx(null); },
     leaveFinished: () => setFinished(null),
     noteMiss: (ex) => setMissed((m) => ({ ...m, [ex.id]: true })),
   };
 }
 
-function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, lang = "en" }) {
+/* "Continue where you left off": shown once a set is under way, it opens the first question not yet completed, so a
+   student coming back never has to hunt for where they stopped. */
+function ContinueButton({ list, session, doneN, lang }) {
+  const at = firstOpen(list, session.isDone);
+  if (at == null || doneN === 0) return null;
+  return (
+    <button onClick={() => session.start(at)} data-testid="continue-set" className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+      {t(lang, "continueWhereLeft")} <ChevronRight size={15} />
+    </button>
+  );
+}
+
+function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, onBack, lang = "en" }) {
   const fullList = getExercises(subject, lang);
   // Subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get an extra
   // chapter-picker step before the exercise list; every other subject is unaffected.
@@ -3347,7 +3362,7 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
   const chapters = chapterKeys.every((ch) => chapterRank(ch) != null)
     ? [...chapterKeys].sort((a, b) => chapterRank(a) - chapterRank(b))
     : chapterKeys;
-  const [chapter, setChapter] = useState(null);
+  const [chapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
   // Inside a chapter, formula-quiz questions (stage 0) come first, then the practice problems —
   // students warm up on the lesson's formulas before the longer questions. The sort is stable, so
   // each group keeps its authored order.
@@ -3360,7 +3375,7 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
   // is the only place that turns that stable key into the localized label shown on screen.
   const chapterLabel = (ch) => (lang === "km" ? fullList.find((ex) => ex.chapter === ch)?.chapterKm || ch : ch);
   const backToList = hasChapters && chapter != null ? () => setChapter(null) : onBack;
-  const session = useSetSession(list, practice);
+  const session = useSetSession(list, practice, memory);
   // Name shown on the "set complete" screen: the formula quiz / practice problems for a staged lesson,
   // otherwise the chapter (or the whole subject).
   const usesStages = list.some((e) => e.stage != null);
@@ -3448,7 +3463,7 @@ function PracticeSubject({ p, subject, practice, onAnswer, onSetStatus, onBack, 
             </div>
             <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
           </div>
-          <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
+          <div className="flex items-center gap-3"><ContinueButton list={list} session={session} doneN={doneN} lang={lang} /><Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring></div>
         </div>
       </div>
 
@@ -3532,14 +3547,14 @@ function ExercisePlayer({ ex, entry, subject, index, total, progress, isRetry = 
     const isCorrect = gradeAnswer(ex, choice);
     const timeSec = Math.round((Date.now() - startRef.current) / 100) / 10;
     if (isCorrect) {
-      onAnswer(ex, "correct", { timeSec }); setPhase("result"); reactOwl("jump", 1.9);
+      onAnswer(ex, "correct", { timeSec, answer: choice }); setPhase("result"); reactOwl("jump", 1.9);
       sayCheer(isRetry || missedRef.current ? "retry" : "correct");
     } else {
       pendingTimeRef.current = timeSec; setPhase("mistake"); reactOwl("no", 1.3);
       missedRef.current = true; sayCheer("miss");
     }
   };
-  const chooseMistake = (mistakeType) => { onAnswer(ex, "incorrect", { timeSec: pendingTimeRef.current, mistakeType }); setPhase("result"); };
+  const chooseMistake = (mistakeType) => { onAnswer(ex, "incorrect", { timeSec: pendingTimeRef.current, mistakeType, answer: choice }); setPhase("result"); };
   const retry = () => { setPhase("answering"); setChoice(null); setCheer(null); startRef.current = Date.now(); };
   const next = () => { retry(); onNext?.(); };
 
@@ -3731,12 +3746,13 @@ function SetComplete({ name, total, retried, setKey, onNextSet, onBack, lang = "
 function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCourseId, onConsumeInitialCourse, lang = "en" }) {
   const up = p.universityProfile || {};
   const courses = UNI_COURSES[up.major] || [];
-  const [courseId, setCourseId] = useState(initialCourseId || null);
+  const memory = useMemo(() => practiceMemory(safeStorage(), "uni", p.userId), [p.userId]);
+  const [courseId, setCourseId] = useState(() => initialCourseId || courses.find((c) => `${up.major}::${c.title}` === memory.get()?.subject)?.id || null);
   useEffect(() => { if (initialCourseId) onConsumeInitialCourse?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const course = courses.find((c) => c.id === courseId);
 
   if (course) {
-    return <UniversityPracticeCourse course={course} major={up.major} uniPractice={uniPractice}
+    return <UniversityPracticeCourse course={course} major={up.major} memory={memory} uniPractice={uniPractice}
       onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setCourseId(null)} lang={lang} />;
   }
 
@@ -3786,10 +3802,10 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
   );
 }
 
-function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetStatus, onBack, lang = "en" }) {
+function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer, onSetStatus, onBack, lang = "en" }) {
   const key = `${major}::${course.title}`;
   const list = getUniExercises(key);
-  const session = useSetSession(list, uniPractice);
+  const session = useSetSession(list, uniPractice, memory);
   const courseTitle = lang === "km" ? course.titleKm : course.title;
 
   if (session.idx != null && list[session.idx]) {
@@ -3824,7 +3840,7 @@ function UniversityPracticeCourse({ course, major, uniPractice, onAnswer, onSetS
             </div>
             <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
           </div>
-          <Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring>
+          <div className="flex items-center gap-3"><ContinueButton list={list} session={session} doneN={doneN} lang={lang} /><Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring></div>
         </div>
       </div>
 
@@ -7199,7 +7215,7 @@ const STRINGS = {
     createAccountTitle: "Create your account", createAccountDesc: "A few details so your AI coach and study plan fit you.",
     fullNameLabel: "Full name", emailLabel: "Email", passwordLabel: "Password", ageLabel: "Age", gradeLevelLabel: "Grade level",
     grade11: "Grade 11", grade12: "Grade 12 (BAC II)", targetGradeLabel: "Target grade", gradeWord: "Grade",
-    continueToTrack: "Continue to academic track", continueWord: "Continue",
+    continueToTrack: "Continue to academic track", continueWord: "Continue", continueWhereLeft: "Continue where you left off",
     chooseTrackTitle: "Choose your academic track",
     chooseTrackDesc: "This helps Bondus prioritize the subjects and exam content shown on your dashboard.",
     personalizeTitle: "Personalize your study plan",
@@ -7416,7 +7432,7 @@ const STRINGS = {
     createAccountTitle: "បង្កើតគណនីរបស់អ្នក", createAccountDesc: "ព័ត៌មានមួយចំនួនដើម្បីឲ្យគ្រូបង្វឹក AI និងផែនការសិក្សាសមស្របនឹងអ្នក។",
     fullNameLabel: "ឈ្មោះពេញ", emailLabel: "អ៊ីមែល", passwordLabel: "ពាក្យសម្ងាត់", ageLabel: "អាយុ", gradeLevelLabel: "កម្រិតថ្នាក់",
     grade11: "ថ្នាក់ទី១១", grade12: "ថ្នាក់ទី១២ (បាក់ឌុប)", targetGradeLabel: "និទ្ទេសគោលដៅ", gradeWord: "និទ្ទេស",
-    continueToTrack: "បន្តទៅផ្នែកសិក្សា", continueWord: "បន្ត",
+    continueToTrack: "បន្តទៅផ្នែកសិក្សា", continueWord: "បន្ត", continueWhereLeft: "បន្តពីកន្លែងដែលអ្នកបានឈប់",
     chooseTrackTitle: "ជ្រើសរើសផ្នែកសិក្សារបស់អ្នក",
     chooseTrackDesc: "នេះជួយ Bondus កំណត់អាទិភាពមុខវិជ្ជា និងខ្លឹមសារប្រឡងដែលបង្ហាញលើផ្ទាំងគ្រប់គ្រងរបស់អ្នក។",
     personalizeTitle: "ធ្វើផែនការសិក្សាផ្ទាល់ខ្លួន",
@@ -8007,13 +8023,13 @@ export default function App() {
     }));
     sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
-  // Manually set a status (Pending / In progress / Completed). XP is only ever awarded once per exercise.
+  // Manually set a status (Pending / In progress / Completed). It is recorded, but earns no XP: that comes from answering.
   const handleSetStatus = (ex, status) => {
     const already = practice[ex.id]?.xpAwarded;
-    const xpAwarded = already || status === "completed";
+    const xpAwarded = already;
     setPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
-    sendStudy(statusEvent(ex, status), status === "completed" && !already ? XP_PER_CORRECT : 0);
+    // A tick is the student's word, not proof of work: it earns no XP (the server pays only for graded answers).
+    sendStudy(statusEvent(ex, status));
   };
   // University-track twins of handleAnswer/handleSetStatus above — same logic, writing to the
   // uniPractice/uniTopicMastery stores instead so BAC-II and university progress never collide.
@@ -8029,10 +8045,10 @@ export default function App() {
   };
   const handleUniSetStatus = (ex, status) => {
     const already = uniPractice[ex.id]?.xpAwarded;
-    const xpAwarded = already || status === "completed";
+    const xpAwarded = already;
     setUniPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    if (status === "completed" && !already) setBonusXp((x) => x + XP_PER_CORRECT);
-    sendStudy(statusEvent(ex, status), status === "completed" && !already ? XP_PER_CORRECT : 0);
+    // A tick is the student's word, not proof of work: it earns no XP (the server pays only for graded answers).
+    sendStudy(statusEvent(ex, status));
   };
 
   // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper

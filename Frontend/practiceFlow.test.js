@@ -2,7 +2,7 @@
    Run with:  node --test Frontend/practiceFlow.test.js   (no dependencies — Node's built-in runner) */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { setIndexes, nextInSet, nextSetStart } from "./practiceFlow.js";
+import { setIndexes, nextInSet, nextSetStart, firstOpen } from "./practiceFlow.js";
 
 const mk = (n, stages = []) => Array.from({ length: n }, (_, i) => ({ id: `q${i}`, stage: stages[i] }));
 
@@ -118,4 +118,15 @@ test("a single-question set finishes after one right answer", () => {
   const { path, finished } = play(mk(1));
   assert.deepEqual(q(path), [1]);
   assert.ok(finished);
+});
+
+/* "Continue where you left off": the first question of the list that is not completed yet. */
+test("firstOpen is the first question not yet completed, and null when everything is", () => {
+  const list = mk(5);
+  const doneSet = (...ix) => (ex) => ix.includes(list.indexOf(ex));
+  assert.equal(firstOpen(list, doneSet()), 0);
+  assert.equal(firstOpen(list, doneSet(0)), 1);
+  assert.equal(firstOpen(list, doneSet(0, 1, 3)), 2, "a gap is found, not skipped over");
+  assert.equal(firstOpen(list, doneSet(0, 1, 2, 3, 4)), null);
+  assert.equal(firstOpen([], doneSet()), null);
 });
