@@ -478,6 +478,19 @@ SUBJECT_GUIDES: dict[str, str] = {
         "- High-yield: correct verb forms, the passive, phrasal verbs, and a clear paragraph "
         "with a topic sentence.",
     ]),
+    "french": "\n".join([
+        "ភាសាបារាំង (French).",
+        "- BAC II exam scope (60 minutes, 50 points, four parts): I Compréhension écrite: "
+        "complete a short everyday dialogue (shop, market, pharmacy) from a list of five "
+        "words; II Vocabulaire: underline the odd one out (soulignez les intrus) in rows of "
+        "countries, shops, fruit, medicines, school things or pronouns; III Grammaire: A "
+        "rewrite sentences as the example shows (pronouns le, la, y, en; ne...ni...ni; and "
+        "similar transformations), B link the halves of sentences (si, pour, pour que, parce "
+        "que, c'est pourquoi, tant mieux); IV Expression écrite: about 70 words on a personal "
+        "topic (your future plans, a gift after the baccalauréat).",
+        "- Explain grammar and vocabulary in Khmer, but keep every exercise, example and model "
+        "answer in French. Everyday Cambodian contexts (Angkor, Siem Reap, the market) are typical.",
+    ]),
 }
 
 
