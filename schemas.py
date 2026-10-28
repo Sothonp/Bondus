@@ -173,6 +173,9 @@ class ExamRequest(_StrictModel):
         "km", description="Language of the paper and its key (English/French papers stay in that language)"
     )
     focus: str = Field("", max_length=1000, description="Optional topic or instruction, e.g. 'integrals'")
+    track: Literal["science", "social_science"] | None = Field(
+        None, description="The student's BAC II track; a Social Science maths paper has no complex numbers"
+    )
     answer_key: bool = Field(True, description="Follow the paper with a worked answer key and marking scheme")
     seed: int | None = Field(
         None, ge=0, le=2**31 - 1,

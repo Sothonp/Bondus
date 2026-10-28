@@ -5427,6 +5427,7 @@ async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam
     subject: subjectId(exam.subject),
     language: exam.language,
     focus: t.slice(0, EXAM_FOCUS_MAX),
+    track: FIELD_META[p?.field] ? p.field : undefined,
     answer_key: exam.answerKey,
     seed: Math.floor(Math.random() * 2 ** 31),
   };

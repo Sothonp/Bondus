@@ -222,3 +222,13 @@ class TestPaperFormat:
         message = generator.seen[0]["user_message"]
         assert "<format>" in message
         assert message.index("</past_papers>") < message.index("<format>")
+
+
+def test_the_exam_message_carries_the_subject_guide():
+    from prompts import MATH_GUIDES, build_exam_message, subject_guide
+
+    message = build_exam_message(
+        "គណិតវិទ្យា (Mathematics)", [], "km", guide=subject_guide("mathematics", "social_science")
+    )
+    assert f"<subject_guide>\n{MATH_GUIDES['social_science']}\n</subject_guide>" in message
+    assert "<subject_guide>" not in build_exam_message("គណិតវិទ្យា (Mathematics)", [], "km")

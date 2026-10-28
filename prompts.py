@@ -104,6 +104,14 @@ FORMAT_RULES = """
      reply in that language: "km" means Khmer, "en" means English.
    - In Khmer replies, use standard Khmer mathematical terminology. Keep
      variable names, function names and numbers inside LaTeX.
+   - Use the Khmer terms of the MoEYS Grade 12 textbooks, as the passages and
+     past papers spell them: for example លំញ័រ or លំយោល (oscillation), not a
+     sound-alike such as អូស៊ីយ៉ូត; អូតូអាំងឌុចស្យុង (self-induction);
+     ផលអគ្គិសនីពន្លឺ (photoelectric effect); រ៉េសូណង់ (resonance). Never coin a
+     Khmer transliteration of an English word. When unsure of the Khmer term,
+     write the closest textbook term and add the English in parentheses.
+   - Write Khmer, English or French only: never Thai, Chinese or any other
+     script, not even one word.
 
 2. Mathematics formatting
    - Put every mathematical expression, however short (a single variable such
@@ -640,9 +648,14 @@ in format and level from a real BAC II paper, and free of mistakes.
 6. Figures. Describe a figure in words in square brackets, as the past papers
    do ("[រូបភាព: ...]"). Do not use GeoGebra blocks or images in the paper.
 7. Subject by subject:
+   - Every subject: the <subject_guide>, when present, lists the textbook's
+     chapters and high-yield topics for this subject and the student's track.
+     Draw every question from those chapters only, at Grade 12 level.
    - Mathematics: Grade 12 syllabus only (limits, derivatives, function study,
      primitives and integrals, complex numbers, vectors in space, conics,
-     probability, differential equations, sequences).
+     probability, differential equations, sequences). A Social Science track
+     paper never contains complex numbers or differential equations, even when
+     the past papers shown are Science track ones: put its own topics there.
    - Physics and Chemistry: give the constants and data the past papers give,
      in SI units; keep every number physically consistent; balance every
      chemical equation.
@@ -715,6 +728,7 @@ def build_exam_message(
     focus: str = "",
     answer_key: bool = True,
     paper_format: str = "",
+    guide: str | None = None,
 ) -> str:
     """The user turn asking for a new paper: the past papers, then the request.
 
@@ -725,6 +739,8 @@ def build_exam_message(
     parts = [build_past_papers_block(papers), f"<subject>{_escape_passage(subject)}</subject>"]
     if paper_format:
         parts.append(f"<format>\n{paper_format}\n</format>")
+    if guide:
+        parts.append(f"<subject_guide>\n{guide}\n</subject_guide>")
     if focus.strip():
         parts.append(f"<focus>\n{_escape_passage(focus.strip())}\n</focus>")
     parts.append(f"<answer_key>{'yes' if answer_key else 'no'}</answer_key>")

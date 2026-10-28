@@ -1508,6 +1508,7 @@ def _exam_message(
         focus=payload.focus,
         answer_key=payload.answer_key,
         paper_format=paper_format,
+        guide=subject_guide(payload.subject, payload.track),
     )
     if not payload.partial:
         return message
