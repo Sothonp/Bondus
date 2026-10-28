@@ -328,12 +328,21 @@ _MATH_EXP_LOG = (
     "- High-yield: អនុគមន៍អិចស្ប៉ូណង់ស្យែល (exponential) and អនុគមន៍លោការីត (logarithmic) "
     "functions. The BAC II paper carries one of the two, picked at random, so practise both."
 )
+_NEVER_SET = "Never set as practice (no BAC II paper has): "
 MATH_GUIDES: dict[Track, str] = {
     "science": "\n".join([
         "Mathematics, ថ្នាក់វិទ្យាសាស្ត្រ (Science track).",
         "- Core topics: លីមីត (limits), ដេរីវេ (derivatives), ចំនួនកុំផ្លិច (complex numbers), "
         "អាំងតេក្រាល (integrals), សមីការឌីផេរ៉ង់ស្យែល (differential equations), the study and "
         "graphs of functions, វ៉ិចទ័រក្នុងលំហ (vectors in space), កោនិក (conics) and ប្រូបាប៊ីលីតេ (probability).",
+        "- BAC II exam scope (150 minutes, 125 points, seven exercises): I limits (15); II "
+        "probability of drawing objects, by counting (10); III complex numbers: modulus, "
+        "argument, trigonometric and algebraic forms, or an equation in C (15); IV integrals, "
+        "including by parts (15); V a differential equation and a particular solution (10); "
+        "VI vectors in space (coordinates, products, triangle properties) plus a conic: "
+        "parabola, ellipse or hyperbola from its focus and vertex (20); VII a full function "
+        "study with an exponential or logarithmic function: domain, parity, limits, variation "
+        "table, tangent, asymptotes, graph (40).",
         _MATH_EXP_LOG,
     ]),
     "social_science": "\n".join([
@@ -341,17 +350,24 @@ MATH_GUIDES: dict[Track, str] = {
         "- Core topics: លីមីត និងភាពជាប់ (limits, continuity), ដេរីវេ (derivatives), the study of "
         "អនុគមន៍សនិទាន (rational), exponential and logarithmic functions, អាំងតេក្រាល (integrals), "
         "ស្ថិតិពីរអថេរ (two-variable statistics) and កោនិក (conics).",
+        "- BAC II exam scope (90 minutes, 75 points, five exercises): I limits (15); II "
+        "integrals (10); III probability of drawing objects, by counting (10); IV an ellipse: "
+        "standard equation, axes, vertices, foci, sketch (10); V a rational function study: "
+        "domain, limits, vertical and oblique asymptotes, variation table, graph (30).",
         "- Never teach or set ចំនួនកុំផ្លិច (complex numbers) or សមីការឌីផេរ៉ង់ស្យែល "
         "(differential equations): they are not on this track's syllabus.",
         "- High-yield: អនុគមន៍សនិទាន (rational functions).",
-        _MATH_EXP_LOG,
     ]),
 }
 
 SUBJECT_GUIDES: dict[str, str] = {
     "mathematics": "\n".join([
-        "Mathematics. The student's track is unknown: the Science track also covers complex "
-        "numbers and differential equations, the Social Science track does not.",
+        "Mathematics. The student's track is unknown. Science track paper: 150 minutes, 125 "
+        "points, seven exercises (limits, probability, complex numbers, integrals, a "
+        "differential equation, vectors in space with a conic, an exponential or logarithmic "
+        "function study). Social Science track paper: 90 minutes, 75 points, five exercises "
+        "(limits, integrals, probability, an ellipse, a rational function study), with no "
+        "complex numbers and no differential equations.",
         _MATH_EXP_LOG,
     ]),
     "physics": "\n".join([
@@ -370,9 +386,9 @@ SUBJECT_GUIDES: dict[str, str] = {
         "length, inductance, stored energy, resistance); VI an AC circuit with a capacitor or a "
         "coil (impedance, effective current, the instantaneous voltage). Older papers also set "
         "interference (Young's experiment).",
-        "- Never examined at BAC II, so never set as practice: the photoelectric effect, charged "
-        "particles moving in a magnetic or electric field, and nuclear physics. Teach them only "
-        "when the student asks about them, and say they are not on the BAC II paper.",
+        "- " + _NEVER_SET + "the photoelectric effect, charged particles moving in a magnetic "
+        "or electric field, and nuclear physics. Teach them only when the student asks, and "
+        "say they are not on the BAC II paper.",
         "- Guide the student through choosing the formula, converting units and substituting "
         "step by step.",
     ]),
@@ -384,8 +400,16 @@ SUBJECT_GUIDES: dict[str, str] = {
         "4. លំនឹងគីមី: equilibrium, its shift, and acid-base and salt equilibria.",
         "5. ឧស្ម័ន (gases): properties and gas laws.",
         "6. គីមីសរីរាង្គ: esters, fats and oils, nitrogen compounds, carbohydrates and lipids.",
-        "- High-yield: acid-base equilibria, pH calculations, and organic structures (esters, "
-        "alcohols). Balance equations and do mole calculations step by step.",
+        "- BAC II exam scope (90 minutes, 75 points, five exercises of 10-20 points): acid-base "
+        "solutions every year (concentrations, pH of strong and weak acids and bases, $K_a$, "
+        "ionisation percentage, titration, equivalence point and indicator); reaction rate "
+        "(average rate from concentration or gas volume, catalysts, autocatalysis, redox "
+        "couples and $E°$); precipitation (molecular, full ionic and net ionic equations, mass "
+        "of precipitate); organic: esters (formula from combustion or molar mass, "
+        "semi-developed formula, names, esterification or hydrolysis equilibrium, yield), "
+        "amides and amines, fats and triglycerides; gas stoichiometry with the molar volume. "
+        "Theory parts ask short definitions (titration, why amides derive from carboxylic acids).",
+        "- Balance every equation and do mole calculations step by step.",
     ]),
     "biology": "\n".join([
         "ជីវវិទ្យា (Biology). Textbook chapters:",
@@ -397,8 +421,17 @@ SUBJECT_GUIDES: dict[str, str] = {
         "5. Genetic information and gene expression: ADN, protein synthesis, biotechnology.",
         "6. Evolution: Darwin's theory, evidence, the fossil record.",
         "7. Populations and communities.  8. Ecology: energy flow and matter cycles.",
-        "- High-yield: ADN/ARN, replication and protein synthesis problems, and genetics. The "
-        "textbook writes ADN and ARN (French), so use those, adding DNA/RNA in parentheses.",
+        "- BAC II exam scope (90 minutes, 75 points, five or six exercises): short theory "
+        "questions of 10 points on amino acids and the peptide bond, protein structure and "
+        "denaturation, enzymes, the nervous system and sense organs (hypothalamus, "
+        "cerebellum, the ear and balance, the eye), hormones (pancreas, hypothalamus), "
+        "genetic engineering (insulin), comparing ADN with ARNm or proteins, and dicot "
+        "flowers; then one or two problems of 15-20 points counting nucleotides: ADN and "
+        "ARNm composition, length (0.34 nm per pair), hydrogen bonds, free nucleotides for "
+        "replication, transcription and codons read by ribosomes.",
+        "- " + _NEVER_SET + "Mendelian crosses and Punnett squares, ecology, and populations; "
+        "evolution only as a short theory question.",
+        "- The textbook writes ADN and ARN (French), so use those, adding DNA/RNA in parentheses.",
     ]),
     "history": "\n".join([
         "ប្រវត្តិវិទ្យា (History). Textbook chapters:",
@@ -408,29 +441,42 @@ SUBJECT_GUIDES: dict[str, str] = {
         "សាធារណរដ្ឋខ្មែរ (1970-1975), កម្ពុជាប្រជាធិបតេយ្យ (1975-1979), the People's Republic of "
         "Kampuchea and State of Cambodia (1979-1993), and the Kingdom of Cambodia since 1993.",
         "3. Regional history during the Cold War.",
-        "- High-yield: precise dates, key figures, causes and consequences. Structure essay "
-        "answers chronologically and analytically, as the BAC II history rubric expects.",
+        "- BAC II exam scope (60 minutes, 50 points, five essay questions): recent papers ask "
+        "almost only about Cambodia: the French protectorate under King Norodom (its positive "
+        "and negative effects), why the Sangkum Reastr Niyum was founded and its neutrality, "
+        "why the Khmer Republic was founded and the cost of the war, the victory of 7 January "
+        "1979, the national reconciliation policy and the peace talks, peace and development "
+        "since then, ASEAN and neighbour cooperation, the Cold War's effects on Cambodia, "
+        "Khmer temples and UNESCO heritage (Preah Vihear), and world challenges such as food "
+        "security. Older papers also asked about the world history chapter.",
+        "- Answer with precise dates, figures, causes and consequences, structured "
+        "chronologically and analytically, as the BAC II history rubric expects.",
     ]),
     "khmer_literature": "\n".join([
-        "អក្សរសាស្ត្រខ្មែរ (Khmer Literature). Focus on essays and literary movements.",
-        "- Essay types: សំណេរពន្យល់ (explanatory: clarify a quote or theme with proof and "
-        "analysis), តែងសេចក្តីបែបប្រៀបធៀប (comparative: characters, themes or structure across "
-        "two works or authors), តែងសេចក្តីបែបពិភាក្សា (discursive: weigh views on a literary "
-        "statement with textual arguments and personal reflection).",
-        "- Every essay follows សេចក្តីផ្តើម (hook and thesis), តួសេចក្តី (one clear point per "
-        "paragraph, evidence from named works, transitions) and សេចក្តីសន្និដ្ឋាន (synthesis and "
-        "a broader reflection). Write in formal academic Khmer.",
+        "អក្សរសាស្ត្រខ្មែរ (Khmer Literature).",
+        "- BAC II exam scope (90 minutes, 75 points): one essay. Every paper since 2014 quotes a "
+        "view about Khmer literature (for example that it educates people, shows loyalty, "
+        "love, struggle and courage, or the fight between good and evil) and asks the student "
+        "to ពន្យល់ or បកស្រាយ it with examples from Khmer literary works. Comparative and "
+        "discursive essays are not set.",
+        "- Marking scheme: សេចក្តីផ្តើម (10 points: លំនាំបញ្ហា 4, ចំណូលបញ្ហា 3, ចំណោទបញ្ហា 3); "
+        "តួសេចក្តី (50 points: ឃ្លាភ្ជាប់សេចក្តី, ពន្យល់ពាក្យគន្លឹះ, ពន្យល់ន័យប្រធាន, then the "
+        "arguments, each proved with a named work, its characters and events); "
+        "សេចក្តីសន្និដ្ឋាន (synthesis and a broader reflection). Write in formal academic Khmer.",
         "- Textbook themes: អក្សរសិល្ប៍ខេមរនិយម, ព្រាហ្មណ៍និយម and ពុទ្ធនិយម, the arts, ល្ខោន, "
         "inscriptions and dance, traditions and កំណាព្យ.",
         "- Key works include រាមកេរ្តិ៍, សូផាត (រីម គីន, 1938), កុលាបប៉ៃលិន (ញ៉ុក ថែម, 1943) and "
         "ផ្កាស្រពោន (នូ ហាច). Never invent a work, author, date or quotation: when unsure, say so.",
     ]),
     "english": "\n".join([
-        "ភាសាអង់គ្លេស (English). Exam sections: cloze tests (បំពេញចន្លោះ), vocabulary (synonyms, "
-        "collocations, word forms), grammar (tenses, passive voice, conditionals, relative "
-        "clauses) and writing (paragraph and essay structure).",
-        "- High-yield: sentence transformation, phrasal verbs, correct verb forms and formal "
-        "writing structure.",
+        "ភាសាអង់គ្លេស (English).",
+        "- BAC II exam scope (60 minutes, 50 points, four parts): Part 1 Reading (10): fill the "
+        "gaps of a short text from a word box; Part 2 Grammar (15) and Part 3 Vocabulary (15): "
+        "multiple choice (tenses, passive voice, comparatives, conditionals, relative clauses, "
+        "word choice and collocations); Part 4 Writing (10): an essay of at least 80 words on "
+        "an everyday topic.",
+        "- High-yield: correct verb forms, the passive, phrasal verbs, and a clear paragraph "
+        "with a topic sentence.",
     ]),
 }
 

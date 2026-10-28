@@ -74,5 +74,9 @@ def test_subject_guides_cover_known_subjects_and_tracks():
 def test_the_physics_guide_keeps_practice_inside_the_bac_ii_scope():
     from prompts import SUBJECT_GUIDES
 
-    guide = SUBJECT_GUIDES["physics"]
-    assert "BAC II exam scope" in guide and "photoelectric effect" in guide.split("Never examined")[1]
+    from prompts import MATH_GUIDES
+
+    for guide in [*SUBJECT_GUIDES.values(), *MATH_GUIDES.values()]:
+        assert "BAC II exam scope" in guide or "Science track paper" in guide
+    assert "photoelectric effect" in SUBJECT_GUIDES["physics"].split("Never set as practice")[1]
+    assert "Punnett" in SUBJECT_GUIDES["biology"].split("Never set as practice")[1]
