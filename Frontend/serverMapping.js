@@ -75,16 +75,20 @@ export function newAttemptId() {
 
 const seconds = (n) => (Number.isFinite(Number(n)) && n !== null ? Math.round(Math.min(3600, Math.max(0, Number(n))) * 10) / 10 : undefined);
 
-/* An answered exercise -> a POST /study-events body. */
+/* An answered exercise -> a POST /study-events body. `answer` is what the student chose: the server grades it against
+   its own copy of the question bank and pays XP only for that verdict. `correct` is what the screen decided; the server
+   ignores it and it is only kept for the older backend. */
 export function answerEvent(ex, result, meta = {}, attemptId = newAttemptId()) {
   return compact({
     type: "answer", key: String(ex.id), attemptId,
     subject: ex.subject, topic: ex.topic, difficulty: ex.difficulty, mistakeType: meta.mistakeType,
+    answer: meta.answer == null ? undefined : String(meta.answer),
     correct: result === "correct", timeSec: seconds(meta.timeSec),
   });
 }
 
-/* A manual Pending / In progress / Completed tick. "pending" tells the server nothing, so it returns null. */
+/* A manual Pending / In progress / Completed tick. "pending" tells the server nothing, so it returns null. The server
+   records the tick (it counts as studying today) but pays nothing for it: only a graded answer earns XP. */
 export function statusEvent(ex, status, attemptId = newAttemptId()) {
   if (status !== "completed" && status !== "in_progress") return null;
   return compact({ type: "answer", key: String(ex.id), attemptId, subject: ex.subject, topic: ex.topic, status });
