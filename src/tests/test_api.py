@@ -245,3 +245,38 @@ class TestLibraryStaysPrivate:
         sent = ask(store_path, ScriptedGenerator(["ok"]))
         meta = next(event for event in sent if event["type"] == "meta")
         assert meta["sources"] == []
+
+
+class TestFallbackSpeed:
+    def test_a_model_that_never_starts_is_abandoned_for_the_next(self):
+        import asyncio
+
+        from src.api import FallbackGenerator
+
+        class Stalled(ScriptedGenerator):
+            async def stream(self, **kwargs):
+                await asyncio.sleep(60)
+                yield "too late"
+
+        stalled = Stalled([]); stalled.provider = "gemini"; stalled.model = "slow"
+        quick = ScriptedGenerator(["ok"]); quick.provider = "groq"; quick.model = "fast"
+        chain = FallbackGenerator([stalled, quick], first_token_seconds=0.05)
+
+        async def collect():
+            return [item async for item in chain.stream(system="", history=[], user_message="q")]
+
+        items = asyncio.run(asyncio.wait_for(collect(), 5))
+        assert "ok" in items and "too late" not in items
+        assert "gemini:slow" in chain.resting
+
+    def test_the_backup_provider_comes_right_after_the_main_model(self):
+        from src.api import build_generator
+
+        settings = Settings(
+            _env_file=None, llm_provider="gemini", gemini_api_key="g", groq_api_key="gsk_test",
+            gemini_model="gemini-a", gemini_fallback_models="gemini-b,gemini-c",
+            llm_backup_provider="groq",
+        )
+        chain = build_generator(settings).chain
+        assert chain[:2] == ["gemini:gemini-a", f"groq:{settings.groq_model}"]
+        assert chain.index("gemini:gemini-b") > 1

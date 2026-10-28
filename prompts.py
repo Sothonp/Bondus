@@ -364,6 +364,29 @@ OUTPUT_RULES = FORMAT_RULES + _TUTOR_RULES
 
 SYSTEM_PROMPT = TUTOR_PERSONA + OUTPUT_RULES
 
+
+def _cut(text: str, start: str, end: str, keep: str = "") -> str:
+    """``text`` with the span from ``start`` up to ``end`` replaced by ``keep``."""
+    head = text.index(start)
+    return text[:head] + keep + text[text.index(end, head):]
+
+
+# For providers capped at 8,000 tokens a minute (Groq, Cerebras): the same rules
+# without the worked example and the GeoGebra figures, so the full prompt leaves
+# room for the passages and the answer.
+COMPACT_SYSTEM_PROMPT = _cut(
+    _cut(SYSTEM_PROMPT, "   A part in the required shape:", "5. The curriculum passages"),
+    "7. Graphs and figures (GeoGebra)",
+    "6. Attached images",
+    "7. Graphs: describe any graph or figure in words; do not draw one.\n\n",
+)
+_COMPACT = {SYSTEM_PROMPT: COMPACT_SYSTEM_PROMPT}
+
+
+def compact_prompt(system: str) -> str:
+    """The short form of a system prompt, for a provider with a small token budget."""
+    return _COMPACT.get(system, system)
+
 LANGUAGE_NAMES: dict[str, str] = {"km": "Khmer (ភាសាខ្មែរ)", "en": "English"}
 
 NO_CONTEXT_NOTE = (

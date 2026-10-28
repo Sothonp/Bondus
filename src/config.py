@@ -76,6 +76,15 @@ class Settings(BaseSettings):
     # every question. A provider that sends `retry-after` sets its own wait.
     llm_cooldown_seconds: float = Field(15.0, ge=0.0)
     llm_max_cooldown_seconds: float = Field(300.0, ge=1.0)
+    # The provider tried right after the main model, before that provider's own
+    # fallback models: with LLM_BACKUP_PROVIDER=groq a failing Gemini model hands
+    # over to Groq at once instead of to three more Gemini models first.
+    llm_backup_provider: str = ""
+    # A streamed answer that has not produced its first words after this many
+    # seconds is abandoned for the next model (0 turns it off). Exams think
+    # before writing, so they get longer.
+    llm_first_token_seconds: float = Field(25.0, ge=0.0)
+    exam_first_token_seconds: float = Field(120.0, ge=0.0)
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = Field(

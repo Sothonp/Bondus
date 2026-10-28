@@ -99,3 +99,14 @@ def test_subject_named_in(question, expected):
     from src.subjects import subject_named_in
 
     assert subject_named_in(question) == expected
+
+
+def test_the_compact_prompt_keeps_the_rules_and_drops_the_bulk():
+    from prompts import COMPACT_SYSTEM_PROMPT, SYSTEM_PROMPT, compact_prompt
+
+    assert compact_prompt(SYSTEM_PROMPT) == COMPACT_SYSTEM_PROMPT
+    assert compact_prompt("other") == "other"
+    for rule in ("How much to answer", "[Scope — strict]", "4. Solution style", "6. Attached images"):
+        assert rule in COMPACT_SYSTEM_PROMPT
+    assert "GeoGebra)" not in COMPACT_SYSTEM_PROMPT
+    assert len(COMPACT_SYSTEM_PROMPT) < len(SYSTEM_PROMPT) * 0.9

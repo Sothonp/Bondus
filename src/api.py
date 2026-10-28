@@ -31,6 +31,7 @@ from prompts import (
     build_exam_message,
     build_extractive_answer,
     build_user_message,
+    compact_prompt,
     subject_guide,
 )
 from src.answer_format import sanitize_answer
@@ -524,8 +525,11 @@ class GroqGenerator:
         chunks: Sequence[RetrievedChunk] = (),
         message_builder: MessageBuilder | None = None,
     ) -> dict:
-        """The request, shrunk to fit the tokens-per-minute limit: the oldest chat
-        turns go first, then the lowest-ranked passages."""
+        """The request, shrunk to fit the tokens-per-minute limit: the short form
+        of the system prompt, then the oldest chat turns go first, then the
+        lowest-ranked passages."""
+        if self.tokens_per_minute:
+            system = compact_prompt(system)
         all_turns = _normalized_history(history)
         turns = list(all_turns)
         kept = list(chunks)
@@ -922,7 +926,9 @@ class FallbackGenerator:
     and burns its per-minute quota while the others sit idle.
 
     A stream only switches before its first text arrives; after that the client
-    is told to start over. If every candidate fails, the retrieved passages are
+    is told to start over. A model that has not started answering within
+    ``first_token_seconds`` counts as failed (504), so a stalled provider costs
+    seconds rather than the whole request timeout. If every candidate fails, the retrieved passages are
     returned with a note that the tutor is unavailable.
     """
 
@@ -933,6 +939,7 @@ class FallbackGenerator:
         rotate: bool = False,
         cooldown_seconds: float = 15.0,
         max_cooldown_seconds: float = 300.0,
+        first_token_seconds: float = 0.0,
     ) -> None:
         if not candidates:
             raise ValueError("at least one generator is required")
@@ -942,6 +949,7 @@ class FallbackGenerator:
         self.rotate = rotate
         self.cooldown_seconds = cooldown_seconds
         self.max_cooldown_seconds = max_cooldown_seconds
+        self.first_token_seconds = first_token_seconds
         self._health = [ModelHealth() for _ in self.candidates]
         self._cursor = 0
 
@@ -1040,8 +1048,20 @@ class FallbackGenerator:
         for index in self._order():
             candidate = self.candidates[index]
             started = False
+            items = stream_answer(candidate, **kwargs).__aiter__()
             try:
-                async for item in stream_answer(candidate, **kwargs):
+                while True:
+                    try:
+                        if started or not self.first_token_seconds:
+                            item = await items.__anext__()
+                        else:
+                            item = await asyncio.wait_for(items.__anext__(), self.first_token_seconds)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        raise LLMError(
+                            504, f"no answer within {self.first_token_seconds:.0f} s"
+                        ) from None
                     if isinstance(item, GeneratedAnswer):
                         item = replace(item, provider=candidate.provider)
                     elif isinstance(item, str):
@@ -1054,6 +1074,8 @@ class FallbackGenerator:
                     # The client already shows part of this answer; tell it to start over.
                     yield StreamReset(detail=exc.detail)
                 continue
+            finally:
+                await items.aclose()
             self._recovered(index)
             return
         fallback = self._last_resort(error)
@@ -1177,8 +1199,11 @@ def build_generator(settings: Settings) -> AnswerGenerator:
     # the general-purpose hosts go first and SEA-LION last -- it is the slowest,
     # but it is the one trained for Khmer, so it is the right final answer rather
     # than a degraded one.
+    backup = settings.llm_backup_provider.strip().lower()
+    if backup and backup != provider:
+        candidates[1:1] = _provider_generators(settings, backup)
     for other in ("anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion"):
-        if other != provider:
+        if other not in (provider, backup):
             candidates += _provider_generators(settings, other)
     if len(candidates) > 1:
         for candidate in candidates:
@@ -1192,6 +1217,7 @@ def build_generator(settings: Settings) -> AnswerGenerator:
         rotate=settings.llm_selection == "rotate",
         cooldown_seconds=settings.llm_cooldown_seconds,
         max_cooldown_seconds=settings.llm_max_cooldown_seconds,
+        first_token_seconds=settings.llm_first_token_seconds,
     )
 
 
@@ -1223,6 +1249,7 @@ def build_exam_generator(settings: Settings) -> AnswerGenerator:
         rotate=False,
         cooldown_seconds=settings.llm_cooldown_seconds,
         max_cooldown_seconds=settings.llm_max_cooldown_seconds,
+        first_token_seconds=settings.exam_first_token_seconds,
     )
 
 
