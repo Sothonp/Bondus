@@ -2084,7 +2084,9 @@ def create_app(
             chunks=len(state.store),
         )
 
-    asked = [Depends(rate_limit), *signed_in]
+    # One limit per question: per signed-in student when sign-in is required (a
+    # school on one Wi-Fi shares an address), per IP address when it is not.
+    asked = signed_in if verifier is not None else [Depends(rate_limit)]
 
     @app.post(
         "/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"], dependencies=asked,

@@ -91,6 +91,8 @@ def make_client(handler, store_path, *, per_minute: int = 20, cache_seconds: int
         vector_store_path=store_path,
         auth_verify_url=ME_URL,
         user_rate_limit_per_minute=per_minute,
+        # These tests count the requests that reach a model; a cached answer would not.
+        answer_cache_ttl_seconds=0,
     )
     generator = ScriptedGenerator(["ok"])
     return TestClient(create_app(settings, generator=generator, token_verifier=verifier)), generator
