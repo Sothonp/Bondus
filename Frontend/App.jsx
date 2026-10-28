@@ -29,6 +29,8 @@ import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diag
 import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
 import { ExerciseCard, ExerciseViewer, AdminExerciseForm, NewExerciseButton } from "./ExerciseUi.jsx";
+import { ProfilePage } from "./ProfileUi.jsx";
+import { serverFieldErrors } from "./profileForm.js";
 import { EXERCISE_SUBJECTS, canBrowseExercises, isAdmin } from "./exercises.js";
 import { MobileTopBar, MobileBottomNav } from "./MobileNav.jsx";
 import { splitMobileNav } from "./mobileNav.js";
@@ -7076,6 +7078,19 @@ const STRINGS = {
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
     navMore: "More", moreLanguage: "Language",
+    // Profile page
+    profileTitle: "Profile", profileDesc: "Update your details and study goals.", profileOpen: "Open your profile",
+    profileDetailsHeading: "Your details", profileNameLabel: "Full name", profileEmailLabel: "Email", profileAgeLabel: "Age",
+    profileGoalsHeading: "Study goals", profileLockedNote: "Track and grade are set when you sign up and can't be changed here.",
+    profileReminderLabel: "Study reminder emails", profileReminderHint: "A friendly email if you haven't studied for a few days.",
+    profileSave: "Save changes", profileSaving: "Saving…", profileSaved: "Saved",
+    profileErrName: "Please enter your name.", profileErrEmail: "Please enter a valid email address.", profileErrAge: "Age must be between 8 and 99.",
+    passwordHeading: "Password", passwordCurrentLabel: "Current password", passwordNewLabel: "New password", passwordConfirmLabel: "Confirm new password",
+    passwordChange: "Change password", passwordChanging: "Changing…", passwordChanged: "Password changed. Other devices were signed out.",
+    errWrongPassword: "That isn't your current password.", passwordErrCurrentRequired: "Enter your current password.",
+    passwordErrTooShort: "Use at least 8 characters.", passwordErrTooLong: "Use at most 128 characters.", passwordErrMismatch: "The two passwords don't match.",
+    passwordForgotLink: "Don't know your current password? Email me a reset code", passwordCodeSent: "We sent a code to {email}.",
+    passwordCodeLabel: "Code from the email", passwordResetSubmit: "Set password", passwordCancel: "Cancel",
     navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress", navExplore: "Explore",
     // Dashboard
     dashGreetingPrefix: "Welcome,",
@@ -7306,6 +7321,19 @@ const STRINGS = {
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
     navMore: "ផ្សេងទៀត", moreLanguage: "ភាសា",
+    // Profile page (Khmer drafted by Claude; the owner proofreads)
+    profileTitle: "ប្រវត្តិរូប", profileDesc: "កែប្រែព័ត៌មានរបស់អ្នក និងគោលដៅសិក្សា។", profileOpen: "បើកប្រវត្តិរូបរបស់អ្នក",
+    profileDetailsHeading: "ព័ត៌មានរបស់អ្នក", profileNameLabel: "ឈ្មោះពេញ", profileEmailLabel: "អ៊ីមែល", profileAgeLabel: "អាយុ",
+    profileGoalsHeading: "គោលដៅសិក្សា", profileLockedNote: "ផ្នែកសិក្សា និងកម្រិតថ្នាក់ត្រូវបានកំណត់ពេលចុះឈ្មោះ ហើយមិនអាចប្តូរនៅទីនេះបានទេ។",
+    profileReminderLabel: "អ៊ីមែលរំលឹកការសិក្សា", profileReminderHint: "អ៊ីមែលរំលឹកដោយមិត្តភាព ប្រសិនបើអ្នកមិនបានសិក្សាអស់រយៈពេលពីរបីថ្ងៃ។",
+    profileSave: "រក្សាទុកការផ្លាស់ប្តូរ", profileSaving: "កំពុងរក្សាទុក…", profileSaved: "បានរក្សាទុក",
+    profileErrName: "សូមបញ្ចូលឈ្មោះរបស់អ្នក។", profileErrEmail: "សូមបញ្ចូលអាសយដ្ឋានអ៊ីមែលឱ្យបានត្រឹមត្រូវ។", profileErrAge: "អាយុត្រូវនៅចន្លោះពី ៨ ដល់ ៩៩។",
+    passwordHeading: "ពាក្យសម្ងាត់", passwordCurrentLabel: "ពាក្យសម្ងាត់បច្ចុប្បន្ន", passwordNewLabel: "ពាក្យសម្ងាត់ថ្មី", passwordConfirmLabel: "បញ្ជាក់ពាក្យសម្ងាត់ថ្មី",
+    passwordChange: "ប្តូរពាក្យសម្ងាត់", passwordChanging: "កំពុងប្តូរ…", passwordChanged: "បានប្តូរពាក្យសម្ងាត់។ ឧបករណ៍ផ្សេងទៀតត្រូវបានចាកចេញ។",
+    errWrongPassword: "នេះមិនមែនជាពាក្យសម្ងាត់បច្ចុប្បន្នរបស់អ្នកទេ។", passwordErrCurrentRequired: "សូមបញ្ចូលពាក្យសម្ងាត់បច្ចុប្បន្នរបស់អ្នក។",
+    passwordErrTooShort: "សូមប្រើយ៉ាងហោចណាស់ ៨តួអក្សរ។", passwordErrTooLong: "សូមប្រើមិនលើស ១២៨តួអក្សរ។", passwordErrMismatch: "ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ។",
+    passwordForgotLink: "មិនដឹងពាក្យសម្ងាត់បច្ចុប្បន្នមែនទេ? ផ្ញើកូដកំណត់ឡើងវិញមកអ៊ីមែលរបស់ខ្ញុំ", passwordCodeSent: "យើងបានផ្ញើកូដទៅ {email}។",
+    passwordCodeLabel: "កូដពីអ៊ីមែល", passwordResetSubmit: "កំណត់ពាក្យសម្ងាត់", passwordCancel: "បោះបង់",
     navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព", navExplore: "ស្វែងរក",
     // Dashboard
     dashGreetingPrefix: "សូមស្វាគមន៍,",
@@ -8077,6 +8105,21 @@ export default function App() {
     sendStudy(statusEvent(ex, status));
   };
 
+  // Profile page: save the changed details. With the server, PATCH /me and take its answer (level and XP stay as they
+  // are); browser-only, just update the profile in memory. Resolves to { ok: true } or { ok: false, errors, message }.
+  const handleSaveDetails = async (fields) => {
+    if (!SERVER_MODE) { setProfile((cur) => ({ ...cur, ...fields })); return { ok: true }; }
+    try {
+      const res = await api.patchMe(fields);
+      const { level, xp, xpToNext, ...details } = userToProfile(res.user);
+      setProfile((cur) => ({ ...cur, ...details }));
+      return { ok: true };
+    } catch (err) {
+      const errors = serverFieldErrors(err);
+      return { ok: false, errors, message: Object.keys(errors).length ? null : apiErrorText(lang, err?.code, err?.retryAfter) };
+    }
+  };
+
   // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper
   // (display: contents keeps that wrapper out of the layout).
   const noticeToast = notice ? (
@@ -8124,6 +8167,12 @@ export default function App() {
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
+    // Reached from the header avatar and the sidebar link, not from NAV. The form pieces are passed in (ProfileUi.jsx
+    // cannot import App.jsx), so editing a profile uses the same fields and option lists as signing up.
+    profile: <ProfilePage profile={profile} lang={lang} tr={tr}
+      parts={{ FormField, SelectField, SubjectChip }}
+      lists={{ examYears: EXAM_YEARS, studyMinutes: STUDY_MINUTES, universities: UNIS, foreignLanguages: FOREIGN_LANGUAGES, targetGrades: ["A", "B", "C", "D", "E"], trackLabels: FIELD_META }}
+      onSaveDetails={handleSaveDetails} />,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
@@ -8176,6 +8225,7 @@ export default function App() {
               <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
               <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
             </div>
+            <button onClick={() => go("profile")} className={`eai-focus w-full text-center text-xs font-semibold py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>{t(lang, "profileTitle")}</button>
             <button onClick={handleLogout} className={`eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "logOut")}</button>
           </div>
         </aside>
@@ -8197,7 +8247,7 @@ export default function App() {
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
-                <div className="grid place-items-center rounded-full text-sm font-bold text-white" style={{ width: 38, height: 38, background: "var(--primary)" }}>{initials}</div>
+                <button onClick={() => go("profile")} aria-label={tr("profileOpen")} className="eai-focus grid place-items-center rounded-full text-sm font-bold text-white" style={{ width: 38, height: 38, background: "var(--primary)" }}>{initials}</button>
               </div>
             </div>
           </header>

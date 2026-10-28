@@ -107,4 +107,7 @@ export const PROFILE_STRING_KEYS = [
   "errWrongPassword", "passwordErrCurrentRequired", "passwordErrTooShort", "passwordErrTooLong", "passwordErrMismatch",
   "passwordForgotLink", "passwordCodeSent", "passwordCodeLabel", "passwordResetSubmit", "passwordCancel",
   "errEmailTaken", "errValidation", "errServer", "errNoEmail", "errEmailFailed", "errInvalidCode", "errTooMany", "errNetwork",
+  // Reused from the sign-up screens so the labels match:
+  "targetGradeLabel", "gradeWord", "targetExamYearLabel", "dailyStudyTimeLabel", "minutesWord", "targetUniLabel", "notSureYet",
+  "foreignLanguageLabel", "subjectsImproveQ", "grade11", "grade12",
 ];
