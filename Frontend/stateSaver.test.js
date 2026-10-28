@@ -127,3 +127,25 @@ test("cancel() forgets unsaved state (sign-out)", async () => {
   assert.equal(puts.length, 0);
   assert.equal(saver.hasPending(), false);
 });
+
+test("the default timers work when called as methods, as browsers only allow setTimeout on the global object", async () => {
+  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+  // A browser throws "Illegal invocation" when setTimeout/clearTimeout run with any receiver other than window.
+  const likeABrowser = (real) => function (...args) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    return real(...args);
+  };
+  globalThis.setTimeout = likeABrowser(realSet);
+  globalThis.clearTimeout = likeABrowser(realClear);
+  try {
+    const puts = [];
+    const api = { putState: async (state) => { puts.push(state); return { revision: 1 }; }, getState: async () => ({ revision: 0 }) };
+    const saver = createStateSaver({ api, delayMs: 5 });
+    saver.schedule({ v: 1 }); saver.schedule({ v: 2 });
+    await new Promise((r) => realSet(r, 60));
+    assert.deepEqual(puts, [{ v: 2 }]);
+    saver.cancel();
+  } finally {
+    globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear;
+  }
+});

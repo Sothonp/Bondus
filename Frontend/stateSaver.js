@@ -12,7 +12,8 @@
 const RETRY_LATER = (status) => status === 0 || status === 401 || status === 408 || status === 429 || status >= 500;
 const MAX_STALE_RETRIES = 3;
 
-export function createStateSaver({ api, delayMs = 1500, retryMs = 10000, timers = { set: setTimeout, clear: clearTimeout }, onError = () => {} }) {
+// The defaults are wrapped, not passed bare: a browser refuses setTimeout when it is called as a method of `timers`.
+export function createStateSaver({ api, delayMs = 1500, retryMs = 10000, timers = { set: (fn, ms) => setTimeout(fn, ms), clear: (id) => clearTimeout(id) }, onError = () => {} }) {
   let revision = 0;
   let pending = null;   // newest state not yet saved
   let timer = null;
