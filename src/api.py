@@ -9,7 +9,7 @@ import json
 import logging
 import time
 import uuid
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
@@ -30,6 +30,7 @@ from prompts import (
     build_exam_message,
     build_extractive_answer,
     build_user_message,
+    subject_guide,
 )
 from src.answer_format import sanitize_answer
 from schemas import (
@@ -1458,6 +1459,17 @@ def _question_language(prompt: str, readings: Sequence[ImageReading]) -> Literal
     return detect_language(image_text) if image_text.strip() else "km"
 
 
+def _question_guide(payload: QueryRequest, context: Sequence[RetrievedChunk]) -> str | None:
+    """Subject focus notes for the answer: the requested subject, else the one most
+    of the retrieved passages come from."""
+    subject = payload.subject
+    if subject is None and context:
+        top, count = Counter(chunk.subject for chunk in context).most_common(1)[0]
+        if top is not None and count * 2 > len(context):
+            subject = top
+    return subject_guide(subject, payload.track)
+
+
 async def _retrieve_context(
     state: RAGState, payload: QueryRequest, readings: Sequence[ImageReading] = ()
 ) -> tuple[Literal["km", "en"], list[RetrievedChunk]]:
@@ -1743,16 +1755,17 @@ def create_app(
         started = time.perf_counter()
         readings = await _read_images(state, _decode_images(state, payload))
         language, context = await _retrieve_context(state, payload, readings)
+        guide = _question_guide(payload, context)
 
         answer = GeneratedAnswer(text="", stop_reason=None, model=state.generator.model)
         if payload.generate:
             answer = await state.generator.generate(
                 system=SYSTEM_PROMPT,
                 history=payload.history,
-                user_message=build_user_message(payload.prompt, context, language, readings),
+                user_message=build_user_message(payload.prompt, context, language, readings, guide),
                 chunks=context,
                 language=language,
-                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
+                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings, guide),
             )
 
         answer_text = answer.text
@@ -1815,6 +1828,7 @@ def create_app(
             except HTTPException as exc:
                 yield _line(QueryStreamError(status=exc.status_code, detail=str(exc.detail)))
                 return
+            guide = _question_guide(payload, context)
             yield _line(QueryStreamMeta(
                 language=language,
                 grounded=bool(context),
@@ -1828,10 +1842,10 @@ def create_app(
                 continues_math=payload.continues_math,
                 system=SYSTEM_PROMPT,
                 history=payload.history,
-                user_message=build_user_message(payload.prompt, context, language, readings),
+                user_message=build_user_message(payload.prompt, context, language, readings, guide),
                 chunks=context,
                 language=language,
-                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings),
+                message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings, guide),
             ):
                 yield event
 

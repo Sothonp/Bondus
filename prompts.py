@@ -10,7 +10,11 @@ from typing import Literal, Protocol
 
 Language = Literal["km", "en"]
 
-TUTOR_PERSONA = """អ្នកគឺជា "គ្រូបង្រៀនថ្នាក់ទី១២ ត្រៀមប្រឡងបាក់ឌុប" ដ៏មានសមត្ថភាព និងភាពអត់ធ្មត់ សម្រាប់សិស្សានុសិស្សនៅកម្ពុជា។
+TUTOR_PERSONA = """អ្នកគឺជា "Rean-AI" (រៀន-AI) គ្រូបង្វឹកប្រឡងបាក់ឌុបថ្នាក់ទី១២ ដ៏មានសមត្ថភាព និងភាពអត់ធ្មត់ សម្រាប់សិស្សានុសិស្សនៅកម្ពុជា។
+Tone: encouraging, academic, culturally aware and clear. Explain in simple Khmer,
+adding the English technical term in parentheses where it helps in maths and
+science. Follow the exam formats and marking expectations of MoEYS, and tie
+practice back to the student's BAC II goal.
 
 [មុខវិជ្ជា / Subjects]
 អ្នកបង្រៀនគ្រប់មុខវិជ្ជាប្រឡងបាក់ឌុបថ្នាក់ទី១២៖ គណិតវិទ្យា រូបវិទ្យា គីមីវិទ្យា ជីវវិទ្យា ផែនដីវិទ្យា អក្សរសាស្ត្រខ្មែរ ប្រវត្តិវិទ្យា ភូមិវិទ្យា សីលធម៌ពលរដ្ឋវិទ្យា និងភាសាបរទេស (អង់គ្លេស ឬ បារាំង)។
@@ -302,6 +306,117 @@ NO_CONTEXT_NOTE = (
 )
 
 
+Track = Literal["science", "social_science"]
+
+# Per-subject focus, sent in the user turn for the question's subject only so the
+# static system prompt stays small (Groq's free tier allows 8,000 tokens a
+# minute). Chapter lists follow the MoEYS Grade 12 textbooks in the index.
+_MATH_EXP_LOG = (
+    "- High-yield: អនុគមន៍អិចស្ប៉ូណង់ស្យែល (exponential) and អនុគមន៍លោការីត (logarithmic) "
+    "functions. The BAC II paper carries one of the two, picked at random, so practise both."
+)
+MATH_GUIDES: dict[Track, str] = {
+    "science": "\n".join([
+        "Mathematics, ថ្នាក់វិទ្យាសាស្ត្រ (Science track).",
+        "- Core topics: លីមីត (limits), ដេរីវេ (derivatives), ចំនួនកុំផ្លិច (complex numbers), "
+        "អាំងតេក្រាល (integrals), សមីការឌីផេរ៉ង់ស្យែល (differential equations), the study and "
+        "graphs of functions, វ៉ិចទ័រក្នុងលំហ (vectors in space), កោនិក (conics) and ប្រូបាប៊ីលីតេ (probability).",
+        _MATH_EXP_LOG,
+    ]),
+    "social_science": "\n".join([
+        "Mathematics, ថ្នាក់វិទ្យាសាស្ត្រសង្គម (Social Science track), textbook កម្រិតមូលដ្ឋាន.",
+        "- Core topics: លីមីត និងភាពជាប់ (limits, continuity), ដេរីវេ (derivatives), the study of "
+        "អនុគមន៍សនិទាន (rational), exponential and logarithmic functions, អាំងតេក្រាល (integrals), "
+        "ស្ថិតិពីរអថេរ (two-variable statistics) and កោនិក (conics).",
+        "- Never teach or set ចំនួនកុំផ្លិច (complex numbers) or សមីការឌីផេរ៉ង់ស្យែល "
+        "(differential equations): they are not on this track's syllabus.",
+        "- High-yield: អនុគមន៍សនិទាន (rational functions).",
+        _MATH_EXP_LOG,
+    ]),
+}
+
+SUBJECT_GUIDES: dict[str, str] = {
+    "mathematics": "\n".join([
+        "Mathematics. The student's track is unknown: the Science track also covers complex "
+        "numbers and differential equations, the Social Science track does not.",
+        _MATH_EXP_LOG,
+    ]),
+    "physics": "\n".join([
+        "រូបវិទ្យា (Physics). Textbook chapters:",
+        "1. ទែម៉ូឌីណាមិច: ទ្រឹស្តីស៊ីនេទិចនៃឧស្ម័ន (kinetic theory of gases), ច្បាប់ទី១ទែម៉ូឌីណាមិច, ម៉ាស៊ីន (heat engines).",
+        "2. រលក (waves): superposition and standing waves, interference and diffraction.",
+        "3. អគ្គិសនី និងម៉ាញេទិច: magnetic fields and forces, electromagnetic induction, "
+        "alternating-current circuits and oscillations.",
+        "4. រូបវិទ្យាទំនើប (modern physics), including nuclear physics.",
+        "- High-yield: oscillations (រំញ័រ), the laws of thermodynamics and wave problems. Guide "
+        "the student through choosing the formula, converting units and substituting step by step.",
+    ]),
+    "chemistry": "\n".join([
+        "គីមីវិទ្យា (Chemistry). Textbook chapters:",
+        "1. ស៊ីនេទិចគីមី: ល្បឿនប្រតិកម្ម and the factors that affect it.",
+        "2. សមាសធាតុក្នុងសូលុយស្យុងទឹក និងកម្លាំងអន្តរម៉ូលេគុល.",
+        "3. អាស៊ីត និងបាស: theories (Arrhenius, Brønsted-Lowry, Lewis), reactions, pH, titration.",
+        "4. លំនឹងគីមី: equilibrium, its shift, and acid-base and salt equilibria.",
+        "5. ឧស្ម័ន (gases): properties and gas laws.",
+        "6. គីមីសរីរាង្គ: esters, fats and oils, nitrogen compounds, carbohydrates and lipids.",
+        "- High-yield: acid-base equilibria, pH calculations, and organic structures (esters, "
+        "alcohols). Balance equations and do mole calculations step by step.",
+    ]),
+    "biology": "\n".join([
+        "ជីវវិទ្យា (Biology). Textbook chapters:",
+        "1. Gymnosperms and angiosperms (plant structure and reproduction).",
+        "2. Plant growth and responses to stimuli.",
+        "3. Regulation in organisms: តម្រូវប្រសាទ (nervous control), សរីរាង្គវិញ្ញាណ (sense organs), "
+        "ប្រព័ន្ធអង់ដូគ្រីន (endocrine system).",
+        "4. Proteins: អាស៊ីតអាមីណេ (amino acids), proteins, អង់ស៊ីម (enzymes).",
+        "5. Genetic information and gene expression: ADN, protein synthesis, biotechnology.",
+        "6. Evolution: Darwin's theory, evidence, the fossil record.",
+        "7. Populations and communities.  8. Ecology: energy flow and matter cycles.",
+        "- High-yield: ADN/ARN, replication and protein synthesis problems, and genetics. The "
+        "textbook writes ADN and ARN (French), so use those, adding DNA/RNA in parentheses.",
+    ]),
+    "history": "\n".join([
+        "ប្រវត្តិវិទ្យា (History). Textbook chapters:",
+        "1. World history: the USA (1860-1990), Britain, France, West Germany (1945-1991), Italy, "
+        "the USSR (1945-1991), East Germany, Czechoslovakia, Poland, Yugoslavia.",
+        "2. Cambodia: under French colonial rule (1863-1953), សង្គមរាស្ត្រនិយម (1955-1970), "
+        "សាធារណរដ្ឋខ្មែរ (1970-1975), កម្ពុជាប្រជាធិបតេយ្យ (1975-1979), the People's Republic of "
+        "Kampuchea and State of Cambodia (1979-1993), and the Kingdom of Cambodia since 1993.",
+        "3. Regional history during the Cold War.",
+        "- High-yield: precise dates, key figures, causes and consequences. Structure essay "
+        "answers chronologically and analytically, as the BAC II history rubric expects.",
+    ]),
+    "khmer_literature": "\n".join([
+        "អក្សរសាស្ត្រខ្មែរ (Khmer Literature). Focus on essays and literary movements.",
+        "- Essay types: សំណេរពន្យល់ (explanatory: clarify a quote or theme with proof and "
+        "analysis), តែងសេចក្តីបែបប្រៀបធៀប (comparative: characters, themes or structure across "
+        "two works or authors), តែងសេចក្តីបែបពិភាក្សា (discursive: weigh views on a literary "
+        "statement with textual arguments and personal reflection).",
+        "- Every essay follows សេចក្តីផ្តើម (hook and thesis), តួសេចក្តី (one clear point per "
+        "paragraph, evidence from named works, transitions) and សេចក្តីសន្និដ្ឋាន (synthesis and "
+        "a broader reflection). Write in formal academic Khmer.",
+        "- Textbook themes: អក្សរសិល្ប៍ខេមរនិយម, ព្រាហ្មណ៍និយម and ពុទ្ធនិយម, the arts, ល្ខោន, "
+        "inscriptions and dance, traditions and កំណាព្យ.",
+        "- Key works include រាមកេរ្តិ៍, សូផាត (រីម គីន, 1938), កុលាបប៉ៃលិន (ញ៉ុក ថែម, 1943) and "
+        "ផ្កាស្រពោន (នូ ហាច). Never invent a work, author, date or quotation: when unsure, say so.",
+    ]),
+    "english": "\n".join([
+        "ភាសាអង់គ្លេស (English). Exam sections: cloze tests (បំពេញចន្លោះ), vocabulary (synonyms, "
+        "collocations, word forms), grammar (tenses, passive voice, conditionals, relative "
+        "clauses) and writing (paragraph and essay structure).",
+        "- High-yield: sentence transformation, phrasal verbs, correct verb forms and formal "
+        "writing structure.",
+    ]),
+}
+
+
+def subject_guide(subject: str | None, track: Track | None = None) -> str | None:
+    """The focus notes for a question's subject, or None when there are none."""
+    if subject == "mathematics" and track in MATH_GUIDES:
+        return MATH_GUIDES[track]
+    return SUBJECT_GUIDES.get(subject or "")
+
+
 class ContextChunk(Protocol):
     source: str
     page: int | None
@@ -391,13 +506,16 @@ def build_user_message(
     chunks: Sequence[ContextChunk],
     language: Language,
     images: Sequence[ImageReadingLike] = (),
+    guide: str | None = None,
 ) -> str:
-    """The final user turn: retrieved context, attached images, then the question."""
+    """The final user turn: retrieved context, attached images, subject guide, then the question."""
     parts = [build_context_block(chunks)]
     if not chunks:
         parts.append(f"<note>{NO_CONTEXT_NOTE}</note>")
     if images:
         parts.append(build_images_block(images))
+    if guide:
+        parts.append(f"<subject_guide>\n{guide}\n</subject_guide>")
     parts.append(f"<question>\n{question or IMAGE_ONLY_QUESTION[language]}\n</question>")
     parts.append(f"<response_language>{language}</response_language>")
     return "\n\n".join(parts)

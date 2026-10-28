@@ -50,6 +50,9 @@ class QueryRequest(_StrictModel):
     subject: SubjectId | None = Field(
         None, description="Restrict retrieval to one subject's documents, e.g. physics or french"
     )
+    track: Literal["science", "social_science"] | None = Field(
+        None, description="The student's BAC II track; picks the maths syllabus the answer follows"
+    )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
     continues_math: bool = Field(
         False,

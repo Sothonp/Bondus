@@ -5360,8 +5360,11 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
 }
 
 async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
+  // The track picks the maths syllabus (the Social Science track has no complex numbers).
+  const track = FIELD_META[p?.field] ? p.field : undefined;
   const first = {
     prompt: t,
+    track,
     history: toRagHistory(history),
     images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
   };
@@ -5373,6 +5376,7 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     const lang = KHMER_CHAR.test(text) ? "km" : "en";
     return {
       prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
+      track,
       history: [
         ...toRagHistory(history),
         { role: "user", content: (t || "(photo)").slice(0, 20000) },

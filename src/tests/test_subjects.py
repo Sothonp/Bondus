@@ -57,3 +57,15 @@ def test_retrieve_keeps_only_the_requested_subject():
     assert hits[0].subject == "chemistry"
     assert retriever.retrieve("ល្បឿន", subject="chemistry", sources=["Science/physics/2019.pdf"]) == []
     assert retriever.retrieve("ល្បឿន", subject="biology") == []
+
+
+def test_subject_guides_cover_known_subjects_and_tracks():
+    from prompts import MATH_GUIDES, SUBJECT_GUIDES, subject_guide
+
+    assert set(SUBJECT_GUIDES) <= SUBJECT_IDS
+    assert subject_guide("mathematics", "science") == MATH_GUIDES["science"]
+    assert subject_guide("mathematics") == SUBJECT_GUIDES["mathematics"]
+    assert subject_guide("physics", "social_science") == SUBJECT_GUIDES["physics"]
+    assert subject_guide("geography") is None and subject_guide(None) is None
+    # Thai script once slipped into a pasted Khmer term; the guides must be Khmer/English only.
+    assert not any("฀" <= ch <= "๿" for guide in [*SUBJECT_GUIDES.values(), *MATH_GUIDES.values()] for ch in guide)

@@ -209,3 +209,27 @@ class TestReadOnlyServer:
             )
             assert response.status_code == 200, response.text
             assert c.get("/health").json()["writes_enabled"] is True
+
+
+class TestSubjectGuide:
+    def test_a_requested_subject_sends_its_guide(self, store_path):
+        generator = ScriptedGenerator(["ok"])
+        ask(store_path, generator, subject="chemistry")
+        assert "<subject_guide>" in generator.seen[0]["user_message"]
+        assert "ស៊ីនេទិចគីមី" in generator.seen[0]["user_message"]
+
+    def test_the_social_science_track_gets_its_own_maths_syllabus(self, store_path):
+        generator = ScriptedGenerator(["ok"])
+        ask(store_path, generator, subject="mathematics", track="social_science")
+        message = generator.seen[0]["user_message"]
+        assert "Social Science track" in message and "Never teach or set ចំនួនកុំផ្លិច" in message
+
+    def test_no_subject_and_no_passages_sends_no_guide(self, store_path):
+        generator = ScriptedGenerator(["ok"])
+        ask(store_path, generator)
+        assert "<subject_guide>" not in generator.seen[0]["user_message"]
+
+    def test_an_unknown_track_is_rejected(self, store_path):
+        with client(ScriptedGenerator(["ok"]), store_path) as c:
+            response = c.post("/api/query/stream", json={"prompt": "x", "track": "university"})
+        assert response.status_code == 422
