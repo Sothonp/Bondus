@@ -728,6 +728,14 @@ _EXTRACTIVE_TEXT = {
 }
 
 
+# Every model failed or is resting: shown to the student in both languages,
+# with nothing about providers or keys.
+ALL_MODELS_BUSY = (
+    "សុំទោស គ្រូ AI រវល់ខ្លាំងពេលនេះ។ សូមព្យាយាមសួរម្ដងទៀតក្នុងរយៈពេលមួយនាទីទៀត។\n\n"
+    "Sorry, the AI tutor is very busy right now. Please ask again in a minute."
+)
+
+
 def build_extractive_answer(
     chunks: Sequence[ContextChunk], language: Language, unavailable_reason: str | None = None
 ) -> str:

@@ -263,6 +263,13 @@ class DeleteDocumentResponse(BaseModel):
 
 # --- /health ------------------------------------------------------------------
 
+class ProviderStatus(BaseModel):
+    name: str = Field(description="provider:model, with #keyN when a provider has several keys")
+    status: Literal["available", "cooling_down", "disabled"]
+    retry_in_seconds: float | None = None
+    last_error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     active_ingest_jobs: int = 0
@@ -277,6 +284,9 @@ class HealthResponse(BaseModel):
     llm_provider: Literal["anthropic", "gemini", "groq", "cerebras", "openrouter", "sea-lion", "none"]
     llm_model: str | None = None
     llm_chain: list[str] = Field(default_factory=list, description="provider:model, in fallback order")
+    llm_providers: list[ProviderStatus] = Field(
+        default_factory=list, description="Each model in the chain: available, cooling down or disabled"
+    )
     llm_selection: Literal["rotate", "priority"] | None = Field(
         None, description="how the next question picks among the chain"
     )

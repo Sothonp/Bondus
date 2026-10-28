@@ -179,17 +179,55 @@ but off on the 2 GB instance. Compare engines on a photo with
 
 ```mermaid
 flowchart LR
-    F["FallbackGenerator"] --> G1["Groq<br/>gpt-oss-120b"]
-    G1 -. fails .-> G2["Gemini 3.6 → 3.8<br/>→ 3.5 → flash-latest"]
-    G2 -. fails .-> G3["Cerebras,<br/>OpenRouter"]
-    G3 -. "all fail" .-> X["Passages only +<br/>'unavailable' note"]
-    G1 & G2 & G3 --> O["OutputGuard<br/>stops floods and<br/>degenerate output"]
-    O --> Z["sanitize_answer<br/>fixes $$ and LaTeX"]
+    Q["Question"] --> C{"Answer cache<br/>(no history,<br/>no photo)"}
+    C -- hit --> Z
+    C -- miss --> R{"Language"}
+    R -- Khmer --> K["Gemini Flash-Lite → Groq<br/>→ SEA-LION → other Gemini"]
+    R -- other --> E["Groq → Cerebras<br/>→ Gemini"]
+    K & E -. "all fail" .-> X["Friendly note<br/>in Khmer + English"]
+    K & E --> O["OutputGuard"] --> Z["sanitize_answer"]
 ```
 
-A model that fails before its first token is skipped silently; one that fails
-mid-answer sends a `reset` event and the next model starts over. Failing
-models cool down before they are tried again.
+`FallbackGenerator` in `src/api.py` is the router. For each question it:
+
+- **Routes by language.** Khmer questions (almost all) follow `LLM_KHMER_ORDER`,
+  others `LLM_OTHER_ORDER`. Each provider named takes its turn with its main
+  model; its other models, and every provider not named, follow. OpenRouter
+  is never named, so it stays a last resort.
+- **Falls through failures.** A rate limit (429) rests that model for the
+  provider's `retry-after` or `LLM_RATE_LIMIT_COOLDOWN_SECONDS` (60 s); a
+  timeout or 5xx for `LLM_COOLDOWN_SECONDS` (15 s, doubling while it keeps
+  failing); a rejected key (401/403) is disabled until restart with an error
+  in the log naming the variable to fix. A model with no first word after
+  `LLM_FIRST_TOKEN_SECONDS` (25 s) is skipped. One that fails mid-answer sends
+  a `reset` event and the next model starts over.
+- **Rotates keys.** `GEMINI_API_KEYS=key2,key3` (and the same for Groq,
+  Cerebras, OpenRouter, SEA-LION) adds keys after the main one; a rate-limited
+  key hands the same model to the next key before the next model is tried.
+- **Never crashes.** If every model fails, the student gets a short note in
+  Khmer and English asking them to try again in a minute.
+
+`GET /health` lists every model in `llm_providers` as `available`,
+`cooling_down` (with `retry_in_seconds`) or `disabled`, never with its key.
+The log names the provider, model and latency of each answer, and why each
+skipped model failed.
+
+**Saving quota.** A question asked without chat history or photos is answered
+from `storage/answer_cache.sqlite` when the same question (ignoring case and
+spacing) retrieved the same passages before, for `ANSWER_CACHE_TTL_SECONDS`
+(7 days). Retrieval keeps the top `TOP_K=5` passages. One IP address may ask
+`RATE_LIMIT_QUESTIONS` (30) per `RATE_LIMIT_WINDOW_SECONDS` (10 minutes); after
+that it gets a 429 in Khmer and English with a `Retry-After` header.
+
+**Adding a provider.** A provider that speaks the OpenAI API needs a subclass
+of `OpenAICompatibleGenerator` (see `CerebrasGenerator`: a name, base URL and
+key variable), its `*_API_KEY`, `*_API_KEYS` and model settings in
+`src/config.py`, a branch in `_key_generators`, and its name in the provider
+lists of `build_generator`, the `Provider` type in `src/api.py` and the provider
+literals in `schemas.py`. Model names live in `.env`, never in code: check the
+provider's docs for current ones.
+
+Run the router's tests with `uv run pytest src/tests/test_llm_router.py`.
 
 ### 6. Building the index
 
