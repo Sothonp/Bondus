@@ -6,7 +6,7 @@ import {
 import {
   LayoutDashboard, BookOpen, Target, GraduationCap, Globe, Sparkles,
   TrendingUp, Flame, Zap, ChevronRight, Download, Bookmark,
-  Eye, Clock, Moon, Sun, Menu, Send, Brain, CheckCircle2, Circle,
+  Eye, Clock, Moon, Sun, Send, Brain, CheckCircle2, Circle,
   Award, ArrowUpRight, ArrowDownRight, Lightbulb, Star, BarChart3,
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
   ClipboardCheck, ShieldCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
@@ -30,6 +30,8 @@ import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
 import { ExerciseCard, ExerciseViewer, AdminExerciseForm, NewExerciseButton } from "./ExerciseUi.jsx";
 import { EXERCISE_SUBJECTS, canBrowseExercises, isAdmin } from "./exercises.js";
+import { MobileTopBar, MobileBottomNav } from "./MobileNav.jsx";
+import { splitMobileNav } from "./mobileNav.js";
 import SubjectIcon from "./SubjectIcon.jsx";
 import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES, newestPaperYear } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
@@ -851,6 +853,9 @@ input.eai-input::placeholder{ color:var(--muted); }
 @media (max-width:640px){ .eai-hero-title{ font-size:24px; } }
 .eai-hero-message{ font-size:14px; color:var(--muted); margin-top:8px; max-width:420px; line-height:1.55; }
 .eai-hero-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:20px; }
+@media (max-width:639px){ .eai-hero-actions{ flex-direction:column; align-items:stretch; } .eai-hero-actions button{ width:100%; justify-content:center; } }
+/* Below lg the page sits above the fixed bottom bar (5rem is its height) and the home-indicator area. */
+@media (max-width:1023.98px){ .eai-main{ padding-bottom:calc(5rem + env(safe-area-inset-bottom)) !important; } }
 
 /* ── Recommended lesson banner ── */
 .eai-lesson-card{
@@ -2716,6 +2721,36 @@ function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initia
 }
 
 /* ════════════════════════ Dashboard ════════════════════════ */
+/* The two stat blocks on the dashboard: one combined card on desktop, and on a phone two cards side by side with each
+   block stacked (icon above the number) so it fits half a screen. */
+function StreakStat({ p, lang, stacked }) {
+  return (
+    <div className={stacked ? "flex flex-col items-center text-center gap-2" : "flex items-center gap-4"}>
+      <div className="grid place-items-center rounded-2xl" style={{ width: stacked ? 52 : 60, height: stacked ? 52 : 60, background: "var(--ember-soft)" }}>
+        <span className="eai-fx-fire-slow"><Flame size={stacked ? 26 : 30} style={{ color: "var(--ember)" }} /></span>
+      </div>
+      <div>
+        <p className="eai-display text-3xl font-extrabold leading-none">{p.streak}</p>
+        <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "dashStreak")}</p>
+      </div>
+    </div>
+  );
+}
+
+function LevelStat({ p, xp, lang, stacked }) {
+  return (
+    <div className={stacked ? "flex flex-col items-center text-center gap-2" : "flex items-center gap-4"}>
+      <Ring value={Math.round((xp / p.xpToNext) * 100)} size={stacked ? 52 : 60} color="var(--gold)">
+        <span className="eai-display font-bold text-sm">{p.level}</span>
+      </Ring>
+      <div className={stacked ? "" : "flex-1"}>
+        <p className={`text-sm font-bold eai-display flex items-center gap-1.5 ${stacked ? "justify-center" : ""}`}><Zap size={15} style={{ color: "var(--gold)" }} /> {xp.toLocaleString()} XP</p>
+        <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{p.xpToNext - xp} XP {t(lang, "toLevel")} {p.level + 1}</p>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask, bonusXp = 0, lang = "en" }) {
   const xp = p.xp + bonusXp;
   // "Today's plan" is the student's own list: each day starts empty, older days stay stored but hidden.
@@ -2742,6 +2777,12 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
         onStartPlan={() => go("practice")} onAskCoach={() => go("coach")} lang={lang}
       />
 
+      {/* On a phone: streak and level as two cards side by side, ahead of the study plan (desktop has one combined card beside it). */}
+      <div className="grid grid-cols-2 gap-3 lg:hidden">
+        <div className="eai-card p-4"><StreakStat p={p} lang={lang} stacked /></div>
+        <div className="eai-card p-4"><LevelStat p={p} xp={xp} lang={lang} stacked /></div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Daily plan */}
         <div className="eai-card p-6 lg:col-span-2">
@@ -2754,20 +2795,20 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
             <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
               placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
               className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <select value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
                 aria-label={t(lang, "planSubjectOptional")}
-                className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }}>
+                className={`eai-ob-input eai-focus w-full sm:flex-1 sm:min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }}>
                 <option value="">{t(lang, "planSubjectOptional")}</option>
                 {subjectOptions.map((s) => <option key={s} value={s}>{subjectLabel(s, lang)}</option>)}
               </select>
               <input type="number" min="1" max="600" inputMode="numeric" value={draft.minutes}
                 onChange={(e) => setDraft((d) => ({ ...d, minutes: e.target.value }))}
                 placeholder={t(lang, "planMinutesShort")} aria-label={t(lang, "planMinutesShort")}
-                className={`eai-ob-input eai-focus ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42, width: 84, flexShrink: 0 }} />
+                className={`eai-ob-input eai-focus w-full sm:w-[84px] sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
               <button type="submit" disabled={!canAdd}
-                className={`eai-btn eai-glass eai-focus px-4 text-sm flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
-                style={{ opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
+                className={`eai-btn eai-glass eai-focus px-4 text-sm flex items-center justify-center gap-1.5 w-full sm:w-auto sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
+                style={{ minHeight: 42, opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
                 <Plus size={15} /> {t(lang, "planAdd")}
               </button>
             </div>
@@ -2794,10 +2835,10 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           {suggestions.length > 0 && (
             <div className="mt-4">
               <p className={`text-xs font-semibold eai-muted mb-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planSuggested")}</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible eai-scroll">
                 {suggestions.map((sg) => (
                   <button key={sg.id} onClick={() => onAddPlanTask({ title: sg.task, subject: sg.s, minutes: sg.min, why: sg.why })} disabled={planFull}
-                    className="eai-focus eai-soft text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    className="eai-focus eai-soft text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
                     <Plus size={12} /> {sg.task}
                   </button>
                 ))}
@@ -2806,27 +2847,11 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           )}
         </div>
 
-        {/* Streak + XP + Level */}
-        <div className="eai-card p-6 flex flex-col gap-5 justify-center">
-          <div className="flex items-center gap-4">
-            <div className="grid place-items-center rounded-2xl" style={{ width: 60, height: 60, background: "var(--ember-soft)" }}>
-              <span className="eai-fx-fire-slow"><Flame size={30} style={{ color: "var(--ember)" }} /></span>
-            </div>
-            <div>
-              <p className="eai-display text-3xl font-extrabold leading-none">{p.streak}</p>
-              <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "dashStreak")}</p>
-            </div>
-          </div>
+        {/* Streak + XP + Level (desktop: one card beside the plan; phones show the row above instead) */}
+        <div className="eai-card p-6 hidden lg:flex flex-col gap-5 justify-center">
+          <StreakStat p={p} lang={lang} />
           <div className="h-px eai-soft" />
-          <div className="flex items-center gap-4">
-            <Ring value={Math.round((xp / p.xpToNext) * 100)} size={60} color="var(--gold)">
-              <span className="eai-display font-bold text-sm">{p.level}</span>
-            </Ring>
-            <div className="flex-1">
-              <p className="text-sm font-bold eai-display flex items-center gap-1.5"><Zap size={15} style={{ color: "var(--gold)" }} /> {xp.toLocaleString()} XP</p>
-              <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{p.xpToNext - xp} XP {t(lang, "toLevel")} {p.level + 1}</p>
-            </div>
-          </div>
+          <LevelStat p={p} xp={xp} lang={lang} />
         </div>
       </div>
 
@@ -7034,6 +7059,7 @@ const STRINGS = {
     heroAlt: "The BONDUS owl lands its airplane on a phone",
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
+    navMore: "More", moreLanguage: "Language",
     navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress", navExplore: "Explore",
     // Dashboard
     dashGreetingPrefix: "Welcome,",
@@ -7263,6 +7289,7 @@ const STRINGS = {
     heroAlt: "ទីទុយ BONDUS ចុះចតយន្តហោះរបស់វានៅលើទូរស័ព្ទ",
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
+    navMore: "ផ្សេងទៀត", moreLanguage: "ភាសា",
     navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព", navExplore: "ស្វែងរក",
     // Dashboard
     dashGreetingPrefix: "សូមស្វាគមន៍,",
@@ -7556,7 +7583,6 @@ export default function App() {
   const [tab, setTab] = useState(saved?.profile?.educationLevel === "university" ? "universityHub" : "dashboard");
   const [dark, setDark] = useTheme(); // follows the device until the student picks; the pick is remembered (theme.js)
   const [lang, setLang] = useState("en"); // "en" | "km" — UI language, independent of theme
-  const [open, setOpen] = useState(false);
   const [practice, setPractice] = useState(saved?.practice ?? {}); // { [exId]: { status, result, at, subject, topic, xpAwarded } }
   const [uniPractice, setUniPractice] = useState(saved?.uniPractice ?? {}); // same shape as practice, university-track quiz attempts (exercise ids prefixed "uni:" so they never collide with practice's ids)
   const [uniPracticeTarget, setUniPracticeTarget] = useState(null); // course id to deep-link straight into when the Hub links to a specific course — consumed once by UniversityPractice
@@ -7579,7 +7605,7 @@ export default function App() {
   const planIdMap = useRef(new Map());                // temporary id (task not saved yet) -> server id
   const saverRef = useRef(null);
   const queueRef = useRef(null);
-  const go = (t) => { setTab(t); setOpen(false); };
+  const go = (t) => setTab(t);
 
   // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
   useEffect(() => {
@@ -8073,6 +8099,8 @@ export default function App() {
     ...(isUniProfile ? UNI_NAV : showSchoolReport ? [...NAV, SCHOOL_NAV] : NAV).filter((n) => n.id !== "exercises" || canBrowseExercises(p)),
     ...(isAdmin(profile) ? [...ADMIN_NAV] : []),
   ];
+  // On a phone the same items go in a bottom bar (the main pages) and a More sheet (the rest); see mobileNav.js.
+  const mobileNav = splitMobileNav(navItems);
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
@@ -8099,9 +8127,8 @@ export default function App() {
       <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
       {noticeToast}
       <div className="flex">
-        {open && <div className="fixed inset-0 z-20 lg:hidden" style={{ background: "rgba(0,0,0,.4)" }} onClick={() => setOpen(false)} />}
-        <aside className={`fixed lg:sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex flex-col ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
-          style={{ background: "var(--card)", borderColor: "var(--line)", transition: "transform .25s ease" }}>
+        <aside className="hidden lg:flex sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex-col"
+          style={{ background: "var(--card)", borderColor: "var(--line)" }}>
           <div className="p-5 flex items-center gap-2.5">
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
@@ -8138,9 +8165,11 @@ export default function App() {
         </aside>
 
         <div className="flex-1 min-w-0">
-          <header className="sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
+          <MobileTopBar logo={<BondusLogo />} initials={initials} dark={dark} onToggleDark={() => setDark((d) => !d)}
+            streak={p.streak} xp={(profile.xp + bonusXp).toLocaleString()}
+            examChip={!isUniProfile && exam.current ? <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} /> : null} />
+          <header className="hidden lg:block sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-              <button className="lg:hidden eai-focus" onClick={() => setOpen(true)}><Menu size={22} /></button>
               <div className="hidden sm:flex items-center gap-2">
                 <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
                 <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
@@ -8156,13 +8185,15 @@ export default function App() {
               </div>
             </div>
           </header>
-          <main className={`p-4 sm:p-6 mx-auto ${tab === "browse" ? "max-w-full" : "max-w-6xl"}`}>
+          <main className={`eai-main p-4 sm:p-6 mx-auto ${tab === "browse" ? "max-w-full" : "max-w-6xl"}`}>
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
                 {view}
               </motion.div>
             </AnimatePresence>
           </main>
+          <MobileBottomNav primary={mobileNav.primary} more={mobileNav.more} tab={tab} lang={lang} tr={tr} showLanguage={!isUniProfile}
+            onGo={go} onToggleLang={() => setLang((l) => (l === "en" ? "km" : "en"))} onLogout={handleLogout} />
         </div>
       </div>
     </div>
