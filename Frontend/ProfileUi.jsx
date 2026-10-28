@@ -8,7 +8,7 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
-import { editableFields, profileToForm, diffProfile, validateProfile, withCurrentOption } from "./profileForm.js";
+import { editableFields, profileToForm, diffProfile, validateProfile, withCurrentOption, validatePasswordChange } from "./profileForm.js";
 
 const INPUT = "eai-input eai-focus w-full px-4 py-3 text-sm";
 const BLANK = { value: "", label: "—" };
@@ -135,9 +135,118 @@ function DetailsCard({ profile, lang, tr, parts, lists, onSaveDetails }) {
   );
 }
 
+/* Change the password by proving the current one. A student who does not know it (a Google sign-up never had one) asks
+   for a code by email instead and sets a new password with it. Each handler resolves to { ok: true, ... } or
+   { ok: false, code, retryAfter }, and `errorText(code, retryAfter)` turns a failure into a message. */
+function PasswordCard({ profile, lang, tr, parts, errorText, onChangePassword, onRequestResetCode, onConfirmResetCode }) {
+  const { FormField } = parts;
+  const km = lang === "km" ? "eai-km" : "";
+  const [fields, setFields] = useState({ current: "", next: "", confirm: "" });
+  const [reset, setReset] = useState(null); // null, or { maskedEmail, code } once a code was asked for
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [failure, setFailure] = useState(null);
+
+  const clearNotes = () => { setFailure(null); setDone(false); };
+  const set = (field, value) => { setFields((f) => ({ ...f, [field]: value })); setErrors((e) => ({ ...e, [field]: undefined })); clearNotes(); };
+  const message = (field) => (errors[field] ? tr(errors[field]) : undefined);
+  const finish = () => { setFields({ current: "", next: "", confirm: "" }); setReset(null); setErrors({}); setFailure(null); setDone(true); };
+
+  const change = async (event) => {
+    event.preventDefault();
+    const problems = validatePasswordChange(fields);
+    setErrors(problems); clearNotes();
+    if (Object.keys(problems).length) return;
+    setBusy(true);
+    const result = await onChangePassword({ currentPassword: fields.current, password: fields.next });
+    setBusy(false);
+    if (result.ok) finish();
+    else if (result.code === "wrong_password") setErrors({ current: "errWrongPassword" });
+    else setFailure(errorText(result.code, result.retryAfter));
+  };
+
+  const askForCode = async () => {
+    setBusy(true); clearNotes();
+    const result = await onRequestResetCode();
+    setBusy(false);
+    if (result.ok) setReset({ maskedEmail: result.maskedEmail || profile.email, code: "" });
+    else setFailure(errorText(result.code, result.retryAfter));
+  };
+
+  const confirmReset = async (event) => {
+    event.preventDefault();
+    const { next, confirm } = validatePasswordChange({ current: "-", next: fields.next, confirm: fields.confirm }); // no current password on this path
+    const problems = { ...(reset.code.trim() ? {} : { code: "errInvalidCode" }), ...(next ? { next } : {}), ...(confirm ? { confirm } : {}) };
+    setErrors(problems); clearNotes();
+    if (Object.keys(problems).length) return;
+    setBusy(true);
+    const result = await onConfirmResetCode({ code: reset.code.trim(), password: fields.next });
+    setBusy(false);
+    if (result.ok) finish();
+    else setFailure(errorText(result.code, result.retryAfter));
+  };
+
+  const newPasswordFields = (
+    <>
+      <FormField label={tr("passwordNewLabel")} required error={message("next")}>
+        <input type="password" className={INPUT} autoComplete="new-password" value={fields.next} onChange={(e) => set("next", e.target.value)} />
+      </FormField>
+      <FormField label={tr("passwordConfirmLabel")} required error={message("confirm")}>
+        <input type="password" className={INPUT} autoComplete="new-password" value={fields.confirm} onChange={(e) => set("confirm", e.target.value)} />
+      </FormField>
+    </>
+  );
+  const submitStyle = { background: "var(--primary)", opacity: busy ? 0.5 : 1 };
+
+  return (
+    <section className="eai-card p-6 space-y-5">
+      <h3 className={`eai-display font-bold ${km}`}>{tr("passwordHeading")}</h3>
+      {!reset ? (
+        <form className="space-y-5" onSubmit={change} noValidate>
+          <div className="grid grid-cols-1 sm:grid-cols-2" style={GRID}>
+            <div className="sm:col-span-2">
+              <FormField label={tr("passwordCurrentLabel")} required error={message("current")}>
+                <input type="password" className={INPUT} autoComplete="current-password" value={fields.current} onChange={(e) => set("current", e.target.value)} />
+              </FormField>
+            </div>
+            {newPasswordFields}
+          </div>
+          <button type="submit" disabled={busy} className={`eai-btn eai-focus text-sm py-2.5 px-5 text-white ${km}`} style={submitStyle}>
+            {busy ? tr("passwordChanging") : tr("passwordChange")}
+          </button>
+        </form>
+      ) : (
+        <form className="space-y-5" onSubmit={confirmReset} noValidate>
+          <p className={`text-sm ${km}`}>{tr("passwordCodeSent").replace("{email}", reset.maskedEmail)}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2" style={GRID}>
+            <div className="sm:col-span-2">
+              <FormField label={tr("passwordCodeLabel")} required error={message("code")}>
+                <input className={INPUT} autoComplete="one-time-code" inputMode="numeric" value={reset.code}
+                  onChange={(e) => { setReset({ ...reset, code: e.target.value }); setErrors((x) => ({ ...x, code: undefined })); clearNotes(); }} />
+              </FormField>
+            </div>
+            {newPasswordFields}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={busy} className={`eai-btn eai-focus text-sm py-2.5 px-5 text-white ${km}`} style={submitStyle}>{tr("passwordResetSubmit")}</button>
+            <button type="button" disabled={busy} onClick={() => { setReset(null); setErrors({}); clearNotes(); }} className={`eai-btn eai-focus text-sm py-2.5 px-5 ${km}`}
+              style={{ color: "var(--ink)", border: "1px solid var(--line)" }}>{tr("passwordCancel")}</button>
+          </div>
+        </form>
+      )}
+      {!reset && profile.email && (
+        <button type="button" disabled={busy} onClick={askForCode} className={`eai-focus text-sm font-semibold underline ${km}`} style={{ color: "var(--primary)" }}>{tr("passwordForgotLink")}</button>
+      )}
+      {done && <p role="status" className={`text-sm font-semibold flex items-center gap-1.5 ${km}`} style={{ color: "var(--jade)" }}><CheckCircle2 size={16} /> {tr("passwordChanged")}</p>}
+      {failure && <p role="alert" className={`text-sm ${km}`} style={{ color: "var(--ember)" }}>{failure}</p>}
+    </section>
+  );
+}
+
 /* `onSaveDetails(changes)` resolves to { ok: true } or { ok: false, errors: { field: messageKey }, message?: text }.
    `tr(key)` is the app's translator for the current language; `lists` carries the sign-up option lists. */
-export function ProfilePage({ profile, lang, tr, parts, lists, onSaveDetails }) {
+export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, errorText, onSaveDetails, onChangePassword, onRequestResetCode, onConfirmResetCode }) {
   const km = lang === "km" ? "eai-km" : "";
   return (
     <div className="space-y-5 eai-rise" style={{ maxWidth: 760 }}>
@@ -146,6 +255,10 @@ export function ProfilePage({ profile, lang, tr, parts, lists, onSaveDetails }) 
         <p className={`eai-muted text-sm mt-1 ${km}`}>{tr("profileDesc")}</p>
       </div>
       <DetailsCard profile={profile} lang={lang} tr={tr} parts={parts} lists={lists} onSaveDetails={onSaveDetails} />
+      {serverMode && (
+        <PasswordCard profile={profile} lang={lang} tr={tr} parts={parts} errorText={errorText}
+          onChangePassword={onChangePassword} onRequestResetCode={onRequestResetCode} onConfirmResetCode={onConfirmResetCode} />
+      )}
     </div>
   );
 }

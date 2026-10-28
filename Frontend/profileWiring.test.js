@@ -34,3 +34,11 @@ test("ProfileUi.jsx does not import App.jsx (a circular import); App passes the 
   assert.doesNotMatch(ui, /from "\.\/App\.jsx"/);
   assert.match(app, /parts=\{\{ FormField, SelectField, SubjectChip \}\}/);
 });
+
+test("App.jsx defines the password handlers and passes them, with serverMode, to the page", () => {
+  for (const name of ["handleChangePassword", "handleRequestResetCode", "handleConfirmResetCode"]) assert.match(app, new RegExp(`const ${name} = async`));
+  assert.match(app, /onChangePassword=\{handleChangePassword\}/);
+  assert.match(app, /onRequestResetCode=\{handleRequestResetCode\}/);
+  assert.match(app, /onConfirmResetCode=\{handleConfirmResetCode\}/);
+  assert.match(app, /serverMode=\{SERVER_MODE\}/);
+});

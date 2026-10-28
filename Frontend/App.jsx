@@ -8120,6 +8120,26 @@ export default function App() {
     }
   };
 
+  // Profile page, password card (server mode only). Each resolves to { ok: true, ... } or { ok: false, code, retryAfter }.
+  const handleChangePassword = async ({ currentPassword, password }) => {
+    try { await api.changePassword({ currentPassword, password }); return { ok: true }; }
+    catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
+  };
+  // "Email me a reset code": the way for a student who never had a password (a Google sign-up) to set one. A code that
+  // was already sent a moment ago is as good as a fresh one.
+  const handleRequestResetCode = async () => {
+    try { const res = await api.forgotPassword({ login: profile.email }); return { ok: true, maskedEmail: res?.maskedEmail }; }
+    catch (err) {
+      if (isCodeAlreadySent(err)) return { ok: true, maskedEmail: err.body?.maskedEmail };
+      return { ok: false, code: err?.code, retryAfter: err?.retryAfter };
+    }
+  };
+  // The reply carries a fresh token, which the client keeps: this device stays signed in, every other one is signed out.
+  const handleConfirmResetCode = async ({ code, password }) => {
+    try { await api.resetPassword({ login: profile.email, code, password }); return { ok: true }; }
+    catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
+  };
+
   // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper
   // (display: contents keeps that wrapper out of the layout).
   const noticeToast = notice ? (
@@ -8172,7 +8192,9 @@ export default function App() {
     profile: <ProfilePage profile={profile} lang={lang} tr={tr}
       parts={{ FormField, SelectField, SubjectChip }}
       lists={{ examYears: EXAM_YEARS, studyMinutes: STUDY_MINUTES, universities: UNIS, foreignLanguages: FOREIGN_LANGUAGES, targetGrades: ["A", "B", "C", "D", "E"], trackLabels: FIELD_META }}
-      onSaveDetails={handleSaveDetails} />,
+      serverMode={SERVER_MODE} errorText={(code, retryAfter) => apiErrorText(lang, code, retryAfter)}
+      onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
+      onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
     universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,

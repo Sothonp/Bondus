@@ -31,7 +31,8 @@ const science = {
 const render = (profile, extra = {}) => {
   const html = s.render(s.h(ProfilePage, {
     profile, lang: "en", tr: (key) => key, serverMode: true, parts, lists, errorText: (code) => code,
-    onSaveDetails: async () => ({ ok: true }), ...extra,
+    onSaveDetails: async () => ({ ok: true }), onChangePassword: async () => ({ ok: true }),
+    onRequestResetCode: async () => ({ ok: true }), onConfirmResetCode: async () => ({ ok: true }), ...extra,
   }));
   return { html, text: s.text(html) };
 };
@@ -75,4 +76,22 @@ test("a stored exam year that the list no longer offers is still an option", () 
 test("Save starts disabled, because nothing has changed", () => {
   const { html } = render(science);
   assert.match(html, /<button[^>]*type="submit"[^>]*disabled/);
+});
+
+test("with an account the Password card has three password fields with the right autocomplete hints, and the reset-code link", () => {
+  const { html, text } = render(science);
+  assert.ok(text.includes("passwordHeading") && text.includes("passwordForgotLink"));
+  const hints = [...html.matchAll(/<input[^>]*type="password"[^>]*>/gi)].map((m) => m[0].match(/autocomplete="([^"]*)"/i)?.[1]);
+  assert.deepEqual(hints, ["current-password", "new-password", "new-password"]);
+});
+
+test("without an account (browser-only mode) there is no Password card", () => {
+  const { text } = render(science, { serverMode: false });
+  assert.ok(!text.includes("passwordHeading"));
+});
+
+test("a phone-only account (no email) has the Password card but no reset-code link", () => {
+  const { text } = render({ ...science, email: null });
+  assert.ok(text.includes("passwordHeading"));
+  assert.ok(!text.includes("passwordForgotLink"));
 });
