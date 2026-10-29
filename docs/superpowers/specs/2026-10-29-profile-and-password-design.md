@@ -1,6 +1,6 @@
 # Profile page and change password
 
-Date: 2026-10-29. Status: design agreed in chat (the owner picked the editable fields and the Google-student behaviour, then said "yes"); this written spec is awaiting the owner's review before any plan or code.
+Date: 2026-10-29. Status: approved by the owner and implemented; see "As built" at the end for where the build differs from this text.
 
 ## Goal
 A signed-in student can change their own details and their password from inside the app. Today there is no profile screen (the header avatar is a plain circle), and no endpoint changes a password: it can only be set at sign-up or reset by email code.
@@ -65,4 +65,14 @@ Backend first: a new endpoint changes nothing for the old frontend. Then the fro
   - use the reset-code path (the mail log shows the code).
 
 ## Open items
-Khmer proofreading; the owner confirming the backend-then-frontend deploy order.
+Khmer proofreading. (The backend-then-frontend deploy order was confirmed and followed.)
+
+## As built
+Shipped 2026-10-29, backend first, then frontend. The build follows this spec, with these differences and additions:
+- **"Saved" shows inline** beside the Save button instead of as a toast, because the app's existing toast is styled as an error.
+- **Shared form pieces arrive as props.** `FormField`, `SelectField` and `SubjectChip` are passed from `App.jsx` into `ProfileUi.jsx` (importing `App.jsx` would be circular). The text inputs use the dashboard's `eai-input` class, because the sign-up classes depend on onboarding-only CSS variables.
+- **A save keeps what the student typed meanwhile.** The review found that a reply to Save wiped any field typed while the request was in flight; the form now merges the refreshed profile instead of replacing it (`mergeProfileForm`).
+- **Phone entry point.** On a phone the desktop header and sidebar are hidden, so the top-bar avatar in `MobileNav.jsx` also opens the profile.
+- **Email changes stay password-free** (the owner confirmed this after review). The known risk: a stolen login session could change the email and then use forgot-password to take the account.
+
+Known small gaps, left for later: switching the foreign language can leave the old language's subject saved but hidden (sign-up behaves the same); the client-side email check is simpler than Laravel's; the backend's `wrong_password` message reads "is not" where the app says "isn't"; no integration test proves a Khmer or emoji password at exactly 8 and 128 characters; no guard against a state update after leaving the page.
