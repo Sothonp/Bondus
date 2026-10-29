@@ -8254,6 +8254,7 @@ export default function App() {
 
         <div className="flex-1 min-w-0">
           <MobileTopBar logo={<BondusLogo />} initials={initials} dark={dark} onToggleDark={() => setDark((d) => !d)}
+            onProfile={() => go("profile")} profileLabel={tr("profileOpen")}
             streak={p.streak} xp={(profile.xp + bonusXp).toLocaleString()}
             examChip={!isUniProfile && exam.current ? <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} /> : null} />
           <header className="hidden lg:block sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>

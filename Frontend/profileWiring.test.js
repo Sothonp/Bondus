@@ -47,3 +47,8 @@ test("ProfileUi.jsx merges a refreshed profile into the form instead of replacin
   assert.match(ui, /mergeProfileForm\(/);
   assert.doesNotMatch(ui, /setForm\(JSON\.parse\(profileKey\)\)/);
 });
+
+test("on a phone the top bar's avatar opens the profile too (the desktop header and sidebar are hidden there)", () => {
+  assert.match(app, /<MobileTopBar[^]{0,600}onProfile=\{\(\) => go\("profile"\)\}[^]{0,200}profileLabel=\{tr\("profileOpen"\)\}/);
+  assert.match(read("MobileNav.jsx"), /<button onClick=\{onProfile\} aria-label=\{profileLabel\}/);
+});
