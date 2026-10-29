@@ -10,7 +10,7 @@ import {
   Award, ArrowUpRight, ArrowDownRight, Lightbulb, Star, BarChart3,
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
   ClipboardCheck, ShieldCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
-  ChevronLeft, XCircle, RotateCcw, Crown, ArrowRight,
+  ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
   Mic, Volume2,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
@@ -4650,7 +4650,48 @@ function Scholarships({ p, lang = "en" }) {
   );
 }
 
-function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours = [] }) {
+/* Top students by real, all-time XP (GET /leaderboard) — `leaderboard` is null while loading or when the server
+   couldn't be reached (browser-only mode never has one), in which case the card simply doesn't render rather than
+   show a stale or fabricated state. Shared by Progress and UniversityProgress. */
+function LeaderboardCard({ leaderboard, lang = "en" }) {
+  if (!leaderboard) return null;
+  const { entries, you } = leaderboard;
+  const outsideList = you && !entries.some((e) => e.rank === you.rank);
+
+  return (
+    <div className="eai-card">
+      <CardHead title={t(lang, "leaderboard")}
+        action={<span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--gold-soft)", color: "var(--gold)" }}><Trophy size={12} /> {t(lang, "allTimeWord")}</span>} />
+      <div className="space-y-1.5">
+        {entries.map((e) => {
+          const isYou = you && e.rank === you.rank;
+          return (
+            <div key={e.rank} className="flex items-center gap-3 p-2.5 rounded-2xl" style={{ background: isYou ? "var(--primary-soft)" : "transparent" }}>
+              <div className="grid place-items-center rounded-full flex-shrink-0 eai-display font-bold text-xs" style={{
+                width: 28, height: 28,
+                background: e.rank === 1 ? "var(--gold-soft)" : e.rank === 3 ? "var(--ember-soft)" : "var(--bg-soft)",
+                color: e.rank === 1 ? "var(--gold)" : e.rank === 3 ? "var(--ember)" : "var(--muted)",
+              }}>
+                {e.rank === 1 ? <Crown size={14} /> : e.rank}
+              </div>
+              <p className="text-sm font-semibold truncate flex-1 min-w-0" style={{ color: isYou ? "var(--primary)" : "var(--ink)" }}>
+                {e.name}{isYou && <span className={`text-xs eai-muted font-normal ${lang === "km" ? "eai-km" : ""}`}> · {t(lang, "youWord")}</span>}
+              </p>
+              <span className="text-xs font-bold eai-display flex items-center gap-1 flex-shrink-0" style={{ color: "var(--gold)" }}>
+                <Zap size={12} /> {e.xp.toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {outsideList && (
+        <p className={`text-xs eai-muted mt-3 text-center ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "youreRanked")} #{you.rank} · {you.xp.toLocaleString()} XP</p>
+      )}
+    </div>
+  );
+}
+
+function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours = [], leaderboard = null }) {
   const xp = p.xp + bonusXp;
   const [openSubject, setOpenSubject] = useState(null);
   const weeklyTotalHours = weeklyStudyHours.reduce((sum, x) => sum + x.h, 0);
@@ -4747,6 +4788,8 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
           </div>
         </div>
       </div>
+
+      <LeaderboardCard leaderboard={leaderboard} lang={lang} />
 
       {/* AI Learning Analytics */}
       <div className="eai-card">
@@ -5077,7 +5120,7 @@ function UniversityExplore({ p, go, lang = "en" }) {
    readiness"/"Subject mastery" framing doesn't apply here, so this shows what's honestly real:
    streak/XP always, plus real per-course mastery once the student's major has quiz content (via
    p.universityInsights) — a "coming soon" note only for majors that don't yet. */
-function UniversityProgress({ p, lang = "en" }) {
+function UniversityProgress({ p, lang = "en", leaderboard = null }) {
   const ui = p.universityInsights;
 
   return (
@@ -5104,6 +5147,8 @@ function UniversityProgress({ p, lang = "en" }) {
           </div>
         ))}
       </div>
+
+      <LeaderboardCard leaderboard={leaderboard} lang={lang} />
 
       {ui?.contentAvailable ? (
         <div className="eai-card">
@@ -6828,6 +6873,7 @@ const STRINGS = {
     studyConsistency: "Study consistency", completionSpeed: "Completion speed",
     estimateNotGuarantee: "Estimate, not a guarantee.", liftingWillMove1: "Lifting", liftingWillMove2: "will move this the most.",
     weeklyStudyHours: "Weekly study hours", thisWeek: "this week", ofWord: "of",
+    leaderboard: "Leaderboard", allTimeWord: "All-time", youWord: "you", youreRanked: "You're ranked",
     aiLearningAnalytics: "AI Learning Analytics", liveWord: "Live",
     coachAnalyzes: "The coach continuously analyzes these signals to personalize your plan:",
     subjectMastery: "Subject mastery", aiRecommendations: "AI recommendations",
@@ -7075,6 +7121,7 @@ const STRINGS = {
     studyConsistency: "ភាពទៀងទាត់ក្នុងការសិក្សា", completionSpeed: "ល្បឿននៃការបញ្ចប់",
     estimateNotGuarantee: "ជាការប៉ាន់ស្មាន មិនមែនការធានា។", liftingWillMove1: "ការលើកកម្ពស់", liftingWillMove2: "នឹងផ្លាស់ប្តូរនេះច្រើនបំផុត។",
     weeklyStudyHours: "ម៉ោងសិក្សាប្រចាំសប្តាហ៍", thisWeek: "សប្តាហ៍នេះ", ofWord: "នៃ",
+    leaderboard: "តារាងអ្នកនាំមុខ", allTimeWord: "គ្រប់ពេល", youWord: "អ្នក", youreRanked: "អ្នកនៅចំណាត់ថ្នាក់",
     aiLearningAnalytics: "ការវិភាគការសិក្សាដោយ AI", liveWord: "កំពុងធ្វើការ",
     coachAnalyzes: "គ្រូបង្វឹកវិភាគសញ្ញាទាំងនេះជានិច្ច ដើម្បីធ្វើផែនការសិក្សាផ្ទាល់ខ្លួនរបស់អ្នក៖",
     subjectMastery: "ការស្ទាត់ជំនាញតាមមុខវិជ្ជា", aiRecommendations: "អនុសាសន៍ពី AI",
@@ -7292,6 +7339,7 @@ export default function App() {
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
   const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
   const [justRegistered, setJustRegistered] = useState(false); // true right after a fresh account is ready; shows SetupFlow once before the real dashboard, then clears itself
+  const [leaderboard, setLeaderboard] = useState(null); // GET /leaderboard: { entries, you } — null until fetched; the card renders nothing until then
   // ── Server mode (VITE_API_URL set): the account, progress, XP, streak and plan live on the Laravel backend ──
   const [booting, setBooting] = useState(SERVER_MODE && api.hasToken()); // restoring a saved login
   const [bootError, setBootError] = useState(false);  // the saved login could not be restored because the server was unreachable or busy (holds the error)
@@ -7328,7 +7376,7 @@ export default function App() {
     serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
     setSummary(null);
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setTab("dashboard");
+    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLeaderboard(null); setTab("dashboard");
   };
   // Without a server, logging out deliberately leaves localStorage alone (see loadSaved); with one, the token is revoked.
   const handleLogout = () => { if (SERVER_MODE) api.logout(); resetSession(); setBootError(false); setBooting(false); setEntry("welcome"); };
@@ -7543,6 +7591,13 @@ export default function App() {
     const timer = setTimeout(() => setNotice(null), 4500);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  // The leaderboard needs real classmates, so it only exists with a server; fetched once, the first time the
+  // student opens Progress (not on every app boot, since most visits never look at it).
+  useEffect(() => {
+    if (!SERVER_MODE || tab !== "progress" || leaderboard) return;
+    api.getLeaderboard().then(setLeaderboard).catch(() => {});
+  }, [tab]);
 
   // The server's numbers replace whatever the screen guessed. A level gained by an answer shows the level-up toast.
   const applySummary = (sm, { announce = true } = {}) => {
@@ -7850,7 +7905,7 @@ export default function App() {
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
       onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
     universities: <Universities p={p} lang={lang} />, coach: <Coach p={p} lang={lang} />,
-    progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
+    progress: isUniProfile ? <UniversityProgress p={p} lang={lang} leaderboard={leaderboard} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} leaderboard={leaderboard} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
     explore: <UniversityExplore p={p} go={go} lang={lang} />,
     scholarships: <Scholarships p={p} lang={lang} />,

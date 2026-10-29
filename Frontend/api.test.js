@@ -187,6 +187,8 @@ test("endpoint shapes: state, study events, plan, exams, password reset", async 
   assert.equal(calls[6].init.headers.Authorization, undefined);
   await api.forgotPassword({ login: "016556618" });
   assert.deepEqual([calls[7].url, calls[7].body], [`${BASE}/forgot-password`, { login: "016556618" }]);
+  await api.getLeaderboard();
+  assert.deepEqual([calls[8].init.method, calls[8].url], ["GET", `${BASE}/leaderboard`]);
 });
 
 test("reset-password signs the student in (token remembered)", async () => {

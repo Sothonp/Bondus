@@ -136,6 +136,7 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     putState: (state, baseRevision) => send("PUT", "/me/state", { state, baseRevision }),
     getSummary: () => get("/me/summary"),
     postStudyEvent: (event) => send("POST", "/study-events", event),
+    getLeaderboard: () => get("/leaderboard"),
 
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),
