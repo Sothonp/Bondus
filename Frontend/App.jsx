@@ -2664,7 +2664,7 @@ function LevelStat({ p, xp, lang, stacked }) {
       </Ring>
       <div className={stacked ? "" : "flex-1"}>
         <p className={`text-sm font-bold eai-display flex items-center gap-1.5 ${stacked ? "justify-center" : ""}`}><Zap size={15} style={{ color: "var(--gold)" }} /> {xp.toLocaleString()} XP</p>
-        <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{p.xpToNext - xp} XP {t(lang, "toLevel")} {p.level + 1}</p>
+        <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{p.xpToNext - xp} {t(lang, "toLevel")} {p.level + 1}</p>
       </div>
     </div>
   );
