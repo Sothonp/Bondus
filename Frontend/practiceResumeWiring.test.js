@@ -13,11 +13,15 @@ test("App.jsx uses the resume helpers", () => {
   assert.match(app, /import \{ setIndexes, nextInSet, nextSetStart, firstOpen \} from "\.\/practiceFlow\.js";/);
 });
 
-test("the question on screen is remembered when shown, and forgotten when the student leaves it on purpose or finishes the set", () => {
+test("the question on screen is remembered when shown, and forgotten only once the whole set is finished", () => {
   assert.match(app, /function useSetSession\(list, progress, memory = null\)/);
   assert.match(app, /const show = \(i\) => \{ memory\?\.remember\(list\[i\]\); setIdx\(i\);/);
-  assert.match(app, /exit: \(\) => \{ memory\?\.forget\(\); setIdx\(null\); \},/);
   assert.match(app, /if \(upNext == null\) \{ memory\?\.forget\(\); setFinished\(\{ from: idx \}\); setIdx\(null\); return; \}/);
+});
+
+test("going back to the list (the breadcrumb on the question screen) is plain navigation: it does not forget the remembered position", () => {
+  assert.match(app, /exit: \(\) => \{ setIdx\(null\); \},/);
+  assert.doesNotMatch(app, /exit: \(\) => \{ memory\?\.forget\(\); setIdx\(null\); \},/);
 });
 
 test("coming back opens the remembered question: the session, the chapter and the subject all start from it", () => {

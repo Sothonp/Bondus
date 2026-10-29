@@ -76,14 +76,14 @@ export function newAttemptId() {
 const seconds = (n) => (Number.isFinite(Number(n)) && n !== null ? Math.round(Math.min(3600, Math.max(0, Number(n))) * 10) / 10 : undefined);
 
 /* An answered exercise -> a POST /study-events body. `answer` is what the student chose: the server grades it against
-   its own copy of the question bank and pays XP only for that verdict. `correct` is what the screen decided; the server
-   ignores it and it is only kept for the older backend. */
+   its own copy of the question bank and pays XP only for that verdict — the screen's own `result` is never sent,
+   so there is nothing here for a client to lie about. */
 export function answerEvent(ex, result, meta = {}, attemptId = newAttemptId()) {
   return compact({
     type: "answer", key: String(ex.id), attemptId,
     subject: ex.subject, topic: ex.topic, difficulty: ex.difficulty, mistakeType: meta.mistakeType,
     answer: meta.answer == null ? undefined : String(meta.answer),
-    correct: result === "correct", timeSec: seconds(meta.timeSec),
+    timeSec: seconds(meta.timeSec),
   });
 }
 

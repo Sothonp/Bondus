@@ -91,15 +91,15 @@ test("attempt ids are unique", () => {
 
 test("an answered exercise becomes a study event", () => {
   const ev = answerEvent({ id: "phy-3", subject: "Physics", topic: "Optics", difficulty: "Hard" }, "incorrect", { timeSec: 12.34, mistakeType: "Careless mistake", answer: "Concave" }, "att-1");
-  assert.deepEqual(ev, { type: "answer", key: "phy-3", attemptId: "att-1", subject: "Physics", topic: "Optics", difficulty: "Hard", mistakeType: "Careless mistake", answer: "Concave", correct: false, timeSec: 12.3 });
+  assert.deepEqual(ev, { type: "answer", key: "phy-3", attemptId: "att-1", subject: "Physics", topic: "Optics", difficulty: "Hard", mistakeType: "Careless mistake", answer: "Concave", timeSec: 12.3 });
   const ok = answerEvent({ id: 41, subject: "Math", topic: "Limits" }, "correct", {}, "att-2");
   assert.equal(ok.key, "41");
-  assert.equal(ok.correct, true);
+  assert.equal("correct" in ok, false);
   assert.equal("timeSec" in ok, false);
   assert.equal("mistakeType" in ok, false);
 });
 
-test("the chosen answer travels with the event, because the server grades it (the verdict above is only a courtesy)", () => {
+test("the chosen answer travels with the event, because the server grades it", () => {
   assert.equal(answerEvent({ id: 1 }, "correct", { answer: "Crust" }, "a").answer, "Crust");
   assert.equal(answerEvent({ id: 1 }, "correct", { answer: 42 }, "a").answer, "42");
   assert.equal("answer" in answerEvent({ id: 1 }, "correct", {}, "a"), false);
