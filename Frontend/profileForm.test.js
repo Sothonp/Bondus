@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   editableFields, profileToForm, diffProfile, validateProfile, withCurrentOption, serverFieldErrors,
-  validatePasswordChange, PROFILE_STRING_KEYS,
+  validatePasswordChange, mergeProfileForm, PROFILE_STRING_KEYS,
 } from "./profileForm.js";
 
 const hs = {
@@ -142,4 +142,22 @@ test("PROFILE_STRING_KEYS lists every message key the helpers can return, once e
   for (const key of ["profileErrName", "profileErrEmail", "profileErrAge", "passwordErrCurrentRequired", "passwordErrTooShort", "passwordErrTooLong", "passwordErrMismatch", "errEmailTaken", "errValidation", "errWrongPassword"]) {
     assert.ok(PROFILE_STRING_KEYS.includes(key), key);
   }
+});
+
+test("a refreshed profile updates the fields the student has not touched and keeps what they typed meanwhile", () => {
+  const before = { name: "Sokha", age: "17", dailyMinutes: 60, subjectsToImprove: ["physics"], reminderEmails: true };
+  const typedMeanwhile = { ...before, age: "18" }; // typed while a save of the name was still in flight
+  const fromServer = { ...before, name: "Sokha C.", dailyMinutes: 90 };
+  assert.deepEqual(mergeProfileForm(typedMeanwhile, before, fromServer), { name: "Sokha C.", age: "18", dailyMinutes: 90, subjectsToImprove: ["physics"], reminderEmails: true });
+});
+
+test("a field that was edited and saved ends at the saved value", () => {
+  assert.deepEqual(mergeProfileForm({ name: "Sokha C." }, { name: "Sokha" }, { name: "Sokha C." }), { name: "Sokha C." });
+});
+
+test("an edited list is kept and an untouched one follows the server", () => {
+  const before = { subjectsToImprove: ["physics"], dailyMinutes: 60 };
+  assert.deepEqual(mergeProfileForm({ subjectsToImprove: ["physics", "chemistry"], dailyMinutes: 60 }, before, { subjectsToImprove: ["physics"], dailyMinutes: 90 }),
+    { subjectsToImprove: ["physics", "chemistry"], dailyMinutes: 90 });
+  assert.deepEqual(mergeProfileForm({ subjectsToImprove: ["physics"] }, before, { subjectsToImprove: ["biology"] }), { subjectsToImprove: ["biology"] });
 });

@@ -5,10 +5,10 @@
    lists in as props, so editing and signing up share them and cannot drift, and this file never imports App.jsx (that
    would be a circular import). Track and grade are shown but cannot be changed here; a university student edits only
    the account fields. */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
-import { editableFields, profileToForm, diffProfile, validateProfile, withCurrentOption, validatePasswordChange } from "./profileForm.js";
+import { editableFields, profileToForm, diffProfile, validateProfile, withCurrentOption, validatePasswordChange, mergeProfileForm } from "./profileForm.js";
 
 const INPUT = "eai-input eai-focus w-full px-4 py-3 text-sm";
 const BLANK = { value: "", label: "—" };
@@ -32,9 +32,16 @@ function DetailsCard({ profile, lang, tr, parts, lists, onSaveDetails }) {
   const [failure, setFailure] = useState(null);
 
   // Follow the profile when its editable values change (after a save, say), not on every new profile object: XP and level
-  // also replace it, and that must not wipe what the student is typing.
+  // also replace it, and that must not wipe what the student is typing. Even then only the fields they have not touched
+  // are replaced: something typed while a save was still in flight survives its reply.
   const profileKey = JSON.stringify(profileToForm(profile));
-  useEffect(() => { setForm(JSON.parse(profileKey)); }, [profileKey]);
+  const baseline = useRef(JSON.parse(profileKey));
+  useEffect(() => {
+    const next = JSON.parse(profileKey);
+    const from = baseline.current; // read now: the updater below may run after the baseline moves on
+    setForm((f) => mergeProfileForm(f, from, next));
+    baseline.current = next;
+  }, [profileKey]);
   useEffect(() => {
     if (!saved) return undefined;
     const timer = setTimeout(() => setSaved(false), 3000);

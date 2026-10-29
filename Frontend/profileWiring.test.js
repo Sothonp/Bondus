@@ -42,3 +42,8 @@ test("App.jsx defines the password handlers and passes them, with serverMode, to
   assert.match(app, /onConfirmResetCode=\{handleConfirmResetCode\}/);
   assert.match(app, /serverMode=\{SERVER_MODE\}/);
 });
+
+test("ProfileUi.jsx merges a refreshed profile into the form instead of replacing it, so unsent edits survive a save", () => {
+  assert.match(ui, /mergeProfileForm\(/);
+  assert.doesNotMatch(ui, /setForm\(JSON\.parse\(profileKey\)\)/);
+});

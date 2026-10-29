@@ -40,6 +40,17 @@ function normalized(field, value) {
   }
 }
 
+/* The form after the profile was refreshed (a save came back, say): a field the student has not touched since `from`
+   takes the profile's new value, and one they edited meanwhile keeps what they typed. `from` and `to` are the
+   profileToForm() of the profile before and after. */
+export function mergeProfileForm(form, from, to) {
+  const merged = {};
+  for (const key of Object.keys(to)) {
+    merged[key] = JSON.stringify(form[key]) === JSON.stringify(from[key]) ? to[key] : form[key];
+  }
+  return merged;
+}
+
 export function diffProfile(profile, form) {
   const changes = {};
   for (const f of editableFields(profile)) {
