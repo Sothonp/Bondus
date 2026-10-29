@@ -11,10 +11,10 @@ import {
   Atom, Landmark, LogIn, CalendarCheck, Timer, Gauge as GaugeIcon, BookMarked,
   ClipboardCheck, ShieldCheck, FileText, Activity as ActivityIcon, AlertTriangle, Repeat,
   ChevronLeft, XCircle, RotateCcw, Trophy, Crown, ArrowRight,
-  Headphones, Mic, Volume2, PlayCircle,
+  Mic, Volume2,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Shirt, Trash2, Mail, MailCheck, School,
+  Shirt, Trash2, Mail, MailCheck, School, Fingerprint,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -472,86 +472,6 @@ function analyticsSignals(p, live = {}) {
 }
 
 const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
-/* pct starts at 0 for all four — none of this is real progress until a student actually takes a
-   diagnostic, so showing anything higher would be the same fabricated-baseline problem as the
-   old hardcoded "Goal Band 7.0" (a brand-new account has done nothing yet). IELTS has no static
-   "goal" here either — it's asked fresh at the start of each diagnostic (see IeltsDiagnostic's
-   "goal" stage) and stored per-result. The other three are still inert "Coming soon" placeholders. */
-const LANGS = [
-  { n: "IELTS Academic", now: "—", pct: 0, c: "var(--ember)" },
-  { n: "TOEFL iBT", goal: "Score 90", now: "—", pct: 0, c: "var(--primary)" },
-  { n: "HSK", goal: "Level 4", now: "—", pct: 0, c: "var(--gold)" },
-  { n: "DELF", goal: "B2", now: "—", pct: 0, c: "var(--jade)" },
-];
-
-/* ════════════════════════ IELTS diagnostic ════════════════════════
-   A short, four-skill placement test (Listening, Reading, Writing, Speaking) — not a full mock
-   exam. Listening/Reading are auto-graded client-side from a fixed answer key; Writing/Speaking
-   are graded by the Gemini-backed /api/ielts-grade function (same resilience pattern as Major
-   Guidance: falls back to a local estimate if the API call fails, so the flow never dead-ends). */
-const IELTS_CONTENT = {
-  listening: {
-    script: `Welcome to the university library orientation. The library is open from eight in the morning until ten at night on weekdays, and from nine until six on weekends. First-year students can borrow up to five books for two weeks, while final-year students can borrow up to ten books for a full month. If you need a book that's already checked out, you can place a hold online and we'll email you when it's back. The quiet study rooms on the third floor must be booked in advance through the library website, and each booking is limited to two hours per day. Remember, food isn't allowed inside the building, but water in a closed bottle is fine.`,
-    questions: [
-      { q: "On weekdays, until what time is the library open?", options: ["6 PM", "8 PM", "10 PM", "Midnight"], answer: "10 PM" },
-      { q: "How many books can a first-year student borrow at once?", options: ["Two", "Five", "Eight", "Ten"], answer: "Five" },
-      { q: "Where are the quiet study rooms located?", options: ["First floor", "Second floor", "Third floor", "Basement"], answer: "Third floor" },
-      { q: "What is NOT allowed inside the library?", options: ["Closed water bottles", "Laptops", "Food", "Quiet conversation"], answer: "Food" },
-    ],
-  },
-  reading: {
-    passage: `Urban beekeeping has grown rapidly in cities around the world over the past decade. Once considered an unusual hobby, keeping honeybee hives on rooftops and in community gardens is now promoted by some city governments as a way to support local ecosystems. Bees pollinate a wide range of plants, and their presence can noticeably improve yields in nearby gardens and parks. However, researchers have also raised concerns: in cities with a very high density of hives, honeybees may compete with wild, native bee species for limited flowers, potentially harming biodiversity rather than helping it. Experts now recommend that city planners think carefully about hive density and prioritise planting more flowering plants alongside any expansion of urban beekeeping, so that food sources grow along with the bee population.`,
-    questions: [
-      { q: "What has happened to urban beekeeping in the last ten years?", options: ["It has declined", "It has grown rapidly", "It has stayed the same", "It has been banned"], answer: "It has grown rapidly" },
-      { q: "According to the passage, bees help nearby gardens by...", options: ["Removing pests", "Pollinating plants", "Fertilising soil", "Reducing noise"], answer: "Pollinating plants" },
-      { q: "What concern do researchers raise about high hive density?", options: ["Bees produce less honey", "Honeybees may compete with native bees", "Hives are expensive to maintain", "Bees become aggressive"], answer: "Honeybees may compete with native bees" },
-      { q: "What do experts recommend city planners do?", options: ["Ban beekeeping entirely", "Reduce the number of parks", "Plant more flowers alongside hive expansion", "Move hives outside cities"], answer: "Plant more flowers alongside hive expansion" },
-    ],
-  },
-  writing: {
-    prompt: "Some people think that university students should be required to attend classes in person, while others believe online study should be an equally acceptable option. Discuss both views and give your own opinion.",
-    minWords: 150,
-  },
-  speaking: {
-    cueCard: "Describe a skill you would like to learn in the future.",
-    bulletPoints: ["what the skill is", "why you want to learn it", "how you would learn it", "and explain how it might change your life"],
-    prepSeconds: 30,
-  },
-};
-
-/* Simple, transparent band conversion for the auto-graded skills — not the official IELTS scale,
-   just a reasonable placement estimate from a 4-question sample. */
-function bandFromScore(correct, total) {
-  const pct = correct / total;
-  if (pct >= 1) return 8.5;
-  if (pct >= 0.75) return 7.5;
-  if (pct >= 0.5) return 6.5;
-  if (pct >= 0.25) return 5.5;
-  return 4.5;
-}
-
-const roundToHalfBand = (n) => Math.round(n * 2) / 2;
-
-/* Writing/Speaking calls the real /api/ielts-grade serverless function (Gemini). If that call
-   fails — no API key configured yet, network hiccup, rate limit — it falls back to a local
-   word-count-based estimate so the flow still produces a result instead of erroring out. */
-async function gradeIeltsResponse(skill, prompt, response) {
-  try {
-    const res = await aiFetch("/api/ielts-grade", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ skill, prompt, response }),
-    });
-    const data = await res.json();
-    if (!res.ok || typeof data.band !== "number") throw new Error(data.error || "Request failed");
-    return { band: data.band, feedback: data.feedback || "" };
-  } catch {
-    const words = response.trim().split(/\s+/).filter(Boolean).length;
-    const band = words >= 180 ? 6.5 : words >= 100 ? 5.5 : words >= 40 ? 4.5 : 3.5;
-    return { band, feedback: "AI grading is temporarily unavailable, so this is a rough estimate based on response length. Try again later for detailed feedback." };
-  }
-}
-
 /* Mock classmates for the dashboard leaderboard. The current user is merged in and ranked live by XP. */
 const LEADERBOARD_SEED = [
   { name: "Sokha Ly", xp: 2140 },
@@ -593,7 +513,13 @@ const STYLES = `
   --shadow:0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.4);
 }
 
-.eai-card{ background:var(--card); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); }
+/* Every card gets the same inner padding: 16px on phones, 24px from 640px up. Cards never set their own p-* any more
+   (this rule is plain CSS, so it would beat a Tailwind p-* utility anyway). --flush is for cards whose children run edge to
+   edge (headers, dividers); --compact is for single-line row cards. Both come after the media query so they win. */
+.eai-card{ background:var(--card); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:16px; }
+@media (min-width:640px){ .eai-card{ padding:24px; } }
+.eai-card--flush{ padding:0; }
+.eai-card--compact{ padding:10px 16px; }
 /* --bg-soft stays a solid, de-yellowed neutral — used directly (not through a class) in ~30
    places (SVG strokes, icon-badge fills, hover backgrounds) that need real visible contrast and
    can't render a backdrop-filter. .eai-soft/.eai-input are the actual "liquid glass" material —
@@ -610,7 +536,7 @@ const STYLES = `
 .eai-tile{ transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; cursor:pointer; }
 .eai-tile:hover{ transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--primary); }
 .eai-focus:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
-input.eai-input, select.eai-input{ background:var(--glass-bg); color:var(--ink); border:1px solid var(--glass-line); border-radius:14px; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow); }
+input.eai-input, select.eai-input{ height:44px; padding:0 16px; background:var(--glass-bg); color:var(--ink); border:1px solid var(--glass-line); border-radius:14px; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow); }
 input.eai-input::placeholder{ color:var(--muted); }
 .eai-rise{ animation:rise .5s cubic-bezier(.2,.7,.3,1) both; }
 @keyframes rise{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:none;} }
@@ -1110,7 +1036,7 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-ex-owl{ padding-top:34px; }
 .eai-ex-say{ position:absolute; left:-8px; right:-8px; bottom:calc(100% - 64px); display:flex; justify-content:center; pointer-events:none; z-index:2; }
 .eai-ex-say .eai-tail-side{ display:none; }
-.eai-ex-card{ flex:1; min-width:0; background:var(--card); border:2px solid color-mix(in srgb, var(--primary) 28%, var(--line)); border-radius:26px; padding:24px 26px; box-shadow:var(--shadow); }
+.eai-ex-card{ flex:1; min-width:0; background:var(--card); border:2px solid color-mix(in srgb, var(--primary) 28%, var(--line)); border-radius:26px; padding:24px; box-shadow:var(--shadow); }
 .eai-ex-qlabel{ font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--primary); }
 .eai-ex-question{ font-size:19px; font-weight:800; margin:6px 0 18px; line-height:1.35; }
 .eai-ex-options{ display:flex; flex-direction:column; gap:10px; }
@@ -1124,7 +1050,7 @@ ${riderKeyframesCss("eai-rider-go")}
   .eai-ex-say{ position:static; flex:1; min-width:0; justify-content:flex-start; }
   .eai-ex-say .eai-tail-down{ display:none; }
   .eai-ex-say .eai-tail-side{ display:block; }
-  .eai-ex-card{ width:100%; padding:20px; }
+  .eai-ex-card{ width:100%; padding:16px; }
 }
 
 .eai-mascot-happy .eai-mascot-img{ animation:eai-mascot-happy .7s ease-in-out 1; }
@@ -1213,10 +1139,11 @@ ${riderKeyframesCss("eai-rider-go")}
   transition:background-color .2s ease, border-color .2s ease, transform .12s ease; }
 .eai-ob-btn-secondary:hover{ border-color:var(--primary); transform:translateY(-1px); }
 
-.eai-ob-option-card{ position:relative; border-radius:16px; padding:22px; border:2px solid var(--line); border-bottom-width:4px; background:var(--card);
+.eai-ob-option-card{ position:relative; border-radius:16px; padding:24px; border:2px solid var(--line); border-bottom-width:4px; background:var(--card);
   backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow);
   transition:background-color .2s ease, border-color .2s ease; display:flex; flex-direction:column; height:100%; }
 .eai-ob-option-card.is-primary{ background:var(--primary-soft); border-color:var(--primary); }
+@media (max-width:639px){ .eai-ob-option-card{ padding:16px; } }
 .eai-ob-badge{ position:absolute; top:16px; right:16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
   padding:4px 9px; border-radius:999px; background:var(--primary); color:#fff; }
 .eai-ob-benefits{ margin-top:12px; display:flex; flex-direction:column; gap:6px; }
@@ -2789,7 +2716,7 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Daily plan */}
-        <div className="eai-card p-6 lg:col-span-2">
+        <div className="eai-card lg:col-span-2">
           <CardHead title={t(lang, "dashTodayPlan")} kh={lang === "km" ? null : "ផែនការសិក្សាថ្ងៃនេះ"}
             action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{tasks.length} {t(lang, "dashDone")}</span>} />
           <div className="h-1.5 rounded-full eai-soft mb-4 overflow-hidden">
@@ -2874,7 +2801,7 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           { icon: BookOpen, fx: "eai-ico-book", label: t(lang, "browseTitle"), desc: t(lang, "exploreBrowsePast"), tab: "browse", c: "var(--ember)" },
           { icon: BarChart3, fx: "eai-ico-chart", label: t(lang, "navProgress"), desc: t(lang, "exploreStats"), tab: "progress", c: "var(--gold)" },
         ].map((c, i) => (
-          <button key={c.label} onClick={() => go(c.tab)} className="eai-card eai-tile eai-focus p-5 text-left flex items-center gap-3.5">
+          <button key={c.label} onClick={() => go(c.tab)} className="eai-card eai-tile eai-focus text-left flex items-center gap-3.5">
             <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}>
               <span className={`eai-ico ${c.fx}`} style={{ "--icon-glow": c.c, "--icon-glow-delay": `${i * 0.4}s` }}>
                 <c.icon size={19} style={{ color: c.c }} />
@@ -2927,7 +2854,7 @@ function ExamPaperPage({ paper, onBack, lang = "en", topSlot = null }) {
           <iframe src={`${paper.pdf}#view=FitH`} title={title} className="w-full block" style={{ height: "88vh", border: "none" }} />
         </>
       ) : (
-        <div className="eai-card p-4 sm:p-6">
+        <div className="eai-card">
           <div className="space-y-4">
             {paper.images.map((src, i) => (
               <img key={i} src={src} alt={`${title} — page ${i + 1}`} className="w-full rounded-xl border" style={{ borderColor: "var(--line)", display: "block" }} />
@@ -3013,7 +2940,7 @@ function Browse({ p, lang = "en", exam, tr }) {
       </div>
       <JoinSchoolCard school={exam.school} lang={lang} tr={tr} lookup={exam.schoolForCode} onJoin={exam.joinSchool} onLeave={exam.leaveSchool} hint={tr("schoolDemoHint")} />
       {running && (
-        <div className="eai-card p-4 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--primary)" }} data-testid="exam-resume">
+        <div className="eai-card flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--primary)" }} data-testid="exam-resume">
           <div className="flex items-center gap-3 min-w-0">
             <span className="grid place-items-center rounded-2xl" style={{ width: 40, height: 40, background: "var(--primary-soft)", color: "var(--primary)" }}><Timer size={20} /></span>
             <div className="min-w-0">
@@ -3042,7 +2969,7 @@ function Browse({ p, lang = "en", exam, tr }) {
           const images = EXAM_PAPER_IMAGES[key];
           const hasPaper = Boolean(pdf || images);
           return (
-            <div key={sub.s} className="eai-card eai-tile p-5">
+            <div key={sub.s} className="eai-card eai-tile">
               <div className="flex items-start justify-between">
                 <SubjectIcon subject={sub.s} tile />
                 {sub.tag === "weak"
@@ -3120,9 +3047,9 @@ function Exercises({ api, lang, tr }) {
       </div>
       <SubjectPills subject={subject} onPick={setSubject} lang={lang} />
       {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : failed ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
+        <div className="eai-card text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
       ) : list.length === 0 ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesEmpty")}</p></div>
+        <div className="eai-card text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exercisesEmpty")}</p></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {list.map((ex) => <ExerciseCard key={ex.id} exercise={ex} subject={subject} lang={lang} tr={tr} onOpen={() => setViewing(ex)} />)}
@@ -3201,9 +3128,9 @@ function AdminExercises({ api, lang, tr }) {
       </div>
       <SubjectPills subject={subject} onPick={setSubject} lang={lang} />
       {loading ? <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoading")}</p> : failed ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
+        <div className="eai-card text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("exLoadError")}</p></div>
       ) : list.length === 0 ? (
-        <div className="eai-card p-6 text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesEmpty")}</p></div>
+        <div className="eai-card text-center"><p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tr("adminExercisesEmpty")}</p></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {list.map((ex) => (
@@ -3311,7 +3238,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
           const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
           const isWeak = p.weak.some((w) => w.s === s);
           return (
-            <button key={s} onClick={() => setSubject(s)} className="eai-card eai-tile eai-focus p-5 text-left">
+            <button key={s} onClick={() => setSubject(s)} className="eai-card eai-tile eai-focus text-left">
               <div className="flex items-center justify-between">
                 <SubjectIcon subject={s} tile />
                 {isWeak && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
@@ -3458,7 +3385,7 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
             const doneN = chList.filter((ex) => practice[ex.id]?.status === "completed").length;
             const pct = chList.length ? Math.round((doneN / chList.length) * 100) : 0;
             return (
-              <button key={ch} onClick={() => setChapter(ch)} className="eai-card eai-tile eai-focus p-5 text-left">
+              <button key={ch} onClick={() => setChapter(ch)} className="eai-card eai-tile eai-focus text-left">
                 <div className="flex items-center justify-between">
                   <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
                     <BookOpen size={19} style={{ color: "var(--primary)" }} />
@@ -3481,7 +3408,7 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
   return (
     <div className="space-y-5 eai-rise">
       <button onClick={backToList} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {hasChapters ? t(lang, "allChapters") : t(lang, "allSubjects")}</button>
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -3516,7 +3443,7 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
                 {isDrill && <p className={`eai-muted text-xs mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "formulaQuizHint")}</p>}
               </div>
             )}
-            <div className="eai-card p-4 flex flex-wrap items-center gap-3">
+            <div className="eai-card flex flex-wrap items-center gap-3">
               <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{setIndexes(list, i).indexOf(i) + 1}</div>
               <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
                 <p className="text-sm font-semibold truncate">{ex.prompt}</p>
@@ -3647,7 +3574,7 @@ function ExercisePlayer({ ex, entry, subject, index, total, progress, isRetry = 
               })}
             </div>
           ) : (
-            <input className="eai-input eai-focus w-full px-4 py-3 text-sm" placeholder={t(lang, "typeAnswer")} value={choice ?? ""}
+            <input className="eai-input eai-focus w-full text-sm" placeholder={t(lang, "typeAnswer")} value={choice ?? ""}
               disabled={submitted} onChange={(e) => setChoice(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
           )}
 
@@ -3738,7 +3665,7 @@ function SetComplete({ name, total, retried, setKey, onNextSet, onBack, lang = "
   useEffect(() => { celebrate.current = { ...celebrate.current, nonce: celebrate.current.nonce + 1 }; }, []);
   return (
     <div className="space-y-5 eai-rise">
-      <div className="eai-card p-8 text-center">
+      <div className="eai-card text-center">
         <div className="flex flex-col-reverse sm:flex-row items-center justify-center gap-3 sm:gap-5 mb-4">
           <div style={{ width: "clamp(150px, 22vw, 210px)", maxWidth: "55vw", flexShrink: 0 }}>
             <OwlMascot triggerRef={celebrate} />
@@ -3787,7 +3714,7 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
     return (
       <div className="space-y-5 eai-rise">
         <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "practiceTitle")}</h2>
-        <div className="eai-card p-6 text-center">
+        <div className="eai-card text-center">
           <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniHubCoursesComingSoon")}</p>
         </div>
       </div>
@@ -3808,7 +3735,7 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
           const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
           const isWeak = (p.universityInsights?.weak || []).some((w) => w.s === key);
           return (
-            <button key={c.id} onClick={() => setCourseId(c.id)} className="eai-card eai-tile eai-focus p-5 text-left">
+            <button key={c.id} onClick={() => setCourseId(c.id)} className="eai-card eai-tile eai-focus text-left">
               <div className="flex items-center justify-between">
                 <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
                   <Target size={19} style={{ color: "var(--primary)" }} />
@@ -3858,7 +3785,7 @@ function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer
   return (
     <div className="space-y-5 eai-rise">
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -3876,7 +3803,7 @@ function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer
           const entry = uniPractice[ex.id];
           const st = STATUS[entry?.status || "pending"];
           return (
-            <div key={ex.id} className="eai-card p-4 flex flex-wrap items-center gap-3">
+            <div key={ex.id} className="eai-card flex flex-wrap items-center gap-3">
               <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{setIndexes(list, i).indexOf(i) + 1}</div>
               <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
                 <p className="text-sm font-semibold truncate">{ex.prompt}</p>
@@ -3976,7 +3903,7 @@ function Diagnostic({ reg, dark, onComplete, lang = "en" }) {
             })}
           </div>
 
-          <div className="eai-card p-6 sm:p-8">
+          <div className="eai-card">
             <div className="flex items-center gap-2 mb-4">
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{subjectLabel(ex.subject, lang)}</span>
               <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
@@ -4036,7 +3963,7 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
             <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "startingPointIs")} <b style={{ color: LEVEL_COLOR[overallLevel] }}>{levelLabel(overallLevel, lang)}</b>.</p>
           </div>
 
-          <div className="eai-card p-6">
+          <div className="eai-card">
             <div className="space-y-3">
               {rows.map((r) => (
                 <div key={r.s} className="flex items-center gap-3">
@@ -4060,6 +3987,191 @@ function DiagnosticResults({ reg, dark, topicMastery, onComplete, lang = "en" })
   );
 }
 
+/* ════════════════════════ Post-registration setup + commitment ════════════════════════
+   One last beat between the account finishing (registration, or the diagnostic) and the real
+   dashboard appearing: a short animated "we're building this for you" loader, then a 2-second
+   hold-to-commit screen recapping what the student just signed up for. App.jsx renders this
+   whenever `justRegistered` is true (set once, right after a fresh account is ready) and clears
+   it once the hold completes — profile/tab are already set by then, this is purely a transition. */
+/* subjectsToImprove stores subjectId()'d values (lowercase, underscored); subjectLabel() takes the
+   original display name, not the id (see subjects.js) — so look each one back up against this
+   track's real subject names before handing it to subjectLabel(), the same way Register's own
+   SubjectChip list derives id from name, never the other way around. */
+function improvedSubjectNames(p, lang) {
+  if (!p.field) return [];
+  const names = fieldSubjects(p.field, p.foreignLanguage);
+  return (p.subjectsToImprove || [])
+    .map((id) => names.find((n) => subjectId(n) === id))
+    .filter(Boolean)
+    .map((n) => subjectLabel(n, lang));
+}
+
+function buildSetupSteps(p, lang) {
+  const gradeLabel = p.grade ? t(lang, p.grade === "11" ? "grade11" : "grade12") : "";
+  const fieldLabel = p.field ? (lang === "km" ? FIELD_META[p.field]?.km : FIELD_META[p.field]?.label) : "";
+  const subjectNames = improvedSubjectNames(p, lang);
+  const subjectsText = subjectNames.length ? subjectNames.join(", ") : t(lang, "setupStepSubjectsAll");
+  const goalLabel = p.target ? `${t(lang, "gradeWord")} ${p.target}` : "";
+  return [
+    { label: t(lang, "setupStepTrack"), detail: [gradeLabel, fieldLabel].filter(Boolean).join(" · ") },
+    { label: t(lang, "setupStepSubjects"), detail: subjectsText },
+    { label: t(lang, "setupStepSchedule"), detail: `${localizeNum(p.dailyMinutes ?? 0, lang)} ${t(lang, "minutesWord")} ${t(lang, "perDayWord")}` },
+    { label: t(lang, "setupStepGoal"), detail: [goalLabel, p.targetExamYear ? localizeNum(p.targetExamYear, lang) : ""].filter(Boolean).join(" · ") },
+  ];
+}
+
+function SetupLoading({ p, dark, lang, onDone }) {
+  const steps = useMemo(() => buildSetupSteps(p, lang), [p, lang]);
+  const [pct, setPct] = useState(0);
+  const doneRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const DURATION = 2600;
+    const started = Date.now();
+    let frame;
+    const tick = () => {
+      const next = Math.min(100, Math.round(((Date.now() - started) / DURATION) * 100));
+      setPct(next);
+      if (next < 100) { frame = requestAnimationFrame(tick); }
+      else if (!doneRef.current) { doneRef.current = true; setTimeout(() => onDoneRef.current(), 450); }
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const stepIndex = Math.min(steps.length - 1, Math.floor((pct / 100) * steps.length));
+  const active = steps[stepIndex];
+
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
+        <div className="w-full eai-rise text-center" style={{ maxWidth: 420 }}>
+          <div className="mx-auto mb-6 grid place-items-center rounded-3xl" style={{ width: 72, height: 72, background: "var(--primary-soft)" }}>
+            <LoaderCircle size={32} style={{ color: "var(--primary)" }} className="animate-spin" />
+          </div>
+          <h1 className={`eai-display text-xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "setupLoadingTitle")}</h1>
+          <p className="eai-display font-extrabold mt-6" style={{ fontSize: 56, color: "var(--primary)", lineHeight: 1 }}>{localizeNum(pct, lang)}%</p>
+          <div className="h-2.5 rounded-full eai-soft overflow-hidden mt-5">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--primary)", transition: "width .2s linear" }} />
+          </div>
+          <div className="eai-card mt-6 text-left">
+            <p className={`text-sm font-bold ${lang === "km" ? "eai-km" : ""}`}>{active.label}</p>
+            <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{active.detail || " "}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommitmentScreen({ p, dark, lang, onDone }) {
+  const [holdPct, setHoldPct] = useState(0);
+  const [committed, setCommitted] = useState(false);
+  const holdRef = useRef(null);
+  const committedRef = useRef(false);
+  const HOLD_MS = 2000;
+
+  useEffect(() => () => { if (holdRef.current) cancelAnimationFrame(holdRef.current); }, []);
+
+  const finish = () => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    if (holdRef.current) cancelAnimationFrame(holdRef.current);
+    setCommitted(true);
+    setHoldPct(100);
+    setTimeout(onDone, 500);
+  };
+  const startHold = () => {
+    if (committedRef.current) return;
+    const started = Date.now();
+    const tick = () => {
+      const next = Math.min(100, Math.round(((Date.now() - started) / HOLD_MS) * 100));
+      setHoldPct(next);
+      if (next >= 100) { finish(); return; }
+      holdRef.current = requestAnimationFrame(tick);
+    };
+    holdRef.current = requestAnimationFrame(tick);
+  };
+  const cancelHold = () => {
+    if (committedRef.current) return;
+    if (holdRef.current) cancelAnimationFrame(holdRef.current);
+    setHoldPct(0);
+  };
+
+  const gradeLabel = p.grade ? t(lang, p.grade === "11" ? "grade11" : "grade12") : "";
+  const fieldLabel = p.field ? (lang === "km" ? FIELD_META[p.field]?.km : FIELD_META[p.field]?.label) : "";
+  const subjectNames = improvedSubjectNames(p, lang);
+  const ringR = 50, ringC = 2 * Math.PI * ringR;
+
+  return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`} style={{ minHeight: "100vh" }}>
+      <style>{STYLES}</style>
+      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
+        <div className="w-full eai-rise text-center" style={{ maxWidth: 440 }}>
+          <h1 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "commitTitle")}</h1>
+          <p className={`eai-muted text-sm mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "commitDesc")}</p>
+
+          <div className="eai-card mt-6 text-left">
+            {(gradeLabel || fieldLabel) && (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full inline-block mb-3 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                {[gradeLabel, fieldLabel].filter(Boolean).join(" · ")}
+              </span>
+            )}
+            <p className={`text-sm ${lang === "km" ? "eai-km" : ""}`}>
+              <b style={{ color: "var(--primary)" }}>{localizeNum(p.dailyMinutes ?? 0, lang)} {t(lang, "minutesWord")}</b> {t(lang, "perDayWord")}
+              {p.targetExamYear ? <> · {t(lang, "commitUntil")} {localizeNum(p.targetExamYear, lang)}</> : null}
+            </p>
+            {p.target && (
+              <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "commitTargetWord")} {t(lang, "gradeWord")} {p.target}</p>
+            )}
+            {subjectNames.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {subjectNames.map((s) => (
+                  <span key={s} className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8 flex flex-col items-center">
+            <button
+              onPointerDown={startHold} onPointerUp={cancelHold} onPointerLeave={cancelHold} onPointerCancel={cancelHold}
+              disabled={committed}
+              className="eai-focus grid place-items-center rounded-full"
+              style={{ width: 112, height: 112, position: "relative", background: "var(--card)", border: "2px solid var(--line)", touchAction: "none", cursor: committed ? "default" : "pointer" }}
+              aria-label={t(lang, "commitHoldInstruction")}>
+              <svg width={112} height={112} style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }} aria-hidden="true">
+                <circle cx={56} cy={56} r={ringR} fill="none" stroke="var(--bg-soft)" strokeWidth={6} />
+                <circle cx={56} cy={56} r={ringR} fill="none" stroke="var(--jade)" strokeWidth={6} strokeLinecap="round"
+                  strokeDasharray={ringC} strokeDashoffset={ringC * (1 - holdPct / 100)}
+                  style={{ transition: holdPct === 0 ? "stroke-dashoffset .2s ease" : "none" }} />
+              </svg>
+              {committed ? <CheckCircle2 size={34} style={{ color: "var(--jade)" }} /> : <Fingerprint size={34} style={{ color: "var(--primary)" }} />}
+            </button>
+            <p className={`text-xs font-semibold eai-muted mt-3 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "commitHoldInstruction")}</p>
+            {!committed && (
+              <button onClick={finish} className={`eai-focus text-xs font-semibold mt-2 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>
+                {t(lang, "commitHoldFallback")}
+              </button>
+            )}
+          </div>
+
+          <p className={`text-center text-xs eai-muted mt-6 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "commitPrivacyNote")}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SetupFlow({ p, dark, lang, onDone }) {
+  const [phase, setPhase] = useState("loading"); // loading | commit
+  if (phase === "loading") return <SetupLoading p={p} dark={dark} lang={lang} onDone={() => setPhase("commit")} />;
+  return <CommitmentScreen p={p} dark={dark} lang={lang} onDone={onDone} />;
+}
+
 
 function Majors({ abbr, color, lang = "en" }) {
   const faculties = UNI_MAJORS[abbr];
@@ -4077,7 +4189,7 @@ function Majors({ abbr, color, lang = "en" }) {
         {faculties.map((f, i) => {
           const isOpen = open === i;
           return (
-            <div key={f.faculty} className="eai-card overflow-hidden">
+            <div key={f.faculty} className="eai-card eai-card--flush overflow-hidden">
               <button onClick={() => setOpen(isOpen ? -1 : i)} className="eai-focus w-full flex items-center justify-between gap-3 p-4 text-left">
                 <div className="flex items-center gap-2 min-w-0">
                   <GraduationCap size={16} style={{ color, flexShrink: 0 }} />
@@ -4158,7 +4270,7 @@ function UniversityDetail({ uni, p, onBack, lang = "en" }) {
       </button>
 
       {/* Header */}
-      <div className="eai-card p-6 flex items-center gap-4">
+      <div className="eai-card flex items-center gap-4">
         <UniLogo uni={uni} size={72} />
         <div className="min-w-0">
           <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: uni.c }} /><span className="eai-display text-xl font-extrabold">{uni.abbr}</span></div>
@@ -4168,7 +4280,7 @@ function UniversityDetail({ uni, p, onBack, lang = "en" }) {
 
       {/* Why this matches you */}
       {match && match.reasons.length > 0 && (
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={17} style={{ color: "var(--primary)" }} />
             <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "whyMatchesYou")}</h3>
@@ -4187,7 +4299,7 @@ function UniversityDetail({ uni, p, onBack, lang = "en" }) {
 
       {/* Admissions & cost — illustrative prototype data, not sourced from the university */}
       {isUni && info && (
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <div className="flex items-center gap-2 mb-1">
             <Compass size={17} style={{ color: "var(--gold)" }} />
             <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "admissionsAndCost")}</h3>
@@ -4265,25 +4377,25 @@ function Universities({ p, lang = "en" }) {
       </div>
 
       {isUni && (
-        <div className="eai-card p-4 flex flex-wrap gap-2">
+        <div className="eai-card flex flex-wrap gap-2">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t(lang, "searchUniversities")}
-            className={`eai-input eai-focus text-sm px-3 py-2 flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ minWidth: 160 }} />
-          <select value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className="eai-input eai-focus text-sm px-3 py-2">
+            className={`eai-input eai-focus text-sm flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ minWidth: 160 }} />
+          <select value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className="eai-input eai-focus text-sm">
             <option value="KH">Cambodia</option>
             <option value="ANY">Any country</option>
             {ABROAD_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
-          <select value={filterMajor} onChange={(e) => setFilterMajor(e.target.value)} className={`eai-input eai-focus text-sm px-3 py-2 ${lang === "km" ? "eai-km" : ""}`}>
+          <select value={filterMajor} onChange={(e) => setFilterMajor(e.target.value)} className={`eai-input eai-focus text-sm ${lang === "km" ? "eai-km" : ""}`}>
             <option value="all">{t(lang, "allMajorsFilter")}</option>
             {UNI_FIELDS.map((f) => <option key={f.id} value={f.id}>{lang === "km" ? f.labelKm : f.label}</option>)}
           </select>
-          <select value={filterBudget} onChange={(e) => setFilterBudget(e.target.value)} className={`eai-input eai-focus text-sm px-3 py-2 ${lang === "km" ? "eai-km" : ""}`}>
+          <select value={filterBudget} onChange={(e) => setFilterBudget(e.target.value)} className={`eai-input eai-focus text-sm ${lang === "km" ? "eai-km" : ""}`}>
             <option value="all">{t(lang, "anyBudget")}</option>
             <option value="low">{t(lang, "budgetLow")}</option>
             <option value="medium">{t(lang, "budgetMedium")}</option>
             <option value="high">{t(lang, "budgetHigh")}</option>
           </select>
-          <select value={filterLanguage} onChange={(e) => setFilterLanguage(e.target.value)} className={`eai-input eai-focus text-sm px-3 py-2 ${lang === "km" ? "eai-km" : ""}`}>
+          <select value={filterLanguage} onChange={(e) => setFilterLanguage(e.target.value)} className={`eai-input eai-focus text-sm ${lang === "km" ? "eai-km" : ""}`}>
             <option value="all">{t(lang, "anyLanguage")}</option>
             <option value="Khmer">Khmer</option>
             <option value="English">English</option>
@@ -4302,7 +4414,7 @@ function Universities({ p, lang = "en" }) {
         {ranked.map(({ scope, u }) => {
           const match = isUni && up ? scoreUniversityMatch(u, up, scope === "abroad" ? u : undefined) : null;
           return (
-            <button key={`${scope}-${u.abbr}`} onClick={() => setSelected({ scope, uni: u })} className="eai-card eai-tile eai-focus p-5 flex items-center gap-4 text-left w-full">
+            <button key={`${scope}-${u.abbr}`} onClick={() => setSelected({ scope, uni: u })} className="eai-card eai-tile eai-focus flex items-center gap-4 text-left w-full">
               <UniLogo uni={{ ...u, c: u.c || "var(--primary)" }} size={64} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2"><GraduationCap size={16} style={{ color: u.c || "var(--primary)" }} /><span className="eai-display font-bold">{u.abbr}</span></div>
@@ -4325,7 +4437,7 @@ function Universities({ p, lang = "en" }) {
         })}
       </div>
       {isUni && !ranked.length && (
-        <div className="eai-card p-6 text-center">
+        <div className="eai-card text-center">
           <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "noUniversitiesMatch")}</p>
         </div>
       )}
@@ -4347,7 +4459,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
         <ChevronLeft size={16} /> {t(lang, "allUniversities")}
       </button>
 
-      <div className="eai-card p-6 flex items-center gap-4">
+      <div className="eai-card flex items-center gap-4">
         <UniLogo uni={{ ...uni, c: uni.c || "var(--primary)" }} size={72} />
         <div className="min-w-0">
           <div className="flex items-center gap-2"><GraduationCap size={18} style={{ color: "var(--primary)" }} /><span className="eai-display text-xl font-extrabold">{uni.n}</span></div>
@@ -4356,7 +4468,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
       </div>
 
       {match && match.reasons.length > 0 && (
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={17} style={{ color: "var(--primary)" }} />
             <h3 className="eai-display font-bold">{t(lang, "whyMatchesYou")}</h3>
@@ -4373,7 +4485,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
         </div>
       )}
 
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <div className="flex items-center gap-2 mb-1">
           <Compass size={17} style={{ color: "var(--gold)" }} />
           <h3 className="eai-display font-bold">{t(lang, "admissionsAndCost")}</h3>
@@ -4394,7 +4506,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
         </div>
       </div>
 
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <div className="flex items-center gap-2 mb-3">
           <BookOpen size={17} style={{ color: "var(--jade)" }} />
           <h3 className="eai-display font-bold">Majors & fields</h3>
@@ -4407,7 +4519,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
         </div>
       </div>
 
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <div className="flex items-center gap-2 mb-1">
           <Lightbulb size={17} style={{ color: "var(--ember)" }} />
           <h3 className="eai-display font-bold">Why it's on this list</h3>
@@ -4468,7 +4580,7 @@ function Scholarships({ p, lang = "en" }) {
           <button onClick={() => setSelected(null)} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
             <ChevronLeft size={16} /> {t(lang, "scholarshipsWord")}
           </button>
-          <div className="eai-card p-6 flex items-center gap-4">
+          <div className="eai-card flex items-center gap-4">
             <UniLogo uni={uni || { c: "var(--primary)" }} size={56} />
             <div className="min-w-0">
               <h2 className="eai-display text-xl font-extrabold">{s.name}</h2>
@@ -4476,7 +4588,7 @@ function Scholarships({ p, lang = "en" }) {
             </div>
           </div>
           {match.reasons.length > 0 && (
-            <div className="eai-card p-6">
+            <div className="eai-card">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={17} style={{ color: "var(--primary)" }} />
                 <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "whyYouMatch")}</h3>
@@ -4492,11 +4604,11 @@ function Scholarships({ p, lang = "en" }) {
               </div>
             </div>
           )}
-          <div className="eai-card p-6">
+          <div className="eai-card">
             <CardHead title={t(lang, "coverageWord")} />
             <p className="text-sm font-semibold">{s.coverage}</p>
           </div>
-          <div className="eai-card p-6">
+          <div className="eai-card">
             <div className="flex items-center gap-2 mb-3">
               <ClipboardCheck size={17} style={{ color: "var(--gold)" }} />
               <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "requirementsWord")}</h3>
@@ -4511,7 +4623,7 @@ function Scholarships({ p, lang = "en" }) {
               ))}
             </div>
           </div>
-          <div className="eai-card p-6">
+          <div className="eai-card">
             <div className="flex items-center gap-2 mb-1"><CalendarCheck size={17} style={{ color: "var(--ember)" }} /><h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "admissionsDeadlineWord")}</h3></div>
             <p className="text-sm">{s.examDate}</p>
           </div>
@@ -4528,7 +4640,7 @@ function Scholarships({ p, lang = "en" }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {rows.map(({ abbr, i, uni, s, match }) => (
-          <button key={`${abbr}-${i}`} onClick={() => setSelected({ abbr, i })} className="eai-card eai-tile eai-focus p-5 text-left">
+          <button key={`${abbr}-${i}`} onClick={() => setSelected({ abbr, i })} className="eai-card eai-tile eai-focus text-left">
             <div className="flex items-center gap-3">
               <UniLogo uni={uni || { c: "var(--primary)" }} size={44} />
               <div className="min-w-0 flex-1">
@@ -4542,388 +4654,6 @@ function Scholarships({ p, lang = "en" }) {
             <p className="text-xs eai-muted mt-2.5">{s.coverage}</p>
           </button>
         ))}
-      </div>
-    </div>
-  );
-}
-
-/* ════════════════════════ IELTS Diagnostic flow ════════════════════════
-   intro → listening → reading → writing → speaking → grading → results.
-   Listening/Reading are scored instantly from the fixed answer key. Writing/Speaking are sent to
-   Gemini (gradeIeltsResponse) once, in parallel, when the student submits the speaking response. */
-function IeltsIntroCard({ icon: Icon, label, desc }) {
-  return (
-    <div className="flex items-start gap-3 p-3.5 rounded-2xl eai-soft">
-      <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 36, height: 36, background: "var(--card)" }}>
-        <Icon size={17} style={{ color: "var(--primary)" }} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm font-bold">{label}</p>
-        <p className="text-xs eai-muted mt-0.5">{desc}</p>
-      </div>
-    </div>
-  );
-}
-
-/* Plain, self-styled button/textarea — the shared PrimaryButton/eai-ob-input classes rely on CSS
-   variables (--primary-hover, --input-border, --focus-border, --muted-2) that only exist inside
-   .eai-onboarding, and this flow's root isn't wrapped in that scope (same reason the academic
-   Diagnostic component above styles its own buttons instead of reusing OnboardingLayout). */
-function DiagButton({ children, disabled, className = "", ...props }) {
-  return (
-    <button {...props} disabled={disabled}
-      className={`eai-focus w-full flex items-center justify-center gap-2 text-sm font-semibold text-white ${className}`}
-      style={{ height: 50, borderRadius: 14, border: "none", background: disabled ? "var(--bg-soft)" : "var(--primary)", color: disabled ? "var(--muted)" : "#fff", cursor: disabled ? "not-allowed" : "pointer", transition: "filter .15s ease" }}>
-      {children}
-    </button>
-  );
-}
-
-function DiagTextarea(props) {
-  return (
-    <textarea {...props}
-      className={`eai-focus ${props.className || ""}`}
-      style={{ width: "100%", borderRadius: 14, border: "1.5px solid var(--line)", background: "var(--bg-soft)", color: "var(--ink)", ...props.style }} />
-  );
-}
-
-function IeltsMCQ({ questions, answers, onAnswer }) {
-  return (
-    <div className="space-y-4 mt-5">
-      {questions.map((q, qi) => (
-        <div key={qi}>
-          <p className="text-sm font-semibold mb-2">{qi + 1}. {q.q}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {q.options.map((opt) => (
-              <button key={opt} onClick={() => onAnswer(qi, opt)}
-                className="eai-focus text-left px-3.5 py-2.5 rounded-xl text-sm font-medium"
-                style={{
-                  background: answers[qi] === opt ? "var(--primary-soft)" : "var(--card)",
-                  border: `1.5px solid ${answers[qi] === opt ? "var(--primary)" : "var(--line)"}`,
-                  color: answers[qi] === opt ? "var(--primary)" : "var(--ink)",
-                }}>
-                {opt}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const IELTS_GOAL_OPTIONS = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
-
-function IeltsDiagnostic({ dark, onExit, onComplete }) {
-  const [stage, setStage] = useState("goal"); // goal | intro | listening | reading | writing | speaking | grading | results
-  const [goal, setGoal] = useState(null);
-  const [listeningAns, setListeningAns] = useState({});
-  const [readingAns, setReadingAns] = useState({});
-  const [writingText, setWritingText] = useState("");
-  const [speakingText, setSpeakingText] = useState("");
-  const [prepLeft, setPrepLeft] = useState(IELTS_CONTENT.speaking.prepSeconds);
-  const [prepDone, setPrepDone] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [result, setResult] = useState(null);
-
-  useEffect(() => {
-    if (stage !== "speaking" || prepDone) return;
-    if (prepLeft <= 0) { setPrepDone(true); return; }
-    const t = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [stage, prepLeft, prepDone]);
-
-  const playScript = () => {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(IELTS_CONTENT.listening.script);
-    u.rate = 0.95;
-    setSpeaking(true);
-    u.onend = () => setSpeaking(false);
-    window.speechSynthesis.speak(u);
-  };
-
-  const stages = ["listening", "reading", "writing", "speaking"];
-  const stageIndex = stages.indexOf(stage);
-  const progressPct = (stage === "goal" || stage === "intro") ? 0 : (stage === "grading" || stage === "results") ? 100 : Math.round(((stageIndex + 1) / stages.length) * 100);
-
-  const listeningComplete = Object.keys(listeningAns).length === IELTS_CONTENT.listening.questions.length;
-  const readingComplete = Object.keys(readingAns).length === IELTS_CONTENT.reading.questions.length;
-  const writingWords = writingText.trim().split(/\s+/).filter(Boolean).length;
-  const speakingWords = speakingText.trim().split(/\s+/).filter(Boolean).length;
-
-  const submitAll = async () => {
-    setStage("grading");
-    const listeningCorrect = IELTS_CONTENT.listening.questions.filter((q, i) => listeningAns[i] === q.answer).length;
-    const readingCorrect = IELTS_CONTENT.reading.questions.filter((q, i) => readingAns[i] === q.answer).length;
-    const listeningBand = bandFromScore(listeningCorrect, IELTS_CONTENT.listening.questions.length);
-    const readingBand = bandFromScore(readingCorrect, IELTS_CONTENT.reading.questions.length);
-
-    const [writingGrade, speakingGrade] = await Promise.all([
-      gradeIeltsResponse("writing", IELTS_CONTENT.writing.prompt, writingText),
-      gradeIeltsResponse("speaking", IELTS_CONTENT.speaking.cueCard, speakingText),
-    ]);
-
-    const overall = roundToHalfBand((listeningBand + readingBand + writingGrade.band + speakingGrade.band) / 4);
-    setResult({
-      listening: listeningBand, reading: readingBand, writing: writingGrade.band, speaking: speakingGrade.band,
-      overall, goal, feedback: { writing: writingGrade.feedback, speaking: speakingGrade.feedback }, completedAt: Date.now(),
-    });
-    setStage("results");
-  };
-
-  return (
-    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"}`} style={{ minHeight: "100vh" }}>
-      <style>{STYLES}</style>
-      <div className="flex items-center justify-center p-4" style={{ minHeight: "100vh" }}>
-        <div className="w-full eai-rise" style={{ maxWidth: 680 }}>
-          <div className="flex items-center justify-between mb-2">
-            <button onClick={onExit} className="eai-focus flex items-center gap-1 text-sm eai-muted"><ChevronLeft size={16} /> Exit diagnostic</button>
-            {stages.includes(stage) && <p className="text-xs eai-muted">Section {stageIndex + 1} of {stages.length}</p>}
-          </div>
-          {stage !== "goal" && stage !== "intro" && (
-            <div className="h-1.5 rounded-full eai-soft mb-6 overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${progressPct}%`, background: "var(--primary)", transition: "width .3s" }} />
-            </div>
-          )}
-
-          <div className="eai-card p-6 sm:p-8">
-            {stage === "goal" && (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <Target size={20} style={{ color: "var(--primary)" }} />
-                  <h2 className="eai-display text-xl font-extrabold">What's your target band score?</h2>
-                </div>
-                <p className="text-sm eai-muted mt-1 mb-5">We'll track your progress against this goal every time you retake the diagnostic.</p>
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-                  {IELTS_GOAL_OPTIONS.map((g) => (
-                    <button key={g} onClick={() => setGoal(g)}
-                      className="eai-focus py-3 rounded-2xl text-sm font-bold eai-display"
-                      style={{
-                        background: goal === g ? "var(--primary)" : "var(--card)",
-                        color: goal === g ? "#fff" : "var(--ink)",
-                        border: `1.5px solid ${goal === g ? "var(--primary)" : "var(--line)"}`,
-                      }}>
-                      {g.toFixed(1)}
-                    </button>
-                  ))}
-                </div>
-                <DiagButton onClick={() => setStage("intro")} disabled={goal == null} className="w-full mt-6">Continue <ChevronRight size={16} /></DiagButton>
-              </>
-            )}
-
-            {stage === "intro" && (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <ClipboardCheck size={20} style={{ color: "var(--primary)" }} />
-                  <h2 className="eai-display text-xl font-extrabold">IELTS placement diagnostic</h2>
-                </div>
-                <p className="text-sm eai-muted mt-1 mb-5">A short test across all four skills so we can estimate your current band toward your Band {goal?.toFixed(1)} goal. Takes about 15 minutes.</p>
-                <div className="space-y-2.5">
-                  <IeltsIntroCard icon={Headphones} label="Listening" desc="Play a short audio clip, then answer 4 questions." />
-                  <IeltsIntroCard icon={BookOpen} label="Reading" desc="Read a short passage, then answer 4 questions." />
-                  <IeltsIntroCard icon={FileText} label="Writing" desc="Write a short essay response to a Task 2 style prompt." />
-                  <IeltsIntroCard icon={Mic} label="Speaking" desc="Prepare briefly, then type your spoken response to a cue card." />
-                </div>
-                <DiagButton onClick={() => setStage("listening")} className="w-full mt-6">Start diagnostic <ChevronRight size={16} /></DiagButton>
-              </>
-            )}
-
-            {stage === "listening" && (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <Headphones size={18} style={{ color: "var(--primary)" }} />
-                  <h2 className="eai-display text-lg font-bold">Listening</h2>
-                </div>
-                <p className="text-xs eai-muted mb-4">Press play to hear the clip (you can replay it), then answer the questions below.</p>
-                <button onClick={playScript} className="eai-btn eai-focus px-4 py-2.5 text-sm text-white flex items-center gap-2" style={{ background: "var(--primary)" }}>
-                  <PlayCircle size={16} /> {speaking ? "Playing…" : "Play audio"}
-                </button>
-                <IeltsMCQ questions={IELTS_CONTENT.listening.questions} answers={listeningAns} onAnswer={(qi, opt) => setListeningAns((a) => ({ ...a, [qi]: opt }))} />
-                <DiagButton onClick={() => setStage("reading")} disabled={!listeningComplete} className="w-full mt-6">Continue to Reading <ChevronRight size={16} /></DiagButton>
-              </>
-            )}
-
-            {stage === "reading" && (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <BookOpen size={18} style={{ color: "var(--primary)" }} />
-                  <h2 className="eai-display text-lg font-bold">Reading</h2>
-                </div>
-                <p className="text-sm leading-relaxed p-4 rounded-2xl eai-soft mt-3" style={{ color: "var(--ink)" }}>{IELTS_CONTENT.reading.passage}</p>
-                <IeltsMCQ questions={IELTS_CONTENT.reading.questions} answers={readingAns} onAnswer={(qi, opt) => setReadingAns((a) => ({ ...a, [qi]: opt }))} />
-                <DiagButton onClick={() => setStage("writing")} disabled={!readingComplete} className="w-full mt-6">Continue to Writing <ChevronRight size={16} /></DiagButton>
-              </>
-            )}
-
-            {stage === "writing" && (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText size={18} style={{ color: "var(--primary)" }} />
-                  <h2 className="eai-display text-lg font-bold">Writing</h2>
-                </div>
-                <p className="text-sm mt-2 mb-3" style={{ color: "var(--ink)" }}>{IELTS_CONTENT.writing.prompt}</p>
-                <DiagTextarea
-                  value={writingText} onChange={(e) => setWritingText(e.target.value)}
-                  placeholder="Write your response here…" rows={10}
-                  className="w-full p-4 text-sm leading-relaxed"
-                  style={{ height: "auto", resize: "vertical" }}
-                />
-                <p className="text-xs eai-muted mt-2">{writingWords} words · aim for at least {IELTS_CONTENT.writing.minWords}</p>
-                <DiagButton onClick={() => setStage("speaking")} disabled={writingWords < 20} className="w-full mt-6">Continue to Speaking <ChevronRight size={16} /></DiagButton>
-              </>
-            )}
-
-            {stage === "speaking" && (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <Mic size={18} style={{ color: "var(--primary)" }} />
-                  <h2 className="eai-display text-lg font-bold">Speaking</h2>
-                </div>
-                <div className="p-4 rounded-2xl eai-soft mt-3">
-                  <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>{IELTS_CONTENT.speaking.cueCard}</p>
-                  <ul className="mt-2 space-y-1">
-                    {IELTS_CONTENT.speaking.bulletPoints.map((b) => (
-                      <li key={b} className="text-xs eai-muted flex items-start gap-1.5"><Circle size={5} className="mt-1.5 flex-shrink-0" style={{ fill: "var(--muted)" }} /> {b}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                {!prepDone ? (
-                  <div className="text-center py-8">
-                    <p className="text-xs eai-muted mb-2">Preparation time</p>
-                    <p className="eai-display text-4xl font-extrabold" style={{ color: "var(--primary)" }}>{prepLeft}s</p>
-                    <button onClick={() => setPrepDone(true)} className="eai-focus text-xs font-semibold mt-3" style={{ color: "var(--primary)" }}>Skip preparation</button>
-                  </div>
-                ) : (
-                  <>
-                    <DiagTextarea
-                      value={speakingText} onChange={(e) => setSpeakingText(e.target.value)}
-                      placeholder="Type what you would say out loud…" rows={7}
-                      className="w-full p-4 text-sm leading-relaxed mt-4"
-                      style={{ height: "auto", resize: "vertical" }}
-                    />
-                    <p className="text-xs eai-muted mt-2">{speakingWords} words</p>
-                    <DiagButton onClick={submitAll} disabled={speakingWords < 10} className="w-full mt-6">Submit diagnostic <ChevronRight size={16} /></DiagButton>
-                  </>
-                )}
-              </>
-            )}
-
-            {stage === "grading" && (
-              <div className="text-center py-10">
-                <div className="mx-auto mb-4 grid place-items-center rounded-2xl" style={{ width: 56, height: 56, background: "var(--primary-soft)" }}>
-                  <Sparkles size={26} style={{ color: "var(--primary)" }} />
-                </div>
-                <p className="text-sm font-semibold">Grading your responses…</p>
-                <p className="text-xs eai-muted mt-1">Our AI examiner is scoring your writing and speaking.</p>
-              </div>
-            )}
-
-            {stage === "results" && result && (
-              <>
-                <div className="text-center mb-6">
-                  <p className="text-xs font-semibold eai-muted uppercase tracking-wide">Estimated overall band</p>
-                  <p className="eai-display font-extrabold" style={{ fontSize: 48, color: "var(--primary)", lineHeight: 1 }}>{result.overall.toFixed(1)}</p>
-                  {result.goal != null && (
-                    <p className="text-xs eai-muted mt-1">
-                      {result.overall >= result.goal
-                        ? `🎉 You've reached your Band ${result.goal.toFixed(1)} goal!`
-                        : `Goal: Band ${result.goal.toFixed(1)} · ${(result.goal - result.overall).toFixed(1)} to go`}
-                    </p>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
-                  {IELTS_SKILL_META.map((s) => (
-                    <div key={s.key} className="rounded-2xl p-3 text-center eai-soft">
-                      <s.icon size={16} className="mx-auto mb-1.5" style={{ color: "var(--primary)" }} />
-                      <p className="eai-display font-bold text-lg leading-none">{result[s.key].toFixed(1)}</p>
-                      <p className="text-xs eai-muted mt-1">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-                {result.feedback.writing && (
-                  <div className="p-4 rounded-2xl eai-soft mb-3">
-                    <p className="text-xs font-bold flex items-center gap-1.5 mb-1"><FileText size={13} /> Writing feedback</p>
-                    <p className="text-xs eai-muted leading-relaxed">{result.feedback.writing}</p>
-                  </div>
-                )}
-                {result.feedback.speaking && (
-                  <div className="p-4 rounded-2xl eai-soft mb-3">
-                    <p className="text-xs font-bold flex items-center gap-1.5 mb-1"><Mic size={13} /> Speaking feedback</p>
-                    <p className="text-xs eai-muted leading-relaxed">{result.feedback.speaking}</p>
-                  </div>
-                )}
-                <DiagButton onClick={() => onComplete(result)} className="w-full mt-4">Done <ChevronRight size={16} /></DiagButton>
-              </>
-            )}
-          </div>
-          {(stage === "writing" || stage === "speaking") && <p className="text-center text-xs eai-muted mt-4">Your response is graded by AI once you submit — no feedback shown during the test.</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const IELTS_SKILL_META = [
-  { key: "listening", label: "Listening", icon: Headphones },
-  { key: "reading", label: "Reading", icon: BookOpen },
-  { key: "writing", label: "Writing", icon: FileText },
-  { key: "speaking", label: "Speaking", icon: Mic },
-];
-
-function Languages({ results = {}, onTakeDiagnostic, lang = "en" }) {
-  return (
-    <div className="space-y-5 eai-rise">
-      <div>
-        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "langHubTitle")}</h2>
-        <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "langHubSubtitle")}</p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {LANGS.map((l) => {
-          const isIelts = l.n === "IELTS Academic";
-          const result = results[l.n];
-          const now = result ? `Band ${result.overall.toFixed(1)}` : l.now;
-          const goalLabel = isIelts ? (result?.goal != null ? `Band ${result.goal.toFixed(1)}` : "Not set yet") : l.goal;
-          const pct = result
-            ? (isIelts && result.goal ? clamp(Math.round((result.overall / result.goal) * 100), 4, 100) : clamp(Math.round((result.overall / 9) * 100), 4, 100))
-            : l.pct;
-          return (
-            <div key={l.n} className="eai-card p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><Globe size={18} style={{ color: l.c }} /><span className="eai-display font-bold">{l.n}</span></div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--bg-soft)", color: l.c }}>Goal {goalLabel}</span>
-              </div>
-              <div className="flex items-end justify-between mt-4 mb-2">
-                <span className="text-xs eai-muted">Current: <b style={{ color: "var(--ink)" }}>{now}</b></span>
-                <span className="text-xs font-bold eai-display">{pct}% there</span>
-              </div>
-              <div className="h-2.5 rounded-full eai-soft overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: l.c, transition: "width .3s" }} /></div>
-
-              {isIelts && result && (
-                <div className="grid grid-cols-4 gap-1.5 mt-4">
-                  {IELTS_SKILL_META.map((s) => (
-                    <div key={s.key} className="rounded-xl px-1.5 py-2 text-center eai-soft">
-                      <s.icon size={13} className="mx-auto mb-1" style={{ color: l.c }} />
-                      <p className="text-[13px] font-bold eai-display leading-none">{result[s.key].toFixed(1)}</p>
-                      <p className="text-[10px] eai-muted mt-0.5 leading-none">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {isIelts ? (
-                <button onClick={() => onTakeDiagnostic(l.n)} className={`eai-btn eai-focus w-full mt-4 py-2 text-sm text-white flex items-center justify-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
-                  <ClipboardCheck size={15} /> {result ? t(lang, "retakeDiagnostic") : t(lang, "takeDiagnostic")}
-                </button>
-              ) : (
-                <button disabled className={`eai-btn w-full mt-4 py-2 text-sm eai-soft cursor-not-allowed ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--muted)" }}>
-                  {t(lang, "comingSoon")}
-                </button>
-              )}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -4969,7 +4699,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
           { l: t(lang, "accuracyWord"), v: accuracy != null ? `${accuracy}%` : "—", sub: "all time", c: "var(--gold)", icon: ClipboardCheck },
           { l: t(lang, "xpToday"), v: `+${todayCompleted.length * 30}`, sub: "from practice", c: "var(--ember)", icon: Zap },
         ].map((s) => (
-          <div key={s.l} className="eai-card p-4 flex items-center gap-3">
+          <div key={s.l} className="eai-card flex items-center gap-3">
             <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 38, height: 38, background: "var(--bg-soft)" }}>
               <s.icon size={18} style={{ color: s.c }} />
             </div>
@@ -4983,7 +4713,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Exam readiness — a composite estimate, presented as a range rather than a guarantee */}
-        <div className="eai-card p-6 relative overflow-hidden">
+        <div className="eai-card relative overflow-hidden">
           <CardHead title={lang === "km" ? "ភាពត្រៀមខ្លួនប្រឡង" : "Exam readiness"} />
           <div className="flex flex-col items-center -mb-2">
             <Gauge value={p.readiness.overall} />
@@ -5012,7 +4742,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
         </div>
 
         {/* Weekly hours */}
-        <div className="eai-card p-6 lg:col-span-2">
+        <div className="eai-card lg:col-span-2">
           <CardHead title={t(lang, "weeklyStudyHours")}
             action={<Pill icon={Clock} color="var(--primary)" soft="var(--primary-soft)" value={`${weeklyTotalHours.toFixed(1)}h`} label={t(lang, "thisWeek")} />} />
           <div style={{ height: 220 }}>
@@ -5035,7 +4765,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
       </div>
 
       {/* Leaderboard */}
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <CardHead title={t(lang, "leaderboard")}
           action={<span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--gold-soft)", color: "var(--gold)" }}><Trophy size={12} /> {t(lang, "thisWeek")}</span>} />
         <div className="space-y-1.5">
@@ -5063,7 +4793,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
       </div>
 
       {/* AI Learning Analytics */}
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <CardHead title={t(lang, "aiLearningAnalytics")}
           action={<span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={12} /> {t(lang, "liveWord")}</span>} />
         <p className={`text-xs eai-muted -mt-2 mb-4 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "coachAnalyzes")}</p>
@@ -5085,7 +4815,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Subject mastery + weak/strong — tap a subject to see its topic-by-topic breakdown */}
-        <div className="eai-card p-6 lg:col-span-2">
+        <div className="eai-card lg:col-span-2">
           <CardHead title={t(lang, "subjectMastery")} />
           <div className="space-y-1">
             {p.subjects.map((s) => {
@@ -5129,7 +4859,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
         </div>
 
         {/* AI recommendations */}
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <CardHead title={t(lang, "aiRecommendations")} />
           <div className="space-y-3">
             {p.recs.map((r, i) => (
@@ -5149,7 +4879,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Weekly + Monthly goals */}
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <CardHead title={t(lang, "goalsWord")} />
           <div className="space-y-4">
             {[{ l: t(lang, "weeklyWord"), v: "0.5 / 8h", p: 6, c: "var(--gold)" }, { l: t(lang, "monthlyWord"), v: "1 / 24 lessons", p: 4, c: "var(--jade)" }].map((g) => (
@@ -5162,7 +4892,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
         </div>
 
         {/* Recent activity */}
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <CardHead title={t(lang, "recentActivity")} />
           <div className="space-y-3">
             {(recent.length
@@ -5207,7 +4937,7 @@ function UniversityMasteryWidget({ p, up, onPracticeCourse, lang = "en" }) {
   const recCourse = rec ? courses.find((c) => `${up.major}::${c.title}` === rec.subject) : null;
 
   return (
-    <div className="eai-card p-6">
+    <div className="eai-card">
       <CardHead title={t(lang, "uniHubYourProgress")} />
       {rec && recCourse && (
         <button onClick={() => onPracticeCourse(recCourse.id)}
@@ -5280,14 +5010,14 @@ function UniversityHub({ p, go, onPracticeCourse, lang = "en" }) {
       <UniversityMasteryWidget p={p} up={up} onPracticeCourse={onPracticeCourse} lang={lang} />
 
       {/* Continue Learning */}
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <CardHead title={t(lang, "uniHubContinueLearning")} />
         {courses.length ? (
           <div className="space-y-3">
             {courses.map((c) => {
               const isOpen = openCourse === c.id;
               return (
-                <div key={c.id} className="eai-card overflow-hidden">
+                <div key={c.id} className="eai-card eai-card--flush overflow-hidden">
                   <button onClick={() => setOpenCourse(isOpen ? null : c.id)} className="eai-focus w-full flex items-center justify-between gap-3 p-4 text-left">
                     <div className="flex items-center gap-2 min-w-0">
                       <BookOpen size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
@@ -5323,12 +5053,11 @@ function UniversityHub({ p, go, onPracticeCourse, lang = "en" }) {
       </div>
 
       {/* Explore teaser */}
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <CardHead title={t(lang, "navExplore")} action={<button onClick={() => go("explore")} className={`eai-focus text-xs font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{t(lang, "viewWord")}</button>} />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
             { icon: Sparkles, label: t(lang, "askAiCoach"), tab: "coach" },
-            { icon: Mic, label: "IELTS / TOEFL", tab: "languages" },
             { icon: Landmark, label: t(lang, "navUniversities"), tab: "universities" },
           ].map((it) => (
             <button key={it.tab} onClick={() => go(it.tab)} className={`eai-tile eai-focus p-4 rounded-2xl border text-left ${lang === "km" ? "eai-km" : ""}`} style={{ borderColor: "var(--line)" }}>
@@ -5354,9 +5083,6 @@ function UniversityExplore({ p, go, lang = "en" }) {
     { title: t(lang, "exploreLearnTitle"), items: [
       { icon: Sparkles, label: t(lang, "askAiCoach"), onClick: () => go("coach") },
     ] },
-    { title: t(lang, "explorePrepareTitle"), items: [
-      { icon: Mic, label: "IELTS / TOEFL", onClick: () => go("languages") },
-    ] },
     { title: t(lang, "exploreDiscoverTitle"), items: [
       { icon: Landmark, label: t(lang, "navUniversities"), onClick: () => go("universities") },
       { icon: DollarSign, label: t(lang, "scholarshipsWord"), onClick: () => go("scholarships") },
@@ -5372,7 +5098,7 @@ function UniversityExplore({ p, go, lang = "en" }) {
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniExploreDesc")}</p>
       </div>
       {categories.map((cat) => (
-        <div key={cat.title} className="eai-card p-6">
+        <div key={cat.title} className="eai-card">
           <CardHead title={cat.title} />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {cat.items.map((it) => (
@@ -5416,7 +5142,7 @@ function UniversityProgress({ p, lang = "en" }) {
           { l: "XP", v: p.xp.toLocaleString(), icon: Zap, c: "var(--gold)" },
           { l: "Level", v: `${p.level}`, icon: TrendingUp, c: "var(--primary)" },
         ].map((s) => (
-          <div key={s.l} className="eai-card p-4 flex items-center gap-3">
+          <div key={s.l} className="eai-card flex items-center gap-3">
             <div className="grid place-items-center rounded-xl flex-shrink-0" style={{ width: 38, height: 38, background: "var(--bg-soft)" }}>
               <s.icon size={18} style={{ color: s.c }} />
             </div>
@@ -5428,7 +5154,7 @@ function UniversityProgress({ p, lang = "en" }) {
         ))}
       </div>
 
-      <div className="eai-card p-6">
+      <div className="eai-card">
         <CardHead title={t(lang, "leaderboard")} />
         <div className="space-y-1.5">
           {leaderboard.slice(0, 8).map((e) => (
@@ -5455,7 +5181,7 @@ function UniversityProgress({ p, lang = "en" }) {
       </div>
 
       {ui?.contentAvailable ? (
-        <div className="eai-card p-6">
+        <div className="eai-card">
           <CardHead title={t(lang, "uniHubYourProgress")} />
           <div className="space-y-2.5">
             {ui.subjects.map((sub) => (
@@ -5470,7 +5196,7 @@ function UniversityProgress({ p, lang = "en" }) {
           </div>
         </div>
       ) : (
-        <div className="eai-card p-6 text-center">
+        <div className="eai-card text-center">
           <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniProgressComingSoon")}</p>
         </div>
       )}
@@ -6968,7 +6694,7 @@ function SuperBondus({ p, lang = "en" }) {
       </div>
 
       {upgraded ? (
-        <div className="eai-card p-6 flex items-start gap-3" style={{ borderColor: "var(--gold)" }}>
+        <div className="eai-card flex items-start gap-3" style={{ borderColor: "var(--gold)" }}>
           <CheckCircle2 size={20} style={{ color: "var(--jade)", flexShrink: 0, marginTop: 2 }} />
           <div>
             <p className={`font-semibold ${lang === "km" ? "eai-km" : ""}`}>
@@ -7036,7 +6762,6 @@ const NAV = [
   { id: "exercises", label: "Exercises", labelKm: "លំហាត់ពីគ្រូ", icon: ClipboardCheck },
   { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
-  { id: "languages", label: "Languages", labelKm: "ភាសាបរទេស", icon: Globe },
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
   { id: "wardrobe", label: "Wardrobe", labelKm: "បន្ទប់ស្លៀកពាក់", icon: Shirt },
   { id: "super", label: "Super Bondus", labelKm: "Super Bondus", icon: Crown, premium: true },
@@ -7136,10 +6861,7 @@ const STRINGS = {
     toLevel: "XP to Level", targetsWeakest: "targets your weakest topic",
     exploreSharpen: "Sharpen your weak subjects", exploreBrowseMajors: "Browse majors & entrance prep", exploreStats: "Your full stats & analytics",
     exploreBrowsePast: "Official past exam papers by year",
-    // Language hub
-    langHubTitle: "International language hub",
-    langHubSubtitle: "Diagnostic driven roadmaps and unlimited AI mock tests with skill-by-skill scoring.",
-    takeDiagnostic: "Take diagnostic", retakeDiagnostic: "Retake diagnostic", comingSoon: "Coming soon",
+    comingSoon: "Coming soon",
     // Browse
     browseTitle: "Browse exams", universityEntrance: "University entrance", trackWord: "track", officialPapers: "official papers",
     recommendedForYou: "Recommended for you", minAbbrev: "min", marksWord: "marks",
@@ -7235,10 +6957,10 @@ const STRINGS = {
     uniYearTitle: "Where are you now?", uniYearDesc: "So we can tailor what we show you.",
     // University Hub
     uniHubContinueLearning: "Continue learning",
-    uniHubCoursesComingSoon: "Course content for this field is coming soon. In the meantime, explore Universities, IELTS prep, or ask your AI mentor.",
+    uniHubCoursesComingSoon: "Course content for this field is coming soon. In the meantime, explore Universities or ask your AI mentor.",
     uniHubLessonsComingSoon: "Full interactive lessons are coming soon — this is the course outline.",
     uniExploreDesc: "Everything you need, organized in one place instead of searching across the web.",
-    exploreLearnTitle: "Learn", explorePrepareTitle: "Prepare", exploreDiscoverTitle: "Discover", explorePracticeTitle: "Practice",
+    exploreLearnTitle: "Learn", exploreDiscoverTitle: "Discover", explorePracticeTitle: "Practice",
     askAiCoach: "Ask your AI coach", scholarshipsWord: "Scholarships", quizzesMockExams: "Quizzes & mock exams",
     uniProgressDesc: "Your learning activity across Bondus.",
     uniProgressComingSoon: "Detailed course and quiz analytics are coming soon.",
@@ -7308,6 +7030,14 @@ const STRINGS = {
     noFeedbackDuringTest: "No feedback during the test — you'll see your results at the end.",
     diagnosticComplete: "Diagnostic complete!", startingPointIs: "Here's your real starting point — overall level is",
     goToDashboard: "Go to my dashboard",
+    // Setup + commitment (between registration/diagnostic and the dashboard)
+    setupLoadingTitle: "We're setting everything up for you",
+    setupStepTrack: "Preparing your track", setupStepSubjects: "Loading your focus subjects", setupStepSubjectsAll: "all subjects",
+    setupStepSchedule: "Scheduling your daily practice", setupStepGoal: "Locking in your target", perDayWord: "a day",
+    commitTitle: "Commit to your goal", commitDesc: "This is the promise you're making to yourself. Hold to lock it in.",
+    commitUntil: "until", commitTargetWord: "Aiming for",
+    commitHoldInstruction: "Press and hold to commit", commitHoldFallback: "Can't hold? Tap here to confirm",
+    commitPrivacyNote: "This is just for you — it only shapes your plan and reminders, nothing is shared.",
   },
   km: {
     ...CHEER_STRINGS.km, // the owl's encouraging lines (mascotCheers.js)
@@ -7379,10 +7109,7 @@ const STRINGS = {
     toLevel: "XP ទៅកម្រិត", targetsWeakest: "ផ្តោតលើប្រធានបទខ្សោយបំផុតរបស់អ្នក",
     exploreSharpen: "ពង្រឹងមុខវិជ្ជាខ្សោយរបស់អ្នក", exploreBrowseMajors: "រកមើលជំនាញ និងការត្រៀមប្រឡងចូល", exploreStats: "ស្ថិតិ និងការវិភាគពេញលេញរបស់អ្នក",
     exploreBrowsePast: "ក្រដាសប្រឡងផ្លូវការតាមឆ្នាំ",
-    // Language hub
-    langHubTitle: "មជ្ឈមណ្ឌលភាសាអន្តរជាតិ",
-    langHubSubtitle: "ផែនទីបង្ហាញផ្លូវផ្អែកលើការធ្វើតេស្តវាយតម្លៃ និងតេស្តសាកល្បង AI មិនកំណត់ ជាមួយពិន្ទុសម្រាប់ជំនាញនីមួយៗ។",
-    takeDiagnostic: "ធ្វើតេស្តវាយតម្លៃ", retakeDiagnostic: "ធ្វើតេស្តវាយតម្លៃម្តងទៀត", comingSoon: "មកដល់ឆាប់ៗនេះ",
+    comingSoon: "មកដល់ឆាប់ៗនេះ",
     // Browse
     browseTitle: "រកមើលកម្រងសំណួរប្រឡងបាក់ឌុប", universityEntrance: "ប្រឡងចូលសាកលវិទ្យាល័យ", trackWord: "ផ្នែក", officialPapers: "ក្រដាសប្រឡងផ្លូវការ",
     recommendedForYou: "បានណែនាំសម្រាប់អ្នក", minAbbrev: "នាទី", marksWord: "ពិន្ទុ",
@@ -7477,10 +7204,10 @@ const STRINGS = {
     uniYearTitle: "តើអ្នកនៅដំណាក់កាលណា?", uniYearDesc: "ដើម្បីឲ្យយើងកែសម្រួលអ្វីដែលបង្ហាញអ្នក។",
     // University Hub
     uniHubContinueLearning: "បន្តការសិក្សា",
-    uniHubCoursesComingSoon: "ខ្លឹមសារវគ្គសិក្សាសម្រាប់ជំនាញនេះនឹងមកដល់ឆាប់ៗនេះ។ ចន្លោះពេលនេះ សូមស្វែងរកសាកលវិទ្យាល័យ រៀបចំ IELTS ឬសួរគ្រូបង្វឹក AI របស់អ្នក។",
+    uniHubCoursesComingSoon: "ខ្លឹមសារវគ្គសិក្សាសម្រាប់ជំនាញនេះនឹងមកដល់ឆាប់ៗនេះ។ ចន្លោះពេលនេះ សូមស្វែងរកសាកលវិទ្យាល័យ ឬសួរគ្រូបង្វឹក AI របស់អ្នក។",
     uniHubLessonsComingSoon: "មេរៀនអន្តរកម្មពេញលេញនឹងមកដល់ឆាប់ៗនេះ — នេះជាគ្រោងវគ្គសិក្សា។",
     uniExploreDesc: "អ្វីៗគ្រប់យ៉ាងដែលអ្នកត្រូវការ រៀបចំនៅកន្លែងតែមួយ — ជំនួសឲ្យការស្វែងរកនៅលើអ៊ីនធឺណិត។",
-    exploreLearnTitle: "រៀន", explorePrepareTitle: "រៀបចំ", exploreDiscoverTitle: "ស្វែងយល់", explorePracticeTitle: "អនុវត្ត",
+    exploreLearnTitle: "រៀន", exploreDiscoverTitle: "ស្វែងយល់", explorePracticeTitle: "អនុវត្ត",
     askAiCoach: "សួរគ្រូបង្វឹក AI របស់អ្នក", scholarshipsWord: "អាហារូបករណ៍", quizzesMockExams: "កម្រងសំណួរ និងការប្រឡងសាកល្បង",
     uniProgressDesc: "សកម្មភាពសិក្សារបស់អ្នកនៅលើ Bondus។",
     uniProgressComingSoon: "ការវិភាគលម្អិតអំពីវគ្គសិក្សា និងកម្រងសំណួរនឹងមកដល់ឆាប់ៗនេះ។",
@@ -7539,6 +7266,14 @@ const STRINGS = {
     noFeedbackDuringTest: "គ្មានមតិកែលម្អកំឡុងពេលធ្វើតេស្តទេ — អ្នកនឹងឃើញលទ្ធផលនៅចុងក្រោយ។",
     diagnosticComplete: "តេស្តវាយតម្លៃបានបញ្ចប់!", startingPointIs: "នេះជាចំណុចចាប់ផ្តើមពិតរបស់អ្នក — កម្រិតទាំងមូលគឺ",
     goToDashboard: "ទៅកាន់ផ្ទាំងគ្រប់គ្រងរបស់ខ្ញុំ",
+    // Setup + commitment (between registration/diagnostic and the dashboard)
+    setupLoadingTitle: "យើងកំពុងរៀបចំអ្វីៗសម្រាប់អ្នក",
+    setupStepTrack: "កំពុងរៀបចំគន្លងសិក្សារបស់អ្នក", setupStepSubjects: "កំពុងផ្ទុកមុខវិជ្ជាដែលអ្នកផ្តោត", setupStepSubjectsAll: "គ្រប់មុខវិជ្ជា",
+    setupStepSchedule: "កំពុងកំណត់កាលវិភាគសិក្សាប្រចាំថ្ងៃ", setupStepGoal: "កំពុងកំណត់គោលដៅរបស់អ្នក", perDayWord: "ក្នុងមួយថ្ងៃ",
+    commitTitle: "ប្តេជ្ញាចិត្តចំពោះគោលដៅរបស់អ្នក", commitDesc: "នេះជាការសន្យាដែលអ្នកធ្វើចំពោះខ្លួនឯង។ សូមចុចសង្កត់ដើម្បីបញ្ជាក់។",
+    commitUntil: "រហូតដល់", commitTargetWord: "ដោយសម្រេចឱ្យបាន",
+    commitHoldInstruction: "ចុចសង្កត់ដើម្បីបញ្ជាក់", commitHoldFallback: "មិនអាចសង្កត់បានទេ? ចុចទីនេះដើម្បីបញ្ជាក់",
+    commitPrivacyNote: "នេះគឺសម្រាប់អ្នកតែម្នាក់ឯង — វាគ្រាន់តែកំណត់ទម្រង់ផែនការ និងការរំលឹករបស់អ្នក គ្មានអ្វីត្រូវបានចែករំលែកទេ។",
   },
 };
 const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
@@ -7569,7 +7304,7 @@ function WelcomeBackToast({ name, show }) {
     <AnimatePresence>
       {show && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
-          className="eai-card flex items-center gap-2.5 px-4 py-2.5"
+          className="eai-card eai-card--compact flex items-center gap-2.5"
           style={{ position: "fixed", top: 72, right: 16, zIndex: 50, boxShadow: "var(--shadow)" }}>
           <span aria-hidden="true">👋</span>
           <span className="text-sm font-semibold">Welcome back, {name.split(" ")[0]}!</span>
@@ -7585,7 +7320,7 @@ function LevelUpToast({ level, show }) {
     <AnimatePresence>
       {show && (
         <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} transition={{ duration: 0.25 }}
-          className="eai-card flex items-center gap-2.5 px-4 py-2.5"
+          className="eai-card eai-card--compact flex items-center gap-2.5"
           style={{ position: "fixed", top: 72, right: 16, zIndex: 50, boxShadow: "var(--shadow)", borderColor: "var(--gold)" }}>
           <TrendingUp size={16} style={{ color: "var(--gold)" }} />
           <span className="text-sm font-semibold">Level up! You're now Level {level}.</span>
@@ -7601,7 +7336,7 @@ function NoticeToast({ text, onClose }) {
     <AnimatePresence>
       {text && (
         <motion.button type="button" onClick={onClose} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
-          className="eai-card flex items-center gap-2.5 px-4 py-2.5 text-left"
+          className="eai-card eai-card--compact flex items-center gap-2.5 text-left"
           style={{ position: "fixed", top: 72, right: 16, zIndex: 60, boxShadow: "var(--shadow)", borderColor: "var(--ember)", maxWidth: "min(92vw, 380px)" }}>
           <AlertTriangle size={16} style={{ color: "var(--ember)", flexShrink: 0 }} />
           <span className="text-sm font-semibold">{text}</span>
@@ -7633,8 +7368,7 @@ export default function App() {
   const [plan, setPlan] = useState(saved?.plan ?? []);
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
   const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
-  const [langResults, setLangResults] = useState(saved?.langResults ?? {}); // { [languageName]: { listening, reading, writing, speaking, overall, feedback, completedAt } }
-  const [takingLangTest, setTakingLangTest] = useState(null); // language name currently being tested, or null
+  const [justRegistered, setJustRegistered] = useState(false); // true right after a fresh account is ready; shows SetupFlow once before the real dashboard, then clears itself
   // ── Server mode (VITE_API_URL set): the account, progress, XP, streak and plan live on the Laravel backend ──
   const [booting, setBooting] = useState(SERVER_MODE && api.hasToken()); // restoring a saved login
   const [bootError, setBootError] = useState(false);  // the saved login could not be restored because the server was unreachable or busy (holds the error)
@@ -7661,8 +7395,8 @@ export default function App() {
   // Browser-only prototype (no VITE_API_URL): persist everything so progress survives a page refresh.
   useEffect(() => {
     if (SERVER_MODE || !profile) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards }));
-  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, langResults, rewards]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, rewards }));
+  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, rewards]);
 
   // Forget everything about the signed-in student (state, saved-but-unsent work stays in storage under their id).
   const resetSession = () => {
@@ -7671,7 +7405,7 @@ export default function App() {
     serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
     setSummary(null);
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
-    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLangResults({}); setTab("dashboard");
+    setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setTab("dashboard");
   };
   // Without a server, logging out deliberately leaves localStorage alone (see loadSaved); with one, the token is revoked.
   const handleLogout = () => { if (SERVER_MODE) api.logout(); resetSession(); setBootError(false); setBooting(false); setEntry("welcome"); };
@@ -7785,6 +7519,7 @@ export default function App() {
         sendStudy(diagnosticEvent()); // finishing the diagnostic counts as studying today (it starts the streak)
         setPendingReg(null);
         setShowDiagnostic(false);
+        setJustRegistered(true);
       } catch (err) {
         flash(apiErrorKey(err?.code)); // stay on the results screen so "Done" can be pressed again
       }
@@ -7796,13 +7531,14 @@ export default function App() {
     setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
     setShowDiagnostic(false);
+    setJustRegistered(true);
   };
   // Straight to an unpersonalized dashboard with no assessment: "Explore first", or a track that has none (Social Science).
   // With the server the account already exists, so this only loads it. Resolves to { error, retryAfter } when that fails,
   // so the caller can say so.
   const enterDashboard = async (reg) => {
     if (SERVER_MODE) {
-      try { await loadAccount(); setPendingReg(null); return null; }
+      try { await loadAccount(); setPendingReg(null); setJustRegistered(true); return null; }
       catch (err) { return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null }; }
     }
     const built = buildProfile(reg);
@@ -7810,6 +7546,7 @@ export default function App() {
     setProfile({ ...built, hasCompletedDiagnostic: false, isPersonalized: false, bannerDismissed: false });
     setPlan([]); // each student writes their own plan; the generated tasks are only offered as suggestions
     setPendingReg(null);
+    setJustRegistered(true);
     return null;
   };
   // "Explore First" — skip the diagnostic and go straight to an unpersonalized dashboard.
@@ -7918,7 +7655,7 @@ export default function App() {
     setProfile(userToProfile(me.user, sm));
     setTopicMastery(saved.topicMastery); setUniTopicMastery(saved.uniTopicMastery);
     setPractice(saved.practice); setUniPractice(saved.uniPractice);
-    setLangResults(saved.langResults); setRewards(wardrobe);
+    setRewards(wardrobe);
     setPlan((pl?.tasks ?? []).map(taskFromServer));
     setBonusXp(0);
     applySummary(sm, { announce: false });
@@ -7950,12 +7687,12 @@ export default function App() {
   // Save progress to the server a moment after the last change (never right after loading it).
   useEffect(() => {
     if (!SERVER_MODE || !hydratedRef.current) return;
-    const state = stateToSave({ topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards });
+    const state = stateToSave({ topicMastery, uniTopicMastery, practice, uniPractice, rewards });
     const json = JSON.stringify(state);
     if (json === lastSavedRef.current) return;
     lastSavedRef.current = json;
     saverRef.current.schedule(state);
-  }, [topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards]);
+  }, [topicMastery, uniTopicMastery, practice, uniPractice, rewards]);
 
   // Keep the screen in step with the server: a day that rolled over, XP earned on another device, events left unsent.
   const refreshLive = async () => {
@@ -8163,13 +7900,7 @@ export default function App() {
   if (!profile && entry === "forgot" && SERVER_MODE) return <>{noticeToast}<ForgotPassword dark={dark} setDark={setDark} onBack={() => setEntry("login")} onSignedIn={handleSignedIn} lang={lang} setLang={setLang} /></>;
   if (!profile) return <>{noticeToast}<Register key={resumeReg?._key ?? "register"} onComplete={handleRegister} onGoogleAuth={handleGoogleAuth} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
-  if (takingLangTest) return (
-    <IeltsDiagnostic
-      dark={dark}
-      onExit={() => setTakingLangTest(null)}
-      onComplete={(res) => { setLangResults((r) => ({ ...r, [takingLangTest]: res })); setTakingLangTest(null); }}
-    />
-  );
+  if (justRegistered) return <SetupFlow p={p} dark={dark} lang={lang} onDone={() => setJustRegistered(false)} />;
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";
@@ -8195,7 +7926,7 @@ export default function App() {
       serverMode={SERVER_MODE} errorText={(code, retryAfter) => apiErrorText(lang, code, retryAfter)}
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
       onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
-    universities: <Universities p={p} lang={lang} />, languages: <Languages results={langResults} onTakeDiagnostic={(name) => setTakingLangTest(name)} lang={lang} />, coach: <Coach p={p} lang={lang} />,
+    universities: <Universities p={p} lang={lang} />, coach: <Coach p={p} lang={lang} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
     explore: <UniversityExplore p={p} go={go} lang={lang} />,

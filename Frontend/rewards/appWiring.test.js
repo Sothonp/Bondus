@@ -8,7 +8,7 @@ const app = readFileSync(new URL("../App.jsx", import.meta.url), "utf8");
 
 test("App saves, restores and clears rewards the way it does bonusXp", () => {
   assert.match(app, /localStorage\.setItem\(STORAGE_KEY, JSON\.stringify\(\{[^)]*\brewards\b/);
-  assert.match(app, /langResults, rewards\]/);
+  assert.match(app, /bonusXp, rewards\]/);
   assert.match(app, /setRewards\(sanitizeRewards\(data\.rewards\)\)/);
   assert.match(app, /setRewards\(emptyRewards\(\)\)/);
 });

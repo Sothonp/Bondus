@@ -31,10 +31,6 @@ test("on a phone the sidebar drawer and its hamburger are gone: the sidebar and 
   assert.doesNotMatch(shell, /useState\(false\);\s*\n\s*const \[open, setOpen\]/);
 });
 
-test("the Languages page stays in the desktop sidebar; only the phone navigation leaves it out", () => {
-  assert.match(app, /\{ id: "languages", label: "Languages"/);
-});
-
 test("the page leaves room under the fixed bar, including the iPhone home-indicator area", () => {
   assert.match(app, /<main className=\{`eai-main /);
   assert.match(app, /@media \(max-width:1023\.98px\)\{ \.eai-main\{ padding-bottom:calc\(5rem \+ env\(safe-area-inset-bottom\)\) !important; \} \}/);

@@ -131,7 +131,7 @@ test("progress is saved to the server only after the account has loaded, and nev
 });
 
 test("what is saved to the server is progress only: never XP, the plan, or the password", () => {
-  assert.match(app, /stateToSave\(\{ topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards \}\)/);
+  assert.match(app, /stateToSave\(\{ topicMastery, uniTopicMastery, practice, uniPractice, rewards \}\)/);
   assert.doesNotMatch(app, /putState\([^)]*password/);
 });
 
@@ -209,7 +209,7 @@ test("a track with no diagnostic (Social Science) goes from sign-up straight to 
 
 test("'Explore first' and the Social Science skip share one way into the dashboard, which reports a failure to load the account", () => {
   const enter = app.slice(app.indexOf("const enterDashboard = async"), app.indexOf("// Completing the diagnostic later"));
-  assert.match(enter, /await loadAccount\(\); setPendingReg\(null\); return null;/);
+  assert.match(enter, /await loadAccount\(\); setPendingReg\(null\); setJustRegistered\(true\); return null;/);
   assert.match(enter, /return \{ error: err\?\.code \?\? "server_error", retryAfter: err\?\.retryAfter \?\? null \};/);
   assert.match(enter, /const built = buildProfile\(reg\);/); // the browser-only mode builds the profile from the answers it was handed, not from state
   assert.match(enter, /const handleSkipDiagnostic = async \(\) => \{ const res = await enterDashboard\(pendingReg\); if \(res\) flash\(apiErrorKey\(res\.error\)\); \};/);

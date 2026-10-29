@@ -80,7 +80,7 @@ test("a server plan task becomes the dashboard's task shape", () => {
 
 test("only progress data is saved to /me/state — never XP, the plan or the profile", () => {
   const saved = stateToSave({ topicMastery: { a: 1 }, practice: { x: 1 }, rewards: { owned: [] }, bonusXp: 99, profile: { xp: 5 }, plan: [1] });
-  assert.deepEqual(Object.keys(saved).sort(), ["langResults", "practice", "rewards", "topicMastery", "uniPractice", "uniTopicMastery"]);
+  assert.deepEqual(Object.keys(saved).sort(), ["practice", "rewards", "topicMastery", "uniPractice", "uniTopicMastery"]);
   assert.deepEqual(saved.uniPractice, {});
 });
 

@@ -58,11 +58,11 @@ export const taskFromServer = (t) => ({
 
 /* What goes into PUT /me/state. XP, level, the plan and the profile live in their own server tables, so they are not
    part of it (the server would strip them anyway). */
-export function stateToSave({ topicMastery, uniTopicMastery, practice, uniPractice, langResults, rewards }) {
+export function stateToSave({ topicMastery, uniTopicMastery, practice, uniPractice, rewards }) {
   return {
     topicMastery: topicMastery ?? {}, uniTopicMastery: uniTopicMastery ?? {},
     practice: practice ?? {}, uniPractice: uniPractice ?? {},
-    langResults: langResults ?? {}, rewards: rewards ?? {},
+    rewards: rewards ?? {},
   };
 }
 

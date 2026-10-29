@@ -7,7 +7,7 @@
 export const MOBILE_PRIMARY_IDS = ["dashboard", "universityHub", "practice", "coach", "wardrobe"];
 
 // Pages the phone navigation does not offer. They still exist in the desktop sidebar.
-export const MOBILE_HIDDEN_IDS = ["languages"];
+export const MOBILE_HIDDEN_IDS = [];
 
 export function splitMobileNav(items = []) {
   const offered = items.filter((n) => !MOBILE_HIDDEN_IDS.includes(n.id));

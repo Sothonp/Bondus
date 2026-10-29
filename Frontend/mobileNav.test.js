@@ -8,7 +8,7 @@ const item = (id, extra = {}) => ({ id, label: id, ...extra });
 const ids = (list) => list.map((n) => n.id);
 
 // The sidebar a science student sees (App.jsx's NAV with Exercises kept), then an admin's, a social student's, a university profile's.
-const STUDENT = ["dashboard", "browse", "practice", "exercises", "universities", "coach", "languages", "progress", "wardrobe", "super"].map((id) => item(id));
+const STUDENT = ["dashboard", "browse", "practice", "exercises", "universities", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
 const ADMIN = [...STUDENT, item("adminExercises")];
 const SOCIAL = STUDENT.filter((n) => n.id !== "exercises");
 const UNIVERSITY = ["universityHub", "explore", "universities", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
@@ -22,14 +22,6 @@ test("everything else is in More, in the sidebar's own order, with Super Bondus 
   assert.deepEqual(ids(splitMobileNav(ADMIN).more), ["browse", "exercises", "universities", "progress", "super", "adminExercises"]);
 });
 
-test("the Languages section is not offered on a phone", () => {
-  assert.deepEqual(MOBILE_HIDDEN_IDS, ["languages"]);
-  for (const nav of [STUDENT, ADMIN, SOCIAL]) {
-    const { primary, more } = splitMobileNav(nav);
-    assert.equal([...primary, ...more].some((n) => n.id === "languages"), false);
-  }
-});
-
 test("a social-science student has no Exercises in More", () => {
   assert.deepEqual(ids(splitMobileNav(SOCIAL).more), ["browse", "universities", "progress", "super"]);
 });
@@ -40,7 +32,7 @@ test("a university profile gets its hub, the coach and the wardrobe in the bar",
   assert.deepEqual(ids(more), ["explore", "universities", "progress", "super"]);
 });
 
-test("no page becomes unreachable: every item except Languages appears exactly once", () => {
+test("no page becomes unreachable: every item appears exactly once", () => {
   for (const nav of [STUDENT, ADMIN, SOCIAL, UNIVERSITY]) {
     const { primary, more } = splitMobileNav(nav);
     const shown = ids([...primary, ...more]).sort();
@@ -65,7 +57,6 @@ test("More lights up when the open page lives in it, and not when it is in the b
   assert.equal(moreIsActive("exercises", more), true);
   assert.equal(moreIsActive("practice", more), false);
   assert.equal(moreIsActive("dashboard", more), false);
-  assert.equal(moreIsActive("languages", more), false);
 });
 
 test("an empty or missing nav does not crash", () => {
