@@ -2714,10 +2714,13 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
             <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
               placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
               className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
-            <div className="flex flex-col sm:flex-row gap-2">
+            {/* sm:flex-wrap is the safety net: the Min input and Add button below are sm:flex-shrink-0 (they
+                never shrink), so if the card is ever too narrow to fit select+Min+Add on one row, this wraps
+                the overflow onto a second line inside the card instead of spilling past its edge. */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
               <select value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
                 aria-label={t(lang, "planSubjectOptional")}
-                className={`eai-ob-input eai-focus w-full sm:flex-1 sm:min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }}>
+                className={`eai-ob-input eai-focus w-full sm:flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42, minWidth: 140 }}>
                 <option value="">{t(lang, "planSubjectOptional")}</option>
                 {subjectOptions.map((s) => <option key={s} value={s}>{subjectLabel(s, lang)}</option>)}
               </select>

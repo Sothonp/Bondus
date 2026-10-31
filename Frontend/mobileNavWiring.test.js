@@ -89,7 +89,7 @@ test("the dashboard puts the streak and level cards in a two-column row before t
 });
 
 test("the study-plan form stacks into full-width controls on a phone and the suggestions scroll sideways", () => {
-  assert.match(dashboard, /<div className="flex flex-col sm:flex-row gap-2">/);
+  assert.match(dashboard, /<div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">/);
   assert.match(dashboard, /className=\{`eai-ob-input eai-focus w-full sm:w-\[84px\] sm:flex-shrink-0/);
   assert.match(dashboard, /eai-glass eai-focus px-4 text-sm flex items-center justify-center gap-1\.5 w-full sm:w-auto/);
   assert.match(dashboard, /flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible eai-scroll/);
