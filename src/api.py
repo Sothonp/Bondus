@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -39,6 +39,7 @@ from prompts import (
     subject_guide,
 )
 from src.answer_cache import AnswerCache, CachedAnswer, cache_key
+from src.router import answer_tier
 from src.answer_format import sanitize_answer
 from src.auth import (
     AuthUnavailable,
@@ -989,6 +990,7 @@ class FallbackGenerator:
         first_token_seconds: float = 0.0,
         rate_limit_cooldown_seconds: float = 60.0,
         routes: Mapping[str, Sequence[str]] | None = None,
+        tier_routes: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         if not candidates:
             raise ValueError("at least one generator is required")
@@ -1002,6 +1004,9 @@ class FallbackGenerator:
         self.rate_limit_cooldown_seconds = rate_limit_cooldown_seconds
         # Language ("km", "en") -> providers to try first, in order.
         self.routes = {language: list(order) for language, order in (routes or {}).items()}
+        # Tier ("simple", "advanced"; see src/router.py) -> "provider" or
+        # "provider:model" entries tried ahead of the language route.
+        self.tier_routes = {tier: list(order) for tier, order in (tier_routes or {}).items()}
         self._health = [ModelHealth() for _ in self.candidates]
         self._cursor = 0
 
@@ -1041,26 +1046,30 @@ class FallbackGenerator:
             })
         return result
 
-    def _route(self, ready: list[int], language: str | None) -> list[int]:
-        """``ready`` reordered for the question's language: each provider named in
-        its route takes its turn with the model it would try first (every key of
-        that model), then everything else in the usual order."""
-        order = self.routes.get(language or "")
+    def _route(self, ready: list[int], language: str | None, tier: str | None = None) -> list[int]:
+        """``ready`` reordered for the question's tier, then its language: each
+        entry takes its turn with every key of one model -- the model it names
+        ("gemini:gemini-3.5-flash"), or the one its provider would try first
+        ("groq") -- then everything else in the usual order."""
+        order = self.tier_routes.get(tier or "", []) + self.routes.get(language or "", [])
         if not order:
             return ready
         first: list[int] = []
-        for provider in order:
-            leading = next((i for i in ready if self.candidates[i].provider == provider), None)
-            if leading is None:
-                continue
-            model = self.candidates[leading].model
+        for entry in order:
+            provider, _, model = entry.partition(":")
+            if not model:
+                leading = next((i for i in ready if self.candidates[i].provider == provider), None)
+                if leading is None:
+                    continue
+                model = self.candidates[leading].model
             first += [
                 i for i in ready
                 if self.candidates[i].provider == provider and self.candidates[i].model == model
+                and i not in first
             ]
         return first + [i for i in ready if i not in first]
 
-    def _order(self, language: str | None = None) -> list[int]:
+    def _order(self, language: str | None = None, tier: str | None = None) -> list[int]:
         """Candidate indices to try, healthiest first.
 
         Rested models still come last rather than being dropped: a stale
@@ -1078,7 +1087,7 @@ class FallbackGenerator:
             ready = ready[start:] + ready[:start]
             self._cursor = (ready[0] + 1) % len(self.candidates)
         elif ready:
-            ready = self._route(ready, language)
+            ready = self._route(ready, language, tier)
         return ready + waiting
 
     def _cooldown(self, exc: LLMError, failures: int) -> float:
@@ -1127,9 +1136,9 @@ class FallbackGenerator:
         logger.error("Every configured model failed (last: %s)", error.detail if error else "none tried")
         return UnavailableGenerator()
 
-    async def generate(self, **kwargs) -> GeneratedAnswer:
+    async def generate(self, *, tier: str | None = None, **kwargs) -> GeneratedAnswer:
         error: LLMError | None = None
-        for index in self._order(kwargs.get("language")):
+        for index in self._order(kwargs.get("language"), tier):
             candidate = self.candidates[index]
             try:
                 answer = await candidate.generate(**kwargs)
@@ -1143,9 +1152,9 @@ class FallbackGenerator:
         fallback = self._last_resort(error)
         return replace(await fallback.generate(**kwargs), provider="none")
 
-    async def stream(self, **kwargs) -> AsyncIterator[StreamItem]:
+    async def stream(self, *, tier: str | None = None, **kwargs) -> AsyncIterator[StreamItem]:
         error: LLMError | None = None
-        for index in self._order(kwargs.get("language")):
+        for index in self._order(kwargs.get("language"), tier):
             candidate = self.candidates[index]
             started = False
             items = stream_answer(candidate, **kwargs).__aiter__()
@@ -1352,6 +1361,10 @@ def build_generator(settings: Settings) -> AnswerGenerator:
         first_token_seconds=settings.llm_first_token_seconds,
         rate_limit_cooldown_seconds=settings.llm_rate_limit_cooldown_seconds,
         routes={"km": settings.llm_khmer_order_list, "en": settings.llm_other_order_list},
+        tier_routes=(
+            {"simple": settings.llm_simple_order_list, "advanced": settings.llm_advanced_order_list}
+            if settings.llm_router else None
+        ),
     )
 
 
@@ -1659,10 +1672,22 @@ async def rate_limit(request: Request) -> None:
         )
 
 
-def _answer_cache_key(
+@dataclass
+class CacheSlot:
+    """Where one question's answer is cached: its exact key, and the scope and
+    embedding under which reworded questions can find it."""
+
+    key: str
+    scope: str
+    question: str
+    chunk_ids: list[str]
+    vector: Any = None  # the question's embedding, once the semantic lookup made it
+
+
+def _cache_slot(
     state: RAGState, payload: QueryRequest, readings: Sequence[ImageReading],
     language: str, context: Sequence[RetrievedChunk], guide: str | None,
-) -> str | None:
+) -> CacheSlot | None:
     """Where this answer is cached, or None when it cannot be: an answer to a
     question with chat history, photos or a continuation depends on more than
     the question and its passages."""
@@ -1670,24 +1695,75 @@ def _answer_cache_key(
         return None
     if payload.history or readings or payload.images or payload.continues_math:
         return None
-    return cache_key(
-        payload.prompt,
-        [chunk.id for chunk in context],
+    chunk_ids = [chunk.id for chunk in context]
+    scope = dict(
         language=language,
         subject=payload.subject,
         track=payload.track,
         sources=",".join(payload.sources or []),
         prompt=hashlib.sha256((SYSTEM_PROMPT + (guide or "")).encode("utf-8")).hexdigest(),
     )
+    return CacheSlot(
+        key=cache_key(payload.prompt, chunk_ids, **scope),
+        scope=cache_key("", [], **scope),
+        question=payload.prompt,
+        chunk_ids=chunk_ids,
+    )
 
 
-def _cache_answer(state: RAGState, key: str | None, text: str, answer: GeneratedAnswer, provider: str) -> None:
+def _cached_answer(state: RAGState, slot: CacheSlot | None) -> CachedAnswer | None:
+    """The answer already given to this question, or to a rewording of it.
+    Embeds the question, so run it in a worker thread."""
+    if slot is None or state.answer_cache is None:
+        return None
+    cached = state.answer_cache.get(slot.key)
+    if cached is not None:
+        logger.info("Answered from the cache (%s %s)", cached.provider, cached.model)
+        return cached
+    if not state.settings.semantic_cache:
+        return None
+    try:
+        slot.vector = state.embedder.embed_query(slot.question)
+    except Exception:  # noqa: BLE001 - a cache must never fail the question
+        logger.exception("Could not embed the question for the semantic cache")
+        return None
+    found = state.answer_cache.find_similar(
+        slot.scope, slot.question, slot.chunk_ids, slot.vector,
+        min_similarity=state.settings.semantic_cache_similarity,
+        min_overlap=state.settings.semantic_cache_overlap,
+    )
+    if found is None:
+        return None
+    cached, similarity = found
+    logger.info(
+        "Answered from the semantic cache (similarity %.3f; %s %s)", similarity, cached.provider, cached.model,
+    )
+    return cached
+
+
+def _cache_answer(state: RAGState, slot: CacheSlot | None, text: str, answer: GeneratedAnswer, provider: str) -> None:
     """Keep a complete answer from a real model; never a cut-off or fallback note."""
-    if key is None or state.answer_cache is None or not text.strip() or provider == "none":
+    if slot is None or state.answer_cache is None or not text.strip() or provider == "none":
         return
     if answer.stop_reason in TRUNCATED_STOP_REASONS or answer.stop_reason in QUOTED_STOP_REASONS:
         return
-    state.answer_cache.put(key, CachedAnswer(text, provider, answer.model, answer.stop_reason))
+    state.answer_cache.put(slot.key, CachedAnswer(text, provider, answer.model, answer.stop_reason))
+    if slot.vector is not None:
+        state.answer_cache.put_similar(slot.key, slot.scope, slot.question, slot.chunk_ids, slot.vector)
+
+
+def _tier_request(generator: AnswerGenerator, payload: QueryRequest, readings: Sequence[ImageReading]) -> dict:
+    """``{"tier": ...}`` for a chain that routes by difficulty (src/router.py), else {}."""
+    if not isinstance(generator, FallbackGenerator) or not generator.tier_routes:
+        return {}
+    tier = answer_tier(
+        payload.prompt,
+        previous_question=_previous_question(payload),
+        has_images=bool(readings or payload.images),
+        continues=payload.continues_math,
+    )
+    logger.info("Question tier: %s", tier)
+    return {"tier": tier}
 
 
 # A message in a conversation that is short, or points back at the exercise
@@ -2099,12 +2175,11 @@ def create_app(
         readings = await _read_images(state, _decode_images(state, payload))
         language, context = await _retrieve_context(state, payload, readings)
         guide = _question_guide(payload, context)
-        key = _answer_cache_key(state, payload, readings, language, context, guide)
-        cached = state.answer_cache.get(key) if key else None
+        slot = _cache_slot(state, payload, readings, language, context, guide)
+        cached = await run_in_threadpool(_cached_answer, state, slot)
 
         answer = GeneratedAnswer(text="", stop_reason=None, model=state.generator.model)
         if cached is not None:
-            logger.info("Answered from the cache (%s %s)", cached.provider, cached.model)
             answer = GeneratedAnswer(
                 text=cached.text, stop_reason=cached.stop_reason, model=cached.model, provider=cached.provider,
             )
@@ -2116,6 +2191,7 @@ def create_app(
                 chunks=context,
                 language=language,
                 message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings, guide),
+                **_tier_request(state.generator, payload, readings),
             )
 
         answer_text = answer.text
@@ -2128,7 +2204,7 @@ def create_app(
             if repairs:
                 logger.info("Repaired the answer's formatting: %s", "; ".join(repairs))
         if cached is None:
-            _cache_answer(state, key, answer_text, answer, answer.provider or state.generator.provider)
+            _cache_answer(state, slot, answer_text, answer, answer.provider or state.generator.provider)
 
         return QueryResponse(
             answer=answer_text,
@@ -2188,10 +2264,9 @@ def create_app(
                 sources=_source_chunks(context, state.settings),
                 provider=generator.provider,
             ))
-            key = _answer_cache_key(state, payload, readings, language, context, guide)
-            cached = state.answer_cache.get(key) if key else None
+            slot = _cache_slot(state, payload, readings, language, context, guide)
+            cached = await run_in_threadpool(_cached_answer, state, slot)
             if cached is not None:
-                logger.info("Answered from the cache (%s %s)", cached.provider, cached.model)
                 yield _line(QueryStreamStatus(stage="generating"))
                 yield _line(QueryStreamDelta(text=cached.text))
                 elapsed = round((time.perf_counter() - started) * 1000, 1)
@@ -2206,7 +2281,7 @@ def create_app(
                 generate=payload.generate,
                 continues_math=payload.continues_math,
                 on_answer=lambda text, final: _cache_answer(
-                    state, key, text, final, final.provider or generator.provider
+                    state, slot, text, final, final.provider or generator.provider
                 ),
                 system=SYSTEM_PROMPT,
                 history=payload.history,
@@ -2214,6 +2289,7 @@ def create_app(
                 chunks=context,
                 language=language,
                 message_builder=lambda kept: build_user_message(payload.prompt, kept, language, readings, guide),
+                **_tier_request(generator, payload, readings),
             ):
                 yield event
 

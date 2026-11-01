@@ -62,3 +62,17 @@ def test_subject_top_k_applies_only_without_an_explicit_top_k():
     retriever.subject_top_k = {"khmer_literature": 8}
     assert len(retriever.retrieve("អក្សរសាស្ត្រខ្មែរ", subject="khmer_literature")) == 8
     assert len(retriever.retrieve("អក្សរសាស្ត្រខ្មែរ", top_k=2, subject="khmer_literature")) == 2
+
+
+def test_a_named_works_key_points_sheet_comes_first_whole_and_in_order():
+    retriever = _retriever()
+    sheet = [
+        ChunkRecord(id=f"s{i}", source="key_points/phka.md", chunk_index=i, text="s",
+                    metadata={"title": "ចំណុចសំខាន់ៗ៖ រឿងផ្កាស្រពោន — អក្សរសាស្ត្រខ្មែរ"})
+        for i in range(3)
+    ]
+    # Its chunks score badly, and in reverse order, but all come first in order.
+    retriever.store.add(sheet, np.array([[0.1, 1.0], [0.2, 1.0], [0.3, 1.0]], dtype=np.float32))
+    ids = [chunk.id for chunk in retriever.retrieve("តួអង្គក្នុងរឿងផ្កាស្រពោន")]
+    assert ids == ["s0", "s1", "s2", "n0", "n1", "n2", "t0", "t1"]
+    assert "s0" not in [c.id for c in retriever.retrieve("អក្សរសាស្ត្រខ្មែរ")], "no work named, no sheet"

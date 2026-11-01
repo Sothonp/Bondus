@@ -707,8 +707,12 @@ SUBJECT_GUIDES: dict[str, str] = {
         "- Textbook themes: អក្សរសិល្ប៍ខេមរនិយម, ព្រាហ្មណ៍និយម and ពុទ្ធនិយម, the arts, ល្ខោន, "
         "inscriptions and dance, traditions and កំណាព្យ.",
         "- Key works include រាមកេរ្តិ៍, សូផាត (រីម គីន, 1938), កុលាបប៉ៃលិន (ញ៉ុក ថែម, 1943), "
-        "ផ្កាស្រពោន (នូ ហាច), មាលាដួងចិត្ត, ភូមិតិរច្ឆាន and ធនញ្ជ័យកុមារ. Never invent a work, "
-        "author, date or quotation: when unsure, say so.",
+        "ផ្កាស្រពោន (នូ ហាច), ភូមិតិរច្ឆាន (ឌឹក គាម និង ឌឿក អំ, written 1964-1965, about the "
+        "18 April 1925 killing of Résident Bardez at ក្រាំងលាវ), មាលាដួងចិត្ត and the folk tale "
+        "ធនញ្ជ័យ. Never invent a work, author, date or quotation: when unsure, say so.",
+        "- Key-points sheets: a passage titled ចំណុចសំខាន់ៗ (Key-Points Sheet) is a checked "
+        "summary of one work. Trust its names, spellings, dates and authors over a passage of "
+        "the novel's own text, which was read from a scan and may misspell a name.",
         "- Novels and stories: the passages may hold the full text of these works (the novels, "
         "រាមកេរ្តិ៍ and its summary and analysis). Read every passage from a work before "
         "writing, and extract its key points: the characters and what each stands for, the "
@@ -724,9 +728,35 @@ SUBJECT_GUIDES: dict[str, str] = {
         "comments on what the example shows, and ends with a sentence that ties it back to the "
         "subject. Write each paragraph as flowing formal Khmer prose, not as a list of points, "
         "and draw the examples of different paragraphs from different works where possible.",
-        "- When the student asks about one work (its summary, characters, theme or lesson), "
-        "answer from that work's passages in the same order: the work and its author, a "
-        "summary of the story, the characters, the theme and lesson, then its value.",
+        "- An essay is never a key-points sheet, even when its passages are one: give its "
+        "three parts (សេចក្តីផ្តើម, តួសេចក្តី, សេចក្តីសន្និដ្ឋាន) a \"### \" heading each and "
+        "write paragraphs under them, with no \"- \" lists and no bold labels. The "
+        "សេចក្តីផ្តើម is one paragraph that runs លំនាំបញ្ហា, ចំណូលបញ្ហា then ចំណោទបញ្ហា without "
+        "naming them; the តួសេចក្តី is one paragraph per argument.",
+        "- When the student asks about one work (its summary, characters, themes, key points "
+        "or lesson) rather than for an essay, answer as a key-points sheet: a \"## \" title "
+        "naming the work in Khmer and English (in Khmer: ចំណុចសំខាន់ៗ៖ រឿង…), then these five "
+        "\"### \" sections, each with short \"- \" items led by a bold label, in an academic, "
+        "clear and concise tone. Give only the sections and items the question asks for when "
+        "it asks for one part (\"who are the characters\" is section 2 alone).",
+        "  ១. ព័ត៌មានទូទៅ និងប្រវត្តិ (General & Historical Metadata): អ្នកនិពន្ធ; កាលបរិច្ឆេទ "
+        "និងប្រភពប្រវត្តិសាស្ត្រ (the period the story is set in, when it was written, when "
+        "published); ប្រភេទ និងចលនាអក្សរសិល្ប៍ (genre and literary movement, e.g. "
+        "historical realism, classical epic poetry, romantic realism).",
+        "  ២. តួអង្គ (Character Profiles): តួឯក ឬវីរបុរស; តួប្រឆាំង ឬអ្នកជិះជាន់ (colonial "
+        "or oppressive figures, and what they do); តួរង (their relation to the others and "
+        "their part in the plot). Name every character the passages name, with their "
+        "background and role, and mark those who are real historical figures. Leave none of "
+        "the main ones out: a character list with gaps is a wrong answer.",
+        "  ៣. ប្រធានបទ និងគោលបំណង (Core Themes & Objectives): three or four central themes, "
+        "each with a short explanation, then what the author meant the work to do.",
+        "  ៤. ឥទ្ធិពលលើសង្គម និងវប្បធម៌ (Societal & Cultural Influence): its effect on "
+        "Cambodian society and culture, then why it matters to a Grade 12 student today.",
+        "  ៥. សាច់រឿងសង្ខេប (Chapter & Plot Summary): ការចាប់ផ្តើមរឿង (the opening setup); "
+        "ចំណុចរបត់ និងទំនាស់ (the turning points and conflict, in order); ដំណោះស្រាយ និង"
+        "មេរៀនសីលធម៌ (how it ends and the moral lesson).",
+        "  Take every item from the passages, the key-points sheet first. Leave out an item "
+        "the passages do not support rather than guess, and say it is not in the book.",
     ]),
     "english": "\n".join([
         "ភាសាអង់គ្លេស (English).",

@@ -208,6 +208,14 @@ flowchart LR
 
 `FallbackGenerator` in `src/api.py` is the router. For each question it:
 
+- **Routes by difficulty.** `src/router.py` sorts each question, for free and
+  without asking a model: a greeting or a short definition ("តើលីមីតជាអ្វី?") is
+  *simple* and goes to `LLM_SIMPLE_ORDER` first (Gemini 3.1 Flash-Lite, Groq,
+  Cerebras, SEA-LION); solving, calculating, proving, explaining a concept, an essay, a
+  long question, a photo or a follow-up to any of them is *advanced* and goes
+  to `LLM_ADVANCED_ORDER` first (Gemini 3.5 Flash, Groq, then NVIDIA). Entries are `provider` or
+  `provider:model`, and the language order below follows them.
+  `LLM_ROUTER=false` turns this off.
 - **Routes by language.** Khmer questions (almost all) follow `LLM_KHMER_ORDER`,
   others `LLM_OTHER_ORDER`. Each provider named takes its turn with its main
   model; its other models, and every provider not named, follow. OpenRouter
@@ -233,7 +241,11 @@ skipped model failed.
 **Saving quota.** A question asked without chat history or photos is answered
 from `storage/answer_cache.sqlite` when the same question (ignoring case and
 spacing) retrieved the same passages before, for `ANSWER_CACHE_TTL_SECONDS`
-(7 days). Retrieval keeps the top `TOP_K=5` passages (`LITERATURE_TOP_K=10` for Khmer
+(7 days). A reworded question ("លីមីតគឺជាអ្វី?") reuses the answer too, when its
+embedding is at least `SEMANTIC_CACHE_SIMILARITY` (0.95) close, it has the same
+numbers and operators, and at least `SEMANTIC_CACHE_OVERLAP` (60%) of its
+passages are the same. Similarity alone would mix up questions about two
+different novels (0.94). `SEMANTIC_CACHE=false` keeps only exact matches. Retrieval keeps the top `TOP_K=5` passages (`LITERATURE_TOP_K=10` for Khmer
 Literature). A question that names a literary work ("រឿងផ្កាស្រពោន") takes that work's
 best passages first, so a novel's own text is not outranked by textbook pages about it. One IP address may ask
 `RATE_LIMIT_QUESTIONS` (30) per `RATE_LIMIT_WINDOW_SECONDS` (10 minutes); after
@@ -296,6 +308,11 @@ moves them, titles them in `catalog.json` and sets exact duplicates aside in
 `data/.duplicates/`. A query's `subject` limits retrieval to that subject's
 documents, read from the folder (or file name, or catalog title), so the index
 needs no rebuild for it.
+Literary works: `build_key_points.py` has Gemini read a work's whole OCR text and write
+a Key-Points Sheet (metadata, every character, themes, influence, plot) into
+`data/<folder>/key_points/`, checking each character name against the book; review
+it, then `ingest_corpus.py` indexes it, and a question naming the work gets the
+whole sheet first.
 Maintenance scripts: `reembed_index.py` (switch the embedding backend without
 OCR again), `backfill_ocr.py` (OCR one file page by page within a quota), `show_chunks.py` / `export_chunks.py` (inspect
 chunks).
