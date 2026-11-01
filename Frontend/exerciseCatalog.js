@@ -5,6 +5,7 @@
    is always an id in the catalog. After changing a question bank, regenerate the backend's copy:
      node scripts/export-exercise-catalog.mjs                                                         */
 import { setIndexes } from "./practiceFlow.js";
+import { chapterKeys } from "./chapterProgress.js";
 
 export const exerciseId = (subject, i) => `${subject}-${i + 1}`;
 export const uniExerciseId = (courseKey, i) => `uni:${courseKey}:${i + 1}`;
@@ -39,20 +40,25 @@ function setsOf(items) {
   return sets;
 }
 
-/* { exercises: { id: [accepted answers] }, sets: { setKey: [exercise ids] } } for the BAC II bank and the university
-   quiz bank (whose courses are keyed "{major}::{course title}"). */
+/* { exercises: { id: [accepted answers] }, sets: { setKey: [exercise ids] }, chapters: { subject: [{ key, ids }] } } for the
+   BAC II bank and the university quiz bank (whose courses are keyed "{major}::{course title}").
+   `chapters` is the path the server enforces: for each BAC II subject that has chapters, its chapters in curriculum order
+   (chapterKeys, the same order the app shows) with the ids of their questions. Subjects without chapters are not listed. */
 export function buildCatalog(bank, uniBank) {
   const exercises = {};
   const sets = {};
-  const add = (list, idOf) => {
+  const chapters = {};
+  const add = (list, idOf, subject = null) => {
     const items = list.map((raw, i) => {
       const id = idOf(i);
       exercises[id] = answersOf(raw);
-      return { id, chapter: raw.chapter, stage: raw.stage };
+      return { id, chapter: raw.chapter, chapterOrder: raw.chapterOrder, stage: raw.stage };
     });
     Object.assign(sets, setsOf(items));
+    const keys = subject ? chapterKeys(items) : [];
+    if (keys.length) chapters[subject] = keys.map((key) => ({ key, ids: items.filter((e) => e.chapter === key).map((e) => e.id) }));
   };
-  for (const [subject, list] of Object.entries(bank)) add(list, (i) => exerciseId(subject, i));
+  for (const [subject, list] of Object.entries(bank)) add(list, (i) => exerciseId(subject, i), subject);
   for (const [course, list] of Object.entries(uniBank)) add(list, (i) => uniExerciseId(course, i));
-  return { exercises, sets };
+  return { exercises, sets, chapters };
 }

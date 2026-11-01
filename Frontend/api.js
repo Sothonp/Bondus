@@ -138,6 +138,10 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     postStudyEvent: (event) => send("POST", "/study-events", event),
     getLeaderboard: () => get("/leaderboard"),
 
+    // the chapter path: every chapter's state for this student, and a Master Quiz to be graded by the server
+    getChapters: () => get("/chapters"),
+    submitChapterQuiz: (quiz) => send("POST", "/chapter-quizzes", quiz),
+
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),
     addPlanTask: (task) => send("POST", "/plan/tasks", task),

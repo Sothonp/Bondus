@@ -291,3 +291,21 @@ test("changePassword sends PUT /me/password with the signed-in token", async () 
   assert.deepEqual([call.init.method, call.url, call.body], ["PUT", `${BASE}/me/password`, { currentPassword: "old-pass-1", password: "new-pass-2" }]);
   assert.equal(call.init.headers.Authorization, "Bearer tok");
 });
+
+test("the chapter path is read with GET /chapters and a Master Quiz is posted to /chapter-quizzes", async () => {
+  const { api, calls } = make((url) => json(url.endsWith("/chapters") ? 200 : 201, { ok: true }));
+  await api.getChapters();
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[0].url, `${BASE}/chapters`);
+  const quiz = { subject: "Mathematics", chapter: "Limits", attemptId: "a1", answers: [{ key: "Mathematics-1", answer: "2" }] };
+  await api.submitChapterQuiz(quiz);
+  assert.equal(calls[1].init.method, "POST");
+  assert.equal(calls[1].url, `${BASE}/chapter-quizzes`);
+  assert.deepEqual(calls[1].body, quiz);
+});
+
+test("a locked chapter's quiz is refused with its code and the chapter that blocks it", async () => {
+  const { api } = make(() => json(403, { message: "Pass the chapter before it first.", code: "chapter_locked", blockedBy: "Limits" }));
+  await assert.rejects(() => api.submitChapterQuiz({ subject: "S", chapter: "C", attemptId: "a", answers: [] }),
+    (e) => e instanceof ApiError && e.status === 403 && e.code === "chapter_locked" && e.body.blockedBy === "Limits");
+});

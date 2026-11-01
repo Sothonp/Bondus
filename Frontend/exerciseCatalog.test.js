@@ -84,3 +84,27 @@ test("the real bank: every exercise is graded, and no exercise is in two sets", 
   assert.deepEqual(sets["Earth Science-1"], ["Earth Science-1", "Earth Science-2"]);
   assert.ok(exercises["Earth Science-2"].includes("tectonic plate movement"));
 });
+
+test("the catalog lists each chapter path in the order the app shows, with the ids of its questions", () => {
+  const bank = {
+    Demo: [
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "Two", chapterOrder: 2 },
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", chapterOrder: 1 },
+      { topic: "B", options: ["x", "y"], answer: "x", chapter: "Two", chapterOrder: 2 },
+    ],
+    Flat: [{ topic: "A", options: ["x", "y"], answer: "x" }],
+  };
+  const { chapters } = buildCatalog(bank, { "m::c": [{ topic: "T", options: ["x", "y"], answer: "x", chapter: "U" }] });
+  assert.deepEqual(chapters, { Demo: [{ key: "One", ids: ["Demo-2"] }, { key: "Two", ids: ["Demo-1", "Demo-3"] }] });
+});
+
+test("in the real bank, five subjects have a chapter path and every chapter question is a known exercise", () => {
+  const { exercises, chapters } = buildCatalog(RAW_EXERCISES, UNI_QUIZ_BANK);
+  assert.deepEqual(Object.keys(chapters).sort(), ["Biology", "Chemistry", "History", "Mathematics", "Physics"]);
+  for (const [subject, path] of Object.entries(chapters)) {
+    const all = path.flatMap((c) => c.ids);
+    assert.equal(new Set(all).size, all.length, `${subject}: a question is in two chapters`);
+    assert.equal(all.length, RAW_EXERCISES[subject].length, `${subject}: every question belongs to a chapter`);
+    for (const id of all) assert.ok(exercises[id], `${id} is not in the catalog`);
+  }
+});

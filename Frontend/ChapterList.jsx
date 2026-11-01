@@ -1,15 +1,16 @@
 /* The chapter path for one subject: chapters in curriculum order on a vertical rail, each drawn from its state (locked,
-   open, in progress, passed, Grade A), and a sheet that says why a locked chapter is locked. A locked chapter is never a
+   open, in progress, quiz ready, passed, Grade A), and a sheet that says why a locked chapter is locked. A locked chapter is never a
    dead tap: it opens the sheet, which names the chapter to finish and takes the student there.
 
    Pure presentation, like WarmUpGate.jsx and MobileNav.jsx: the rules are in chapterProgress.js, the words in
    chapterStrings.js, and App.jsx passes in everything else (nothing is imported back from it).
 
-   Colours reuse the status meanings already in the app: gold for in progress, jade for done, primary for ready to start.
+   Colours reuse the status meanings already in the app: gold for in progress, jade for done, primary for ready to start
+   (and for a Master Quiz that is ready to take).
    A lock is muted grey, never the ember red, because a lock is not an error. State is always said in words as well as
    shown in colour and icon. */
 import React, { useEffect, useRef, useState } from "react";
-import { Lock, PlayCircle, CheckCircle2, Award } from "lucide-react";
+import { Lock, PlayCircle, CheckCircle2, Award, ClipboardCheck } from "lucide-react";
 import { PASS_PERCENT, MASTER_PERCENT } from "./progressionConfig.js";
 import { chaptersPassed } from "./chapterProgress.js";
 import { chapterText, fillChapter } from "./chapterStrings.js";
@@ -18,12 +19,13 @@ const LOOK = {
   locked: { icon: Lock, color: "var(--muted)", soft: "var(--bg-soft)", label: "stateLocked" },
   available: { icon: PlayCircle, color: "var(--primary)", soft: "var(--primary-soft)", label: "stateAvailable" },
   inProgress: { icon: PlayCircle, color: "var(--gold)", soft: "var(--gold-soft)", label: "stateInProgress" },
+  quizReady: { icon: ClipboardCheck, color: "var(--primary)", soft: "var(--primary-soft)", label: "stateQuizReady" },
   passed: { icon: CheckCircle2, color: "var(--jade)", soft: "var(--jade-soft)", label: "statePassed" },
   mastered: { icon: Award, color: "var(--jade)", soft: "var(--jade-soft)", label: "stateMastered" },
 };
 
 /* Props
-   rows       chapterStates() for the subject
+   rows       chapterStates() for the subject (a row may also carry `canTestOut`, set by the screen that knows the topic scores)
    labelOf    (chapterKey) -> the chapter's name in the student's language
    localize   (number, lang) -> the number in Khmer numerals when the language is Khmer
    onOpen     (chapterKey) open that chapter's exercises */
@@ -57,15 +59,16 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
 
   const lineFor = (row) => {
     const solved = w("rowSolved", { solved: num(row.solved), total: num(row.total) });
+    const best = row.best != null ? w("rowBest", { best: num(row.best) }) : solved;
+    const testOut = row.canTestOut ? ` · ${w("rowTestOut")}` : "";
     switch (row.state) {
       case "locked":
-        return byKey.get(row.blockedBy)?.state === "locked"
-          ? w("rowLockedDeeper")
-          : `${w("rowLocked", { pass: num(PASS_PERCENT), name: labelOf(row.blockedBy) })} · ${w("rowLockedMore", { n: num(row.needed) })}`;
-      case "available": return w("rowExercises", { total: num(row.total) });
-      case "inProgress": return `${solved} · ${w("rowToPass", { n: num(row.toPass) })}`;
-      case "passed": return `${solved} · ${w("rowToMaster", { master: num(MASTER_PERCENT) })}`;
-      default: return solved;
+        return byKey.get(row.blockedBy)?.state === "locked" ? w("rowLockedDeeper") : w("rowLocked", { name: labelOf(row.blockedBy) });
+      case "available": return `${w("rowExercises", { total: num(row.total) })}${testOut}`;
+      case "inProgress": return `${solved} · ${w("rowToQuiz", { n: num(row.toQuiz) })}${testOut}`;
+      case "quizReady": return `${solved} · ${w("rowQuizReady", { pass: num(PASS_PERCENT) })}`;
+      case "passed": return `${best} · ${w("rowToMaster", { master: num(MASTER_PERCENT) })}`;
+      default: return best;
     }
   };
 
@@ -105,7 +108,7 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 <p className={`text-xs eai-muted mt-1 ${km}`}>{lineFor(row)}</p>
                 {!locked && row.state !== "available" && (
                   <div className="relative h-1.5 rounded-full eai-soft mt-2.5 overflow-hidden" aria-hidden="true">
-                    <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : "var(--jade)" }} />
+                    <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : row.state === "quizReady" ? "var(--primary)" : "var(--jade)" }} />
                     <span className="absolute top-0 bottom-0" style={{ left: `${PASS_PERCENT}%`, width: 2, background: "var(--ink)", opacity: 0.35 }} />
                   </div>
                 )}
@@ -131,9 +134,11 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 </div>
               </div>
               <p className={`text-sm mt-4 leading-relaxed ${km}`}>
-                {direct
-                  ? w("sheetBody", { pass: num(PASS_PERCENT), name: labelOf(target.key), solved: num(target.solved), total: num(target.total), n: num(sheet.needed) })
-                  : w("sheetBodyDeeper", { pass: num(PASS_PERCENT), name: labelOf(target.key) })}
+                {!direct
+                  ? w("sheetBodyDeeper", { name: labelOf(target.key) })
+                  : target.state === "quizReady"
+                    ? w("sheetBodyQuiz", { pass: num(PASS_PERCENT), name: labelOf(target.key) })
+                    : w("sheetBodySolve", { pass: num(PASS_PERCENT), name: labelOf(target.key), n: num(target.toQuiz) })}
               </p>
               <div className="mt-5 flex flex-col gap-2">
                 <button ref={primary} type="button" onClick={() => { setSheet(null); onOpen(target.key); }}

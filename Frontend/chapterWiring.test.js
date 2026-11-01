@@ -10,13 +10,18 @@ const read = (name) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8
 const app = read("App.jsx");
 const list = read("ChapterList.jsx");
 const rules = read("chapterProgress.js");
+const quizUi = read("ChapterQuiz.jsx");
+const lockUi = read("PapersLock.jsx");
 const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-const subject = app.slice(app.indexOf("function PracticeSubject("), app.indexOf("function PracticeSubject(") + 6500);
+const subject = app.slice(app.indexOf("function PracticeSubject("), app.indexOf("function ExercisePlayer("));
+const browse = app.slice(app.indexOf("function Browse("), app.indexOf("function Exercises("));
 
-test("Practice shows the chapter path and decides the open chapter from the practice record", () => {
+test("Practice shows the chapter path and decides the open chapter from the practice record and the quiz results", () => {
   assert.match(app, /import ChapterList from "\.\/ChapterList\.jsx";/);
-  assert.match(app, /import \{ chapterStates \} from "\.\/chapterProgress\.js";/);
-  assert.match(subject, /const chapterRows = hasChapters \? chapterStates\(fullList, practice\) : \[\];/);
+  assert.match(app, /import ChapterQuiz, \{ QuizCard \} from "\.\/ChapterQuiz\.jsx";/);
+  assert.match(app, /import \{ chapterStates, [^}]*\} from "\.\/chapterProgress\.js";/);
+  assert.match(subject, /const progress = hasChapters \? \(chapterProgress\?\.\(subject\) \?\? null\) : null;/);
+  assert.match(subject, /chapterStates\(fullList, practice, progress\)/);
   assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} \/>/);
 });
 
@@ -66,13 +71,16 @@ test("the sheet sends the student to an open chapter, never to another locked on
 test("every word the list asks for exists in English and Khmer", () => {
   const en = Object.keys(CHAPTER_STRINGS.en), km = Object.keys(CHAPTER_STRINGS.km);
   assert.deepEqual([...km].sort(), [...en].sort());
-  const used = new Set([...list.matchAll(/\bw\(\s*"(\w+)"/g)].map((m) => m[1]));
+  const used = new Set();
+  for (const src of [list, quizUi, lockUi]) for (const m of src.matchAll(/\bw\(\s*"(\w+)"/g)) used.add(m[1]);
+  for (const m of quizUi.matchAll(/\bw\(\s*\w+\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/g)) { used.add(m[1]); used.add(m[2]); } // w(last ? "quizFinish" : "quizNext")
+  for (const m of quizUi.matchAll(/w\(\s*\w+\s*\?\s*"(\w+)"\s*:\s*\w+\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/g)) { used.add(m[1]); used.add(m[2]); used.add(m[3]); } // mastered ? .. : passed ? .. : ..
   for (const label of list.matchAll(/label: "(\w+)"/g)) used.add(label[1]); // the state names, looked up through LOOK
-  assert.ok(used.size >= 15, "found the keys the list uses");
+  assert.ok(used.size >= 40, `found the keys the screens use (${used.size})`);
   for (const key of used) assert.ok(en.includes(key), `"${key}" is used by the list but not defined`);
   for (const lang of ["en", "km"]) for (const [k, v] of Object.entries(CHAPTER_STRINGS[lang])) {
     assert.ok(String(v).trim(), `${lang}.${k} is empty`);
-    for (const [, name] of String(v).matchAll(/\{(\w+)\}/g)) assert.ok(["name", "pass", "master", "n", "solved", "total"].includes(name), `unknown placeholder {${name}}`);
+    for (const [, name] of String(v).matchAll(/\{(\w+)\}/g)) assert.ok(["name", "pass", "master", "n", "solved", "total", "best", "need", "size", "correct", "passed"].includes(name), `unknown placeholder {${name}}`);
   }
 });
 
@@ -83,4 +91,87 @@ test("the list keeps a gap under the note, and the rail icons line up with the c
   // 11px on a phone, 19px from 640px: card padding + 1px border + half the 24px title line, minus half the 36px icon.
   assert.match(list, /className="h-\[11px\] sm:h-\[19px\] flex-shrink-0"/);
   assert.match(list, /background: i === 0 \? "transparent" : "var\(--line\)"/);
+});
+
+test("every word the quiz, its card and the paper lock use is defined, and none of the old pass-by-practice wording is left", () => {
+  const en = Object.keys(CHAPTER_STRINGS.en);
+  const quoted = new Set();
+  for (const src of [list, quizUi, lockUi]) for (const m of strip(src).matchAll(/"((?:state|path|row|sheet|quiz|result|papers)[A-Z]\w*)"/g)) quoted.add(m[1]);
+  assert.ok(quoted.size >= 40, "found the string keys named in the screens");
+  const stateNames = new Set(["quizReady"]); // a chapter state the screens compare against, not a word
+  for (const key of quoted) assert.ok(stateNames.has(key) || en.includes(key), `"${key}" is named in a screen but not defined`);
+  for (const old of ["rowToPass", "rowLockedMore", "sheetBody"]) assert.ok(!en.includes(old), `${old} described passing by practice and must be gone`);
+});
+
+test("a quiz is only offered where it can be taken: ready, already passed (a retake), or tested out of, and only when the results are known", () => {
+  assert.match(subject, /const quizAvailable = progress != null;/);
+  assert.match(subject, /if \(!row \|\| !quizAvailable\) return;/);
+  assert.match(subject, /row\.state === "quizReady" \|\| row\.state === "passed" \|\| row\.state === "mastered" \|\| row\.canTestOut/);
+  assert.match(subject, /canTestOut: quizAvailable && \(r\.state === "available" \|\| r\.state === "inProgress"\) && testOutEligible\(fullList, r\.key, mastery\?\.\[subject\]\)/);
+  assert.match(subject, /<QuizCard row=\{chapterRow\} available=\{quizAvailable\}/);
+});
+
+test("every quiz question is also recorded as practice, and the quiz is marked in either language", () => {
+  assert.match(subject, /grade=\{gradeAnswerAny\} onAnswer=\{onAnswer\} onSubmit=\{\(payload\) => onSubmitQuiz\(\{ subject, chapter: quiz\.chapter, \.\.\.payload \}\)\}/);
+  assert.match(app, /const gradeAnswerAny = \(ex, val\) => \["en", "km"\]\.some\(/);
+  assert.match(strip(quizUi), /if \(chosen != null\) onAnswer\?\.\(ex, grade\(ex, chosen\) \? "correct" : "incorrect"/);
+});
+
+test("the questions of a quiz are fixed when it starts, so a language switch cannot change them", () => {
+  assert.match(subject, /ids: pickQuizQuestions\(fullList, key, `\$\{seedKey\}\|\$\{Date\.now\(\)\}`\)\.map\(\(q\) => q\.id\)/);
+  assert.match(subject, /questions=\{quiz\.ids\.map\(\(id\) => getExercise\(id, lang\)\)\.filter\(Boolean\)\}/);
+});
+
+test("the quiz sends its answers to be graded, never a verdict, and a failed save is retried as the same attempt", () => {
+  const submit = app.slice(app.indexOf("const submitChapterQuiz = async"), app.indexOf("// Are a subject's full past papers locked"));
+  assert.match(submit, /api\.submitChapterQuiz\(chapterQuizPayload\(\{ subject, chapter, attemptId, answers, timeSec \}\)\)/);
+  assert.match(submit, /return \{ ok: true, result: res\.result \};/);
+  assert.match(submit, /if \(err\?\.code === "chapter_locked"\) loadChapters\(\);/);
+  assert.match(submit, /return \{ ok: false, code: err\?\.code, retryAfter: err\?\.retryAfter \};/);
+  assert.match(submit, /quizVerdict\(correct, answers\.length, wasPassed\)/, "without a server the quiz is graded here");
+  assert.match(strip(quizUi), /onClick=\{\(\) => save\(answers\)\}/);
+  assert.match(strip(quizUi), /if \(saving\.current\) return;/);
+  assert.match(strip(quizUi), /if \(advancing\.current \|\| phase !== "answering"\) return;/);
+});
+
+test("the server's chapters are fetched after sign-in without ever blocking it", () => {
+  const load = app.slice(app.indexOf("const loadAccount = async"), app.indexOf("// Restore the saved login when the page opens"));
+  assert.doesNotMatch(load, /getChapters/, "a slow or older server must not stop a student from signing in");
+  assert.match(load, /queueRef\.current\.flush\(\); \/\/ anything left unsent from last time\n\s+loadChapters\(\);/);
+  assert.match(app, /api\.getChapters\(\)\.then\(\(res\) => \{ if \(run === chaptersRun\.current\) setServerChapters\(res\); \}\)\.catch\(\(\) => \{\}\);/);
+  assert.match(app, /chaptersRun\.current \+= 1; setServerChapters\(null\); setChapterQuiz\(\{\}\);/, "signing out forgets the previous student's chapters");
+});
+
+test("full past papers are locked until the subject's chapters are passed, and unknown progress never locks", () => {
+  const gate = app.slice(app.indexOf("const paperGate = (subject) =>"), app.indexOf("// Fetch the account, progress"));
+  assert.match(gate, /if \(progress == null \|\| !list\.some\(\(ex\) => ex\.chapter\)\) return \{ locked: false \};/);
+  assert.match(gate, /locked: !papersOpen\(rows\)/);
+  assert.match(app, /browse: <Browse [^>]*paperGate=\{paperGate\} onGoPractice=\{\(\) => go\("practice"\)\} \/>/);
+  assert.match(browse, /if \(paperGate\(subject\)\.locked\) return;/, "a stale button must not start a locked paper");
+  const cardLock = browse.indexOf("{gate.locked ? (");
+  assert.ok(cardLock > 0, "the card branches on the lock");
+  const locked = browse.slice(cardLock, browse.indexOf(") : (", cardLock));
+  assert.match(locked, /<PapersLock /);
+  assert.doesNotMatch(locked, /examStartBtn|setViewingPaper|download/, "nothing that opens a paper sits in the locked branch");
+  const unlocked = browse.slice(browse.indexOf(") : (", cardLock));
+  for (const open of ["startAttempt(sub.s, year)", "setViewingPaper({ subject: sub.s, year, pdf, images })", "href={pdf} download"]) assert.ok(unlocked.includes(open), `${open} stays, behind the lock`);
+});
+
+test("the paper lock says it locks the app's links, and a lock stays grey", () => {
+  assert.match(lockUi, /public static files/);
+  assert.doesNotMatch(strip(lockUi), /--ember/);
+  assert.match(lockUi, /background: "var\(--bg-soft\)"/);
+});
+
+test("the quiz and the paper lock do not hard-code the pass or master score", () => {
+  for (const [name, src] of [["ChapterQuiz.jsx", quizUi], ["PapersLock.jsx", lockUi]]) {
+    assert.doesNotMatch(strip(src), /(?<![\d.])(70|85)(?![\d.])/, `${name} must not hard-code the pass or master score`);
+  }
+  assert.match(quizUi, /from "\.\/progressionConfig\.js"/);
+});
+
+test("the quiz gives no right-or-wrong feedback while it is being taken, and the result reviews only what was missed", () => {
+  const answering = strip(quizUi).slice(strip(quizUi).indexOf("/* ── A question ── */"));
+  assert.doesNotMatch(answering, /grade\(/, "the question screen never marks an answer");
+  assert.match(strip(quizUi), /const missed = questions\.filter\(\(q\) => !\(answers\[q\.id\] != null && grade\(q, answers\[q\.id\]\)\)\);/);
 });
