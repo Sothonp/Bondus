@@ -57,3 +57,19 @@ export function flameLabel(state, urgency, hoursLeft, lang = "en") {
   if (state === "dormant" && (urgency === "countdown" || urgency === "ring")) return countdownText(hoursLeft, lang);
   return strings[state];
 }
+
+/* The Phnom Penh calendar day of `now` as "YYYY-MM-DD" — the same day the backend counts a study event on. */
+export function phnomPenhDay(now = Date.now()) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: PHNOM_PENH_TZ, year: "numeric", month: "2-digit", day: "2-digit" })
+    .formatToParts(new Date(now));
+  const get = (type) => parts.find((x) => x.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/* Milliseconds from `now` to the next Phnom Penh midnight (at least one second, so a timer set with it never fires early). */
+export function msUntilMidnight(now = Date.now()) {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: PHNOM_PENH_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(now));
+  const n = (type) => Number(parts.find((x) => x.type === type)?.value ?? 0);
+  return Math.max(1000, 86400000 - (n("hour") * 3600 + n("minute") * 60 + n("second")) * 1000);
+}

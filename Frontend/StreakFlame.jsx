@@ -30,11 +30,11 @@ export function StreakFlame({ state, size = 16, ring = false, slow = false }) {
   const previous = useRef(state);
   const [igniting, setIgniting] = useState(false);
 
-  // Dormant to lit while the screen is open is the moment worth celebrating; a page that loads already lit stays calm.
+  // Dormant (or cold) to lit while the screen is open is the moment worth celebrating; a page that loads already lit stays calm.
   useEffect(() => {
     const was = previous.current;
     previous.current = state;
-    if (was === "dormant" && state === "lit") {
+    if ((was === "dormant" || was === "cold") && state === "lit") {
       setIgniting(true);
       const id = setTimeout(() => setIgniting(false), 1300);
       return () => clearTimeout(id);
