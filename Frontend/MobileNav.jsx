@@ -3,15 +3,16 @@
    go in the bar and which in More is decided by mobileNav.js; this file only draws them. Pure presentation, like
    ExerciseUi.jsx: a translator `tr(key)` and `lang` come from App.jsx and nothing is imported back from it. */
 import React, { useCallback, useEffect, useState } from "react";
-import { Flame, Zap, Moon, Sun, LayoutGrid, Globe, LogOut, ChevronRight, X } from "lucide-react";
+import { Zap, Moon, Sun, LayoutGrid, Globe, LogOut, ChevronRight, X } from "lucide-react";
 import { moreIsActive } from "./mobileNav.js";
+import { StreakFlame } from "./StreakFlame.jsx";
 
 const kmc = (lang) => (lang === "km" ? "eai-km" : "");
 const labelOf = (n, lang) => (lang === "km" ? n.labelKm ?? n.label : n.label);
 
 /* Sticky bar at the top: logo and name, a compact streak + XP pill, the dark-mode toggle and the avatar. The language
    switch lives in More instead. A running exam gets its own strip underneath so the timer is never out of sight. */
-export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, profileLabel, streak, xp, examChip }) {
+export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, profileLabel, streak, flame = "cold", flameLabel = "", flameRing = false, xp, examChip }) {
   return (
     <header className="lg:hidden sticky top-0 z-40 border-b"
       style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", paddingTop: "env(safe-area-inset-top)" }}>
@@ -22,9 +23,9 @@ export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, pr
         </div>
         <div className="flex items-center gap-2 max-[360px]:gap-1.5 flex-shrink-0">
           <div className="flex items-center gap-2 max-[360px]:gap-1.5 rounded-full px-2.5 max-[360px]:px-2 py-1.5" style={{ background: "var(--bg-soft)" }}>
-            <span className="eai-fx-fire inline-flex items-center gap-1">
-              <Flame size={15} style={{ color: "var(--ember)" }} />
-              <span className="text-sm font-bold eai-display">{streak}</span>
+            <span className="inline-flex items-center gap-1" role="img" aria-label={`${streak}-day streak. ${flameLabel}`}>
+              <StreakFlame state={flame} size={15} ring={flameRing} />
+              <span className="text-sm font-bold eai-display" aria-hidden="true">{streak}</span>
             </span>
             <span className="h-4" style={{ width: 1, background: "var(--line)" }} />
             <span className="eai-fx-bolt inline-flex items-center gap-1">

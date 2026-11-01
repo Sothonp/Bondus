@@ -59,6 +59,8 @@ import { setIndexes, nextInSet, nextSetStart, firstOpen } from "./practiceFlow.j
 import { practiceMemory } from "./practiceResume.js";
 import { exerciseId, uniExerciseId } from "./exerciseCatalog.js";
 import { CHEER_STRINGS, pickCheer } from "./mascotCheers.js";
+import { flameState } from "./streakFlame.js";
+import { StreakFlame, StreakFlameDefs, useFlameInfo } from "./StreakFlame.jsx";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
@@ -265,7 +267,7 @@ function collectAttempts(topicMastery = {}, uniTopicMastery = {}) {
    until it's earned, and the streak breaks the first calendar day with no activity. */
 function computeStreakStats(topicMastery, uniTopicMastery) {
   const days = [...new Set(collectAttempts(topicMastery, uniTopicMastery).map((a) => dateKey(new Date(a.ts))))].sort();
-  if (!days.length) return { streak: 0, longestStreak: 0 };
+  if (!days.length) return { streak: 0, longestStreak: 0, studiedToday: false };
   let longest = 1, run = 1;
   for (let i = 1; i < days.length; i++) {
     const gap = Math.round((dateKeyToTime(days[i]) - dateKeyToTime(days[i - 1])) / DAY_MS);
@@ -282,7 +284,7 @@ function computeStreakStats(topicMastery, uniTopicMastery) {
       if (gap === 1) streak += 1; else break;
     }
   }
-  return { streak, longestStreak: Math.max(longest, streak) };
+  return { streak, longestStreak: Math.max(longest, streak), studiedToday: last === today };
 }
 
 /* Real trailing-7-day study time in hours, built from the actual per-question timing
@@ -491,6 +493,7 @@ const STYLES = `
   --line:#E7E6EF; --glass-bg:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.8); --glass-shadow:0 1px 3px rgba(26,27,58,.08), inset 0 1px 0 rgba(255,255,255,.6);
   --primary:#403FB0; --primary-soft:#ECECFB; --gold:#E29A30; --gold-soft:#FBEFD7;
   --ember:#D9543F; --ember-soft:#FAE2DB; --jade:#159A82; --jade-soft:#DBF1EC;
+  --streak-core:#FFC247; --streak-mid:#FF7A1A; --streak-edge:#F0391D; --streak-glow:rgba(255,122,26,.45); --streak-dormant:#6B7890; --streak-soft:#FFF0E3;
   --shadow:0 1px 2px rgba(26,27,58,.04), 0 10px 30px rgba(26,27,58,.07);
 }
 .theme-dark{
@@ -498,6 +501,7 @@ const STYLES = `
   --line:#2A2C49; --glass-bg:rgba(255,255,255,.08); --glass-line:rgba(255,255,255,.16); --glass-shadow:0 1px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
   --primary:#8a89f5; --primary-soft:#23244A; --gold:#EEAB49; --gold-soft:#2B2417;
   --ember:#E96E58; --ember-soft:#2E1B18; --jade:#2BB89C; --jade-soft:#13271F;
+  --streak-core:#FFD066; --streak-mid:#FF8A33; --streak-edge:#FF5A3C; --streak-glow:rgba(255,138,51,.55); --streak-dormant:#8B96AE; --streak-soft:#2E1F14;
   --shadow:0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.4);
 }
 
@@ -550,6 +554,34 @@ input.eai-input::placeholder{ color:var(--muted); }
   70%  { transform:scale(1.08,0.93) rotate(-3deg) skewX(2deg); filter:drop-shadow(0 0 6px var(--ember)) brightness(1.15); }
   85%  { transform:scale(0.97,1.04) rotate(1deg) skewX(-1deg); filter:drop-shadow(0 0 4px var(--ember)) brightness(1.05); }
   100% { transform:scale(1,1) rotate(0deg) skewX(0deg); filter:drop-shadow(0 0 2px var(--ember)) brightness(1); }
+}
+
+/* Streak flame (StreakFlame.jsx). The lit flame flickers like the old fire effect but in the --streak-* colours, which are
+   kept apart from --ember (that one means "weak" and "hard" elsewhere). A dormant flame is perfectly still: a small ember
+   dot at its base, and in the last three hours of the day a slow breathing ring. Igniting is a one-off bloom. */
+.eai-streak{ position:relative; display:inline-flex; transform-origin:50% 92%; }
+.eai-streak-still{ display:inline-flex; }
+.eai-fx-streak, .eai-fx-streak-slow{ display:inline-flex; transform-origin:50% 92%; }
+.eai-fx-streak{ animation:eai-streak-flicker 1.7s ease-in-out infinite; }
+.eai-fx-streak-slow{ animation:eai-streak-flicker 3.4s ease-in-out infinite; }
+@keyframes eai-streak-flicker{
+  0%   { transform:scale(1,1) rotate(0deg); filter:drop-shadow(0 0 2px var(--streak-glow)) brightness(1); }
+  25%  { transform:scale(1.08,0.93) rotate(-3deg); filter:drop-shadow(0 0 6px var(--streak-glow)) brightness(1.15); }
+  50%  { transform:scale(0.95,1.07) rotate(2deg); filter:drop-shadow(0 0 3px var(--streak-glow)) brightness(0.95); }
+  75%  { transform:scale(1.06,0.95) rotate(-2deg); filter:drop-shadow(0 0 7px var(--streak-glow)) brightness(1.2); }
+  100% { transform:scale(1,1) rotate(0deg); filter:drop-shadow(0 0 2px var(--streak-glow)) brightness(1); }
+}
+.eai-streak-dot{ position:absolute; left:50%; bottom:1px; transform:translateX(-50%); border-radius:50%; background:var(--streak-mid); opacity:.75; pointer-events:none; }
+.eai-streak-ring::after{ content:""; position:absolute; inset:-5px; border-radius:50%; border:1.5px solid var(--streak-dormant); opacity:.15; animation:eai-streak-breathe 4s ease-in-out infinite; pointer-events:none; }
+@keyframes eai-streak-breathe{ 0%,100%{ opacity:.15; } 50%{ opacity:.6; } }
+.eai-streak-igniting{ animation:eai-streak-ignite 1.2s ease-out 1; }
+@keyframes eai-streak-ignite{
+  0%   { transform:scale(0.8); filter:grayscale(1) brightness(0.9); }
+  45%  { transform:scale(1.3); filter:drop-shadow(0 0 12px var(--streak-glow)) brightness(1.4); }
+  100% { transform:scale(1); filter:drop-shadow(0 0 3px var(--streak-glow)) brightness(1); }
+}
+@media (prefers-reduced-motion: reduce){
+  .eai-fx-streak, .eai-fx-streak-slow, .eai-streak-igniting, .eai-streak-ring::after{ animation:none; }
 }
 
 /* XP pill lightning: mostly still, punctuated by two quick bright strikes per loop (a double-flash
@@ -1190,11 +1222,12 @@ function Ring({ value, size = 60, stroke = 7, color = "var(--gold)", children })
   );
 }
 
-function Pill({ icon: Icon, color, soft, label, value, effect }) {
+// `iconNode` replaces the icon when a pill needs its own drawing (the streak flame has three looks of its own).
+function Pill({ icon: Icon, color, soft, label, value, effect, iconNode }) {
   const fxClass = effect === "fire" ? "eai-fx-fire" : effect === "bolt" ? "eai-fx-bolt" : effect === "climb" ? "eai-fx-climb" : "";
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: soft }}>
-      <span className={fxClass}><Icon size={16} style={{ color }} /></span>
+      <span className={fxClass}>{iconNode ?? <Icon size={16} style={{ color }} />}</span>
       <span className={`text-sm font-bold eai-display ${kmClass(value)}`} style={{ color: "var(--ink)" }}>{value}</span>
       <span className={`text-xs eai-muted hidden sm:inline ${kmClass(label)}`}>{label}</span>
     </div>
@@ -2645,12 +2678,13 @@ function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initia
 function StreakStat({ p, lang, stacked }) {
   return (
     <div className={stacked ? "flex flex-col items-center text-center gap-2" : "flex items-center gap-4"}>
-      <div className="grid place-items-center rounded-2xl" style={{ width: stacked ? 52 : 60, height: stacked ? 52 : 60, background: "var(--ember-soft)" }}>
-        <span className="eai-fx-fire-slow"><Flame size={stacked ? 26 : 30} style={{ color: "var(--ember)" }} /></span>
+      <div className="grid place-items-center rounded-2xl" style={{ width: stacked ? 52 : 60, height: stacked ? 52 : 60, background: p.flame === "lit" ? "var(--streak-soft)" : "var(--bg-soft)" }}>
+        <StreakFlame state={p.flame} size={stacked ? 26 : 30} ring={p.flameRing} slow />
       </div>
       <div>
         <p className="eai-display text-3xl font-extrabold leading-none">{p.streak}</p>
         <p className={`text-xs eai-muted mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "dashStreak")}</p>
+        <p className={`text-xs font-semibold mt-0.5 ${lang === "km" ? "eai-km" : ""}`} style={{ color: p.flame === "dormant" ? "var(--streak-dormant)" : "var(--ink)" }}>{p.flameLabel}</p>
       </div>
     </div>
   );
@@ -7557,6 +7591,10 @@ export default function App() {
   // With the server, streak and weekly hours come from its study ledger (days counted in Phnom Penh time), not from this browser.
   const liveStreak = summary ? summary.streak : streakStats.streak;
   const liveLongestStreak = summary ? summary.longestStreak : streakStats.longestStreak;
+  // The flame's look: lit once the student has studied today (the server's Phnom Penh day), dormant while a streak waits, cold without one.
+  const liveStudiedToday = summary ? !!summary.studiedToday : streakStats.studiedToday;
+  const flame = flameState({ streak: liveStreak, studiedToday: liveStudiedToday });
+  const flameInfo = useFlameInfo(flame, lang);
   // Timed exam attempts and the school report (kept per student on this device until the backend part exists).
   const exam = useExamSessions({
     userKey: profile ? `${profile.email ?? profile.phone ?? ""}|${profile.name}` : "anon",
@@ -7574,8 +7612,8 @@ export default function App() {
     [profile, uniTopicMastery]
   );
   const p = useMemo(
-    () => (profile ? { ...profile, ...insights, streak: liveStreak, longestStreak: liveLongestStreak, universityInsights: uniInsights } : null),
-    [profile, insights, uniInsights, liveStreak, liveLongestStreak]
+    () => (profile ? { ...profile, ...insights, streak: liveStreak, longestStreak: liveLongestStreak, flame, flameLabel: flameInfo.label, flameRing: flameInfo.urgency === "ring", universityInsights: uniInsights } : null),
+    [profile, insights, uniInsights, liveStreak, liveLongestStreak, flame, flameInfo.label, flameInfo.urgency]
   );
 
   // Level up whenever XP crosses the next threshold (can chain multiple levels from one big award).
@@ -7938,6 +7976,7 @@ export default function App() {
     <RewardsContext.Provider value={rewardsApi}>
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" && !isUniProfile ? "eai-km-root" : ""}`}>
       <style>{STYLES}</style>
+      <StreakFlameDefs />
       <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
       <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
       {noticeToast}
@@ -7971,9 +8010,9 @@ export default function App() {
           </nav>
           <div className="p-3 space-y-2">
             <div className="eai-soft rounded-2xl p-4 text-center">
-              <span className="eai-fx-fire" style={{ display: "block", margin: "0 auto", width: 20 }}><Flame size={20} style={{ color: "var(--ember)" }} /></span>
+              <span style={{ display: "block", margin: "0 auto", width: 20 }}><StreakFlame state={p.flame} size={20} ring={p.flameRing} /></span>
               <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
-              <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "streakKeepIt")}</p>
+              <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{p.flame === "dormant" ? t(lang, "streakKeepIt") : p.flameLabel}</p>
             </div>
             <button onClick={() => go("profile")} className={`eai-focus w-full text-center text-xs font-semibold py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>{t(lang, "profileTitle")}</button>
             <button onClick={handleLogout} className={`eai-focus w-full text-center text-xs eai-muted py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "logOut")}</button>
@@ -7983,12 +8022,13 @@ export default function App() {
         <div className="flex-1 min-w-0">
           <MobileTopBar logo={<BondusLogo />} initials={initials} dark={dark} onToggleDark={() => setDark((d) => !d)}
             onProfile={() => go("profile")} profileLabel={tr("profileOpen")}
-            streak={p.streak} xp={(profile.xp + bonusXp).toLocaleString()}
+            streak={p.streak} flame={p.flame} flameLabel={p.flameLabel} flameRing={p.flameRing} xp={(profile.xp + bonusXp).toLocaleString()}
             examChip={!isUniProfile && exam.current ? <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} /> : null} />
           <header className="hidden lg:block sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
               <div className="hidden sm:flex items-center gap-2">
-                <Pill icon={Flame} color="var(--ember)" soft="var(--ember-soft)" value={p.streak} label={lang === "km" ? "ថ្ងៃជាប់គ្នា" : "streak"} effect="fire" />
+                <Pill icon={Flame} soft={p.flame === "lit" ? "var(--streak-soft)" : "var(--bg-soft)"} value={p.streak} label={p.flameLabel}
+                  iconNode={<StreakFlame state={p.flame} size={16} ring={p.flameRing} />} />
                 <Pill icon={Zap} color="var(--gold)" soft="var(--gold-soft)" value={(profile.xp + bonusXp).toLocaleString()} label="XP" effect="bolt" />
                 <Pill icon={TrendingUp} color="var(--primary)" soft="var(--primary-soft)" value={`Lv ${profile.level}`} label="" effect="climb" />
               </div>

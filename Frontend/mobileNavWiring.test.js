@@ -42,7 +42,7 @@ test("the top bar is sticky, only on phones, with the logo and name, the streak 
   assert.match(bar, /className="lg:hidden sticky top-0 z-40 border-b"/);
   assert.match(bar, /\{logo\}/);
   assert.match(bar, />Bondus</);
-  assert.match(bar, /<Flame /);
+  assert.match(bar, /<StreakFlame /);
   assert.match(bar, /<Zap /);
   assert.match(bar, /onClick=\{onToggleDark\}/);
   assert.match(bar, /\{initials\}/);
