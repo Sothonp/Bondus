@@ -382,6 +382,10 @@ class Settings(BaseSettings):
 
     # --- Retrieval ---
     top_k: int = Field(5, ge=1, le=50)
+    # Khmer Literature essays draw on several works, so they get more passages, and
+    # so does any question that names a literary work (its chunks come first).
+    literature_top_k: int = Field(10, ge=1, le=50)
+    work_top_k: int = Field(10, ge=1, le=50)
     # Tuned for sentence-transformers cosine scores, which sit high (~0.8) even for a loose
     # match. Hashing similarities are lexical overlap and peak far lower, so that cutoff would
     # reject every passage; `_scale_score_threshold` swaps in the hashing default below unless
