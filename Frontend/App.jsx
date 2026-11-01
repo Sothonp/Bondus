@@ -45,7 +45,7 @@ import LoadingScreen from "./LoadingScreen.jsx";
 import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, waitParts, isCodeAlreadySent,
+  answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, apiErrorKey, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 import { createEventQueue } from "./eventQueue.js";
 import { createStateSaver } from "./stateSaver.js";
@@ -59,8 +59,11 @@ import { setIndexes, nextInSet, nextSetStart, firstOpen } from "./practiceFlow.j
 import { practiceMemory } from "./practiceResume.js";
 import { exerciseId, uniExerciseId } from "./exerciseCatalog.js";
 import { CHEER_STRINGS, pickCheer } from "./mascotCheers.js";
-import { flameState } from "./streakFlame.js";
+import { flameState, phnomPenhDay } from "./streakFlame.js";
 import { StreakFlame, StreakFlameDefs, useFlameInfo } from "./StreakFlame.jsx";
+import WarmUpGate from "./WarmUpGate.jsx";
+import { useDayRollover } from "./dayRollover.js";
+import { isWarmupQuestion, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup, WARMUP_COUNT } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
@@ -581,8 +584,10 @@ input.eai-input::placeholder{ color:var(--muted); }
   100% { transform:scale(1); filter:drop-shadow(0 0 3px var(--streak-glow)) brightness(1); }
 }
 @media (prefers-reduced-motion: reduce){
-  .eai-fx-streak, .eai-fx-streak-slow, .eai-streak-igniting, .eai-streak-ring::after{ animation:none; }
+  .eai-fx-streak, .eai-fx-streak-slow, .eai-streak-igniting, .eai-streak-ring::after, .eai-warmup{ animation:none; }
 }
+.eai-warmup{ animation:eai-warmup-in .35s ease-out both; }
+@keyframes eai-warmup-in{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
 
 /* XP pill lightning: mostly still, punctuated by two quick bright strikes per loop (a double-flash
    strobe, like a real bolt), instead of a smooth rhythmic pulse. */
@@ -3191,7 +3196,17 @@ const localizeNum = (n, lang) => (lang === "km" ? String(n).replace(/[0-9]/g, (d
 const EXERCISE_BANK_RAW = RAW_EXERCISES;
 function getExercises(subject, lang = "en") {
   const list = EXERCISE_BANK_RAW[subject] || [];
-  return list.map((r, i) => ({
+  return list.map((r, i) => localizeExercise(subject, r, i, lang));
+}
+// One question by its id (`${subject}-${position}`), in the given language, or null. The daily warm-up keeps only ids.
+function getExercise(id, lang = "en") {
+  const cut = String(id).lastIndexOf("-");
+  const subject = String(id).slice(0, cut), i = Number(String(id).slice(cut + 1)) - 1;
+  const raw = EXERCISE_BANK_RAW[subject]?.[i];
+  return raw ? localizeExercise(subject, raw, i, lang) : null;
+}
+function localizeExercise(subject, r, i, lang) {
+  return ({
     id: exerciseId(subject, i), subject, topic: r.topic, difficulty: r.difficulty,
     prompt: lang === "km" ? (r.promptKm || r.prompt) : r.prompt,
     options: lang === "km" && r.optionsKm ? r.optionsKm : r.options,
@@ -3209,7 +3224,7 @@ function getExercises(subject, lang = "en") {
     // were appended later; stage 0 marks a short formula quiz that PracticeSubject lists first.
     // Neither changes an exercise's id, which stays `${subject}-${position in the bank}`.
     chapterOrder: r.chapterOrder, stage: r.stage,
-  }));
+  });
 }
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
 
@@ -7616,6 +7631,41 @@ export default function App() {
     [profile, insights, uniInsights, liveStreak, liveLongestStreak, flame, flameInfo.label, flameInfo.urgency]
   );
 
+  // ── The daily warm-up gate (warmup.js, WarmUpGate.jsx): three quick questions before the dashboard, once a day ──
+  // Every hook is up here, above the early returns below. The day is the server's Phnom Penh day (summary.today); the
+  // browser-only prototype has no server, so it uses the device's own date like the rest of its streak.
+  const [dayTick, setDayTick] = useState(0);   // browser-only: bumped at midnight so the date is read again
+  const [warmupMem, setWarmupMem] = useState(null); // { userKey, state }: this session's progress; the saved copy is only read on load
+  const warmupUserKey = profile ? String(profile.userId ?? profile.email ?? profile.phone ?? profile.name) : null;
+  const warmupToday = SERVER_MODE ? (summary?.today ?? phnomPenhDay()) : dateKey();
+  const warmupEligible = Boolean(profile) && profile.educationLevel !== "university" && !isAdmin(profile);
+  const warmupPool = useMemo(
+    () => (warmupEligible ? fieldSubjects(profile.field, profile.foreignLanguage).flatMap((s) => getExercises(s, "en")).filter(isWarmupQuestion) : []),
+    [warmupEligible, profile?.field, profile?.foreignLanguage]
+  );
+  const masteryNow = useRef(topicMastery);
+  masteryNow.current = topicMastery;
+  // The three questions are chosen once per student and day. Answering changes the scores the choice reads, so they are
+  // deliberately not a dependency: the same three stay on screen (and are kept with the saved progress).
+  const warmupSlots = useMemo(
+    () => (warmupUserKey && warmupPool.length ? pickWarmupQuestions({ pool: warmupPool, mastery: masteryNow.current, seed: `${warmupUserKey}|${warmupToday}` }) : []),
+    [warmupUserKey, warmupToday, warmupPool]
+  );
+  // How the flame stood when the day's warm-up began: the first answer already counts as studying, so the live flame
+  // moves under the screen, which keeps showing the dormant one until the last answer.
+  const warmupBefore = useMemo(() => ({ flame, streak: liveStreak }), [warmupUserKey, warmupToday]); // eslint-disable-line react-hooks/exhaustive-deps
+  const warmupSaved = useMemo(() => (warmupUserKey ? loadWarmup(safeStorage(), warmupUserKey, warmupToday) : null), [warmupUserKey, warmupToday]);
+  const warmupNow = warmupMem && warmupMem.userKey === warmupUserKey && warmupMem.state.day === warmupToday ? warmupMem.state : warmupSaved;
+  const warmupGate = needsWarmup({
+    eligible: warmupEligible, hasQuestions: warmupSlots.length > 0, serverMode: SERVER_MODE, summary, today: warmupToday, state: warmupNow, studiedToday: liveStudiedToday,
+  });
+  const warmupProgress = warmupNow ?? newWarmup(warmupToday, warmupSlots, warmupBefore);
+  // At midnight the flame cools and the next warm-up is asked for, without waiting for the next launch.
+  useDayRollover(() => {
+    if (SERVER_MODE) api.getSummary().then((sm) => applySummary(sm, { announce: false })).catch(() => {});
+    else setDayTick((n) => n + 1);
+  }, Boolean(profile));
+
   // Level up whenever XP crosses the next threshold (can chain multiple levels from one big award).
   useEffect(() => {
     if (!profile) return;
@@ -7877,6 +7927,19 @@ export default function App() {
     sendStudy(statusEvent(ex, status));
   };
 
+  // Warm-up answers are ordinary practice answers (mastery, XP, the study ledger), so they go through handleAnswer; the
+  // progress is saved after each one so a closed app resumes at the same question. A timed-out question is a miss with no answer.
+  const keepWarmup = (state) => { setWarmupMem({ userKey: warmupUserKey, state }); saveWarmup(safeStorage(), warmupUserKey, state); };
+  const handleWarmupAnswer = (ex, choice, correct, timeSec) => {
+    handleAnswer(ex, correct ? "correct" : "incorrect", { timeSec, answer: choice ?? undefined });
+    keepWarmup(recordWarmupAnswer(warmupProgress, ex.id, correct));
+  };
+  // The last button: the warm-up is done on this device at once, and the server is told so it lights the day.
+  const handleWarmupFinish = () => {
+    keepWarmup(finishWarmup(warmupProgress));
+    if (SERVER_MODE) sendStudy(warmupEvent(warmupToday, WARMUP_COUNT));
+  };
+
   // Profile page: save the changed details. With the server, PATCH /me and take its answer (level and XP stay as they
   // are); browser-only, just update the profile in memory. Resolves to { ok: true } or { ok: false, errors, message }.
   const handleSaveDetails = async (fields) => {
@@ -7936,6 +7999,17 @@ export default function App() {
   if (!profile) return <>{noticeToast}<Register key={resumeReg?._key ?? "register"} onComplete={handleRegister} onGoogleAuth={handleGoogleAuth} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (justRegistered) return <SetupFlow p={p} dark={dark} lang={lang} onDone={() => setJustRegistered(false)} />;
+  // Once a day, before the dashboard. It brings its own theme wrapper and the flame's gradient, like the toast above.
+  if (warmupGate) return (
+    <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""}`}>
+      <style>{STYLES}</style>
+      <StreakFlameDefs />
+      {noticeToast}
+      <WarmUpGate key={warmupProgress.day} state={warmupProgress} lang={lang} tr={tr} streak={liveStreak}
+        resolve={getExercise} grade={gradeAnswer} topicLabel={topicLabel} localize={localizeNum}
+        onAnswer={handleWarmupAnswer} onFinish={handleWarmupFinish} />
+    </div>
+  );
 
   const initials = profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const isUniProfile = profile.educationLevel === "university";

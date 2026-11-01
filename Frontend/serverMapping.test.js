@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
+  newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 
 const form = {
@@ -159,4 +159,11 @@ test("every backend error code has a message key, and unknown codes fall back to
 
 test("a wrong current password maps to its own message key", () => {
   assert.equal(apiErrorKey("wrong_password"), "errWrongPassword");
+});
+
+test("the warm-up event is keyed by the server's day and has no attemptId, so a retry cannot count twice", () => {
+  assert.deepEqual(warmupEvent("2026-11-01", 3), { type: "warmup", key: "2026-11-01", total: 3 });
+  assert.equal("attemptId" in warmupEvent("2026-11-01"), false);
+  assert.equal(warmupEvent("2026-11-01").total, 3);
+  assert.equal(warmupEvent("2026-11-01", "x").total, 0);
 });

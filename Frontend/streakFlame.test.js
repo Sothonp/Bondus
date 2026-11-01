@@ -2,7 +2,7 @@
    Run with:  node --test Frontend/streakFlame.test.js */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { flameState, flameUrgency, hoursLeftToday, countdownText, flameLabel, FLAME_STRINGS } from "./streakFlame.js";
+import { flameState, flameUrgency, hoursLeftToday, countdownText, flameLabel, FLAME_STRINGS, phnomPenhDay, msUntilMidnight } from "./streakFlame.js";
 
 test("no streak and nothing studied is cold", () => {
   assert.equal(flameState({ streak: 0, studiedToday: false }), "cold");
@@ -49,4 +49,17 @@ test("the label says the state in words, so colour never carries it alone", () =
   assert.equal(flameLabel("dormant", "countdown", 5, "en"), "Ends in 5h 0m");
   assert.equal(flameLabel("dormant", "label", 12, "km"), FLAME_STRINGS.km.dormant);
   assert.equal(flameLabel("lit", "none", 12, "fr"), "Lit today"); // unknown language falls back to English
+});
+
+test("the day is the Phnom Penh calendar day, whatever time zone the phone is in", () => {
+  assert.equal(phnomPenhDay(Date.parse("2026-11-01T16:59:59Z")), "2026-11-01"); // 23:59:59 in Phnom Penh
+  assert.equal(phnomPenhDay(Date.parse("2026-11-01T17:00:00Z")), "2026-11-02"); // midnight: a new day
+  assert.equal(phnomPenhDay(Date.parse("2026-12-31T20:00:00Z")), "2027-01-01"); // across a year end
+});
+
+test("the time to the next midnight counts seconds, and is never less than a second", () => {
+  assert.equal(msUntilMidnight(Date.parse("2026-11-01T16:59:30Z")), 30000);
+  assert.equal(msUntilMidnight(Date.parse("2026-11-01T11:00:00Z")), 6 * 3600 * 1000);
+  assert.equal(msUntilMidnight(Date.parse("2026-11-01T17:00:00Z")), 86400000);
+  assert.equal(msUntilMidnight(Date.parse("2026-11-01T16:59:59.900Z")), 1000);
 });

@@ -99,6 +99,11 @@ export function boxEvent({ setKey, total, retried, itemId }, attemptId = newAtte
   return compact({ type: "box_claim", key: String(setKey), attemptId, total: Number(total) || 0, retried: Number(retried) || 0, itemId });
 }
 
+/* Finishing the daily warm-up. The key is the server's Phnom Penh day (summary.today); there is deliberately no attemptId,
+   because the server keeps one warm-up per day and a retry must never count twice. It earns no XP of its own: the
+   three answers are ordinary answer events. */
+export const warmupEvent = (day, total = 3) => ({ type: "warmup", key: String(day), total: Number(total) || 0 });
+
 /* Finishing the diagnostic counts as studying that day (it starts the streak) but earns no XP. */
 export const diagnosticEvent = (attemptId = newAttemptId()) => ({ type: "diagnostic", key: "diagnostic", attemptId });
 
