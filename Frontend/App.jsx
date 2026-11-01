@@ -45,7 +45,7 @@ import LoadingScreen from "./LoadingScreen.jsx";
 import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, apiErrorKey, waitParts, isCodeAlreadySent,
+  answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, newAttemptId, apiErrorKey, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 import { createEventQueue } from "./eventQueue.js";
 import { createStateSaver } from "./stateSaver.js";
@@ -64,7 +64,9 @@ import { StreakFlame, StreakFlameDefs, useFlameInfo } from "./StreakFlame.jsx";
 import WarmUpGate from "./WarmUpGate.jsx";
 import { useDayRollover } from "./dayRollover.js";
 import ChapterList from "./ChapterList.jsx";
-import { chapterStates } from "./chapterProgress.js";
+import ChapterQuiz, { QuizCard } from "./ChapterQuiz.jsx";
+import PapersLock from "./PapersLock.jsx";
+import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
 import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
@@ -2926,7 +2928,9 @@ const SUBJECT_DURATION_MIN = {
   },
 };
 
-function Browse({ p, lang = "en", exam, tr }) {
+/* `paperGate(subject)` says whether a subject's full papers are locked until its chapters are passed ({ locked, passed, total });
+   `onGoPractice` takes the student to the chapters. */
+function Browse({ p, lang = "en", exam, tr, paperGate = () => ({ locked: false }), onGoPractice = () => {} }) {
   const [year, setYear] = useState(() => newestPaperYear(p.field));
   const [viewingPaper, setViewingPaper] = useState(null);
   // Timed attempts: "read" = the paper with the running clock, "submit" = adding the photos, "result" = how long it took.
@@ -2936,6 +2940,7 @@ function Browse({ p, lang = "en", exam, tr }) {
   const running = exam.current;
   const paperFor = (subject, y) => { const key = `${subject}-${p.field}-${y}`; return { subject, year: y, pdf: EXAM_PAPER_PDFS[key], images: EXAM_PAPER_IMAGES[key] }; };
   const startAttempt = (subject, y) => {
+    if (paperGate(subject).locked) return; // a stale button must not start a locked paper
     const res = exam.start({ subject, field: p.field, year: y, student: { name: p.name, grade: p.grade } });
     if (res.error === "already_running") { setNote(tr("examAlreadyRunning")); return; }
     if (res.error) { setNote(tr("examErr_generic")); return; }
@@ -3001,6 +3006,7 @@ function Browse({ p, lang = "en", exam, tr }) {
           const pdf = EXAM_PAPER_PDFS[key];
           const images = EXAM_PAPER_IMAGES[key];
           const hasPaper = Boolean(pdf || images);
+          const gate = paperGate(sub.s);
           return (
             <div key={sub.s} className="eai-card eai-tile">
               <div className="flex items-start justify-between">
@@ -3015,32 +3021,38 @@ function Browse({ p, lang = "en", exam, tr }) {
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--bg-soft)", color: dc }}>{diffLabel(diff)}</span>
                 <span className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{sub.m != null ? `${t(lang, "matchesLevel")} ${lang === "km" ? levelLabel(sub.level, lang) : sub.level.toLowerCase()}` : t(lang, "answerSheetReady")}</span>
               </div>
-              {hasPaper && (
-                <button onClick={() => startAttempt(sub.s, year)} data-testid={`start-${sub.s}`}
-                  className={`eai-btn eai-focus w-full mt-4 text-sm py-2.5 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
-                  <Timer size={14} /> {tr("examStartBtn")}
-                </button>
+              {gate.locked ? (
+                <PapersLock passed={gate.passed} total={gate.total} lang={lang} localize={localizeNum} onGo={onGoPractice} />
+              ) : (
+                <>
+                {hasPaper && (
+                  <button onClick={() => startAttempt(sub.s, year)} data-testid={`start-${sub.s}`}
+                    className={`eai-btn eai-focus w-full mt-4 text-sm py-2.5 flex items-center justify-center gap-1.5 text-white ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
+                    <Timer size={14} /> {tr("examStartBtn")}
+                  </button>
+                )}
+                <div className="flex gap-2 mt-2">
+                  {hasPaper ? (
+                    <button
+                      onClick={() => setViewingPaper({ subject: sub.s, year, pdf, images })}
+                      className={`eai-btn eai-glass eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}>
+                      <Eye size={14} /> {t(lang, "viewWord")}
+                    </button>
+                  ) : (
+                    <button disabled title={t(lang, "comingSoon")}
+                      className={`eai-btn flex-1 text-sm py-2 flex items-center justify-center gap-1.5 eai-soft cursor-not-allowed ${lang === "km" ? "eai-km" : ""}`}
+                      style={{ color: "var(--muted)" }}>
+                      <Eye size={14} /> {t(lang, "comingSoon")}
+                    </button>
+                  )}
+                  {pdf ? (
+                    <a href={pdf} download className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center" style={{ color: "var(--ink)" }}><Download size={14} /></a>
+                  ) : (
+                    <button disabled={!images} className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50" style={{ color: "var(--ink)" }}><Download size={14} /></button>
+                  )}
+                </div>
+                </>
               )}
-              <div className="flex gap-2 mt-2">
-                {hasPaper ? (
-                  <button
-                    onClick={() => setViewingPaper({ subject: sub.s, year, pdf, images })}
-                    className={`eai-btn eai-glass eai-focus flex-1 text-sm py-2 flex items-center justify-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`}>
-                    <Eye size={14} /> {t(lang, "viewWord")}
-                  </button>
-                ) : (
-                  <button disabled title={t(lang, "comingSoon")}
-                    className={`eai-btn flex-1 text-sm py-2 flex items-center justify-center gap-1.5 eai-soft cursor-not-allowed ${lang === "km" ? "eai-km" : ""}`}
-                    style={{ color: "var(--muted)" }}>
-                    <Eye size={14} /> {t(lang, "comingSoon")}
-                  </button>
-                )}
-                {pdf ? (
-                  <a href={pdf} download className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center" style={{ color: "var(--ink)" }}><Download size={14} /></a>
-                ) : (
-                  <button disabled={!images} className="eai-btn eai-focus text-sm py-2 px-3 eai-soft flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50" style={{ color: "var(--ink)" }}><Download size={14} /></button>
-                )}
-              </div>
             </div>
           );
         })}
@@ -3230,6 +3242,9 @@ function localizeExercise(subject, r, i, lang) {
   });
 }
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
+// Right in either language. The server accepts the English and the Khmer wording of an answer, so a Master Quiz is marked the
+// same way here: switching language half-way through a quiz cannot turn a right answer into a wrong one.
+const gradeAnswerAny = (ex, val) => ["en", "km"].some((l) => { const twin = getExercise(ex.id, l); return twin != null && gradeAnswer(twin, val); });
 
 /* Topic taxonomy per subject, derived from the exercise bank (canonical English topics) — this is
    what the diagnostic test, adaptive practice, and per-topic mastery tracking all key off. */
@@ -3263,10 +3278,10 @@ function StatusControl({ status, onChange, lang = "en" }) {
   );
 }
 
-function Practice({ p, practice, onAnswer, onSetStatus, lang = "en" }) {
+function Practice({ p, practice, onAnswer, onSetStatus, lang = "en", chapterProgress, mastery, onSubmitQuiz }) {
   const memory = useMemo(() => practiceMemory(safeStorage(), "bac", p.userId), [p.userId]);
   const [subject, setSubject] = useState(() => { const s = memory.get()?.subject; return fieldSubjects(p.field, p.foreignLanguage).includes(s) ? s : null; });
-  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setSubject(null)} lang={lang} />;
+  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setSubject(null)} lang={lang} chapterProgress={chapterProgress} mastery={mastery} onSubmitQuiz={onSubmitQuiz} seedKey={String(p.userId ?? p.name ?? "")} />;
 
   return (
     <div className="space-y-5 eai-rise">
@@ -3350,16 +3365,36 @@ function ContinueButton({ list, session, doneN, lang }) {
   );
 }
 
-function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, onBack, lang = "en" }) {
+/* Chapter subjects also offer each chapter's Master Quiz. `chapterProgress(subject)` is what the server (or this session) knows
+   about the quizzes, or null while that is not known; `mastery` is the topic-mastery store (for Test out); `onSubmitQuiz` sends
+   a finished quiz to be graded (see submitChapterQuiz in App). */
+function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, onBack, lang = "en", chapterProgress, mastery, onSubmitQuiz, seedKey = "" }) {
   const fullList = getExercises(subject, lang);
   // Subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get an extra
   // chapter-picker step before the exercise list; every other subject is unaffected.
   const hasChapters = fullList.some((ex) => ex.chapter);
-  // The chapters in curriculum order, each with its state: the next one opens when the one before is Passed (chapterProgress.js).
-  const chapterRows = hasChapters ? chapterStates(fullList, practice) : [];
+  // The chapters in curriculum order, each with its state: the next one opens when the one before is Passed by its Master Quiz
+  // (chapterProgress.js). `progress` is null while the quiz results are not known, and then no quiz is offered.
+  const progress = hasChapters ? (chapterProgress?.(subject) ?? null) : null;
+  const quizAvailable = progress != null;
+  const chapterRows = hasChapters
+    ? chapterStates(fullList, practice, progress).map((r) => ({
+      ...r, canTestOut: quizAvailable && (r.state === "available" || r.state === "inProgress") && testOutEligible(fullList, r.key, mastery?.[subject]),
+    }))
+    : [];
   const [pickedChapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
+  const [quiz, setQuiz] = useState(null); // { chapter, attemptId, alreadyPassed, ids } while a Master Quiz is on screen
   // The chapter on screen. A remembered or tapped chapter that is locked (or no longer exists) is not opened: back to the list.
   const chapter = pickedChapter != null && chapterRows.some((r) => r.key === pickedChapter && r.state !== "locked") ? pickedChapter : null;
+  const chapterRow = chapter != null ? chapterRows.find((r) => r.key === chapter) : null;
+  // A new draw every time (a retake is not the same questions); the ids are kept so a language switch cannot change them.
+  const startQuiz = (key) => {
+    const row = chapterRows.find((r) => r.key === key);
+    if (!row || !quizAvailable) return;
+    if (!(row.state === "quizReady" || row.state === "passed" || row.state === "mastered" || row.canTestOut)) return;
+    setQuiz({ chapter: key, attemptId: newAttemptId(), alreadyPassed: row.state === "passed" || row.state === "mastered",
+      ids: pickQuizQuestions(fullList, key, `${seedKey}|${Date.now()}`).map((q) => q.id) });
+  };
   // Inside a chapter, formula-quiz questions (stage 0) come first, then the practice problems —
   // students warm up on the lesson's formulas before the longer questions. The sort is stable, so
   // each group keeps its authored order.
@@ -3414,6 +3449,21 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
     );
   }
 
+  if (quiz) {
+    const at = chapterRows.findIndex((r) => r.key === quiz.chapter);
+    const after = chapterRows[at + 1];
+    return (
+      <ChapterQuiz key={quiz.attemptId} title={chapterLabel(quiz.chapter)} questions={quiz.ids.map((id) => getExercise(id, lang)).filter(Boolean)}
+        lang={lang} localize={localizeNum} attemptId={quiz.attemptId} alreadyPassed={quiz.alreadyPassed}
+        nextName={after && after.state !== "locked" ? chapterLabel(after.key) : null}
+        grade={gradeAnswerAny} onAnswer={onAnswer} onSubmit={(payload) => onSubmitQuiz({ subject, chapter: quiz.chapter, ...payload })}
+        errorText={(code, retryAfter) => apiErrorText(lang, code, retryAfter)}
+        onExit={() => { setQuiz(null); setChapter(null); }}
+        onNext={() => { setQuiz(null); setChapter(after.key); }}
+        onRetake={() => startQuiz(quiz.chapter)} />
+    );
+  }
+
   if (hasChapters && chapter == null) {
     return (
       <div className="space-y-5 eai-rise">
@@ -3444,6 +3494,10 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
           <div className="flex items-center gap-3"><ContinueButton list={list} session={session} doneN={doneN} lang={lang} /><Ring value={pct} size={60} color="var(--jade)"><span className="eai-display font-bold text-xs">{pct}%</span></Ring></div>
         </div>
       </div>
+
+      {hasChapters && (
+        <QuizCard row={chapterRow} available={quizAvailable} canTestOut={Boolean(chapterRow?.canTestOut)} lang={lang} localize={localizeNum} onStart={() => startQuiz(chapter)} />
+      )}
 
       <div className="space-y-3">
         {list.map((ex, i) => {
@@ -7386,6 +7440,8 @@ export default function App() {
   const [uniPracticeTarget, setUniPracticeTarget] = useState(null); // course id to deep-link straight into when the Hub links to a specific course — consumed once by UniversityPractice
   const [plan, setPlan] = useState(saved?.plan ?? []);
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
+  const [chapterQuiz, setChapterQuiz] = useState(saved?.chapterQuiz ?? {}); // browser-only: Master Quiz results { [subject]: { [chapterKey]: result } } (chapterProgress.js)
+  const [serverChapters, setServerChapters] = useState(null); // server mode, GET /chapters: { pass, master, quizSize, subjects } -- null until it has answered
   const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
   const [justRegistered, setJustRegistered] = useState(false); // true right after a fresh account is ready; shows SetupFlow once before the real dashboard, then clears itself
   const [leaderboard, setLeaderboard] = useState(null); // GET /leaderboard: { entries, you } — null until fetched; the card renders nothing until then
@@ -7403,6 +7459,7 @@ export default function App() {
   const planIdMap = useRef(new Map());                // temporary id (task not saved yet) -> server id
   const saverRef = useRef(null);
   const queueRef = useRef(null);
+  const chaptersRun = useRef(0);                      // which GET /chapters is the latest, so a slow old answer cannot overwrite a newer one
   const go = (t) => setTab(t);
 
   // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
@@ -7415,8 +7472,8 @@ export default function App() {
   // Browser-only prototype (no VITE_API_URL): persist everything so progress survives a page refresh.
   useEffect(() => {
     if (SERVER_MODE || !profile) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, rewards }));
-  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, rewards]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, rewards, chapterQuiz }));
+  }, [profile, topicMastery, uniTopicMastery, practice, uniPractice, plan, bonusXp, rewards, chapterQuiz]);
 
   // Forget everything about the signed-in student (state, saved-but-unsent work stays in storage under their id).
   const resetSession = () => {
@@ -7424,6 +7481,7 @@ export default function App() {
     saverRef.current?.cancel(); queueRef.current?.setUser(null);
     serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
     setSummary(null);
+    chaptersRun.current += 1; setServerChapters(null); setChapterQuiz({});
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
     setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLeaderboard(null); setTab("dashboard");
   };
@@ -7459,6 +7517,7 @@ export default function App() {
     setUniPractice(data.uniPractice ?? {});
     setPlan(data.plan ?? []);
     setBonusXp(data.bonusXp ?? 0);
+    setChapterQuiz(data.chapterQuiz ?? {});
     setRewards(sanitizeRewards(data.rewards));
     setShowWelcomeBack(true);
     setTab(data.profile.educationLevel === "university" ? "universityHub" : "dashboard");
@@ -7709,6 +7768,49 @@ export default function App() {
   }
   const sendStudy = (event, award = 0) => { if (SERVER_MODE && event) queueRef.current.push({ ...event, _award: award }); };
 
+  // ── The chapter path's quiz results (chapterProgress.js) ──
+  // With the server they come from GET /chapters, which also counts students who were part-way through a chapter before the
+  // quiz existed. It is fetched after sign-in and never blocks it: until it answers, or if it cannot (an older server, a bad
+  // connection), the progress is unknown and the chapter list falls back to the earlier rule instead of locking anyone out.
+  const loadChapters = () => {
+    if (!SERVER_MODE) return;
+    const run = ++chaptersRun.current;
+    api.getChapters().then((res) => { if (run === chaptersRun.current) setServerChapters(res); }).catch(() => {});
+  };
+  const chapterProgressFor = (subject) => {
+    if (!SERVER_MODE) return localProgress(chapterQuiz, subject);
+    const row = serverChapters?.subjects?.[subject];
+    return row ? progressFromServer(row) : null;
+  };
+  // A finished Master Quiz. With the server it is graded there (the answers are sent, never a verdict) and its answer replaces
+  // this subject's chapters; without one it is graded here. Resolves to { ok: true, result } or { ok: false, code, retryAfter }.
+  const submitChapterQuiz = async ({ subject, chapter, attemptId, answers, timeSec }) => {
+    if (!SERVER_MODE) {
+      const correct = answers.filter((a) => a.answer != null && gradeAnswerAny({ id: a.key }, a.answer)).length;
+      const wasPassed = Boolean(localProgress(chapterQuiz, subject)[chapter]?.passed);
+      setChapterQuiz((store) => recordLocalQuiz(store, subject, chapter, correct, answers.length));
+      return { ok: true, result: quizVerdict(correct, answers.length, wasPassed) };
+    }
+    try {
+      const res = await api.submitChapterQuiz(chapterQuizPayload({ subject, chapter, attemptId, answers, timeSec }));
+      setServerChapters((cur) => (cur ? { ...cur, subjects: { ...cur.subjects, [subject]: res.subject } } : cur));
+      if (!serverChapters) loadChapters();
+      applySummary(res.summary);
+      return { ok: true, result: res.result };
+    } catch (err) {
+      if (err?.code === "chapter_locked") loadChapters(); // our picture of the path was out of date: take the server's
+      return { ok: false, code: err?.code, retryAfter: err?.retryAfter };
+    }
+  };
+  // Are a subject's full past papers locked until its chapters are passed? Unknown progress never locks (see above).
+  const paperGate = (subject) => {
+    const list = getExercises(subject, "en");
+    const progress = chapterProgressFor(subject);
+    if (progress == null || !list.some((ex) => ex.chapter)) return { locked: false };
+    const rows = chapterStates(list, practice, progress);
+    return { locked: !papersOpen(rows), passed: chaptersPassed(rows), total: rows.length };
+  };
+
   // Fetch the account, progress, XP summary and today's plan from the server and show them. Throws an ApiError on failure.
   const loadAccount = async () => {
     const [me, st, sm, pl] = await Promise.all([api.getMe(), api.getState(), api.getSummary(), api.getPlan(dateKey())]);
@@ -7729,6 +7831,7 @@ export default function App() {
     hydratedRef.current = true;
     setTab(me.user.educationLevel === "university" ? "universityHub" : "dashboard");
     queueRef.current.flush(); // anything left unsent from last time
+    loadChapters();
     return me.user;
   };
   // Restore the saved login when the page opens (or retry after the server could not be reached).
@@ -7766,6 +7869,7 @@ export default function App() {
     try {
       const [sm, pl] = await Promise.all([api.getSummary(), planBusy.current === 0 ? api.getPlan(dateKey()) : Promise.resolve(null)]);
       applySummary(sm, { announce: false });
+      loadChapters();
       if (pl) { const day = pl.date ?? dateKey(); setPlan((arr) => [...arr.filter((x) => x.date !== day), ...(pl.tasks ?? []).map(taskFromServer)]); }
     } catch { /* offline: keep what is on screen */ }
   };
@@ -8004,9 +8108,9 @@ export default function App() {
   const mobileNav = splitMobileNav(navItems);
   const view = {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
-    browse: <Browse p={p} lang={lang} exam={exam} tr={tr} />,
+    browse: <Browse p={p} lang={lang} exam={exam} tr={tr} paperGate={paperGate} onGoPractice={() => go("practice")} />,
     schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
-    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} />,
+    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
     // Reached from the header avatar and the sidebar link, not from NAV. The form pieces are passed in (ProfileUi.jsx

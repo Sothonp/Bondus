@@ -1,0 +1,711 @@
+{
+ "passPercent": 70,
+ "masterPercent": 85,
+ "cases": [
+  {
+   "name": "a new student: the first chapter is open and the rest are locked",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "A",
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "exactly 70% solved makes the quiz ready, but does not open the next chapter",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "quizReady",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "locked",
+     "blockedBy": "A",
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "one question short of 70% is only in progress",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 6,
+     "answered": 6,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 60,
+     "toQuiz": 1
+    },
+    {
+     "state": "locked",
+     "blockedBy": "A",
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "a passed chapter opens only the next one",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": true,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "a mastered chapter and a passed one",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 9,
+     "answered": 9,
+     "passed": true,
+     "mastered": true,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": true,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "mastered",
+     "blockedBy": null,
+     "percent": 90,
+     "toQuiz": 0
+    },
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "testing out: passed with nothing solved still opens the next chapter",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": true,
+     "mastered": false,
+     "attempts": 1
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "mastered counts as passed even when only the mastered flag is set",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 9,
+     "answered": 9,
+     "passed": false,
+     "mastered": true,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "mastered",
+     "blockedBy": null,
+     "percent": 90,
+     "toQuiz": 0
+    },
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "work in a later chapter keeps the earlier ones open",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 3,
+     "answered": 3,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 2,
+     "answered": 2,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 30,
+     "toQuiz": 4
+    },
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 20,
+     "toQuiz": 5
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "a quiz taken in a later chapter keeps the earlier ones open",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 1
+    }
+   ],
+   "expect": [
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "available",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  },
+  {
+   "name": "a small chapter: 3 of 4 is 75%, so the quiz is ready",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": true,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": true,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 3,
+     "answered": 3,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "quizReady",
+     "blockedBy": null,
+     "percent": 75,
+     "toQuiz": 0
+    }
+   ]
+  },
+  {
+   "name": "a small chapter: 2 of 4 is 50%",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": true,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 7,
+     "answered": 7,
+     "passed": true,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 2,
+     "answered": 2,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "passed",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 0
+    },
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 50,
+     "toQuiz": 1
+    }
+   ]
+  },
+  {
+   "name": "23 questions: 16 solved is 69.6%, not enough",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 23,
+     "solved": 16,
+     "answered": 16,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 70,
+     "toQuiz": 1
+    }
+   ]
+  },
+  {
+   "name": "23 questions: 17 solved is 73.9%, enough",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 23,
+     "solved": 17,
+     "answered": 17,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "quizReady",
+     "blockedBy": null,
+     "percent": 74,
+     "toQuiz": 0
+    }
+   ]
+  },
+  {
+   "name": "a chapter answered wrong but never solved is in progress",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 0,
+     "answered": 2,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "A",
+     "percent": 0,
+     "toQuiz": 7
+    }
+   ]
+  },
+  {
+   "name": "a locked chapter two steps ahead names the chapter just before it",
+   "chapters": [
+    {
+     "key": "A",
+     "total": 10,
+     "solved": 2,
+     "answered": 2,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "B",
+     "total": 10,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    },
+    {
+     "key": "C",
+     "total": 4,
+     "solved": 0,
+     "answered": 0,
+     "passed": false,
+     "mastered": false,
+     "attempts": 0
+    }
+   ],
+   "expect": [
+    {
+     "state": "inProgress",
+     "blockedBy": null,
+     "percent": 20,
+     "toQuiz": 5
+    },
+    {
+     "state": "locked",
+     "blockedBy": "A",
+     "percent": 0,
+     "toQuiz": 7
+    },
+    {
+     "state": "locked",
+     "blockedBy": "B",
+     "percent": 0,
+     "toQuiz": 3
+    }
+   ]
+  }
+ ]
+}

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
+  newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 
 const form = {
@@ -166,4 +166,40 @@ test("the warm-up event is keyed by the server's day and has no attemptId, so a 
   assert.equal("attemptId" in warmupEvent("2026-11-01"), false);
   assert.equal(warmupEvent("2026-11-01").total, 3);
   assert.equal(warmupEvent("2026-11-01", "x").total, 0);
+});
+
+test("a Master Quiz becomes the request body the server grades: answers only, never a verdict", () => {
+  const body = chapterQuizPayload({
+    subject: "Mathematics", chapter: "Limits", attemptId: "att-1", timeSec: 95.46,
+    answers: [{ key: "Mathematics-3", answer: "12" }, { key: "Mathematics-9", answer: null }, { key: 14, answer: 0 }],
+  });
+  assert.deepEqual(body, {
+    subject: "Mathematics", chapter: "Limits", attemptId: "att-1", timeSec: 95.5,
+    answers: [{ key: "Mathematics-3", answer: "12" }, { key: "Mathematics-9", answer: null }, { key: "14", answer: "0" }],
+  });
+  assert.equal(JSON.stringify(body).includes("correct"), false);
+});
+
+test("a quiz without a usable time still sends the answers", () => {
+  const body = chapterQuizPayload({ subject: "S", chapter: "C", attemptId: "a", answers: [{ key: "k", answer: "x" }], timeSec: undefined });
+  assert.equal("timeSec" in body, false);
+  assert.equal(chapterQuizPayload({ subject: "S", chapter: "C", attemptId: "a", answers: [], timeSec: 99999 }).timeSec, 3600);
+});
+
+test("the server's chapters become the progress the chapter list is drawn from", () => {
+  const progress = progressFromServer({
+    passed: 1, papersOpen: false,
+    chapters: [
+      { key: "A", passed: true, mastered: true, attempts: 2, best: 90 },
+      { key: "B", passed: true, mastered: false, attempts: 0, best: null },
+      { key: "C", passed: false, mastered: false, attempts: "1", best: 60 },
+    ],
+  });
+  assert.deepEqual(progress, {
+    A: { passed: true, mastered: true, attempts: 2, best: 90 },
+    B: { passed: true, mastered: false, attempts: 0, best: null },
+    C: { passed: false, mastered: false, attempts: 1, best: 60 },
+  });
+  assert.deepEqual(progressFromServer(undefined), {});
+  assert.deepEqual(progressFromServer({}), {});
 });

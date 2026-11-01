@@ -104,6 +104,27 @@ export function boxEvent({ setKey, total, retried, itemId }, attemptId = newAtte
    three answers are ordinary answer events. */
 export const warmupEvent = (day, total = 3) => ({ type: "warmup", key: String(day), total: Number(total) || 0 });
 
+/* A finished Master Quiz -> the POST /chapter-quizzes body. `answers` is [{ key, answer }] with one entry per question of
+   the quiz; an `answer` of null means the student skipped it. The server grades every answer itself against its copy of
+   the question bank (so `correct` is never sent), keeps the best attempt, and says whether the chapter is now passed.
+   Send the SAME attemptId when retrying a failed request: the server then counts the quiz once. */
+export function chapterQuizPayload({ subject, chapter, attemptId, answers, timeSec }) {
+  return compact({
+    subject: String(subject), chapter: String(chapter), attemptId: String(attemptId),
+    answers: answers.map((a) => ({ key: String(a.key), answer: a.answer == null ? null : String(a.answer) })),
+    timeSec: seconds(timeSec),
+  });
+}
+
+/* One subject of GET /chapters (also returned by POST /chapter-quizzes) -> the `progress` chapterStates() takes:
+   { [chapterKey]: { passed, mastered, attempts, best } }. The server has already folded in students who were part-way
+   through a chapter before the quiz existed. */
+export function progressFromServer(subject) {
+  return Object.fromEntries((subject?.chapters ?? []).map((c) => [c.key, {
+    passed: Boolean(c.passed), mastered: Boolean(c.mastered), attempts: Number(c.attempts) || 0, best: Number.isFinite(c.best) ? c.best : null,
+  }]));
+}
+
 /* Finishing the diagnostic counts as studying that day (it starts the streak) but earns no XP. */
 export const diagnosticEvent = (attemptId = newAttemptId()) => ({ type: "diagnostic", key: "diagnostic", attemptId });
 

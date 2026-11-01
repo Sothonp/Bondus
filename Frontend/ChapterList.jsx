@@ -1,15 +1,17 @@
 /* The chapter path for one subject: chapters in curriculum order on a vertical rail, each drawn from its state (locked,
-   open, in progress, passed, Grade A), and a sheet that says why a locked chapter is locked. A locked chapter is never a
+   open, in progress, quiz ready, passed, Grade A), and a sheet that says why a locked chapter is locked. A locked chapter is never a
    dead tap: it opens the sheet, which names the chapter to finish and takes the student there.
 
    Pure presentation, like WarmUpGate.jsx and MobileNav.jsx: the rules are in chapterProgress.js, the words in
    chapterStrings.js, and App.jsx passes in everything else (nothing is imported back from it).
 
-   Colours reuse the status meanings already in the app: gold for in progress, jade for done, primary for ready to start.
+   Colours reuse the status meanings already in the app: gold for in progress, jade for done, primary for ready to start
+   (and for a Master Quiz that is ready to take).
    A lock is muted grey, never the ember red, because a lock is not an error. State is always said in words as well as
    shown in colour and icon. */
 import React, { useEffect, useRef, useState } from "react";
-import { Lock, PlayCircle, CheckCircle2, Award } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Lock, PlayCircle, CheckCircle2, Award, ClipboardCheck } from "lucide-react";
 import { PASS_PERCENT, MASTER_PERCENT } from "./progressionConfig.js";
 import { chaptersPassed } from "./chapterProgress.js";
 import { chapterText, fillChapter } from "./chapterStrings.js";
@@ -18,12 +20,13 @@ const LOOK = {
   locked: { icon: Lock, color: "var(--muted)", soft: "var(--bg-soft)", label: "stateLocked" },
   available: { icon: PlayCircle, color: "var(--primary)", soft: "var(--primary-soft)", label: "stateAvailable" },
   inProgress: { icon: PlayCircle, color: "var(--gold)", soft: "var(--gold-soft)", label: "stateInProgress" },
+  quizReady: { icon: ClipboardCheck, color: "var(--primary)", soft: "var(--primary-soft)", label: "stateQuizReady" },
   passed: { icon: CheckCircle2, color: "var(--jade)", soft: "var(--jade-soft)", label: "statePassed" },
   mastered: { icon: Award, color: "var(--jade)", soft: "var(--jade-soft)", label: "stateMastered" },
 };
 
 /* Props
-   rows       chapterStates() for the subject
+   rows       chapterStates() for the subject (a row may also carry `canTestOut`, set by the screen that knows the topic scores)
    labelOf    (chapterKey) -> the chapter's name in the student's language
    localize   (number, lang) -> the number in Khmer numerals when the language is Khmer
    onOpen     (chapterKey) open that chapter's exercises */
@@ -40,11 +43,11 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
     returnTo.current = el;
     setSheet(row);
   };
-  const close = () => { setSheet(null); returnTo.current?.focus?.(); };
+  const close = () => { setSheet(null); returnTo.current?.focus?.({ preventScroll: true }); };
 
   useEffect(() => {
     if (!sheet) return undefined;
-    primary.current?.focus();
+    primary.current?.focus({ preventScroll: true }); // the page must not jump when the sheet opens
     const onKey = (e) => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -57,15 +60,16 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
 
   const lineFor = (row) => {
     const solved = w("rowSolved", { solved: num(row.solved), total: num(row.total) });
+    const best = row.best != null ? w("rowBest", { best: num(row.best) }) : solved;
+    const testOut = row.canTestOut ? ` · ${w("rowTestOut")}` : "";
     switch (row.state) {
       case "locked":
-        return byKey.get(row.blockedBy)?.state === "locked"
-          ? w("rowLockedDeeper")
-          : `${w("rowLocked", { pass: num(PASS_PERCENT), name: labelOf(row.blockedBy) })} · ${w("rowLockedMore", { n: num(row.needed) })}`;
-      case "available": return w("rowExercises", { total: num(row.total) });
-      case "inProgress": return `${solved} · ${w("rowToPass", { n: num(row.toPass) })}`;
-      case "passed": return `${solved} · ${w("rowToMaster", { master: num(MASTER_PERCENT) })}`;
-      default: return solved;
+        return byKey.get(row.blockedBy)?.state === "locked" ? w("rowLockedDeeper") : w("rowLocked", { name: labelOf(row.blockedBy) });
+      case "available": return `${w("rowExercises", { total: num(row.total) })}${testOut}`;
+      case "inProgress": return `${solved} · ${w("rowToQuiz", { n: num(row.toQuiz) })}${testOut}`;
+      case "quizReady": return `${solved} · ${w("rowQuizReady", { pass: num(PASS_PERCENT) })}`;
+      case "passed": return `${best} · ${w("rowToMaster", { master: num(MASTER_PERCENT) })}`;
+      default: return best;
     }
   };
 
@@ -105,7 +109,7 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 <p className={`text-xs eai-muted mt-1 ${km}`}>{lineFor(row)}</p>
                 {!locked && row.state !== "available" && (
                   <div className="relative h-1.5 rounded-full eai-soft mt-2.5 overflow-hidden" aria-hidden="true">
-                    <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : "var(--jade)" }} />
+                    <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : row.state === "quizReady" ? "var(--primary)" : "var(--jade)" }} />
                     <span className="absolute top-0 bottom-0" style={{ left: `${PASS_PERCENT}%`, width: 2, background: "var(--ink)", opacity: 0.35 }} />
                   </div>
                 )}
@@ -118,11 +122,22 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
       {sheet && (() => {
         const target = nextUp(sheet);
         const direct = target.key === sheet.blockedBy;
-        return (
-          <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(10,10,30,.45)" }} onClick={close}>
+        /* Shown in the middle of the screen the student is looking at, on every size, so it never needs a scroll to find.
+           Two things make that hold. It is drawn through a portal into the app root instead of inside the page: the page
+           wrapper carries the `rise` animation, and an element with a transform (even one that has finished) becomes the
+           containing block of its `position: fixed` children, which sized this overlay to the whole page and left the sheet
+           at the page's bottom, far below the chapter that was tapped. The app root (not document.body) is the host so the
+           theme variables below still apply. And it is centred with a height cap, not stuck to the bottom edge. */
+        const host = returnTo.current?.closest?.(".eai-root") ?? document.body;
+        return createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center" onClick={close}
+            style={{
+              background: "rgba(10,10,30,.45)",
+              padding: "max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))",
+            }}>
             <div role="dialog" aria-modal="true" aria-labelledby="chapter-sheet-title" onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 eai-rise"
-              style={{ background: "var(--card)", color: "var(--ink)", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+              className="w-full max-w-md rounded-3xl p-5 eai-rise overflow-y-auto"
+              style={{ background: "var(--card)", color: "var(--ink)", maxHeight: "100%", boxShadow: "0 18px 50px rgba(10,10,30,.35)" }}>
               <div className="flex items-center gap-3">
                 <span className="grid place-items-center rounded-full flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}><Lock size={19} style={{ color: "var(--muted)" }} /></span>
                 <div className="min-w-0">
@@ -131,9 +146,11 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 </div>
               </div>
               <p className={`text-sm mt-4 leading-relaxed ${km}`}>
-                {direct
-                  ? w("sheetBody", { pass: num(PASS_PERCENT), name: labelOf(target.key), solved: num(target.solved), total: num(target.total), n: num(sheet.needed) })
-                  : w("sheetBodyDeeper", { pass: num(PASS_PERCENT), name: labelOf(target.key) })}
+                {!direct
+                  ? w("sheetBodyDeeper", { name: labelOf(target.key) })
+                  : target.state === "quizReady"
+                    ? w("sheetBodyQuiz", { pass: num(PASS_PERCENT), name: labelOf(target.key) })
+                    : w("sheetBodySolve", { pass: num(PASS_PERCENT), name: labelOf(target.key), n: num(target.toQuiz) })}
               </p>
               <div className="mt-5 flex flex-col gap-2">
                 <button ref={primary} type="button" onClick={() => { setSheet(null); onOpen(target.key); }}
@@ -141,7 +158,8 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 <button type="button" onClick={close} className={`eai-btn eai-focus w-full py-3 text-sm eai-soft ${km}`} style={{ color: "var(--ink)" }}>{w("sheetClose")}</button>
               </div>
             </div>
-          </div>
+          </div>,
+          host,
         );
       })()}
     </>
