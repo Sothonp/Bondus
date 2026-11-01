@@ -76,7 +76,8 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
         <p className={`text-xs eai-muted mt-0.5 ${km}`}>{w("pathNote", { pass: num(PASS_PERCENT), master: num(MASTER_PERCENT) })}</p>
       </div>
 
-      <ol className="mt-4" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      {/* The top margin is inline on purpose: a `margin: 0` here would cancel any margin class and glue the list to the note. */}
+      <ol style={{ listStyle: "none", padding: 0, margin: "20px 0 0" }}>
         {rows.map((row, i) => {
           const look = LOOK[row.state];
           const Icon = look.icon;
@@ -84,8 +85,11 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
           const last = i === rows.length - 1;
           return (
             <li key={row.key} className="flex gap-3">
-              {/* The rail: a state icon, and a line down to the next chapter. */}
+              {/* The rail: a short line in from the previous chapter, the state icon, and a line down to the next one. The
+                  line in is as tall as it takes to centre the icon on the card's title line (the card's padding is 16px on a
+                  phone and 24px from 640px up, plus the 1px border and half of the 24px title line). */}
               <div className="flex flex-col items-center flex-shrink-0" style={{ width: 36 }} aria-hidden="true">
+                <span className="h-[11px] sm:h-[19px] flex-shrink-0" style={{ width: 2, background: i === 0 ? "transparent" : "var(--line)" }} />
                 <span className="grid place-items-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, background: look.soft }}>
                   <Icon size={18} style={{ color: look.color }} />
                 </span>

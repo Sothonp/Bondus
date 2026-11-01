@@ -75,3 +75,12 @@ test("every word the list asks for exists in English and Khmer", () => {
     for (const [, name] of String(v).matchAll(/\{(\w+)\}/g)) assert.ok(["name", "pass", "master", "n", "solved", "total"].includes(name), `unknown placeholder {${name}}`);
   }
 });
+
+test("the list keeps a gap under the note, and the rail icons line up with the card titles", () => {
+  // A `margin: 0` in the same style would cancel the gap (it did once, and the first card touched the note).
+  assert.match(list, /<ol style=\{\{ listStyle: "none", padding: 0, margin: "20px 0 0" \}\}>/);
+  assert.doesNotMatch(list, /<ol [^>]*className="[^"]*\bmt-/);
+  // 11px on a phone, 19px from 640px: card padding + 1px border + half the 24px title line, minus half the 36px icon.
+  assert.match(list, /className="h-\[11px\] sm:h-\[19px\] flex-shrink-0"/);
+  assert.match(list, /background: i === 0 \? "transparent" : "var\(--line\)"/);
+});
