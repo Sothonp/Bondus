@@ -1,7 +1,9 @@
 """Query-time retrieval: embed, search, threshold, restore formulas."""
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+import math
+import re
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,6 +29,30 @@ class RetrievedChunk:
     subject: str | None = None
 
 
+# A literary work's name is read from its catalog title: the word after "រឿង" or
+# "ប្រលោមលោក" ("ប្រលោមលោករឿងផ្កាស្រពោន (នូ ហាច) — ..." names ផ្កាស្រពោន). Only the
+# part before " — " counts, and parentheses are dropped.
+_WORK_NAME = re.compile(r"(?:រឿង|ប្រលោមលោក)\s*([^\s()—]+)")
+_PARENTHESES = re.compile(r"\([^)]*\)")
+MIN_WORK_NAME_CHARS = 4
+# Of top_k chunks, the share taken from the works a question names; the rest
+# come from the whole corpus (the essay method, exam papers, the textbook).
+WORK_SHARE = 0.6
+
+
+def normalize_khmer(text: str) -> str:
+    """Fold the two spellings of a subscript t (្ដ and ្ត) together."""
+    return text.replace("្ដ", "្ត")
+
+
+def work_name(title: str) -> str | None:
+    """The literary work a catalog title names, or None when it names none."""
+    head = _PARENTHESES.sub(" ", normalize_khmer(title).split("—")[0])
+    names = [name for name in _WORK_NAME.findall(head) if len(name) >= MIN_WORK_NAME_CHARS]
+    # "ប្រលោមលោករឿងX" matches "រឿងX" after the "ប្រលោមលោក"; the last name is X.
+    return names[-1].removeprefix("រឿង") if names else None
+
+
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Cosine similarity between rows of ``a`` and rows of ``b``.
 
@@ -50,12 +76,18 @@ class Retriever:
         top_k: int = 5,
         score_threshold: float = 0.0,
         max_context_chars: int = 12000,
+        subject_top_k: Mapping[str, int] | None = None,
+        work_top_k: int | None = None,
     ) -> None:
         self.embedder = embedder
         self.store = store
         self.top_k = top_k
         self.score_threshold = score_threshold
         self.max_context_chars = max_context_chars
+        # Subjects that need more passages than top_k by default (an essay that
+        # draws on several works), and the default when a question names a work.
+        self.subject_top_k = dict(subject_top_k or {})
+        self.work_top_k = work_top_k
 
     def retrieve(
         self,
@@ -73,13 +105,22 @@ class Retriever:
         if subject is not None:
             of_subject = self.sources_for_subject(subject)
             sources = of_subject if sources is None else of_subject & set(sources)
+        works = self.works_named_in(query, sources)
+        if top_k is None:
+            top_k = self.subject_top_k.get(subject or "", self.top_k)
+            if works and self.work_top_k is not None:
+                top_k = max(top_k, self.work_top_k)
+        threshold = self.score_threshold if score_threshold is None else score_threshold
         vector = self.embedder.embed_query(query)
-        hits = self.store.search(
-            vector,
-            top_k=top_k if top_k is not None else self.top_k,
-            score_threshold=self.score_threshold if score_threshold is None else score_threshold,
-            sources=sources,
-        )
+        hits = self._search_works(vector, works, top_k, threshold) if works else []
+        seen = {hit.record.id for hit in hits}
+        for hit in self.store.search(
+            vector, top_k=top_k + len(hits), score_threshold=threshold, sources=sources
+        ):
+            if len(hits) >= top_k:
+                break
+            if hit.record.id not in seen:
+                hits.append(hit)
         return [
             RetrievedChunk(
                 id=hit.record.id,
@@ -95,6 +136,28 @@ class Retriever:
             )
             for hit in hits
         ]
+
+    def works_named_in(self, query: str, sources: Iterable[str] | None = None) -> dict[str, set[str]]:
+        """The literary works a question names, each with the sources that hold it
+        (a novel and its summary), limited to ``sources`` when given."""
+        text = normalize_khmer(query)
+        allowed = None if sources is None else set(sources)
+        works: dict[str, set[str]] = {}
+        for source, metadata in self.store.source_metadata().items():
+            if allowed is not None and source not in allowed:
+                continue
+            name = work_name(metadata.get("title") or "")
+            if name and name in text:
+                works.setdefault(name, set()).add(source)
+        return works
+
+    def _search_works(self, vector: np.ndarray, works: Mapping[str, set[str]], top_k: int, threshold: float):
+        """The best chunks of each named work, sharing WORK_SHARE of top_k."""
+        per_work = max(2, math.ceil(top_k * WORK_SHARE / len(works)))
+        hits = []
+        for sources in works.values():
+            hits.extend(self.store.search(vector, top_k=per_work, score_threshold=threshold, sources=sources))
+        return hits[:top_k]
 
     def sources_for_subject(self, subject: str) -> set[str]:
         return {

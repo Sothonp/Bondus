@@ -117,14 +117,14 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = Field(
         None, validation_alias=AliasChoices("gemini_api_key", "google_api_key")
     )
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-3.1-flash-lite"
     # Gemini thinks before answering unless told not to, and on a tutor reply
     # that shows its working anyway the thinking mostly buys latency: it is
     # spent before the first token, so the student watches an empty bubble.
     # "minimal" or "low" for chat; raise it only if answer quality drops.
     gemini_thinking_level: Literal["minimal", "low", "medium", "high"] = "low"
     # Tried in order when the main model is overloaded, rate limited or unavailable.
-    gemini_fallback_models: str = "gemini-3.5-flash,gemini-flash-latest"
+    gemini_fallback_models: str = "gemini-3.5-flash"
     gemini_temperature: float = Field(0.2, ge=0.0, le=2.0)
 
     groq_api_key: SecretStr | None = None
@@ -382,6 +382,10 @@ class Settings(BaseSettings):
 
     # --- Retrieval ---
     top_k: int = Field(5, ge=1, le=50)
+    # Khmer Literature essays draw on several works, so they get more passages, and
+    # so does any question that names a literary work (its chunks come first).
+    literature_top_k: int = Field(10, ge=1, le=50)
+    work_top_k: int = Field(10, ge=1, le=50)
     # Tuned for sentence-transformers cosine scores, which sit high (~0.8) even for a loose
     # match. Hashing similarities are lexical overlap and peak far lower, so that cutoff would
     # reject every passage; `_scale_score_threshold` swaps in the hashing default below unless

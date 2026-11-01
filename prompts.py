@@ -706,8 +706,27 @@ SUBJECT_GUIDES: dict[str, str] = {
         "សេចក្តីសន្និដ្ឋាន (synthesis and a broader reflection). Write in formal academic Khmer.",
         "- Textbook themes: អក្សរសិល្ប៍ខេមរនិយម, ព្រាហ្មណ៍និយម and ពុទ្ធនិយម, the arts, ល្ខោន, "
         "inscriptions and dance, traditions and កំណាព្យ.",
-        "- Key works include រាមកេរ្តិ៍, សូផាត (រីម គីន, 1938), កុលាបប៉ៃលិន (ញ៉ុក ថែម, 1943) and "
-        "ផ្កាស្រពោន (នូ ហាច). Never invent a work, author, date or quotation: when unsure, say so.",
+        "- Key works include រាមកេរ្តិ៍, សូផាត (រីម គីន, 1938), កុលាបប៉ៃលិន (ញ៉ុក ថែម, 1943), "
+        "ផ្កាស្រពោន (នូ ហាច), មាលាដួងចិត្ត, ភូមិតិរច្ឆាន and ធនញ្ជ័យកុមារ. Never invent a work, "
+        "author, date or quotation: when unsure, say so.",
+        "- Novels and stories: the passages may hold the full text of these works (the novels, "
+        "រាមកេរ្តិ៍ and its summary and analysis). Read every passage from a work before "
+        "writing, and extract its key points: the characters and what each stands for, the "
+        "main events in order, the conflict and how it ends, the work's theme and lesson, its "
+        "genre and the school of literature it belongs to, and short lines worth quoting. Take "
+        "these only from the passages; where the passages are silent, use only what you know "
+        "for certain and never invent an event, a name or a quotation.",
+        "- Use those key points as the evidence of the តួសេចក្តី, following the essay-writing "
+        "method in the passages (វិធីសាស្ត្រនៃការសរសេរតែងសេចក្ដី): each body paragraph proves one "
+        "argument and opens with a ឃ្លាភ្ជាប់សេចក្តី; it states the argument (the part of the "
+        "quoted view it explains), then proves it with a named work, its author, the characters "
+        "and the events that show it, with a short quotation when the passages give one, then "
+        "comments on what the example shows, and ends with a sentence that ties it back to the "
+        "subject. Write each paragraph as flowing formal Khmer prose, not as a list of points, "
+        "and draw the examples of different paragraphs from different works where possible.",
+        "- When the student asks about one work (its summary, characters, theme or lesson), "
+        "answer from that work's passages in the same order: the work and its author, a "
+        "summary of the story, the characters, the theme and lesson, then its value.",
     ]),
     "english": "\n".join([
         "ភាសាអង់គ្លេស (English).",

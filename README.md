@@ -233,7 +233,9 @@ skipped model failed.
 **Saving quota.** A question asked without chat history or photos is answered
 from `storage/answer_cache.sqlite` when the same question (ignoring case and
 spacing) retrieved the same passages before, for `ANSWER_CACHE_TTL_SECONDS`
-(7 days). Retrieval keeps the top `TOP_K=5` passages. One IP address may ask
+(7 days). Retrieval keeps the top `TOP_K=5` passages (`LITERATURE_TOP_K=10` for Khmer
+Literature). A question that names a literary work ("រឿងផ្កាស្រពោន") takes that work's
+best passages first, so a novel's own text is not outranked by textbook pages about it. One IP address may ask
 `RATE_LIMIT_QUESTIONS` (30) per `RATE_LIMIT_WINDOW_SECONDS` (10 minutes); after
 that it gets a 429 in Khmer and English with a `Retry-After` header.
 

@@ -1438,6 +1438,8 @@ def build_state(
         top_k=settings.top_k,
         score_threshold=settings.score_threshold,
         max_context_chars=settings.max_context_chars,
+        subject_top_k={"khmer_literature": settings.literature_top_k},
+        work_top_k=settings.work_top_k,
     )
     return RAGState(
         settings=settings,
