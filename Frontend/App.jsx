@@ -63,6 +63,9 @@ import { flameState, phnomPenhDay } from "./streakFlame.js";
 import { StreakFlame, StreakFlameDefs, useFlameInfo } from "./StreakFlame.jsx";
 import WarmUpGate from "./WarmUpGate.jsx";
 import { useDayRollover } from "./dayRollover.js";
+import ChapterList from "./ChapterList.jsx";
+import { chapterStates } from "./chapterProgress.js";
+import { MASTER_PERCENT } from "./progressionConfig.js";
 import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
@@ -247,7 +250,7 @@ function recordAttempt(topicMastery, subject, topic, attempt) {
 
 const estimateGradeRange = (avg) => {
   if (avg == null) return "—";
-  if (avg >= 85) return "A";
+  if (avg >= MASTER_PERCENT) return "A";
   if (avg >= 75) return "A–B";
   if (avg >= 60) return "B–C";
   if (avg >= 40) return "C–D";
@@ -3352,14 +3355,11 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
   // Subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get an extra
   // chapter-picker step before the exercise list; every other subject is unaffected.
   const hasChapters = fullList.some((ex) => ex.chapter);
-  const chapterKeys = hasChapters ? [...new Set(fullList.map((ex) => ex.chapter))] : [];
-  // Chapters keep first-appearance order unless EVERY chapter carries a numeric chapterOrder, in
-  // which case they sort by it (so lessons appended to the bank later still land in curriculum order).
-  const chapterRank = (ch) => fullList.find((ex) => ex.chapter === ch)?.chapterOrder;
-  const chapters = chapterKeys.every((ch) => chapterRank(ch) != null)
-    ? [...chapterKeys].sort((a, b) => chapterRank(a) - chapterRank(b))
-    : chapterKeys;
-  const [chapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
+  // The chapters in curriculum order, each with its state: the next one opens when the one before is Passed (chapterProgress.js).
+  const chapterRows = hasChapters ? chapterStates(fullList, practice) : [];
+  const [pickedChapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
+  // The chapter on screen. A remembered or tapped chapter that is locked (or no longer exists) is not opened: back to the list.
+  const chapter = pickedChapter != null && chapterRows.some((r) => r.key === pickedChapter && r.state !== "locked") ? pickedChapter : null;
   // Inside a chapter, formula-quiz questions (stage 0) come first, then the practice problems —
   // students warm up on the lesson's formulas before the longer questions. The sort is stable, so
   // each group keeps its authored order.
@@ -3418,28 +3418,9 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
     return (
       <div className="space-y-5 eai-rise">
         <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
+        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
         <div>
-          <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
-          <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "chooseChapterDesc")}</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {chapters.map((ch) => {
-            const chList = fullList.filter((ex) => ex.chapter === ch);
-            const doneN = chList.filter((ex) => practice[ex.id]?.status === "completed").length;
-            const pct = chList.length ? Math.round((doneN / chList.length) * 100) : 0;
-            return (
-              <button key={ch} onClick={() => setChapter(ch)} className="eai-card eai-tile eai-focus text-left">
-                <div className="flex items-center justify-between">
-                  <div className="grid place-items-center rounded-xl" style={{ width: 40, height: 40, background: "var(--primary-soft)" }}>
-                    <BookOpen size={19} style={{ color: "var(--primary)" }} />
-                  </div>
-                  <Ring value={pct} size={44} color="var(--jade)"><span className="eai-display font-bold" style={{ fontSize: 10 }}>{pct}%</span></Ring>
-                </div>
-                <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{chapterLabel(ch)}</h3>
-                <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{chList.length} {t(lang, "exercisesWord")} · {doneN} {t(lang, "completedWord")}</p>
-              </button>
-            );
-          })}
+          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} />
         </div>
       </div>
     );

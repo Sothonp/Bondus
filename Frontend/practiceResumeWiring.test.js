@@ -28,7 +28,9 @@ test("coming back opens the remembered question: the session, the chapter and th
   // The question is looked up in the list the screen is showing, so a stale or foreign id simply finds nothing.
   assert.match(app, /const \[idx, setIdx\] = useState\(\(\) => \{ const at = memory \? list\.findIndex\(\(e\) => e\.id === memory\.get\(\)\?\.exId\) : -1; return at >= 0 \? at : null; \}\);/);
   assert.match(app, /const \[subject, setSubject\] = useState\(\(\) => \{ const s = memory\.get\(\)\?\.subject; return fieldSubjects\(p\.field, p\.foreignLanguage\)\.includes\(s\) \? s : null; \}\);/);
-  assert.match(app, /const \[chapter, setChapter\] = useState\(\(\) => \{ const s = memory\.get\(\); return s\?\.subject === subject \? s\.chapter : null; \}\);/);
+  // The remembered chapter is read as before, but it only opens when it is not locked (a locked one lands on the list).
+  assert.match(app, /const \[pickedChapter, setChapter\] = useState\(\(\) => \{ const s = memory\.get\(\); return s\?\.subject === subject \? s\.chapter : null; \}\);/);
+  assert.match(app, /const chapter = pickedChapter != null && chapterRows\.some\(\(r\) => r\.key === pickedChapter && r\.state !== "locked"\) \? pickedChapter : null;/);
   assert.match(app, /const session = useSetSession\(list, practice, memory\);/);
   assert.match(app, /const session = useSetSession\(list, uniPractice, memory\);/);
 });

@@ -1,0 +1,149 @@
+/* The chapter path for one subject: chapters in curriculum order on a vertical rail, each drawn from its state (locked,
+   open, in progress, passed, Grade A), and a sheet that says why a locked chapter is locked. A locked chapter is never a
+   dead tap: it opens the sheet, which names the chapter to finish and takes the student there.
+
+   Pure presentation, like WarmUpGate.jsx and MobileNav.jsx: the rules are in chapterProgress.js, the words in
+   chapterStrings.js, and App.jsx passes in everything else (nothing is imported back from it).
+
+   Colours reuse the status meanings already in the app: gold for in progress, jade for done, primary for ready to start.
+   A lock is muted grey, never the ember red, because a lock is not an error. State is always said in words as well as
+   shown in colour and icon. */
+import React, { useEffect, useRef, useState } from "react";
+import { Lock, PlayCircle, CheckCircle2, Award } from "lucide-react";
+import { PASS_PERCENT, MASTER_PERCENT } from "./progressionConfig.js";
+import { chaptersPassed } from "./chapterProgress.js";
+import { chapterText, fillChapter } from "./chapterStrings.js";
+
+const LOOK = {
+  locked: { icon: Lock, color: "var(--muted)", soft: "var(--bg-soft)", label: "stateLocked" },
+  available: { icon: PlayCircle, color: "var(--primary)", soft: "var(--primary-soft)", label: "stateAvailable" },
+  inProgress: { icon: PlayCircle, color: "var(--gold)", soft: "var(--gold-soft)", label: "stateInProgress" },
+  passed: { icon: CheckCircle2, color: "var(--jade)", soft: "var(--jade-soft)", label: "statePassed" },
+  mastered: { icon: Award, color: "var(--jade)", soft: "var(--jade-soft)", label: "stateMastered" },
+};
+
+/* Props
+   rows       chapterStates() for the subject
+   labelOf    (chapterKey) -> the chapter's name in the student's language
+   localize   (number, lang) -> the number in Khmer numerals when the language is Khmer
+   onOpen     (chapterKey) open that chapter's exercises */
+export default function ChapterList({ rows, labelOf, lang = "en", localize = (n) => String(n), onOpen }) {
+  const km = lang === "km" ? "eai-km" : "";
+  const w = (key, vars) => fillChapter(chapterText(lang, key), vars);
+  const num = (n) => localize(n, lang);
+  const [sheet, setSheet] = useState(null); // the locked row whose sheet is open
+  const returnTo = useRef(null);            // the row that opened it, so focus goes back there
+  const primary = useRef(null);
+
+  const open = (row, el) => {
+    if (row.state !== "locked") { onOpen(row.key); return; }
+    returnTo.current = el;
+    setSheet(row);
+  };
+  const close = () => { setSheet(null); returnTo.current?.focus?.(); };
+
+  useEffect(() => {
+    if (!sheet) return undefined;
+    primary.current?.focus();
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [sheet]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  // Where a locked chapter's sheet sends the student: the nearest chapter before it that is open. For the first locked
+  // chapter that is simply the chapter that blocks it; for one further along it is the chapter just before the first lock.
+  const nextUp = (row) => { let j = row.index - 1; while (j > 0 && rows[j].state === "locked") j--; return rows[Math.max(0, j)]; };
+
+  const lineFor = (row) => {
+    const solved = w("rowSolved", { solved: num(row.solved), total: num(row.total) });
+    switch (row.state) {
+      case "locked":
+        return byKey.get(row.blockedBy)?.state === "locked"
+          ? w("rowLockedDeeper")
+          : `${w("rowLocked", { pass: num(PASS_PERCENT), name: labelOf(row.blockedBy) })} · ${w("rowLockedMore", { n: num(row.needed) })}`;
+      case "available": return w("rowExercises", { total: num(row.total) });
+      case "inProgress": return `${solved} · ${w("rowToPass", { n: num(row.toPass) })}`;
+      case "passed": return `${solved} · ${w("rowToMaster", { master: num(MASTER_PERCENT) })}`;
+      default: return solved;
+    }
+  };
+
+  return (
+    <>
+      <div>
+        <p className={`text-sm font-semibold ${km}`} style={{ color: "var(--ink)" }}>{w("pathSummary", { n: num(chaptersPassed(rows)), total: num(rows.length) })}</p>
+        <p className={`text-xs eai-muted mt-0.5 ${km}`}>{w("pathNote", { pass: num(PASS_PERCENT), master: num(MASTER_PERCENT) })}</p>
+      </div>
+
+      {/* The top margin is inline on purpose: a `margin: 0` here would cancel any margin class and glue the list to the note. */}
+      <ol style={{ listStyle: "none", padding: 0, margin: "20px 0 0" }}>
+        {rows.map((row, i) => {
+          const look = LOOK[row.state];
+          const Icon = look.icon;
+          const locked = row.state === "locked";
+          const last = i === rows.length - 1;
+          return (
+            <li key={row.key} className="flex gap-3">
+              {/* The rail: a short line in from the previous chapter, the state icon, and a line down to the next one. The
+                  line in is as tall as it takes to centre the icon on the card's title line (the card's padding is 16px on a
+                  phone and 24px from 640px up, plus the 1px border and half of the 24px title line). */}
+              <div className="flex flex-col items-center flex-shrink-0" style={{ width: 36 }} aria-hidden="true">
+                <span className="h-[11px] sm:h-[19px] flex-shrink-0" style={{ width: 2, background: i === 0 ? "transparent" : "var(--line)" }} />
+                <span className="grid place-items-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, background: look.soft }}>
+                  <Icon size={18} style={{ color: look.color }} />
+                </span>
+                {!last && <span className="flex-1" style={{ width: 2, minHeight: 14, background: "var(--line)" }} />}
+              </div>
+              <button type="button" onClick={(e) => open(row, e.currentTarget)} aria-haspopup={locked ? "dialog" : undefined}
+                className="eai-card eai-tile eai-focus text-left flex-1 min-w-0" style={{ marginBottom: last ? 0 : 12, opacity: locked ? 0.85 : 1 }}>
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                  <h3 className={`eai-display font-bold min-w-0 ${km}`} style={{ color: locked ? "var(--muted)" : "var(--ink)", overflowWrap: "anywhere" }}>{labelOf(row.key)}</h3>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${km}`}
+                    style={row.state === "mastered" ? { background: "var(--jade)", color: "#fff" } : { background: look.soft, color: look.color }}>{w(look.label)}</span>
+                </div>
+                <p className={`text-xs eai-muted mt-1 ${km}`}>{lineFor(row)}</p>
+                {!locked && row.state !== "available" && (
+                  <div className="relative h-1.5 rounded-full eai-soft mt-2.5 overflow-hidden" aria-hidden="true">
+                    <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : "var(--jade)" }} />
+                    <span className="absolute top-0 bottom-0" style={{ left: `${PASS_PERCENT}%`, width: 2, background: "var(--ink)", opacity: 0.35 }} />
+                  </div>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+
+      {sheet && (() => {
+        const target = nextUp(sheet);
+        const direct = target.key === sheet.blockedBy;
+        return (
+          <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(10,10,30,.45)" }} onClick={close}>
+            <div role="dialog" aria-modal="true" aria-labelledby="chapter-sheet-title" onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 eai-rise"
+              style={{ background: "var(--card)", color: "var(--ink)", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center rounded-full flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}><Lock size={19} style={{ color: "var(--muted)" }} /></span>
+                <div className="min-w-0">
+                  <h2 id="chapter-sheet-title" className={`eai-display text-lg font-extrabold ${km}`}>{w("sheetTitle")}</h2>
+                  <p className={`text-sm eai-muted ${km}`} style={{ overflowWrap: "anywhere" }}>{labelOf(sheet.key)}</p>
+                </div>
+              </div>
+              <p className={`text-sm mt-4 leading-relaxed ${km}`}>
+                {direct
+                  ? w("sheetBody", { pass: num(PASS_PERCENT), name: labelOf(target.key), solved: num(target.solved), total: num(target.total), n: num(sheet.needed) })
+                  : w("sheetBodyDeeper", { pass: num(PASS_PERCENT), name: labelOf(target.key) })}
+              </p>
+              <div className="mt-5 flex flex-col gap-2">
+                <button ref={primary} type="button" onClick={() => { setSheet(null); onOpen(target.key); }}
+                  className={`eai-btn eai-focus w-full py-3 text-sm ${km}`} style={{ background: "var(--primary)", color: "#fff" }}>{w("sheetGo", { name: labelOf(target.key) })}</button>
+                <button type="button" onClick={close} className={`eai-btn eai-focus w-full py-3 text-sm eai-soft ${km}`} style={{ color: "var(--ink)" }}>{w("sheetClose")}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </>
+  );
+}
