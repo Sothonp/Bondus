@@ -3,16 +3,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  WARMUP_COUNT, seedFrom, seededRandom, isWarmupQuestion, pickWarmupQuestions,
+  WARMUP_COUNT, seedFrom, seededRandom, isWarmupQuestion, wasPractised, practisedPool, pickWarmupQuestions,
   newWarmup, recordWarmupAnswer, warmupAnswered, warmupFinished, finishWarmup, warmupScore, warmupCurrentIndex,
   loadWarmup, saveWarmup, needsWarmup,
 } from "./warmup.js";
 
 const q = (id, subject, topic, difficulty = "Easy") => ({ id, subject, topic, difficulty, options: ["a", "b", "c"], answer: "a" });
-const pool = [
+const bank = [
   q("Math-1", "Math", "Limits"), q("Math-2", "Math", "Limits", "Hard"), q("Math-3", "Math", "Derivatives"),
   q("Math-4", "Math", "Integrals"), q("Phys-1", "Physics", "Kinematics"), q("Phys-2", "Physics", "Optics", "Medium"),
 ];
+const lookup = (id) => bank.find((e) => e.id === id) ?? null;
+// What the student did in Practice: { [id]: { status, result, at } }
+const done = (result, at) => ({ status: result === "correct" ? "completed" : "in_progress", result, at });
+const everything = Object.fromEntries(bank.map((e, i) => [e.id, done(i % 2 ? "incorrect" : "correct", 100 + i)]));
+const pool = practisedPool(everything, lookup);
+const topicOf = (s) => bank.find((e) => e.id === s.id).topic;
 
 test("the same text always gives the same seed and the same random run", () => {
   assert.equal(seedFrom("ana|2026-11-01"), seedFrom("ana|2026-11-01"));
@@ -29,41 +35,88 @@ test("only multiple-choice questions whose answer is among the options can be as
   assert.equal(isWarmupQuestion({ id: "x", options: ["a", "b"], answer: "z" }), false);         // answer not offered
 });
 
+test("a question counts as practised when it was answered or ticked Completed, not when merely opened or ticked In progress", () => {
+  assert.equal(wasPractised({ status: "completed", result: "correct" }), true);
+  assert.equal(wasPractised({ status: "in_progress", result: "incorrect" }), true);   // answered wrong: the best thing to review
+  assert.equal(wasPractised({ status: "completed", result: null }), true);            // ticked Completed
+  assert.equal(wasPractised({ status: "in_progress", result: null }), false);         // ticked In progress, never answered
+  assert.equal(wasPractised({ status: "pending" }), false);
+  assert.equal(wasPractised(undefined), false);
+});
+
+test("the pool holds only what the student has practised, never new questions", () => {
+  const practice = { "Math-1": done("correct", 1), "Math-3": done("incorrect", 2), "Phys-1": { status: "in_progress", result: null }, "Gone-9": done("correct", 3) };
+  assert.deepEqual(practisedPool(practice, lookup).map((e) => e.id).sort(), ["Math-1", "Math-3"]);
+  assert.deepEqual(practisedPool({}, lookup), []);
+  assert.deepEqual(practisedPool(null, lookup), []);
+});
+
+test("only the student's own subjects are used", () => {
+  const ids = (subjects) => practisedPool(everything, lookup, subjects).map((e) => e.id);
+  assert.deepEqual(ids(new Set(["Physics"])).sort(), ["Phys-1", "Phys-2"]);
+  assert.equal(ids(null).length, bank.length);
+});
+
+test("a question that cannot be asked as multiple choice is left out even when practised", () => {
+  const typed = { id: "T-1", subject: "Math", topic: "Limits", answer: "x" };
+  assert.deepEqual(practisedPool({ "T-1": done("correct", 1) }, (id) => (id === "T-1" ? typed : null)), []);
+});
+
 test("three questions from three different topics, the same three for the same seed", () => {
-  const one = pickWarmupQuestions({ pool, seed: "ana|2026-11-01" });
-  const again = pickWarmupQuestions({ pool, seed: "ana|2026-11-01" });
+  const one = pickWarmupQuestions({ pool, practice: everything, seed: "ana|2026-11-01" });
+  const again = pickWarmupQuestions({ pool, practice: everything, seed: "ana|2026-11-01" });
   assert.equal(one.length, WARMUP_COUNT);
   assert.deepEqual(one, again);
-  const topics = one.map((s) => pool.find((e) => e.id === s.id).topic);
-  assert.equal(new Set(topics).size, WARMUP_COUNT);
-  assert.deepEqual(one.map((s) => s.slot), ["weak", "review", "fresh"]);
+  assert.equal(new Set(one.map(topicOf)).size, WARMUP_COUNT);
+  assert.deepEqual(one.map((s) => s.slot).slice(0, 2), ["weak", "review"]);
 });
 
-test("the first question comes from the weakest topic and the second from the one practised longest ago", () => {
-  const mastery = {
-    Math: { Limits: { score: 90, lastPracticedAt: 300 }, Derivatives: { score: 35, lastPracticedAt: 200 }, Integrals: { score: 80, lastPracticedAt: 100 } },
-    Physics: { Kinematics: { score: 70, lastPracticedAt: 400 } },
-  };
-  const picked = pickWarmupQuestions({ pool, mastery, seed: "ana|2026-11-01" });
-  const topicOf = (s) => pool.find((e) => e.id === s.id).topic;
-  assert.equal(topicOf(picked[0]), "Derivatives");   // lowest score
-  assert.equal(topicOf(picked[1]), "Integrals");     // oldest practice among the rest
-  assert.equal(topicOf(picked[2]) === "Optics", true); // the one topic never assessed
-});
-
-test("a warm-up prefers easy and medium questions when the topic has them", () => {
-  for (let day = 1; day <= 20; day++) {
-    const picked = pickWarmupQuestions({ pool, seed: `ana|2026-11-${day}` });
-    assert.ok(!picked.some((s) => s.id === "Math-2"), "the hard Limits question is skipped while an easy one exists");
+test("every picked question was practised, whatever the seed", () => {
+  const practice = { "Math-1": done("correct", 1), "Math-3": done("incorrect", 2), "Phys-2": done("correct", 3) };
+  const small = practisedPool(practice, lookup);
+  for (let day = 1; day <= 25; day++) {
+    const picked = pickWarmupQuestions({ pool: small, practice, seed: `ana|2026-11-${day}` });
+    assert.ok(picked.every((s) => practice[s.id]), "a question the student never did was asked");
   }
 });
 
-test("a small pool still gives as many questions as it can, and an empty one gives none", () => {
-  assert.equal(pickWarmupQuestions({ pool: pool.slice(0, 2), seed: "s" }).length, 2);
-  assert.equal(pickWarmupQuestions({ pool: [], seed: "s" }).length, 0);
-  assert.equal(pickWarmupQuestions({ pool: [{ id: "t", subject: "S", topic: "T", answer: "x" }], seed: "s" }).length, 0);
-  const ids = pickWarmupQuestions({ pool: pool.slice(0, 3), seed: "s" }).map((s) => s.id);
-  assert.equal(new Set(ids).size, ids.length, "never the same question twice");
+test("the first question comes from the weakest topic, the second from the one practised longest ago, the third is a miss", () => {
+  const practice = {
+    "Math-1": done("correct", 300), "Math-3": done("correct", 200), "Math-4": done("correct", 100),
+    "Phys-1": done("correct", 400), "Phys-2": done("incorrect", 250),
+  };
+  const mastery = {
+    Math: { Limits: { score: 90, lastPracticedAt: 300 }, Derivatives: { score: 35, lastPracticedAt: 200 }, Integrals: { score: 80, lastPracticedAt: 100 } },
+    Physics: { Kinematics: { score: 70, lastPracticedAt: 400 }, Optics: { score: 60, lastPracticedAt: 250 } },
+  };
+  const picked = pickWarmupQuestions({ pool: practisedPool(practice, lookup), mastery, practice, seed: "ana|2026-11-01" });
+  assert.deepEqual(picked.map(topicOf), ["Derivatives", "Integrals", "Optics"]);   // lowest score, then oldest, then the miss
+  assert.deepEqual(picked.map((s) => s.slot), ["weak", "review", "missed"]);
+});
+
+test("inside a topic, a question last answered wrong comes first, then the one done longest ago", () => {
+  const two = (a, b) => ({ "Math-1": a, "Math-2": b });
+  const only = (practice) => pickWarmupQuestions({ pool: practisedPool(practice, lookup), practice, seed: "s", count: 1 })[0].id;
+  assert.equal(only(two(done("correct", 50), done("incorrect", 90))), "Math-2", "the miss, though it is newer");
+  assert.equal(only(two(done("correct", 50), done("correct", 90))), "Math-1", "the older one");
+  assert.equal(only(two(done("incorrect", 50), done("incorrect", 90))), "Math-1", "both missed: the older one");
+});
+
+test("with nothing missed, the third question is another practised one", () => {
+  const practice = { "Math-1": done("correct", 1), "Math-3": done("correct", 2), "Math-4": done("correct", 3), "Phys-1": done("correct", 4) };
+  const picked = pickWarmupQuestions({ pool: practisedPool(practice, lookup), practice, seed: "s" });
+  assert.equal(picked.length, 3);
+  assert.equal(picked[2].slot, "again");
+  assert.equal(new Set(picked.map(topicOf)).size, 3, "a different topic while there is one");
+});
+
+test("a small practice history still gives as many questions as there are, and none gives none", () => {
+  const one = { "Math-1": done("correct", 1) };
+  assert.equal(pickWarmupQuestions({ pool: practisedPool(one, lookup), practice: one, seed: "s" }).length, 1);
+  const sameTopic = { "Math-1": done("correct", 1), "Math-2": done("incorrect", 2) };
+  const ids = pickWarmupQuestions({ pool: practisedPool(sameTopic, lookup), practice: sameTopic, seed: "s" }).map((x) => x.id);
+  assert.deepEqual(ids.sort(), ["Math-1", "Math-2"], "one topic: both questions, never the same one twice");
+  assert.equal(pickWarmupQuestions({ pool: [], practice: {}, seed: "s" }).length, 0);
 });
 
 test("progress records each answer once, resumes at the first unanswered question and scores itself", () => {

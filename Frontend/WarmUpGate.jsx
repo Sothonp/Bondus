@@ -13,7 +13,7 @@ import { StreakFlame } from "./StreakFlame.jsx";
 import { WARMUP_SECONDS, warmupCurrentIndex, warmupFinished, warmupScore } from "./warmup.js";
 import { warmupText, fillWarmup } from "./warmupStrings.js";
 
-const SLOT_KEY = { weak: "slotWeak", review: "slotReview", fresh: "slotFresh" };
+const SLOT_KEY = { weak: "slotWeak", review: "slotReview", missed: "slotMissed", again: "slotAgain" };
 
 /* Props
    state        the saved progress (warmup.js): { day, slots, answers, before }
@@ -135,7 +135,7 @@ export default function WarmUpGate({ state, lang = "en", tr, streak = 0, resolve
 
             <div className="eai-ex-card mt-4" style={{ padding: 20, flex: "none" }}>
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${km}`} style={chip}>{w(SLOT_KEY[current.slot] ?? "slotFresh")}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${km}`} style={chip}>{w(SLOT_KEY[current.slot] ?? "slotAgain")}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${kmClassOf(topicLabel(ex.topic, lang))}`} style={chip}>{topicLabel(ex.topic, lang)}</span>
               </div>
               <h2 ref={headingRef} tabIndex={-1} className="eai-ex-question eai-display" style={{ outline: "none" }}>{ex.prompt}</h2>

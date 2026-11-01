@@ -13,7 +13,7 @@ const shell = app.slice(app.indexOf("export default function App()"));
 const beforeReturns = shell.slice(0, shell.indexOf("if (SERVER_MODE && booting) return"));
 
 test("the gate state and the midnight timer are hooks above the early returns", () => {
-  for (const hook of ["useState(0)", "const warmupPool = useMemo(", "const warmupSlots = useMemo(", "const warmupSaved = useMemo(", "useDayRollover("]) {
+  for (const hook of ["useState(0)", "const warmupSlots = useMemo(", "const warmupSaved = useMemo(", "useDayRollover("]) {
     assert.ok(beforeReturns.includes(hook), `${hook} must be declared before the early returns`);
   }
 });
@@ -28,14 +28,24 @@ test("the gate comes after the setup flow and before the dashboard, and is not s
 
 test("the day is the server's Phnom Penh day, the device's own date only without a server", () => {
   assert.match(shell, /const warmupToday = SERVER_MODE \? \(summary\?\.today \?\? phnomPenhDay\(\)\) : dateKey\(\);/);
-  assert.match(shell, /sendStudy\(warmupEvent\(warmupToday, WARMUP_COUNT\)\)/);
+  assert.match(shell, /sendStudy\(warmupEvent\(warmupToday, warmupProgress\.slots\.length\)\)/);
 });
 
-test("the three questions do not change while the student answers", () => {
+test("the warm-up only reviews: its questions come from the student's own practice record, never from the whole bank", () => {
   const slots = shell.slice(shell.indexOf("const warmupSlots = useMemo("), shell.indexOf("const warmupBefore = useMemo("));
-  assert.match(slots, /\[warmupUserKey, warmupToday, warmupPool\]/);
-  assert.doesNotMatch(slots.slice(slots.indexOf("],\n")), /topicMastery/, "the mastery is read through a ref, not a dependency");
+  assert.match(slots, /practisedPool\(practiceNow\.current, \(id\) => getExercise\(id, "en"\), new Set\(fieldSubjects\(profile\.field, profile\.foreignLanguage\)\)\)/);
+  assert.doesNotMatch(slots, /getExercises\(/, "never build the pool from every question in the bank");
+  assert.doesNotMatch(shell, /warmupPool/, "no pool built from the bank");
+  assert.match(slots, /practice: practiceNow\.current/);
+});
+
+test("the questions do not change while the student answers", () => {
+  const slots = shell.slice(shell.indexOf("const warmupSlots = useMemo("), shell.indexOf("const warmupBefore = useMemo("));
+  const deps = slots.slice(slots.lastIndexOf("}, ["));
+  assert.match(deps, /\[warmupEligible, warmupUserKey, warmupToday, profile\?\.field, profile\?\.foreignLanguage\]/);
+  assert.doesNotMatch(deps, /topicMastery|practice\b/, "mastery and practice are read through refs, not dependencies");
   assert.match(shell, /const masteryNow = useRef\(topicMastery\);/);
+  assert.match(shell, /const practiceNow = useRef\(practice\);/);
 });
 
 test("warm-up answers are ordinary practice answers, kept after each one, and a timed-out question sends no answer", () => {

@@ -1,16 +1,19 @@
 /* The daily warm-up — pure functions, no React, tested in warmup.test.js.
 
-   Once a day, before the dashboard, a student answers three quick multiple-choice questions. This file decides which
+   Once a day, before the dashboard, a student answers up to three quick multiple-choice questions. It is a REVIEW: only
+   questions the student has already done in Practice are ever asked, never new material. This file decides which
    three, remembers how far the student got (so closing the app halfway resumes at the same question), and decides
-   whether the gate is needed at all. The three answers are recorded like any practice answer (mastery, XP, the study
+   whether the gate is needed at all. The answers are recorded like any practice answer (mastery, XP, the study
    ledger); finishing also sends one `warmup` event, which is what lights the day on the server.
 
-   The three questions are picked from what the student already works on:
-     weak    the topic with the lowest score
-     review  the topic practised longest ago (a spaced-review question)
-     fresh   a topic the student has not been assessed on yet, or any other one
-   Picking is seeded by user and day, so the same student gets the same three on every device that day. It is only done
-   once: the chosen ids are saved with the progress, because answering changes the scores the picking reads. */
+   The questions are picked from the practised ones:
+     weak     a question from the topic with the lowest score
+     review   a question from the topic practised longest ago (spaced review)
+     missed   a question the student last got wrong; when there is none, any other practised question ("again")
+   Inside a topic, a question last answered wrong comes first, then the one done longest ago. A student who has not
+   practised anything yet has nothing to review, so there is no warm-up (the gate never blocks an empty pool).
+   Picking is seeded by user and day, so the same student gets the same questions on every device that day. It is only
+   done once: the chosen ids are saved with the progress, because answering changes the scores the picking reads. */
 
 export const WARMUP_COUNT = 3;
 export const WARMUP_SECONDS = 45;
@@ -35,12 +38,30 @@ export function seededRandom(seed) {
 /* A warm-up question is multiple choice with its answer among the options. */
 export const isWarmupQuestion = (ex) => Array.isArray(ex?.options) && ex.options.length >= 2 && ex.options.includes(ex.answer);
 
-/* `pool`: the student's exercises ({ id, subject, topic, difficulty, options, answer }).
+/* Has the student done this question in Practice? `rec` is its entry in the practice store ({ status, result, at }):
+   answered (right or wrong), or ticked Completed. Opened or ticked In progress without an answer does not count. */
+export const wasPractised = (rec) => Boolean(rec) && (rec.result === "correct" || rec.result === "incorrect" || rec.status === "completed");
+
+/* The questions a warm-up may ask: every practised question that can be asked as multiple choice, in the given subjects
+   (null = any). `practice` is the practice store; `lookup(id)` returns the question for an id, or null. */
+export function practisedPool(practice, lookup, subjects = null) {
+  return Object.keys(practice ?? {})
+    .filter((id) => wasPractised(practice[id]))
+    .map((id) => lookup(id))
+    .filter((ex) => ex && isWarmupQuestion(ex) && (!subjects || subjects.has(ex.subject)));
+}
+
+/* `pool`: practised questions ({ id, subject, topic, options, answer }), see practisedPool.
    `mastery`: the topic-mastery store ({ [subject]: { [topic]: { score, lastPracticedAt } } }).
+   `practice`: the practice store, for what each question last scored and when it was done.
    Returns up to `count` of { id, slot } in the order they are asked; fewer when the pool is small, none when it is empty. */
-export function pickWarmupQuestions({ pool, mastery = {}, seed, count = WARMUP_COUNT }) {
+export function pickWarmupQuestions({ pool, mastery = {}, practice = {}, seed, count = WARMUP_COUNT }) {
   const random = seededRandom(seedFrom(String(seed)));
   const usable = pool.filter(isWarmupQuestion);
+  const wrong = (q) => practice?.[q.id]?.result === "incorrect";
+  // Wrong first, then done longest ago; the same ids always tie-break the same way for the same seed.
+  const order = (a, b) => (wrong(b) - wrong(a)) || ((practice?.[a.id]?.at ?? 0) - (practice?.[b.id]?.at ?? 0))
+    || (seedFrom(`${seed}|${a.id}`) - seedFrom(`${seed}|${b.id}`));
   const topics = new Map();
   for (const ex of usable) {
     const key = `${ex.subject}\u0000${ex.topic}`;
@@ -54,17 +75,11 @@ export function pickWarmupQuestions({ pool, mastery = {}, seed, count = WARMUP_C
   const chosen = [];
   const usedIds = new Set();
   const usedTopics = new Set();
-  const pickIn = (t) => {
-    const left = t.questions.filter((q) => !usedIds.has(q.id));
-    if (!left.length) return null;
-    const easy = left.filter((q) => q.difficulty === "Easy" || q.difficulty === "Medium"); // a warm-up should be quick
-    const from = easy.length ? easy : left;
-    return from[Math.floor(random() * from.length)];
-  };
+  const add = (q, slot, topicKey) => { chosen.push({ id: q.id, slot }); usedIds.add(q.id); if (topicKey) usedTopics.add(topicKey); };
   const take = (slot, candidates) => {
     for (const t of candidates) {
-      const q = pickIn(t);
-      if (q) { chosen.push({ id: q.id, slot }); usedIds.add(q.id); usedTopics.add(t.key); return true; }
+      const q = t.questions.filter((x) => !usedIds.has(x.id)).sort(order)[0];
+      if (q) { add(q, slot, t.key); return true; }
     }
     return false;
   };
@@ -73,10 +88,20 @@ export function pickWarmupQuestions({ pool, mastery = {}, seed, count = WARMUP_C
 
   take("weak", [...free().filter((t) => t.score != null).sort((a, b) => a.score - b.score), ...shuffled(free())]);
   if (chosen.length < count) take("review", [...free().filter((t) => t.last != null).sort((a, b) => a.last - b.last), ...shuffled(free())]);
-  if (chosen.length < count) take("fresh", [...shuffled(free().filter((t) => t.score == null)), ...shuffled(free())]);
-  // A small pool (fewer topics than slots): top up with any unused question.
-  const rest = shuffled(usable.filter((q) => !usedIds.has(q.id)));
-  for (const q of rest) { if (chosen.length >= count) break; chosen.push({ id: q.id, slot: "fresh" }); usedIds.add(q.id); }
+  if (chosen.length < count) {
+    // A question last answered wrong, preferably from a topic not used yet; the most valuable thing to look at again.
+    const missed = usable.filter((q) => wrong(q) && !usedIds.has(q.id));
+    const fresh = missed.filter((q) => !usedTopics.has(`${q.subject}\u0000${q.topic}`));
+    const pick = (fresh.length ? fresh : missed).sort(order)[0];
+    if (pick) add(pick, "missed", `${pick.subject}\u0000${pick.topic}`);
+  }
+  // Nothing missed, or a small pool (fewer topics than slots): top up with any other practised question.
+  const rest = usable.filter((q) => !usedIds.has(q.id)).sort(order);
+  const fromNewTopics = rest.filter((q) => !usedTopics.has(`${q.subject}\u0000${q.topic}`));
+  for (const q of [...fromNewTopics, ...rest.filter((x) => !fromNewTopics.includes(x))]) {
+    if (chosen.length >= count) break;
+    add(q, "again", `${q.subject}\u0000${q.topic}`);
+  }
   return chosen.slice(0, count);
 }
 

@@ -63,7 +63,7 @@ import { flameState, phnomPenhDay } from "./streakFlame.js";
 import { StreakFlame, StreakFlameDefs, useFlameInfo } from "./StreakFlame.jsx";
 import WarmUpGate from "./WarmUpGate.jsx";
 import { useDayRollover } from "./dayRollover.js";
-import { isWarmupQuestion, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup, WARMUP_COUNT } from "./warmup.js";
+import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
@@ -7639,18 +7639,19 @@ export default function App() {
   const warmupUserKey = profile ? String(profile.userId ?? profile.email ?? profile.phone ?? profile.name) : null;
   const warmupToday = SERVER_MODE ? (summary?.today ?? phnomPenhDay()) : dateKey();
   const warmupEligible = Boolean(profile) && profile.educationLevel !== "university" && !isAdmin(profile);
-  const warmupPool = useMemo(
-    () => (warmupEligible ? fieldSubjects(profile.field, profile.foreignLanguage).flatMap((s) => getExercises(s, "en")).filter(isWarmupQuestion) : []),
-    [warmupEligible, profile?.field, profile?.foreignLanguage]
-  );
   const masteryNow = useRef(topicMastery);
   masteryNow.current = topicMastery;
-  // The three questions are chosen once per student and day. Answering changes the scores the choice reads, so they are
-  // deliberately not a dependency: the same three stay on screen (and are kept with the saved progress).
-  const warmupSlots = useMemo(
-    () => (warmupUserKey && warmupPool.length ? pickWarmupQuestions({ pool: warmupPool, mastery: masteryNow.current, seed: `${warmupUserKey}|${warmupToday}` }) : []),
-    [warmupUserKey, warmupToday, warmupPool]
-  );
+  const practiceNow = useRef(practice);
+  practiceNow.current = practice;
+  // The warm-up is a review: it only asks questions this student has already done in Practice (never new ones), from their
+  // own subjects. The questions are chosen once per student and day. Answering changes the scores and practice record the
+  // choice reads, so they are deliberately not dependencies (they are read through refs): the same questions stay on
+  // screen, and are kept with the saved progress. A student with nothing practised yet has nothing to review: no warm-up.
+  const warmupSlots = useMemo(() => {
+    if (!warmupEligible || !warmupUserKey) return [];
+    const pool = practisedPool(practiceNow.current, (id) => getExercise(id, "en"), new Set(fieldSubjects(profile.field, profile.foreignLanguage)));
+    return pickWarmupQuestions({ pool, mastery: masteryNow.current, practice: practiceNow.current, seed: `${warmupUserKey}|${warmupToday}` });
+  }, [warmupEligible, warmupUserKey, warmupToday, profile?.field, profile?.foreignLanguage]);
   // How the flame stood when the day's warm-up began: the first answer already counts as studying, so the live flame
   // moves under the screen, which keeps showing the dormant one until the last answer.
   const warmupBefore = useMemo(() => ({ flame, streak: liveStreak }), [warmupUserKey, warmupToday]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -7937,7 +7938,7 @@ export default function App() {
   // The last button: the warm-up is done on this device at once, and the server is told so it lights the day.
   const handleWarmupFinish = () => {
     keepWarmup(finishWarmup(warmupProgress));
-    if (SERVER_MODE) sendStudy(warmupEvent(warmupToday, WARMUP_COUNT));
+    if (SERVER_MODE) sendStudy(warmupEvent(warmupToday, warmupProgress.slots.length));
   };
 
   // Profile page: save the changed details. With the server, PATCH /me and take its answer (level and XP stay as they
