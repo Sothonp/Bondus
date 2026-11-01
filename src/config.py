@@ -106,6 +106,14 @@ class Settings(BaseSettings):
     # and SEA-LION, trained for Khmer but slow, comes third.
     llm_khmer_order: str = "gemini,groq,sea-lion"
     llm_other_order: str = "groq,cerebras,gemini"
+    # Difficulty routing (src/router.py): a simple question (a greeting, a short
+    # definition or introduction) goes to the cheap models first, an advanced one
+    # (solving, proving, explaining a concept, an essay, a photo) to the frontier
+    # models first. Entries are "provider" or "provider:model"; they come ahead of
+    # the language order above, which still decides everything behind them.
+    llm_router: bool = True
+    llm_simple_order: str = "gemini:gemini-3.1-flash-lite,groq,cerebras,sea-lion"
+    llm_advanced_order: str = "gemini:gemini-3.5-flash,groq,nvidia"
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = Field(
@@ -254,6 +262,13 @@ class Settings(BaseSettings):
     # file sits beside the index unless a path is given.
     answer_cache_path: Path | None = None
     answer_cache_ttl_seconds: int = Field(7 * 24 * 3600, ge=0)
+    # A reworded question reuses an answer when its embedding is this close to an
+    # earlier one's and they retrieved at least this share of the same passages
+    # (see src/answer_cache.py). 0.95 keeps "តើលីមីតជាអ្វី?" / "លីមីតគឺជាអ្វី?" (0.98)
+    # and leaves "acid" / "base" (0.87) and two different novels (0.94) apart.
+    semantic_cache: bool = True
+    semantic_cache_similarity: float = Field(0.95, ge=0.5, le=1.0)
+    semantic_cache_overlap: float = Field(0.6, ge=0.0, le=1.0)
     # Questions one IP address may ask per window (0 turns the limit off), so a
     # single student cannot spend the day's quota for everyone.
     rate_limit_questions: int = Field(30, ge=0)
@@ -467,6 +482,14 @@ class Settings(BaseSettings):
     @property
     def llm_khmer_order_list(self) -> list[str]:
         return [name.strip().lower() for name in self.llm_khmer_order.split(",") if name.strip()]
+
+    @property
+    def llm_simple_order_list(self) -> list[str]:
+        return [name.strip() for name in self.llm_simple_order.split(",") if name.strip()]
+
+    @property
+    def llm_advanced_order_list(self) -> list[str]:
+        return [name.strip() for name in self.llm_advanced_order.split(",") if name.strip()]
 
     @property
     def llm_other_order_list(self) -> list[str]:

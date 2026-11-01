@@ -38,6 +38,11 @@ MIN_WORK_NAME_CHARS = 4
 # Of top_k chunks, the share taken from the works a question names; the rest
 # come from the whole corpus (the essay method, exam papers, the textbook).
 WORK_SHARE = 0.6
+# A work's key-points sheet (data/<folder>/key_points/, titled "ចំណុចសំខាន់ៗ៖ រឿង…")
+# is its checked summary: every chunk of it goes in front, in order, on top of
+# top_k, so a character list split across chunks is never cut short.
+KEY_POINTS_PREFIX = "ចំណុចសំខាន់ៗ"
+MAX_SHEET_CHARS = 15000
 
 
 def normalize_khmer(text: str) -> str:
@@ -51,6 +56,10 @@ def work_name(title: str) -> str | None:
     names = [name for name in _WORK_NAME.findall(head) if len(name) >= MIN_WORK_NAME_CHARS]
     # "ប្រលោមលោករឿងX" matches "រឿងX" after the "ប្រលោមលោក"; the last name is X.
     return names[-1].removeprefix("រឿង") if names else None
+
+
+def is_key_points(title: str) -> bool:
+    return normalize_khmer(title).lstrip().startswith(KEY_POINTS_PREFIX)
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -112,15 +121,18 @@ class Retriever:
                 top_k = max(top_k, self.work_top_k)
         threshold = self.score_threshold if score_threshold is None else score_threshold
         vector = self.embedder.embed_query(query)
-        hits = self._search_works(vector, works, top_k, threshold) if works else []
-        seen = {hit.record.id for hit in hits}
+        sheet_sources = self._sheet_sources(works)
+        sheets = self._sheet_chunks(vector, works, sheet_sources) if works else []
+        hits = self._search_works(vector, works, top_k, threshold, sheet_sources) if works else []
+        seen = {hit.record.id for hit in sheets + hits}
         for hit in self.store.search(
-            vector, top_k=top_k + len(hits), score_threshold=threshold, sources=sources
+            vector, top_k=top_k + len(seen), score_threshold=threshold, sources=sources
         ):
             if len(hits) >= top_k:
                 break
-            if hit.record.id not in seen:
+            if hit.record.id not in seen and hit.record.source not in sheet_sources:
                 hits.append(hit)
+        hits = sheets + hits
         return [
             RetrievedChunk(
                 id=hit.record.id,
@@ -151,12 +163,47 @@ class Retriever:
                 works.setdefault(name, set()).add(source)
         return works
 
-    def _search_works(self, vector: np.ndarray, works: Mapping[str, set[str]], top_k: int, threshold: float):
-        """The best chunks of each named work, sharing WORK_SHARE of top_k."""
+    def _sheet_sources(self, works: Mapping[str, set[str]]) -> set[str]:
+        """The key-points sheets among the named works' sources."""
+        if not works:
+            return set()
+        metadata = self.store.source_metadata()
+        return {
+            source
+            for sources in works.values()
+            for source in sources
+            if is_key_points(metadata.get(source, {}).get("title") or "")
+        }
+
+    def _sheet_chunks(self, vector: np.ndarray, works: Mapping[str, set[str]], sheet_sources: set[str]):
+        """Every chunk of each named work's key-points sheet, in reading order,
+        up to MAX_SHEET_CHARS a work."""
+        hits = []
+        for sources in works.values():
+            sheets = sources & sheet_sources
+            if not sheets:
+                continue
+            found = self.store.search(vector, top_k=len(self.store), sources=sheets)
+            used = 0
+            for hit in sorted(found, key=lambda hit: (hit.record.source, hit.record.chunk_index)):
+                if used + len(hit.record.text) > MAX_SHEET_CHARS:
+                    break
+                hits.append(hit)
+                used += len(hit.record.text)
+        return hits
+
+    def _search_works(
+        self, vector: np.ndarray, works: Mapping[str, set[str]], top_k: int, threshold: float,
+        sheet_sources: set[str],
+    ):
+        """The best chunks of each named work's own text (not its sheet), sharing
+        WORK_SHARE of top_k."""
         per_work = max(2, math.ceil(top_k * WORK_SHARE / len(works)))
         hits = []
         for sources in works.values():
-            hits.extend(self.store.search(vector, top_k=per_work, score_threshold=threshold, sources=sources))
+            text = sources - sheet_sources
+            if text:
+                hits.extend(self.store.search(vector, top_k=per_work, score_threshold=threshold, sources=text))
         return hits[:top_k]
 
     def sources_for_subject(self, subject: str) -> set[str]:
@@ -169,11 +216,17 @@ class Retriever:
     def fit_context(self, chunks: Sequence[RetrievedChunk]) -> list[RetrievedChunk]:
         """Keep the best chunks that fit within ``max_context_chars``.
 
-        The top chunk is always kept so a single long passage is never dropped.
+        The top chunk is always kept so a single long passage is never dropped,
+        and key-points sheet chunks are kept without counting against the budget.
         """
         selected: list[RetrievedChunk] = []
         used = 0
         for chunk in chunks:
+            # A named work's key-points sheet is already capped (MAX_SHEET_CHARS)
+            # and is the one passage the answer cannot do without.
+            if is_key_points(chunk.title):
+                selected.append(chunk)
+                continue
             if selected and used + len(chunk.text) > self.max_context_chars:
                 continue
             selected.append(chunk)
