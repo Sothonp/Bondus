@@ -175,3 +175,25 @@ test("the quiz gives no right-or-wrong feedback while it is being taken, and the
   assert.doesNotMatch(answering, /grade\(/, "the question screen never marks an answer");
   assert.match(strip(quizUi), /const missed = questions\.filter\(\(q\) => !\(answers\[q\.id\] != null && grade\(q, answers\[q\.id\]\)\)\);/);
 });
+
+test("the locked-chapter sheet is centred on the screen and drawn outside the animated page, so it never lands off-screen", () => {
+  const code = strip(list);
+  // The page wrapper keeps a transform from its `rise` animation, and a transform makes it the containing block of any
+  // `position: fixed` child: inside it the overlay was as tall as the page and the sheet sat at the page's bottom.
+  assert.match(code, /import \{ createPortal \} from "react-dom";/);
+  assert.match(code, /createPortal\(/);
+  assert.match(code, /closest\?\.\("\.eai-root"\) \?\? document\.body/, "hosted in the app root so the theme variables still apply");
+  // Centred on every size, not a bottom sheet on phones.
+  const overlay = code.slice(code.indexOf('className="fixed inset-0 z-[150]'), code.indexOf('role="dialog"'));
+  assert.match(overlay, /flex items-center justify-center/);
+  assert.doesNotMatch(overlay, /items-end/);
+  assert.doesNotMatch(code, /rounded-t-3xl/);
+  // It must fit a short phone and keep clear of the notch and home bar.
+  assert.match(code, /maxHeight: "100%"/);
+  assert.match(code, /overflow-y-auto/);
+  assert.match(code, /env\(safe-area-inset-top\)/);
+  assert.match(code, /env\(safe-area-inset-bottom\)/);
+  // Opening and closing it must never scroll the page.
+  assert.match(code, /primary\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(code, /returnTo\.current\?\.focus\?\.\(\{ preventScroll: true \}\)/);
+});

@@ -10,6 +10,7 @@
    A lock is muted grey, never the ember red, because a lock is not an error. State is always said in words as well as
    shown in colour and icon. */
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Lock, PlayCircle, CheckCircle2, Award, ClipboardCheck } from "lucide-react";
 import { PASS_PERCENT, MASTER_PERCENT } from "./progressionConfig.js";
 import { chaptersPassed } from "./chapterProgress.js";
@@ -42,11 +43,11 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
     returnTo.current = el;
     setSheet(row);
   };
-  const close = () => { setSheet(null); returnTo.current?.focus?.(); };
+  const close = () => { setSheet(null); returnTo.current?.focus?.({ preventScroll: true }); };
 
   useEffect(() => {
     if (!sheet) return undefined;
-    primary.current?.focus();
+    primary.current?.focus({ preventScroll: true }); // the page must not jump when the sheet opens
     const onKey = (e) => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -121,11 +122,22 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
       {sheet && (() => {
         const target = nextUp(sheet);
         const direct = target.key === sheet.blockedBy;
-        return (
-          <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(10,10,30,.45)" }} onClick={close}>
+        /* Shown in the middle of the screen the student is looking at, on every size, so it never needs a scroll to find.
+           Two things make that hold. It is drawn through a portal into the app root instead of inside the page: the page
+           wrapper carries the `rise` animation, and an element with a transform (even one that has finished) becomes the
+           containing block of its `position: fixed` children, which sized this overlay to the whole page and left the sheet
+           at the page's bottom, far below the chapter that was tapped. The app root (not document.body) is the host so the
+           theme variables below still apply. And it is centred with a height cap, not stuck to the bottom edge. */
+        const host = returnTo.current?.closest?.(".eai-root") ?? document.body;
+        return createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center" onClick={close}
+            style={{
+              background: "rgba(10,10,30,.45)",
+              padding: "max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))",
+            }}>
             <div role="dialog" aria-modal="true" aria-labelledby="chapter-sheet-title" onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 eai-rise"
-              style={{ background: "var(--card)", color: "var(--ink)", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+              className="w-full max-w-md rounded-3xl p-5 eai-rise overflow-y-auto"
+              style={{ background: "var(--card)", color: "var(--ink)", maxHeight: "100%", boxShadow: "0 18px 50px rgba(10,10,30,.35)" }}>
               <div className="flex items-center gap-3">
                 <span className="grid place-items-center rounded-full flex-shrink-0" style={{ width: 40, height: 40, background: "var(--bg-soft)" }}><Lock size={19} style={{ color: "var(--muted)" }} /></span>
                 <div className="min-w-0">
@@ -146,7 +158,8 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 <button type="button" onClick={close} className={`eai-btn eai-focus w-full py-3 text-sm eai-soft ${km}`} style={{ color: "var(--ink)" }}>{w("sheetClose")}</button>
               </div>
             </div>
-          </div>
+          </div>,
+          host,
         );
       })()}
     </>
