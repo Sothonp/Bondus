@@ -13,23 +13,23 @@ const ADMIN = [...STUDENT, item("adminExercises")];
 const SOCIAL = STUDENT.filter((n) => n.id !== "exercises");
 const UNIVERSITY = ["universityHub", "explore", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
 
-test("the bottom bar holds Dashboard, Practice, AI coach and Wardrobe, in that order", () => {
-  assert.deepEqual(ids(splitMobileNav(STUDENT).primary), ["dashboard", "practice", "coach", "wardrobe"]);
+test("the bottom bar holds Dashboard, Practice, AI coach and Browse exams, in that order", () => {
+  assert.deepEqual(ids(splitMobileNav(STUDENT).primary), ["dashboard", "practice", "coach", "browse"]);
 });
 
 test("everything else is in More, in the sidebar's own order, with Super Bondus and Admin there", () => {
-  assert.deepEqual(ids(splitMobileNav(STUDENT).more), ["browse", "exercises", "progress", "super"]);
-  assert.deepEqual(ids(splitMobileNav(ADMIN).more), ["browse", "exercises", "progress", "super", "adminExercises"]);
+  assert.deepEqual(ids(splitMobileNav(STUDENT).more), ["exercises", "progress", "wardrobe", "super"]);
+  assert.deepEqual(ids(splitMobileNav(ADMIN).more), ["exercises", "progress", "wardrobe", "super", "adminExercises"]);
 });
 
 test("a social-science student has no Exercises in More", () => {
-  assert.deepEqual(ids(splitMobileNav(SOCIAL).more), ["browse", "progress", "super"]);
+  assert.deepEqual(ids(splitMobileNav(SOCIAL).more), ["progress", "wardrobe", "super"]);
 });
 
-test("a university profile gets its hub, the coach and the wardrobe in the bar", () => {
+test("a university profile gets its hub and the coach in the bar, with the wardrobe in More", () => {
   const { primary, more } = splitMobileNav(UNIVERSITY);
-  assert.deepEqual(ids(primary), ["universityHub", "coach", "wardrobe"]);
-  assert.deepEqual(ids(more), ["explore", "progress", "super"]);
+  assert.deepEqual(ids(primary), ["universityHub", "coach"]);
+  assert.deepEqual(ids(more), ["explore", "progress", "wardrobe", "super"]);
 });
 
 test("no page becomes unreachable: every item appears exactly once", () => {

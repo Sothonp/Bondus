@@ -4,7 +4,7 @@
 
 // The bar's slots, in order. A profile that lacks one (a university profile has no Practice) simply gets a shorter
 // bar; the last slot is always More.
-export const MOBILE_PRIMARY_IDS = ["dashboard", "universityHub", "practice", "coach", "wardrobe"];
+export const MOBILE_PRIMARY_IDS = ["dashboard", "universityHub", "practice", "coach", "browse"];
 
 // Pages the phone navigation does not offer. They still exist in the desktop sidebar.
 export const MOBILE_HIDDEN_IDS = [];
