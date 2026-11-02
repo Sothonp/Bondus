@@ -309,3 +309,30 @@ test("a locked chapter's quiz is refused with its code and the chapter that bloc
   await assert.rejects(() => api.submitChapterQuiz({ subject: "S", chapter: "C", attemptId: "a", answers: [] }),
     (e) => e instanceof ApiError && e.status === 403 && e.code === "chapter_locked" && e.body.blockedBy === "Limits");
 });
+
+test("plans: usage is read, a question is counted by id, and a 402 keeps its usage in the error body", async () => {
+  const usage = { plan: "free", limit: 5, used: 5, remaining: 0, resetsAt: "2026-11-03T00:00:00+07:00" };
+  const { api, calls } = make((url, init) => (init.method === "POST"
+    ? json(402, { ...usage, allowed: false, message: "used all", code: "ai_limit_reached" })
+    : json(200, usage)));
+  assert.deepEqual(await api.getAiUsage(), usage);
+  assert.equal(calls[0].url, `${BASE}/ai/usage`);
+  await assert.rejects(() => api.consumeAi("req-12345678"), (e) => e instanceof ApiError && e.status === 402 && e.code === "ai_limit_reached" && e.body.remaining === 0 && e.body.limit === 5);
+  assert.equal(calls[1].url, `${BASE}/ai/consume`);
+  assert.equal(calls[1].init.method, "POST");
+  assert.deepEqual(calls[1].body, { requestId: "req-12345678" });
+});
+
+test("plans: an admin lists students and switches a plan on", async () => {
+  const { api, calls } = make(() => json(200, { users: [], user: { id: 7, plan: "standard" } }));
+  await api.getAdminUsers();
+  await api.getAdminUsers("sok ha");
+  await api.setUserPlan(7, { plan: "standard", months: 3 });
+  await api.setUserPlan(7, { plan: "premium", noExpiry: true });
+  assert.equal(calls[0].url, `${BASE}/admin/users`);
+  assert.equal(calls[1].url, `${BASE}/admin/users?q=sok%20ha`);
+  assert.equal(calls[2].url, `${BASE}/admin/users/7/plan`);
+  assert.equal(calls[2].init.method, "PATCH");
+  assert.deepEqual(calls[2].body, { plan: "standard", months: 3 });
+  assert.deepEqual(calls[3].body, { plan: "premium", noExpiry: true });
+});

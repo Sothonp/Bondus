@@ -78,13 +78,13 @@ test("the mode tabs, subtitles and suggestions of the Coach come from the table,
 });
 
 test("the Coach is given the language, and passes it on to the replies, the messages and the streaming layer", () => {
-  assert.match(app, /<Coach p=\{p\} lang=\{lang\} userKey=\{userKeyOf\(profile\)\} \/>/);
-  assert.match(app, /function Coach\(\{ p, lang = "en", userKey = null \}\) \{/);
-  assert.match(app, /const extras = \{ images, signal: controller\.signal, onImages, exam, lang \};/);
+  assert.match(app, /<Coach p=\{p\} lang=\{lang\} userKey=\{userKeyOf\(profile\)\} onUpgrade=\{\(\) => go\("super"\)\} \/>/);
+  assert.match(app, /function Coach\(\{ p, lang = "en", userKey = null, onUpgrade = null \}\) \{/);
+  assert.match(app, /const extras = \{ images, signal: controller\.signal, onImages, exam, lang, requestId \};/);
   assert.match(app, /<UserMessage key=\{m\.id\} m=\{m\} onOpenImage=\{setLightbox\} lang=\{lang\} \/>/);
-  assert.match(app, /<AssistantMessage key=\{m\.id\} m=\{m\} Icon=\{active\.icon\} lang=\{lang\} \/>/);
-  assert.match(app, /async function ragStudyReply\(t, p, history, onUpdate = \(\) => \{\}, \{ images = \[\], signal, onImages, lang = "en" \} = \{\}\) \{/);
-  assert.match(app, /async function examPaperReply\(t, p, history, onUpdate = \(\) => \{\}, \{ signal, exam, lang = "en" \} = \{\}\) \{/);
+  assert.match(app, /<AssistantMessage key=\{m\.id\} m=\{m\} Icon=\{active\.icon\} lang=\{lang\} onUpgrade=\{onUpgrade\} \/>/);
+  assert.match(app, /async function ragStudyReply\(t, p, history, onUpdate = \(\) => \{\}, \{ images = \[\], signal, onImages, lang = "en", requestId \} = \{\}\) \{/);
+  assert.match(app, /async function examPaperReply\(t, p, history, onUpdate = \(\) => \{\}, \{ signal, exam, lang = "en", requestId \} = \{\}\) \{/);
   assert.match(app, /initialStatus, lang = "en", stageLabels = stageLabelsFor\(lang\) \}\) \{/);
 });
 

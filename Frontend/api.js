@@ -146,6 +146,15 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     getChapters: () => get("/chapters"),
     submitChapterQuiz: (quiz) => send("POST", "/chapter-quizzes", quiz),
 
+    // the daily limit on AI questions (Free 5, VIP Bondus 60, Super Bondus 150): where the student stands, and counting one
+    // question under an id made for it. Out of questions answers 402 `ai_limit_reached` with the usage in the error's body.
+    getAiUsage: () => get("/ai/usage"),
+    consumeAi: (requestId) => send("POST", "/ai/consume", { requestId }),
+
+    // admin-only: switch a student's plan on after they have paid. No query lists the students on a paid plan.
+    getAdminUsers: (q) => get(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+    setUserPlan: (id, { plan, months, noExpiry }) => send("PATCH", `/admin/users/${id}/plan`, { plan, months, noExpiry }),
+
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),
     addPlanTask: (task) => send("POST", "/plan/tasks", task),

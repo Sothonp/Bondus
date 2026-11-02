@@ -48,6 +48,7 @@ from src.auth import (
     TokenVerifier,
     bearer_token,
 )
+from src.quota import LaravelQuota, Quota, QuotaUnavailable, question_id
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -2028,6 +2029,7 @@ def create_app(
     ocr: CachedPageOCR | None = None,
     image_ocr: HybridImageOCR | None | object = _DEFAULT,
     token_verifier: TokenVerifier | None = None,
+    quota: Quota | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     logging.basicConfig(
@@ -2089,6 +2091,11 @@ def create_app(
     if verifier is None and settings.auth_verify_url:
         verifier = LaravelTokenVerifier(settings.auth_verify_url, cache_seconds=settings.auth_cache_seconds)
     limiter = SlidingWindowLimiter(settings.user_rate_limit_per_minute)
+    # The daily limit on AI questions (src/quota.py). Built from the settings only where the real sign-in check is (not when a
+    # test hands in its own verifier), and only when sign-in is on: it needs the student's own token to count against.
+    counter: Quota | None = quota
+    if counter is None and token_verifier is None and settings.resolved_quota_url:
+        counter = LaravelQuota(settings.resolved_quota_url)
 
     async def require_signed_in(request: Request) -> None:
         """Refuse the routes that spend model quota unless a signed-in student is asking, and not too often."""
@@ -2119,6 +2126,31 @@ def create_app(
                 status.HTTP_429_TOO_MANY_REQUESTS,
                 "You are asking very fast. Please wait a moment and try again.",
                 headers={"Retry-After": str(wait)},
+            )
+
+    async def count_question(request: Request) -> None:
+        """Count this request against the student's plan, and refuse it when the plan's questions for today are used up."""
+        if counter is None:
+            return
+        token = bearer_token(request.headers.get("authorization"))
+        if token is None:  # require_signed_in already refused this
+            return
+        try:
+            body = await request.json()
+        except ValueError:  # not JSON: the route itself answers 422
+            return
+        supplied = body.get("request_id") if isinstance(body, dict) else None
+        try:
+            verdict = await counter.consume(token, question_id(supplied))
+        except QuotaUnavailable:
+            # Only the API's own "no" stops a question: if it cannot be asked (or does not have this feature yet), a student
+            # is not shut out of studying because of it.
+            logger.warning("Could not count a question against the plan", exc_info=True)
+            return
+        if not verdict.allowed:
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                "You have used all of today's AI questions on your plan. They come back tomorrow, or upgrade for more.",
             )
 
     signed_in = [Depends(require_signed_in)]
@@ -2164,7 +2196,7 @@ def create_app(
 
     # One limit per question: per signed-in student when sign-in is required (a
     # school on one Wi-Fi shares an address), per IP address when it is not.
-    asked = signed_in if verifier is not None else [Depends(rate_limit)]
+    asked = [*signed_in, Depends(count_question)] if verifier is not None else [Depends(rate_limit)]
 
     @app.post(
         "/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"], dependencies=asked,

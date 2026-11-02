@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     auth_cache_seconds: int = Field(60, ge=0, le=600)
     # Per signed-in student, across the AI routes (an answer that runs long makes up to seven requests).
     user_rate_limit_per_minute: int = Field(20, ge=1, le=600)
+    # The daily limit on AI questions per plan (src/quota.py): each question is reported to the Laravel API, which counts it
+    # and says no once the student's plan is used up. Empty means "next to AUTH_VERIFY_URL": the same API's /ai/consume
+    # (https://<api>/api/v1/me -> https://<api>/api/v1/ai/consume). Only used when AUTH_VERIFY_URL is set.
+    ai_quota_url: str = ""
+    # Turn the limit off without taking sign-in off (for example while the Laravel API is being upgraded).
+    ai_quota_enforce: bool = True
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
@@ -471,6 +477,16 @@ class Settings(BaseSettings):
     @property
     def config_warnings(self) -> list[str]:
         return list(self._config_warnings)
+
+    @property
+    def resolved_quota_url(self) -> str:
+        """Where each question is counted against the student's plan, or "" when the limit is off or sign-in is."""
+        if not self.ai_quota_enforce or not self.auth_verify_url:
+            return ""
+        if self.ai_quota_url:
+            return self.ai_quota_url
+        url = self.auth_verify_url.rstrip("/")
+        return f"{url[: -len('/me')]}/ai/consume" if url.endswith("/me") else ""
 
     @property
     def resolved_answer_cache_path(self) -> Path:

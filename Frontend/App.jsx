@@ -77,6 +77,8 @@ import FormulaDrill from "./FormulaDrill.jsx";
 import { drillPool } from "./formulaDrill.js";
 import PapersLock from "./PapersLock.jsx";
 import { RomdoulCluster, RomdoulBlossom, RomdoulSprig } from "./Romdoul.jsx";
+import { UsageStrip, AdminPlans, PLAN_NAMES } from "./PlanUi.jsx";
+import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage } from "./aiQuota.js";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
 import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
@@ -186,6 +188,10 @@ const SERVER_MODE = api.enabled;
 // "Sign in with Google": public by design (also shipped to Google's own GSI script, which this app
 // has no control over). Unset, the Google button simply doesn't render -- email/password still works.
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+// How a student pays for VIP Bondus or Super Bondus: free text the owner writes (bank account, KHQR, who to send the receipt to),
+// shown on the plans page. The app takes no payment itself; an admin switches the plan on afterwards (Admin > Plans). Write a
+// line break as \n in the environment variable.
+const PAY_INSTRUCTIONS = String(import.meta.env.VITE_PAY_INSTRUCTIONS || "").replace(/\\n/g, "\n").trim();
 const safeStorage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 const STUDY_MINUTES = [30, 45, 60, 90, 120];
 const MISTAKE_TYPES = [
@@ -5496,7 +5502,7 @@ function coachReply(text, p) {
    the real UNI_MAJORS catalog). If that call fails — no API key configured yet, network hiccup,
    rate limit — it falls back to the local scripted matcher so the feature still gives a
    grounded answer instead of an error. */
-async function majorGuidanceReply(t, p, history) {
+async function majorGuidanceReply(t, p, history, _onUpdate, { requestId } = {}) {
   try {
     const res = await aiFetch("/api/major-guidance", {
       method: "POST",
@@ -5505,6 +5511,7 @@ async function majorGuidanceReply(t, p, history) {
         message: t,
         history: history.map((m) => ({ role: m.role, text: m.text })),
         context: { name: p.name, field: p.field, subjects: p.subjects, weak: p.weak, strong: p.strong },
+        request_id: requestId,
       }),
     });
     const data = await res.json();
@@ -5543,7 +5550,7 @@ function universityCoachReply(text, p) {
 /* University Mentor calls /api/university-mentor (same Gemini+Groq serverless pattern as Major
    Guidance), grounded in the student's major/year/goals instead of a BAC II track. Falls back to
    the scripted matcher above on any failure. */
-async function universityMentorReply(t, p, history) {
+async function universityMentorReply(t, p, history, _onUpdate, { requestId } = {}) {
   const up = p.universityProfile || {};
   try {
     const res = await aiFetch("/api/university-mentor", {
@@ -5556,6 +5563,7 @@ async function universityMentorReply(t, p, history) {
           name: p.name, major: up.major, year: up.year, goals: up.goals,
           subjects: p.universityInsights?.subjects, weak: p.universityInsights?.weak, strong: p.universityInsights?.strong,
         },
+        request_id: requestId,
       }),
     });
     const data = await res.json();
@@ -5803,7 +5811,7 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
   }
 }
 
-async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages, lang = "en" } = {}) {
+async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages, lang = "en", requestId } = {}) {
   // The track picks the maths syllabus (the Social Science track has no complex numbers).
   const track = FIELD_META[p?.field] ? p.field : undefined;
   const first = {
@@ -5811,6 +5819,9 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     track,
     history: toRagHistory(history),
     images: images.map(({ data, mime_type, name }) => ({ data, mime_type, name })),
+    // The id this question was counted under (aiQuota.js). The AI server reports the same id to the backend before it answers,
+    // so the question is counted once. A continuation round carries it too: it is the same question.
+    request_id: requestId,
   };
   // The photos are already read, so a continuation sends the answer so far instead.
   const next = (text) => {
@@ -5827,6 +5838,7 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
         { role: "assistant", content: text.slice(-CONTINUE_CONTEXT_CHARS) },
       ],
       images: [],
+      request_id: requestId,
       // The round picks the formula up mid-block, so the server must leave this
       // round headless instead of repairing it as a whole answer.
       continues_math: opensInDisplayMath(text),
@@ -5871,7 +5883,7 @@ const examStageLabelsFor = (lang) => ({
 const ANSWER_REQUEST = /ចម្លើយ|កំណែ|ដំណោះស្រាយ|\banswers?\b|\bsolutions?\b|\bkey\b/i;
 const lastExamPaper = (messages) => [...messages].reverse().find((m) => m.role === "ai" && m.exam && !m.exam.answers && !m.error && m.text);
 
-async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam, lang = "en" } = {}) {
+async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam, lang = "en", requestId } = {}) {
   const answering = Boolean(exam.paper);
   const first = {
     subject: subjectId(exam.subject),
@@ -5879,6 +5891,7 @@ async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam
     focus: answering ? "" : t.slice(0, EXAM_FOCUS_MAX),
     track: FIELD_META[p?.field] ? p.field : undefined,
     answer_key: false,
+    request_id: requestId, // see ragStudyReply; the continuation rounds spread `first`, so they carry it too
     ...(answering ? { answers_for: (t || "all").slice(0, 300), paper: exam.paper } : {}),
     seed: Math.floor(Math.random() * 2 ** 31),
   };
@@ -6354,7 +6367,7 @@ function UserMessage({ m, onOpenImage, lang = "en" }) {
   );
 }
 
-function AssistantMessage({ m, Icon, lang = "en" }) {
+function AssistantMessage({ m, Icon, lang = "en", onUpgrade = null }) {
   const answerRef = useRef(null);
   const [printBlocked, setPrintBlocked] = useState(false);
   return (
@@ -6364,6 +6377,9 @@ function AssistantMessage({ m, Icon, lang = "en" }) {
         {m.rag && !m.text && m.notice ? <StatusLine text={m.notice} />
           : m.rag ? <div ref={answerRef}><RichAnswer text={m.text} streaming={m.streaming} /></div>
           : <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>}
+        {m.upgrade && onUpgrade && (
+          <button type="button" onClick={onUpgrade} className="eai-btn eai-focus mt-3 px-4 py-2.5 text-sm" style={{ background: "var(--gold)", color: "#fff" }}>{tf(lang, "coachLimitSeePlans")}</button>
+        )}
         {!m.streaming && m.text && (
           <div className="eai-msg-actions">
             <CopyButton text={m.text} lang={lang} />
@@ -6391,7 +6407,7 @@ const COACH_MODE_IDS_HIGHSCHOOL = ["study", "exam", "major"];
 const NO_MESSAGES = [];
 const COACH_RAIL_KEY = "bondus_coach_rail"; // "0" once the student hides the side list on a wide screen
 
-function Coach({ p, lang = "en", userKey = null }) {
+function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
   const isUni = p.educationLevel === "university";
   const availableModeIds = isUni ? COACH_MODE_IDS_UNIVERSITY : COACH_MODE_IDS_HIGHSCHOOL;
   // Saved chats (coachHistory.js): read once when the Coach opens, written back as they change. A chat belongs to one mode;
@@ -6427,6 +6443,14 @@ function Coach({ p, lang = "en", userKey = null }) {
   const [dragging, setDragging] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [notice, setNotice] = useState("");
+  // Where the student stands on today's AI questions (aiQuota.js): null until the backend has said, and with no backend at all.
+  const [usage, setUsage] = useState(null);
+  useEffect(() => {
+    if (!SERVER_MODE || !api.hasToken()) return undefined;
+    let live = true;
+    api.getAiUsage().then((u) => { if (live) setUsage(readUsage(u)); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   const endRef = useRef(null);
   const textRef = useRef(null);
   const photoRef = useRef(null);
@@ -6632,8 +6656,19 @@ function Coach({ p, lang = "en", userKey = null }) {
     // A minimum "thinking" delay keeps the typing indicator feeling natural for the instant
     // scripted mode, without adding extra wait on top of a real (already-slower) API call.
     const minDelay = new Promise((resolve) => setTimeout(resolve, 400));
-    const extras = { images, signal: controller.signal, onImages, exam, lang };
-    Promise.all([Promise.resolve(active.reply(t, p, historyForReply, upsertReply, extras)), minDelay])
+    // Every question to the AI counts against the plan's daily allowance. It is counted here first, under an id the AI server
+    // gets too (so it is not counted twice); out of questions, the answer is the plan's limit and a way to upgrade.
+    const requestId = newAiRequestId();
+    const extras = { images, signal: controller.signal, onImages, exam, lang, requestId };
+    const answer = async () => {
+      const gate = await askAllowance(api, requestId);
+      if (gate.usage) setUsage(gate.usage);
+      if (!gate.ok) {
+        return { text: T("coachLimitReached", { limit: localizeNum(gate.usage?.limit ?? "", lang), plan: PLAN_NAMES[gate.usage?.plan] ?? PLAN_NAMES.free }), error: true, upgrade: true };
+      }
+      return active.reply(t, p, historyForReply, upsertReply, extras);
+    };
+    Promise.all([answer(), minDelay])
       .then(([reply]) => (typeof reply === "string" ? { text: reply } : reply))
       .catch((err) => ({ text: T("coachSomethingWrong", { error: ragMessage(err, lang) }), error: true }))
       .then((reply) => {
@@ -6728,6 +6763,14 @@ function Coach({ p, lang = "en", userKey = null }) {
           {!railShown && <NewChatButton className="order-2 md:order-3" onClick={newChat} T={T} lang={lang} />}
         </div>
 
+        {usage && (() => {
+          const left = leftOf(usage);
+          return (
+            <UsageStrip lang={lang} left={left.n} limit={left.limit} exhausted={isOut(usage)}
+              text={isOut(usage) ? T("aiUsedUp") : T("aiLeft", { n: localizeNum(left.n, lang), limit: localizeNum(left.limit, lang) })}
+              onUpgrade={onUpgrade && usage.plan !== "premium" ? onUpgrade : null} upgradeLabel={T("aiUpgrade")} />
+          );
+        })()}
         <div className="flex-1 overflow-y-auto eai-scroll">
           <div className="eai-chat-col">
             {msgs.length === 0 ? (
@@ -6750,7 +6793,7 @@ function Coach({ p, lang = "en", userKey = null }) {
               </div>
             ) : msgs.map((m) => (m.role === "user"
               ? <UserMessage key={m.id} m={m} onOpenImage={setLightbox} lang={lang} />
-              : <AssistantMessage key={m.id} m={m} Icon={active.icon} lang={lang} />))}
+              : <AssistantMessage key={m.id} m={m} Icon={active.icon} lang={lang} onUpgrade={onUpgrade} />))}
             {loading && !msgs.some((m) => m.streaming) && (
               <div className="flex gap-3">
                 <div className="eai-avatar"><active.icon size={15} color="#fff" /></div>
@@ -7000,6 +7043,15 @@ function SuperBondus({ p, lang = "en" }) {
   const plans = p?.educationLevel === "university" ? UNI_SUPER_PLANS : SUPER_PLANS;
   const [selected, setSelected] = useState("premium");
   const [upgraded, setUpgraded] = useState(null); // plan object once a CTA is clicked
+  // The plan that counts right now, as the backend says (an admin may have switched it on since the app opened).
+  const [live, setLive] = useState(null);
+  useEffect(() => {
+    if (!SERVER_MODE || !api.hasToken()) return undefined;
+    let on = true;
+    api.getAiUsage().then((u) => { if (on) setLive(readUsage(u)); }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+  const current = live?.plan ?? p?.plan ?? "free";
 
   return (
     <div className="space-y-5 eai-rise">
@@ -7018,14 +7070,16 @@ function SuperBondus({ p, lang = "en" }) {
       {upgraded ? (
         <div className="eai-card flex items-start gap-3" style={{ borderColor: "var(--gold)" }}>
           <CheckCircle2 size={20} style={{ color: "var(--jade)", flexShrink: 0, marginTop: 2 }} />
-          <div>
+          <div className="min-w-0">
             <p className={`font-semibold ${lang === "km" ? "eai-km" : ""}`}>
-              {upgraded.id === "free" ? t(lang, "allSet") : `${t(lang, "thanksUpgrade")} ${lang === "km" ? (upgraded.labelKm ?? upgraded.label) : upgraded.label}!`}
+              {tf(lang, "planPayTitle", { plan: lang === "km" ? (upgraded.labelKm ?? upgraded.label) : upgraded.label, price: upgraded.price, period: upgraded.period ? ` ${lang === "km" ? (upgraded.periodKm ?? upgraded.period) : upgraded.period}` : "" })}
             </p>
-            <p className={`text-sm eai-muted mt-1 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>
-              {upgraded.id === "free" ? t(lang, "freeIncluded") : t(lang, "prototypeNoPayment")}
-            </p>
-            <button onClick={() => setUpgraded(null)} className={`eai-focus text-sm font-semibold mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{t(lang, "backToPlans")}</button>
+            <p className={`text-sm eai-muted mt-1 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "planPayHow")}</p>
+            {PAY_INSTRUCTIONS
+              ? <pre className="eai-soft rounded-xl p-3 mt-3 text-sm" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", overflowWrap: "anywhere" }}>{PAY_INSTRUCTIONS}</pre>
+              : <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }}>{tf(lang, "planPayNotSet")}</p>}
+            <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`}><span className="eai-muted">{tf(lang, "planPayAccount")}: </span><strong style={{ overflowWrap: "anywhere" }}>{p?.email || p?.phone || p?.name}</strong></p>
+            <button onClick={() => setUpgraded(null)} className={`eai-focus text-sm font-semibold mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{tf(lang, "planPayBack")}</button>
           </div>
         </div>
       ) : (
@@ -7043,7 +7097,10 @@ function SuperBondus({ p, lang = "en" }) {
                     </span>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.labelKm ?? plan.label) : plan.label}</span>
+                    <span className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <span className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.labelKm ?? plan.label) : plan.label}</span>
+                      {plan.id === current && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{tf(lang, "planCurrentBadge")}</span>}
+                    </span>
                     {on && <CheckCircle2 size={18} style={{ color: "var(--gold)" }} />}
                   </div>
                   <p className="mt-2"><span className="eai-display text-2xl font-extrabold">{plan.price}</span> <span className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{lang === "km" ? (plan.periodKm ?? plan.period) : plan.period}</span></p>
@@ -7055,17 +7112,23 @@ function SuperBondus({ p, lang = "en" }) {
                       </li>
                     ))}
                   </ul>
-                  <button onClick={(e) => { e.stopPropagation(); setUpgraded(plan); }}
-                    className={`eai-btn eai-focus w-full mt-5 py-2.5 text-sm flex items-center justify-center gap-2 ${lang === "km" ? "eai-km" : ""}`}
-                    style={{ background: plan.best ? "var(--gold)" : "var(--card)", color: plan.best ? "#fff" : "var(--ink)", border: plan.best ? "none" : "1px solid var(--line)" }}>
-                    {lang === "km" ? (plan.buttonKm ?? plan.button) : plan.button} <ArrowRight size={14} />
-                  </button>
+                  {canUpgradeTo(current, plan.id) ? (
+                    <button onClick={(e) => { e.stopPropagation(); setUpgraded(plan); }}
+                      className={`eai-btn eai-focus w-full mt-5 py-2.5 text-sm flex items-center justify-center gap-2 ${lang === "km" ? "eai-km" : ""}`}
+                      style={{ background: plan.best ? "var(--gold)" : "var(--card)", color: plan.best ? "#fff" : "var(--ink)", border: plan.best ? "none" : "1px solid var(--line)" }}>
+                      {lang === "km" ? (plan.buttonKm ?? plan.button) : plan.button} <ArrowRight size={14} />
+                    </button>
+                  ) : plan.id === current ? (
+                    <button type="button" disabled className={`eai-btn w-full mt-5 py-2.5 text-sm ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--bg-soft)", color: "var(--ink)", border: "1px solid var(--line)", cursor: "default" }}>
+                      {tf(lang, "planCurrentButton")}
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
           </div>
 
-          <p className={`text-center text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "prototypePaymentsNote")}</p>
+          <p className={`text-center text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "planManualNote")}</p>
         </>
       )}
     </div>
@@ -7103,6 +7166,7 @@ const UNI_NAV = [
 /* Added to the sidebar for an admin account only (the server checks the role too): posting exercises. */
 const ADMIN_NAV = [
   { id: "adminExercises", label: "Admin", labelKm: "អ្នកគ្រប់គ្រង", icon: ShieldCheck },
+  { id: "adminPlans", label: "Plans", labelKm: "គម្រោង", icon: Crown },
 ];
 
 /* ════════════════════════ UI localization (English / Khmer) ════════════════════════
@@ -7238,7 +7302,7 @@ const STRINGS = {
     mode_major_label: "Major Guidance", mode_major_subtitle: "Matches your subjects & interests to real Cambodian university majors", mode_major_placeholder: "Ask about majors, universities, or careers…",
     // Super Bondus
     superBondusTitle: "Super Bondus",
-    superBondusDesc: "Unlock the full BAC II toolkit — unlimited AI coaching, every past paper, and deeper analytics.",
+    superBondusDesc: "Ask the AI coach far more questions every day, and get deeper analytics and exam-ready tools.",
     allSet: "You're all set!", thanksUpgrade: "Thanks for trying to upgrade to",
     freeIncluded: "Free is already included with your account — no signup needed.",
     prototypeNoPayment: "This is a prototype, so payments aren't actually connected yet — no card was charged. This screen shows what the Super Bondus upgrade flow will look like once billing is wired up.",
@@ -7486,7 +7550,7 @@ const STRINGS = {
     mode_major_label: "ណែនាំជំនាញ", mode_major_subtitle: "ផ្គូផ្គងមុខវិជ្ជា និងចំណាប់អារម្មណ៍របស់អ្នកទៅនឹងជំនាញសាកលវិទ្យាល័យកម្ពុជាពិតប្រាកដ", mode_major_placeholder: "សួរអំពីជំនាញ សាកលវិទ្យាល័យ ឬអាជីព…",
     // Super Bondus
     superBondusTitle: "Super Bondus",
-    superBondusDesc: "ដោះសោឧបករណ៍ បាក់ឌុប ពេញលេញ — ការណែនាំដោយ AI មិនកំណត់ ក្រដាសប្រឡងចាស់ៗទាំងអស់ និងការវិភាគស៊ីជម្រៅ។",
+    superBondusDesc: "សួរគ្រូបង្វឹក AI បានច្រើនជាងមុនរាល់ថ្ងៃ ព្រមទាំងទទួលបានការវិភាគស៊ីជម្រៅ និងឧបករណ៍ត្រៀមប្រឡង។",
     allSet: "អ្នករួចរាល់ហើយ!", thanksUpgrade: "សូមអរគុណដែលសាកល្បងអាប់ក្រេតទៅជា",
     freeIncluded: "គម្រោងឥតគិតថ្លៃត្រូវបានរួមបញ្ចូលរួចហើយជាមួយគណនីរបស់អ្នក — មិនចាំបាច់ចុះឈ្មោះទេ។",
     prototypeNoPayment: "នេះជាគំរូសាកល្បង ដូច្នេះការទូទាត់មិនទាន់ភ្ជាប់មែនទែននៅឡើយទេ — គ្មានកាតត្រូវបានគិតលុយទេ។ អេក្រង់នេះបង្ហាញពីរបៀបដែលការអាប់ក្រេត Super Bondus នឹងមើលទៅដូចនៅពេលប្រព័ន្ធទូទាត់ត្រូវបានតភ្ជាប់។",
@@ -8401,6 +8465,7 @@ export default function App() {
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
+    adminPlans: isAdmin(profile) ? <AdminPlans api={api} lang={lang} tr={tr} trf={(key, vars) => tf(lang, key, vars)} /> : null,
     // Reached from the header avatar and the sidebar link, not from NAV. The form pieces are passed in (ProfileUi.jsx
     // cannot import App.jsx), so editing a profile uses the same fields and option lists as signing up.
     profile: <ProfilePage profile={profile} lang={lang} tr={tr}
@@ -8410,7 +8475,7 @@ export default function App() {
       initials={initials} onUploadPhoto={handleUploadPhoto} onRemovePhoto={handleRemovePhoto}
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
       onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
-    coach: <Coach p={p} lang={lang} userKey={userKeyOf(profile)} />,
+    coach: <Coach p={p} lang={lang} userKey={userKeyOf(profile)} onUpgrade={() => go("super")} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} leaderboard={leaderboard} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} leaderboard={leaderboard} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
     explore: <UniversityExplore p={p} go={go} lang={lang} />,
