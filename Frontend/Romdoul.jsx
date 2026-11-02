@@ -70,19 +70,37 @@ export function RomdoulBlossom({ size = 16, className = "", style }) {
 
 /* Fills the space it is given (the rail's connector). A repeating 36 x 64 tile, so a tall rail gets more blossoms and
    a short one fewer, and nothing is stretched. */
-export function RomdoulVine({ className = "", style }) {
+/* `stage` says how far along the chapter above the connector is: "bud" (locked: a pale bud on a grey stem, still reads as
+   locked), "grow" (open or in progress: green stem, leaves and a closed bud) or "bloom" (passed or mastered: leaves and a
+   full blossom). */
+export function RomdoulVine({ stage = "bloom", className = "", style }) {
   const id = useId().replace(/:/g, "");
+  const tile = stage === "bud" ? (
+    <>
+      <path d="M18 0 L18 64" fill="none" stroke="var(--line)" strokeWidth="2" strokeLinecap="round" />
+      <g opacity=".85"><Bloom cx={18} cy={28} s={0.27} /></g>
+    </>
+  ) : stage === "grow" ? (
+    <>
+      <path d="M18 0 C 20 16, 16 32, 18 64" fill="none" stroke="var(--stem)" strokeWidth="2" strokeLinecap="round" />
+      <Leaf x={18} y={16} rot={196} s={0.42} />
+      <Leaf x={18} y={16} rot={-16} s={0.42} />
+      <Bloom cx={18} cy={36} s={0.24} />
+    </>
+  ) : (
+    <>
+      <path d="M18 0 C 21 16, 15 32, 18 64" fill="none" stroke="var(--stem)" strokeWidth="2" strokeLinecap="round" />
+      <Leaf x={18} y={14} rot={196} s={0.5} />
+      <Leaf x={18} y={14} rot={-16} s={0.5} />
+      <Bloom cx={18} cy={44} s={0.3} />
+    </>
+  );
   // The wrapper takes the connector's space (flex-1); the drawing is laid over it, so its own height never pushes a row taller.
   return (
-    <span className={`eai-romdoul ${className}`} style={{ position: "relative", flex: "1 1 0", width: 36, minHeight: 14, WebkitMaskImage: "linear-gradient(180deg, #000 78%, transparent)", maskImage: "linear-gradient(180deg, #000 78%, transparent)", ...style }} aria-hidden="true">
+    <span className={`eai-romdoul ${className}`} data-stage={stage} style={{ position: "relative", flex: "1 1 0", width: 36, minHeight: 14, WebkitMaskImage: "linear-gradient(180deg, #000 78%, transparent)", maskImage: "linear-gradient(180deg, #000 78%, transparent)", ...style }} aria-hidden="true">
       <svg focusable="false" width="36" height="100%" style={{ position: "absolute", inset: 0 }}>
         <defs>
-          <pattern id={`${id}-v`} width="36" height="64" patternUnits="userSpaceOnUse">
-            <path d="M18 0 C 21 16, 15 32, 18 64" fill="none" stroke="var(--stem)" strokeWidth="2" strokeLinecap="round" />
-            <Leaf x={18} y={14} rot={196} s={0.5} />
-            <Leaf x={18} y={14} rot={-16} s={0.5} />
-            <Bloom cx={18} cy={44} s={0.3} />
-          </pattern>
+          <pattern id={`${id}-v`} width="36" height="64" patternUnits="userSpaceOnUse">{tile}</pattern>
         </defs>
         <rect width="36" height="100%" fill={`url(#${id}-v)`} />
       </svg>

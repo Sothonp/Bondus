@@ -45,9 +45,11 @@ test("the flowers sit where the plan put them, and corner text leaves room for t
   assert.match(app, /<RomdoulSprig size=\{34\} \/>/, "the empty plan has a sprig");
 });
 
-test("the chapter path grows a vine only for a passed or mastered chapter, and dark mode keeps the plain line", () => {
-  assert.match(chapters, /row\.state === "passed" \|\| row\.state === "mastered" \? "is-earned" : ""/);
-  assert.match(chapters, /\{!last && \(row\.state === "passed" \|\| row\.state === "mastered"\) && <RomdoulVine className="flex-1" \/>\}/);
-  assert.match(app, /\.eai-rail-line\.is-earned\{ display:none; \}/);
-  assert.match(app, /\.theme-dark \.eai-rail-line\.is-earned\{ display:block; \}/);
+test("the chapter path draws a Romdoul vine in light mode, staged by the chapter above, and dark mode keeps the plain line", () => {
+  assert.match(chapters, /<RomdoulVine stage=\{row\.state === "passed" \|\| row\.state === "mastered" \? "bloom" : row\.state === "locked" \? "bud" : "grow"\} \/>/);
+  assert.match(chapters, /<RomdoulBlossom size=\{15\} className="eai-romdoul-bullet" \/>/, "the chapter count has the blossom bullet");
+  assert.match(app, /\.theme-light \.eai-rail-line\{ display:none; \}/);
+  assert.doesNotMatch(app, /\.theme-dark \.eai-rail-line/, "dark mode never hides the plain line");
+  for (const stage of ["bud", "grow", "bloom"]) assert.ok(art.includes(stage), stage);
+  assert.match(app, /\{subjectLabel\(subject, lang\)\}<RomdoulSprig size=\{34\} \/><\/h2>/, "the subject heading has a sprig");
 });
