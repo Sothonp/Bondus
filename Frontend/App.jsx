@@ -540,8 +540,7 @@ const STYLES = `
 @media (min-width:640px){ .eai-lesson-card .eai-romdoul-corner{ width:70px; height:70px; } }
 @media (max-width:339px){ .eai-romdoul-corner{ display:none; } }
 .eai-romdoul-bullet{ margin-inline-end:8px; }
-.eai-rail-line.is-earned{ display:none; }
-.theme-dark .eai-rail-line.is-earned{ display:block; }
+.theme-light .eai-rail-line{ display:none; }
 @media (max-width:639px){
   .theme-light .eai-hero-greeting{ padding-inline-end:52px; }
   .theme-light .eai-lesson-label{ padding-inline-end:52px; }
@@ -3579,7 +3578,7 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
     return (
       <div className="space-y-5 eai-rise">
         <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
-        <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
+        <h2 className={`eai-display text-2xl font-extrabold flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}<RomdoulSprig size={34} /></h2>
         <div>
           <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} onDrill={setDrillChapter} />
         </div>
