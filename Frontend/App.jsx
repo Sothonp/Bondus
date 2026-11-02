@@ -14,7 +14,7 @@ import {
   Mic, Volume2,
   Plus, ArrowUp, Square, Copy, Check, X, ImagePlus, FileUp, LoaderCircle, ScanText, ChevronDown,
   Briefcase, DollarSign, Compass,
-  Shirt, Trash2, Mail, MailCheck, School, Fingerprint,
+  Shirt, Trash2, Mail, MailCheck, School, Fingerprint, Lock,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -25,7 +25,7 @@ import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
 import { moreText, fillText } from "./moreStrings.js";
-import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
+import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel, isPracticeLocked } from "./subjects.js";
 import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
 import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
@@ -3341,7 +3341,7 @@ function StatusControl({ status, onChange, lang = "en" }) {
 
 function Practice({ p, practice, onAnswer, onSetStatus, lang = "en", chapterProgress, mastery, onSubmitQuiz }) {
   const memory = useMemo(() => practiceMemory(safeStorage(), "bac", p.userId), [p.userId]);
-  const [subject, setSubject] = useState(() => { const s = memory.get()?.subject; return fieldSubjects(p.field, p.foreignLanguage).includes(s) ? s : null; });
+  const [subject, setSubject] = useState(() => { const s = memory.get()?.subject; return fieldSubjects(p.field, p.foreignLanguage).includes(s) && !isPracticeLocked(s) ? s : null; });
   if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setSubject(null)} lang={lang} chapterProgress={chapterProgress} mastery={mastery} onSubmitQuiz={onSubmitQuiz} seedKey={String(p.userId ?? p.name ?? "")} />;
 
   return (
@@ -3351,16 +3351,24 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en", chapterProg
         <p className={`eai-muted text-sm mt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "practiceDesc")}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {fieldSubjects(p.field, p.foreignLanguage).map((s) => {
+        {/* Open subjects first; locked ones follow as greyed-out "Coming soon" cards that can't be opened. */}
+        {[...fieldSubjects(p.field, p.foreignLanguage)].sort((a, b) => isPracticeLocked(a) - isPracticeLocked(b)).map((s) => {
           const list = getExercises(s, lang);
           const doneN = list.filter((ex) => practice[ex.id]?.status === "completed").length;
           const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
           const isWeak = p.weak.some((w) => w.s === s);
+          const locked = isPracticeLocked(s);
           return (
-            <button key={s} onClick={() => setSubject(s)} className="eai-card eai-tile eai-focus text-left">
+            <button key={s} onClick={() => !locked && setSubject(s)} disabled={locked} aria-disabled={locked}
+              title={locked ? t(lang, "comingSoon") : undefined}
+              className={`eai-card text-left ${locked ? "cursor-not-allowed" : "eai-tile eai-focus"}`} style={locked ? { opacity: 0.55 } : undefined}>
               <div className="flex items-center justify-between">
                 <SubjectIcon subject={s} tile />
-                {isWeak && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
+                {locked ? (
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--bg-soft)", color: "var(--muted)" }}>
+                    <Lock size={12} /> {t(lang, "comingSoon")}
+                  </span>
+                ) : isWeak && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>{t(lang, "focusArea")}</span>}
               </div>
               <h3 className={`eai-display font-bold mt-3 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(s, lang)}</h3>
               <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{list.length} {t(lang, "exercisesAutoGraded")}</p>

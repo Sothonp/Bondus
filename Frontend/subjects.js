@@ -20,6 +20,11 @@ export function fieldSubjects(field, foreignLanguage) {
   return (FIELD_SUBJECTS[field] || []).map((s) => (s === FOREIGN_LANGUAGE ? language : s));
 }
 
+/* Practice subjects that are open right now. Every other subject shows on the Practice page as a locked
+   "Coming soon" card that can't be opened. Add a subject's canonical name here to unlock it. */
+export const OPEN_PRACTICE_SUBJECTS = ["Mathematics"];
+export const isPracticeLocked = (s) => !OPEN_PRACTICE_SUBJECTS.includes(s);
+
 export const subjectId = (s) => s.toLowerCase().replace(/\s+/g, "_");
 
 /* Same pattern as topicLabel(), one level up: the canonical (English) subject name is the key

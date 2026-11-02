@@ -24,3 +24,11 @@ test("the Social Science track is unchanged", () => {
 test("every Science subject has a Khmer label", () => {
   for (const s of [...FIELD_SUBJECTS.science, "English", "French"]) assert.notEqual(subjectLabel(s, "km"), s);
 });
+
+test("Practice is in Mathematics-only mode: Mathematics is open, every other subject is locked", async () => {
+  const { isPracticeLocked, FIELD_SUBJECTS: all, FOREIGN_LANGUAGES: langs } = await import("./subjects.js");
+  assert.equal(isPracticeLocked("Mathematics"), false);
+  for (const s of [...new Set([...all.science, ...all.social_science, ...langs])].filter((s) => s !== "Mathematics")) {
+    assert.equal(isPracticeLocked(s), true, s);
+  }
+});
