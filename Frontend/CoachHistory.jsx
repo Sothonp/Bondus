@@ -2,6 +2,7 @@
    delete), shown beside the chat on a wide screen (HistoryRail) and as a sheet on a phone or tablet (HistorySheet).
    Pure presentation, like MobileNav.jsx: the chats and the actions come in as props and nothing is imported back from App.jsx.
    What a chat is and how it is saved is in coachHistory.js. */
+import { RomdoulSprig } from "./Romdoul.jsx";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { History, Plus, Search, X, MoreHorizontal, Pencil, Trash2, MessageSquare, PanelLeftClose } from "lucide-react";
@@ -158,6 +159,7 @@ function HistoryList({ chats, activeId, modeInfo, lang, T, onSelect, onNew, onRe
       <div ref={listRef} className="eai-hist-scroll eai-scroll">
         {chats.length === 0 ? (
           <div className="eai-hist-empty">
+            <RomdoulSprig size={36} />
             <span className="eai-hist-empty-icon" aria-hidden="true"><MessageSquare size={20} /></span>
             <p className={`font-semibold text-sm ${km}`}>{T("histEmptyTitle")}</p>
             <p className={`eai-muted text-[13px] ${km}`}>{T("histEmptyBody")}</p>

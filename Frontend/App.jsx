@@ -76,6 +76,7 @@ import ChapterQuiz, { QuizCard } from "./ChapterQuiz.jsx";
 import FormulaDrill from "./FormulaDrill.jsx";
 import { drillPool } from "./formulaDrill.js";
 import PapersLock from "./PapersLock.jsx";
+import { RomdoulCluster, RomdoulBlossom, RomdoulSprig } from "./Romdoul.jsx";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
 import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
@@ -526,6 +527,24 @@ const STYLES = `
   --ember:#E96E58; --ember-soft:#2E1B18; --jade:#2BB89C; --jade-soft:#13271F;
   --streak-core:#FFD066; --streak-mid:#FF8A33; --streak-edge:#FF5A3C; --streak-glow:rgba(255,138,51,.55); --streak-dormant:#8B96AE; --streak-soft:#2E1F14;
   --shadow:0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.4);
+}
+
+/* Romdoul flower decoration (Romdoul.jsx). Four NEW tokens, light theme only; no existing token is touched. The flowers are
+   decoration: they take no space (absolutely placed inside a card that already clips), ignore taps, and are hidden in dark
+   mode. Corner pieces stay small and the text beside them reserves room, so a taller Khmer line never runs under one. */
+.theme-light{ --romdoul:#F6DE97; --romdoul-edge:#C48A2A; --leaf:#5BA24C; --leaf-edge:color-mix(in srgb, #5BA24C 60%, #0B2A12); --stem:color-mix(in srgb, #5BA24C 55%, #6B4A1E); }
+.eai-romdoul{ display:block; flex:none; pointer-events:none; user-select:none; }
+.theme-dark .eai-romdoul{ display:none; }
+.eai-romdoul-corner{ position:absolute; top:-8px; right:-6px; width:68px; height:68px; z-index:4; opacity:.95; }
+@media (min-width:640px){ .eai-romdoul-corner{ width:92px; height:92px; top:-10px; right:-8px; } }
+@media (min-width:640px){ .eai-lesson-card .eai-romdoul-corner{ width:70px; height:70px; } }
+@media (max-width:339px){ .eai-romdoul-corner{ display:none; } }
+.eai-romdoul-bullet{ margin-inline-end:8px; }
+.eai-rail-line.is-earned{ display:none; }
+.theme-dark .eai-rail-line.is-earned{ display:block; }
+@media (max-width:639px){
+  .theme-light .eai-hero-greeting{ padding-inline-end:52px; }
+  .theme-light .eai-lesson-label{ padding-inline-end:52px; }
 }
 
 /* Every card gets the same inner padding: 16px on phones, 24px from 640px up. Cards never set their own p-* any more
@@ -1311,9 +1330,12 @@ function Pill({ icon: Icon, color, soft, label, value, effect, iconNode }) {
 function CardHead({ title, kh, action }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <div>
-        <h3 className={`eai-display font-bold text-base ${kmClass(title)}`}>{title}</h3>
-        {kh && <p className="eai-km text-xs eai-muted mt-0.5">{kh}</p>}
+      <div className="flex items-center min-w-0">
+        <RomdoulBlossom size={15} className="eai-romdoul-bullet" />
+        <div>
+          <h3 className={`eai-display font-bold text-base ${kmClass(title)}`}>{title}</h3>
+          {kh && <p className="eai-km text-xs eai-muted mt-0.5">{kh}</p>}
+        </div>
       </div>
       {action}
     </div>
@@ -1344,6 +1366,7 @@ function WelcomeHeroCard({ userName, greeting, message, onStartPlan, onAskCoach,
       <div className="eai-hero-mascot" aria-hidden="true">
         <StudyOwlScene />
       </div>
+      <RomdoulCluster className="eai-romdoul-corner" />
     </div>
   );
 }
@@ -1356,6 +1379,7 @@ function RecommendedLessonCard({ title, subject, duration, description, xpNote, 
     <div className="eai-lesson-card">
       {imageUrl && <img src={imageUrl} alt="" aria-hidden="true" className="eai-lesson-decor" />}
       <div className="eai-lesson-overlay" />
+      <RomdoulCluster className="eai-romdoul-corner" />
       <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
         <div className="min-w-0">
           <div className={`eai-lesson-label ${lang === "km" ? "eai-km" : ""}`}><Star size={16} /> {t(lang, "recommendedNextLesson")}</div>
@@ -2845,7 +2869,10 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           </form>
           <div className="space-y-2.5">
             {tasks.length === 0 && (
-              <p className={`text-sm eai-muted py-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planEmpty")}</p>
+              <div className="flex items-center gap-3 py-2">
+                <RomdoulSprig size={34} />
+                <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planEmpty")}</p>
+              </div>
             )}
             {tasks.map((task) => (
               <div key={task.id} className="eai-nav flex items-center gap-2 p-3 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
@@ -2864,7 +2891,7 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           </div>
           {suggestions.length > 0 && (
             <div className="mt-4">
-              <p className={`text-xs font-semibold eai-muted mb-2 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planSuggested")}</p>
+              <p className={`text-xs font-semibold eai-muted mb-2 flex items-center ${lang === "km" ? "eai-km" : ""}`}><RomdoulBlossom size={13} className="eai-romdoul-bullet" />{t(lang, "planSuggested")}</p>
               <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible eai-scroll">
                 {suggestions.map((sg) => (
                   <button key={sg.id} onClick={() => onAddPlanTask({ title: sg.task, subject: sg.s, minutes: sg.min, why: sg.why })} disabled={planFull}
