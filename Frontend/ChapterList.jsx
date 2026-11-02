@@ -15,6 +15,7 @@ import { Lock, PlayCircle, CheckCircle2, Award, ClipboardCheck } from "lucide-re
 import { PASS_PERCENT, MASTER_PERCENT } from "./progressionConfig.js";
 import { chaptersPassed } from "./chapterProgress.js";
 import { chapterText, fillChapter } from "./chapterStrings.js";
+import { RomdoulVine } from "./Romdoul.jsx";
 import { DrillButton } from "./FormulaDrill.jsx";
 
 const LOOK = {
@@ -101,7 +102,9 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 <span className="grid place-items-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, background: look.soft }}>
                   <Icon size={18} style={{ color: look.color }} />
                 </span>
-                {!last && <span className="flex-1" style={{ width: 2, minHeight: 14, background: "var(--line)" }} />}
+                {/* Once a chapter is passed the line below it grows a Romdoul vine (light mode); a locked or open chapter keeps the plain line. */}
+                {!last && <span className={`eai-rail-line flex-1 ${row.state === "passed" || row.state === "mastered" ? "is-earned" : ""}`} style={{ width: 2, minHeight: 14, background: "var(--line)" }} />}
+                {!last && (row.state === "passed" || row.state === "mastered") && <RomdoulVine className="flex-1" />}
               </div>
               {/* A plain div, not a button, so the main "open chapter" button and the Formula drill button below it can
                   sit as two separate, independently focusable controls — a button cannot contain another button. */}
