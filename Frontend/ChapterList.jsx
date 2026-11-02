@@ -15,6 +15,7 @@ import { Lock, PlayCircle, CheckCircle2, Award, ClipboardCheck } from "lucide-re
 import { PASS_PERCENT, MASTER_PERCENT } from "./progressionConfig.js";
 import { chaptersPassed } from "./chapterProgress.js";
 import { chapterText, fillChapter } from "./chapterStrings.js";
+import { DrillButton } from "./FormulaDrill.jsx";
 
 const LOOK = {
   locked: { icon: Lock, color: "var(--muted)", soft: "var(--bg-soft)", label: "stateLocked" },
@@ -26,11 +27,14 @@ const LOOK = {
 };
 
 /* Props
-   rows       chapterStates() for the subject (a row may also carry `canTestOut`, set by the screen that knows the topic scores)
+   rows       chapterStates() for the subject (a row may also carry `canTestOut`, set by the screen that knows the topic
+              scores, and `drillCount`, the chapter's formula-quiz question count, set by the same screen)
    labelOf    (chapterKey) -> the chapter's name in the student's language
    localize   (number, lang) -> the number in Khmer numerals when the language is Khmer
-   onOpen     (chapterKey) open that chapter's exercises */
-export default function ChapterList({ rows, labelOf, lang = "en", localize = (n) => String(n), onOpen }) {
+   onOpen     (chapterKey) open that chapter's exercises
+   onDrill    optional: (chapterKey) start that chapter's quick Formula drill — offered even on a locked chapter, since it
+              is pure review and touches no progress. Omitted entirely when a row carries no `drillCount`. */
+export default function ChapterList({ rows, labelOf, lang = "en", localize = (n) => String(n), onOpen, onDrill }) {
   const km = lang === "km" ? "eai-km" : "";
   const w = (key, vars) => fillChapter(chapterText(lang, key), vars);
   const num = (n) => localize(n, lang);
@@ -99,21 +103,30 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                 </span>
                 {!last && <span className="flex-1" style={{ width: 2, minHeight: 14, background: "var(--line)" }} />}
               </div>
-              <button type="button" onClick={(e) => open(row, e.currentTarget)} aria-haspopup={locked ? "dialog" : undefined}
-                className="eai-card eai-tile eai-focus text-left flex-1 min-w-0" style={{ marginBottom: last ? 0 : 12, opacity: locked ? 0.85 : 1 }}>
-                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
-                  <h3 className={`eai-display font-bold min-w-0 ${km}`} style={{ color: locked ? "var(--muted)" : "var(--ink)", overflowWrap: "anywhere" }}>{labelOf(row.key)}</h3>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${km}`}
-                    style={row.state === "mastered" ? { background: "var(--jade)", color: "#fff" } : { background: look.soft, color: look.color }}>{w(look.label)}</span>
-                </div>
-                <p className={`text-xs eai-muted mt-1 ${km}`}>{lineFor(row)}</p>
-                {!locked && row.state !== "available" && (
-                  <div className="relative h-1.5 rounded-full eai-soft mt-2.5 overflow-hidden" aria-hidden="true">
-                    <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : row.state === "quizReady" ? "var(--primary)" : "var(--jade)" }} />
-                    <span className="absolute top-0 bottom-0" style={{ left: `${PASS_PERCENT}%`, width: 2, background: "var(--ink)", opacity: 0.35 }} />
+              {/* A plain div, not a button, so the main "open chapter" button and the Formula drill button below it can
+                  sit as two separate, independently focusable controls — a button cannot contain another button. */}
+              <div className="eai-card flex-1 min-w-0" style={{ marginBottom: last ? 0 : 12, opacity: locked ? 0.85 : 1 }}>
+                <button type="button" onClick={(e) => open(row, e.currentTarget)} aria-haspopup={locked ? "dialog" : undefined}
+                  className="eai-tile eai-focus text-left block w-full">
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                    <h3 className={`eai-display font-bold min-w-0 ${km}`} style={{ color: locked ? "var(--muted)" : "var(--ink)", overflowWrap: "anywhere" }}>{labelOf(row.key)}</h3>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${km}`}
+                      style={row.state === "mastered" ? { background: "var(--jade)", color: "#fff" } : { background: look.soft, color: look.color }}>{w(look.label)}</span>
+                  </div>
+                  <p className={`text-xs eai-muted mt-1 ${km}`}>{lineFor(row)}</p>
+                  {!locked && row.state !== "available" && (
+                    <div className="relative h-1.5 rounded-full eai-soft mt-2.5 overflow-hidden" aria-hidden="true">
+                      <div className="h-full rounded-full" style={{ width: `${row.percent}%`, background: row.state === "inProgress" ? "var(--gold)" : row.state === "quizReady" ? "var(--primary)" : "var(--jade)" }} />
+                      <span className="absolute top-0 bottom-0" style={{ left: `${PASS_PERCENT}%`, width: 2, background: "var(--ink)", opacity: 0.35 }} />
+                    </div>
+                  )}
+                </button>
+                {onDrill && row.drillCount > 0 && (
+                  <div className="mt-2.5">
+                    <DrillButton count={row.drillCount} lang={lang} onStart={() => onDrill(row.key)} />
                   </div>
                 )}
-              </button>
+              </div>
             </li>
           );
         })}
