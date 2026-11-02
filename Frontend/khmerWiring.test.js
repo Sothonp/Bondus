@@ -12,6 +12,7 @@ import { MORE_STRINGS } from "./moreStrings.js";
 const read = (name) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
 const app = read("App.jsx");
 const nav = read("MobileNav.jsx");
+const profileUi = read("ProfileUi.jsx");
 const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const between = (src, from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
 
@@ -54,7 +55,7 @@ test("t() looks in the table, then in moreStrings.js, and tf() fills the {placeh
 
 test("a key the screens ask for exists in a table (otherwise the screen would show the key itself)", () => {
   const known = new Set([...Object.keys(STRINGS.en), ...Object.keys(MORE_STRINGS.en)]);
-  const code = strip(app) + strip(nav);
+  const code = strip(app) + strip(nav) + strip(profileUi);
   const wanted = new Set();
   const patterns = [/\bT\("(\w+)"/g, /\btf\(lang, "(\w+)"/g, /\bt\(lang, "(\w+)"/g, /\btr\("(\w+)"/g, /\bword\(tr, "(\w+)"/g, /\bT\(\s*[a-z]+ \? "(\w+)" : "(\w+)"/g];
   for (const re of patterns) for (const m of code.matchAll(re)) m.slice(1).filter(Boolean).forEach((k) => wanted.add(k));

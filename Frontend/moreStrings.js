@@ -169,6 +169,23 @@ export const MORE_STRINGS = {
     egName: "e.g. Sophea Chan",
     trackUniversity: "University",
     trackHighschool: "Highschool",
+
+    // Profile photo
+    photoHeading: "Profile photo",
+    photoSourceGoogle: "This is the photo on your Google account. Upload your own to replace it.",
+    photoSourceUpload: "This is the photo you uploaded.",
+    photoSourceNone: "No photo yet, so your initials show instead. Upload one to put your face on your profile.",
+    photoUpload: "Upload a photo",
+    photoChange: "Change photo",
+    photoRemove: "Remove photo",
+    photoUploading: "Uploading…",
+    photoSaved: "Photo saved.",
+    photoRemoved: "Photo removed.",
+    photoErrNotImage: "That file is not a picture. Choose a photo from your gallery or take a new one.",
+    photoErrTooBig: "That picture is too large to open. Try a smaller one.",
+    photoErrTooSmall: "That picture is too small. Choose a bigger one.",
+    photoErrRefused: "The server did not accept that picture. Try a different one.",
+    photoErrGeneric: "The photo could not be saved. Please try again.",
   },
 
   km: {
@@ -329,6 +346,23 @@ export const MORE_STRINGS = {
     egName: "ឧទាហរណ៍៖ សុភា ចាន់",
     trackUniversity: "សាកលវិទ្យាល័យ",
     trackHighschool: "វិទ្យាល័យ",
+
+    // Profile photo
+    photoHeading: "រូបថតប្រវត្តិរូប",
+    photoSourceGoogle: "នេះជារូបថតពីគណនី Google របស់អ្នក។ ផ្ទុកឡើងរូបថតផ្ទាល់ខ្លួន ដើម្បីជំនួសវា។",
+    photoSourceUpload: "នេះជារូបថតដែលអ្នកបានផ្ទុកឡើង។",
+    photoSourceNone: "មិនទាន់មានរូបថតទេ ដូច្នេះអក្សរកាត់ឈ្មោះរបស់អ្នកបង្ហាញជំនួស។ ផ្ទុកឡើងរូបថតមួយ ដើម្បីដាក់មុខរបស់អ្នកលើប្រវត្តិរូប។",
+    photoUpload: "ផ្ទុកឡើងរូបថត",
+    photoChange: "ប្តូររូបថត",
+    photoRemove: "លុបរូបថត",
+    photoUploading: "កំពុងផ្ទុកឡើង…",
+    photoSaved: "បានរក្សាទុករូបថត។",
+    photoRemoved: "បានលុបរូបថត។",
+    photoErrNotImage: "ឯកសារនោះមិនមែនជារូបភាពទេ។ សូមជ្រើសរើសរូបថតពីបណ្ណាល័យរូបភាព ឬថតរូបថ្មី។",
+    photoErrTooBig: "រូបភាពនោះធំពេកមិនអាចបើកបាន។ សូមសាកល្បងរូបតូចជាងនេះ។",
+    photoErrTooSmall: "រូបភាពនោះតូចពេក។ សូមជ្រើសរើសរូបធំជាងនេះ។",
+    photoErrRefused: "ម៉ាស៊ីនមេមិនទទួលយករូបភាពនោះទេ។ សូមសាកល្បងរូបផ្សេង។",
+    photoErrGeneric: "មិនអាចរក្សាទុករូបថតបានទេ។ សូមព្យាយាមម្តងទៀត។",
   },
 };
 
