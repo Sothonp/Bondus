@@ -32,6 +32,8 @@ import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard,
 import { ExerciseCard, ExerciseViewer, AdminExerciseForm, NewExerciseButton } from "./ExerciseUi.jsx";
 import { ProfilePage } from "./ProfileUi.jsx";
 import { serverFieldErrors } from "./profileForm.js";
+import { shrinkAvatar } from "./imageUtils.js";
+import { AvatarFace } from "./Avatar.jsx";
 import { EXERCISE_SUBJECTS, canBrowseExercises, isAdmin } from "./exercises.js";
 import { MobileTopBar, MobileBottomNav } from "./MobileNav.jsx";
 import { splitMobileNav } from "./mobileNav.js";
@@ -8107,6 +8109,29 @@ export default function App() {
     }
   };
 
+  // Profile photo (the card at the top of the Profile page). The chosen picture is cut to its middle square and shrunk to a
+  // small JPEG here, on the phone, before anything is sent. With the server, its answer carries the new avatarUrl and
+  // avatarSource; browser-only, the picture just stays in memory for this visit. Each resolves to { ok: true } or
+  // { ok: false, code, retryAfter }.
+  const PHOTO_PROBLEM = { too_big: "photo_too_big", too_small: "photo_too_small", not_image: "photo_not_image" }; // shrinkAvatar's reasons -> the Profile card's
+  const keepPhoto = (user) => {
+    const { level, xp, xpToNext, ...details } = userToProfile(user);
+    setProfile((cur) => ({ ...cur, ...details }));
+  };
+  const handleUploadPhoto = async (file) => {
+    let picture;
+    try { picture = await shrinkAvatar(file); }
+    catch (err) { return { ok: false, code: PHOTO_PROBLEM[err?.message] ?? "photo_not_image" }; }
+    if (!SERVER_MODE) { setProfile((cur) => ({ ...cur, avatarUrl: picture.dataUrl, avatarSource: "upload" })); return { ok: true }; }
+    try { keepPhoto((await api.uploadAvatar(picture.blob)).user); return { ok: true }; }
+    catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
+  };
+  const handleRemovePhoto = async () => {
+    if (!SERVER_MODE) { setProfile((cur) => ({ ...cur, avatarUrl: null, avatarSource: null })); return { ok: true }; }
+    try { keepPhoto((await api.removeAvatar()).user); return { ok: true }; }
+    catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
+  };
+
   // Profile page, password card (server mode only). Each resolves to { ok: true, ... } or { ok: false, code, retryAfter }.
   const handleChangePassword = async ({ currentPassword, password }) => {
     try { await api.changePassword({ currentPassword, password }); return { ok: true }; }
@@ -8185,6 +8210,7 @@ export default function App() {
       parts={{ FormField, SelectField, SubjectChip }}
       lists={{ examYears: EXAM_YEARS, studyMinutes: STUDY_MINUTES, universities: UNIS, foreignLanguages: FOREIGN_LANGUAGES, targetGrades: ["A", "B", "C", "D", "E"], trackLabels: FIELD_META }}
       serverMode={SERVER_MODE} errorText={(code, retryAfter) => apiErrorText(lang, code, retryAfter)}
+      initials={initials} onUploadPhoto={handleUploadPhoto} onRemovePhoto={handleRemovePhoto}
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
       onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
     universities: <Universities p={p} lang={lang} />, coach: <Coach p={p} lang={lang} />,
@@ -8246,7 +8272,7 @@ export default function App() {
         </aside>
 
         <div className="flex-1 min-w-0">
-          <MobileTopBar logo={<BondusLogo />} initials={initials} dark={dark} onToggleDark={() => setDark((d) => !d)}
+          <MobileTopBar logo={<BondusLogo />} initials={initials} avatarUrl={profile.avatarUrl} dark={dark} onToggleDark={() => setDark((d) => !d)}
             onProfile={() => go("profile")} profileLabel={tr("profileOpen")} tr={tr}
             streak={localizeNum(p.streak, lang)} flame={p.flame} flameLabel={p.flameLabel} flameRing={p.flameRing} xp={localizeNum((profile.xp + bonusXp).toLocaleString(), lang)}
             examChip={!isUniProfile && exam.current ? <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} /> : null} />
@@ -8264,7 +8290,7 @@ export default function App() {
                 <button onClick={() => setDark((d) => !d)} className="eai-btn eai-focus grid place-items-center" style={{ width: 38, height: 38, color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
                   {dark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
-                <button onClick={() => go("profile")} aria-label={tr("profileOpen")} className="eai-focus grid place-items-center rounded-full text-sm font-bold text-white" style={{ width: 38, height: 38, background: "var(--primary)" }}>{initials}</button>
+                <button onClick={() => go("profile")} aria-label={tr("profileOpen")} className="eai-focus grid place-items-center rounded-full overflow-hidden text-sm font-bold text-white" style={{ width: 38, height: 38, background: "var(--primary)" }}><AvatarFace src={profile.avatarUrl} initials={initials} /></button>
               </div>
             </div>
           </header>

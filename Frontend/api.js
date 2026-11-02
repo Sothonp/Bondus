@@ -126,6 +126,10 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     logout: async () => { try { await send("POST", "/logout"); } catch { /* the session is going away either way */ } setToken(null); },
     getMe: () => get("/me"),
     patchMe: (fields) => send("PATCH", "/me", fields),
+    // The profile photo: a picture to upload (a Blob or File, already shrunk by the app), or remove the uploaded one. Each
+    // answers { user } with the new avatarUrl / avatarSource.
+    uploadAvatar: (picture) => { const form = new FormData(); form.append("avatar", picture, "avatar.jpg"); return send("POST", "/me/avatar", form); },
+    removeAvatar: () => send("DELETE", "/me/avatar"),
     forgotPassword: ({ login }) => send("POST", "/forgot-password", { login }, { auth: false }),
     resetPassword: ({ login, code, password }) => send("POST", "/reset-password", { login, code, password }, { auth: false }).then(remember),
     // The signed-in student proves their current password; the server signs out every other device and keeps this one.

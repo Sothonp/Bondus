@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Zap, Moon, Sun, LayoutGrid, Globe, LogOut, ChevronRight, X } from "lucide-react";
 import { moreIsActive } from "./mobileNav.js";
 import { StreakFlame } from "./StreakFlame.jsx";
+import { AvatarFace } from "./Avatar.jsx";
 import { moreText, fillText } from "./moreStrings.js";
 
 const kmc = (lang) => (lang === "km" ? "eai-km" : "");
@@ -13,9 +14,10 @@ const kmc = (lang) => (lang === "km" ? "eai-km" : "");
 const word = (tr, key, vars) => fillText((tr && tr(key) !== key ? tr(key) : null) ?? moreText("en", key), vars);
 const labelOf = (n, lang) => (lang === "km" ? n.labelKm ?? n.label : n.label);
 
-/* Sticky bar at the top: logo and name, a compact streak + XP pill, the dark-mode toggle and the avatar. The language
+/* Sticky bar at the top: logo and name, a compact streak + XP pill, the dark-mode toggle and the profile button (the
+   student's photo, or their initials). The language
    switch lives in More instead. A running exam gets its own strip underneath so the timer is never out of sight. */
-export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, profileLabel, tr, streak, flame = "cold", flameLabel = "", flameRing = false, xp, examChip }) {
+export function MobileTopBar({ logo, initials, avatarUrl = null, dark, onToggleDark, onProfile, profileLabel, tr, streak, flame = "cold", flameLabel = "", flameRing = false, xp, examChip }) {
   return (
     <header className="lg:hidden sticky top-0 z-40 border-b"
       style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", paddingTop: "env(safe-area-inset-top)" }}>
@@ -40,7 +42,7 @@ export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, pr
             style={{ color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
             {dark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <button onClick={onProfile} aria-label={profileLabel} className="eai-focus grid place-items-center rounded-full text-xs font-bold text-white w-9 h-9 max-[360px]:w-8 max-[360px]:h-8" style={{ background: "var(--primary)" }}>{initials}</button>
+          <button onClick={onProfile} aria-label={profileLabel} className="eai-focus grid place-items-center rounded-full overflow-hidden text-xs font-bold text-white w-9 h-9 max-[360px]:w-8 max-[360px]:h-8" style={{ background: "var(--primary)" }}><AvatarFace src={avatarUrl} initials={initials} /></button>
         </div>
       </div>
       {examChip && <div className="px-4 pb-2">{examChip}</div>}

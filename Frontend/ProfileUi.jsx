@@ -7,6 +7,7 @@
    the account fields. */
 import React, { useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
+import { AvatarFace } from "./Avatar.jsx";
 import { fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
 import { editableFields, profileToForm, diffProfile, validateProfile, withCurrentOption, validatePasswordChange, mergeProfileForm } from "./profileForm.js";
 
@@ -19,6 +20,74 @@ const asNumber = (e) => (e.target.value === "" ? "" : Number(e.target.value));
 function optionsFor(options, current) {
   const shown = withCurrentOption(options, current);
   return current === "" && !shown.some((o) => o.value === "") ? [BLANK, ...shown] : shown;
+}
+
+/* The words for a photo that could not be saved. `result` is what App.jsx's handlers resolve to: { ok: false, code, retryAfter }.
+   The codes the picture shrinker makes itself have their own words, a refusal from the server (422) another, and the rest
+   (no connection, too many tries, signed out) come from errorText like every other call. */
+function photoProblem(result, tr, errorText) {
+  switch (result.code) {
+    case "photo_not_image": return tr("photoErrNotImage");
+    case "photo_too_big": return tr("photoErrTooBig");
+    case "photo_too_small": return tr("photoErrTooSmall");
+    case "validation_failed": return tr("photoErrRefused");
+    default: return (result.code && errorText?.(result.code, result.retryAfter)) || tr("photoErrGeneric");
+  }
+}
+
+/* The photo at the top of the page: shows it, says where it comes from (their Google account or their own upload), and lets
+   them upload another or remove their own. */
+function PhotoCard({ profile, lang, tr, initials, errorText, onUploadPhoto, onRemovePhoto }) {
+  const km = lang === "km" ? "eai-km" : "";
+  const picker = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null); // { ok, text }
+  const source = profile.avatarSource ?? null;
+
+  const finish = (result, done) => {
+    setBusy(false);
+    setMessage(result.ok ? { ok: true, text: tr(done) } : { ok: false, text: photoProblem(result, tr, errorText) });
+  };
+  const choose = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // so choosing the same picture again still counts
+    if (!file) return;
+    setBusy(true); setMessage(null);
+    finish(await onUploadPhoto(file), "photoSaved");
+  };
+  const remove = async () => {
+    setBusy(true); setMessage(null);
+    finish(await onRemovePhoto(), "photoRemoved");
+  };
+
+  return (
+    <section className="eai-card p-5 sm:p-6 flex flex-wrap items-center gap-x-5 gap-y-4" aria-labelledby="profile-photo-heading">
+      <span className="grid place-items-center rounded-full overflow-hidden flex-shrink-0 font-bold text-white"
+        style={{ width: 88, height: 88, background: "var(--primary)", fontSize: 30 }} aria-hidden="true">
+        <AvatarFace src={profile.avatarUrl} initials={initials} />
+      </span>
+      <div className="min-w-0 flex-1" style={{ minWidth: 176 }}>
+        <h3 id="profile-photo-heading" className={`eai-display font-bold ${km}`}>{tr("photoHeading")}</h3>
+        <p className={`text-xs eai-muted mt-1 ${km}`}>{tr(source === "upload" ? "photoSourceUpload" : source === "google" ? "photoSourceGoogle" : "photoSourceNone")}</p>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <button type="button" onClick={() => picker.current?.click()} disabled={busy}
+            className={`eai-btn eai-focus text-sm py-2 px-4 text-white ${km}`} style={{ background: "var(--primary)", opacity: busy ? 0.6 : 1 }}>
+            {busy ? tr("photoUploading") : tr(source === "upload" ? "photoChange" : "photoUpload")}
+          </button>
+          {source === "upload" && (
+            <button type="button" onClick={remove} disabled={busy} className={`eai-btn eai-focus eai-soft text-sm py-2 px-4 ${km}`} style={{ color: "var(--ink)", opacity: busy ? 0.6 : 1 }}>
+              {tr("photoRemove")}
+            </button>
+          )}
+        </div>
+        {/* Any picture the phone offers: its gallery or its camera. The app shrinks it before anything is sent. */}
+        <input ref={picker} type="file" accept="image/*" hidden onChange={choose} />
+        {message && (
+          <p role={message.ok ? "status" : "alert"} className={`text-sm mt-3 ${km}`} style={{ color: message.ok ? "var(--jade)" : "var(--ember)" }}>{message.text}</p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function DetailsCard({ profile, lang, tr, parts, lists, onSaveDetails }) {
@@ -253,7 +322,7 @@ function PasswordCard({ profile, lang, tr, parts, errorText, onChangePassword, o
 
 /* `onSaveDetails(changes)` resolves to { ok: true } or { ok: false, errors: { field: messageKey }, message?: text }.
    `tr(key)` is the app's translator for the current language; `lists` carries the sign-up option lists. */
-export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, errorText, onSaveDetails, onChangePassword, onRequestResetCode, onConfirmResetCode }) {
+export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, errorText, initials, onUploadPhoto, onRemovePhoto, onSaveDetails, onChangePassword, onRequestResetCode, onConfirmResetCode }) {
   const km = lang === "km" ? "eai-km" : "";
   return (
     <div className="space-y-5 eai-rise" style={{ maxWidth: 760 }}>
@@ -261,6 +330,9 @@ export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, error
         <h2 className={`eai-display text-2xl font-extrabold ${km}`}>{tr("profileTitle")}</h2>
         <p className={`eai-muted text-sm mt-1 ${km}`}>{tr("profileDesc")}</p>
       </div>
+      {onUploadPhoto && onRemovePhoto && (
+        <PhotoCard profile={profile} lang={lang} tr={tr} initials={initials} errorText={errorText} onUploadPhoto={onUploadPhoto} onRemovePhoto={onRemovePhoto} />
+      )}
       <DetailsCard profile={profile} lang={lang} tr={tr} parts={parts} lists={lists} onSaveDetails={onSaveDetails} />
       {serverMode && (
         <PasswordCard profile={profile} lang={lang} tr={tr} parts={parts} errorText={errorText}
