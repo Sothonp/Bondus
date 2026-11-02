@@ -6,13 +6,16 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Zap, Moon, Sun, LayoutGrid, Globe, LogOut, ChevronRight, X } from "lucide-react";
 import { moreIsActive } from "./mobileNav.js";
 import { StreakFlame } from "./StreakFlame.jsx";
+import { moreText, fillText } from "./moreStrings.js";
 
 const kmc = (lang) => (lang === "km" ? "eai-km" : "");
+/* A word of this file's own chrome (the aria-labels): from the translator when App.jsx passes one, English otherwise. */
+const word = (tr, key, vars) => fillText((tr && tr(key) !== key ? tr(key) : null) ?? moreText("en", key), vars);
 const labelOf = (n, lang) => (lang === "km" ? n.labelKm ?? n.label : n.label);
 
 /* Sticky bar at the top: logo and name, a compact streak + XP pill, the dark-mode toggle and the avatar. The language
    switch lives in More instead. A running exam gets its own strip underneath so the timer is never out of sight. */
-export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, profileLabel, streak, flame = "cold", flameLabel = "", flameRing = false, xp, examChip }) {
+export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, profileLabel, tr, streak, flame = "cold", flameLabel = "", flameRing = false, xp, examChip }) {
   return (
     <header className="lg:hidden sticky top-0 z-40 border-b"
       style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", paddingTop: "env(safe-area-inset-top)" }}>
@@ -23,7 +26,7 @@ export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, pr
         </div>
         <div className="flex items-center gap-2 max-[360px]:gap-1.5 flex-shrink-0">
           <div className="flex items-center gap-2 max-[360px]:gap-1.5 rounded-full px-2.5 max-[360px]:px-2 py-1.5" style={{ background: "var(--bg-soft)" }}>
-            <span className="inline-flex items-center gap-1" role="img" aria-label={`${streak}-day streak. ${flameLabel}`}>
+            <span className="inline-flex items-center gap-1" role="img" aria-label={`${word(tr, "streakDays", { n: streak })}. ${flameLabel}`}>
               <StreakFlame state={flame} size={15} ring={flameRing} />
               <span className="text-sm font-bold eai-display" aria-hidden="true">{streak}</span>
             </span>
@@ -33,7 +36,7 @@ export function MobileTopBar({ logo, initials, dark, onToggleDark, onProfile, pr
               <span className="text-sm font-bold eai-display">{xp}</span>
             </span>
           </div>
-          <button onClick={onToggleDark} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"} className="eai-btn eai-focus grid place-items-center w-9 h-9 max-[360px]:w-8 max-[360px]:h-8"
+          <button onClick={onToggleDark} aria-label={word(tr, dark ? "themeToLight" : "themeToDark")} className="eai-btn eai-focus grid place-items-center w-9 h-9 max-[360px]:w-8 max-[360px]:h-8"
             style={{ color: "var(--ink)", background: "var(--card)", border: "1px solid var(--line)" }}>
             {dark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
@@ -71,7 +74,7 @@ function MoreSheet({ open, items, tab, lang, tr, showLanguage, onGo, onToggleLan
         <div className="mx-auto mt-2.5 rounded-full" style={{ width: 40, height: 4, background: "var(--line)" }} />
         <div className="px-5 pt-3 pb-1 flex items-center justify-between">
           <h2 className={`eai-display font-extrabold text-lg ${kmc(lang)}`}>{tr("navMore")}</h2>
-          <button onClick={onClose} aria-label="Close" className="eai-focus grid place-items-center rounded-full" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--ink)" }}><X size={18} /></button>
+          <button onClick={onClose} aria-label={word(tr, "navClose")} className="eai-focus grid place-items-center rounded-full" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--ink)" }}><X size={18} /></button>
         </div>
         <div className="px-3 pb-2 space-y-1">
           {items.map((n) => {
@@ -121,7 +124,7 @@ export function MobileBottomNav({ primary, more, tab, lang, tr, showLanguage, on
     <>
       <MoreSheet open={sheetOpen} items={more} tab={tab} lang={lang} tr={tr} showLanguage={showLanguage}
         onGo={onGo} onToggleLang={onToggleLang} onLogout={onLogout} onClose={closeSheet} />
-      <nav aria-label="Main" className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t"
+      <nav aria-label={word(tr, "navMain")} className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t"
         style={{ background: "color-mix(in srgb, var(--card) 80%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="grid" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}>
           {primary.map((n) => {

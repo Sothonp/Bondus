@@ -24,6 +24,7 @@ import { UNIS, UNI_MAJORS, UNI_SCHOLARSHIPS, UNI_PROFILE_INFO } from "../src/dat
 import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
+import { moreText, fillText } from "./moreStrings.js";
 import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel } from "./subjects.js";
 import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
 import { useExamSessions } from "./useExamSessions.js";
@@ -463,21 +464,26 @@ function deriveUniInsights(p, uniTopicMastery) {
 }
 
 /* Continuously-analyzed AI signals shown on the Progress tab. */
-function analyticsSignals(p, live = {}) {
+function analyticsSignals(p, live = {}, lang = "en") {
   const lessons = live.completedLessons ?? 0;
+  const T = (key, vars) => tf(lang, key, vars);
+  const n = (v) => localizeNum(v, lang);
+  // The study-hours figure arrives as "2.5h" (or is the placeholder); in Khmer the number is localised and the unit spelled out.
+  const hours = String(live.hours ?? "0.5h");
+  const hoursValue = lang === "km" ? `${n(hours.replace(/h$/, ""))}${T("sigHoursUnit")}` : hours;
   return [
-    { icon: LogIn, label: "Login frequency", value: "Today", note: "Active now" },
-    { icon: CalendarCheck, label: "Study consistency", value: `${p.streak}-day`, note: "Streak going" },
-    { icon: Timer, label: "Study hours", value: live.hours ?? "0.5h", note: "This week" },
-    { icon: GaugeIcon, label: "Learning speed", value: lessons ? "Good" : "—", note: lessons ? "Steady pace" : "Calibrating" },
-    { icon: BookMarked, label: "Completed lessons", value: `${lessons}`, note: lessons ? "Nice work" : "Let's begin" },
-    { icon: ClipboardCheck, label: "Quiz scores", value: live.quizScore != null ? `${live.quizScore}%` : "—", note: live.quizScore != null ? "Avg accuracy" : "No quizzes yet" },
-    { icon: FileText, label: "Mock exams", value: "0", note: "Try one soon" },
-    { icon: ActivityIcon, label: "Subject performance", value: p.avg != null ? `${p.avg}%` : "—", note: "Avg mastery" },
-    { icon: AlertTriangle, label: "Mistake patterns", value: live.mistakes != null ? `${live.mistakes}` : "—", note: live.mistakes ? "Review these" : "Tracking" },
-    { icon: Repeat, label: "Weak concepts", value: `${p.weak.length}`, note: "Flagged to revise" },
-    { icon: Star, label: "Strong concepts", value: `${p.strong.length}`, note: "Keep them sharp" },
-    { icon: Brain, label: "Learning habits", value: lessons ? "Forming" : "New", note: "AI is watching" },
+    { icon: LogIn, label: T("sigLoginLabel"), value: T("sigLoginValue"), note: T("sigLoginNote") },
+    { icon: CalendarCheck, label: T("sigConsistencyLabel"), value: T("sigConsistencyValue", { n: n(p.streak) }), note: T("sigConsistencyNote") },
+    { icon: Timer, label: T("sigHoursLabel"), value: hoursValue, note: T("sigHoursNote") },
+    { icon: GaugeIcon, label: T("sigSpeedLabel"), value: lessons ? T("sigSpeedGood") : "—", note: lessons ? T("sigSpeedNoteSteady") : T("sigSpeedNoteCalibrating") },
+    { icon: BookMarked, label: T("sigLessonsLabel"), value: n(lessons), note: lessons ? T("sigLessonsNoteDone") : T("sigLessonsNoteNone") },
+    { icon: ClipboardCheck, label: T("sigQuizLabel"), value: live.quizScore != null ? `${n(live.quizScore)}%` : "—", note: live.quizScore != null ? T("sigQuizNoteDone") : T("sigQuizNoteNone") },
+    { icon: FileText, label: T("sigMockLabel"), value: n(0), note: T("sigMockNote") },
+    { icon: ActivityIcon, label: T("sigPerformanceLabel"), value: p.avg != null ? `${n(p.avg)}%` : "—", note: T("sigPerformanceNote") },
+    { icon: AlertTriangle, label: T("sigMistakesLabel"), value: live.mistakes != null ? n(live.mistakes) : "—", note: live.mistakes ? T("sigMistakesNoteSome") : T("sigMistakesNoteNone") },
+    { icon: Repeat, label: T("sigWeakLabel"), value: n(p.weak.length), note: T("sigWeakNote") },
+    { icon: Star, label: T("sigStrongLabel"), value: n(p.strong.length), note: T("sigStrongNote") },
+    { icon: Brain, label: T("sigHabitsLabel"), value: lessons ? T("sigHabitsForming") : T("sigHabitsNew"), note: T("sigHabitsNote") },
   ];
 }
 
@@ -2254,7 +2260,7 @@ function Login({ dark, setDark, onBack, onLogin, onGoogleAuth, onCreateInstead, 
       )}
       <div className="space-y-4">
         <FormField label={t(lang, "emailLabel")} required error={error} lang={lang}>
-          <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
+          <input type="email" className="eai-ob-input eai-focus" placeholder={t(lang, "egEmail")} autoComplete="email" inputMode="email"
             value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && submit()} />
         </FormField>
@@ -2409,7 +2415,7 @@ function ForgotPassword({ dark, setDark, onBack, onSignedIn, lang = "en", setLan
       {step === 1 ? (
         sending ? <SendingCard lang={lang} /> : (
           <FormField label={t(lang, "forgotLoginLabel")} required error={error} lang={lang}>
-            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="username" inputMode="email"
+            <input type="email" className="eai-ob-input eai-focus" placeholder={t(lang, "egEmail")} autoComplete="username" inputMode="email"
               value={login} onChange={(e) => { setLogin(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && sendCode()} />
           </FormField>
@@ -2530,11 +2536,11 @@ function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initia
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
           <FormField label={t(lang, "fullNameLabel")} required>
-            <input className="eai-ob-input eai-focus" placeholder="e.g. Sophea Chan" autoComplete="name"
+            <input className="eai-ob-input eai-focus" placeholder={t(lang, "egName")} autoComplete="name"
               value={form.name} onChange={(e) => set("name", e.target.value)} />
           </FormField>
           <FormField label={t(lang, "emailLabel")} required>
-            <input type="email" className="eai-ob-input eai-focus" placeholder="e.g. sophea@gmail.com" autoComplete="email" inputMode="email"
+            <input type="email" className="eai-ob-input eai-focus" placeholder={t(lang, "egEmail")} autoComplete="email" inputMode="email"
               value={form.email} onChange={(e) => set("email", e.target.value)} />
             {SERVER_MODE && <p className={`text-xs eai-muted mt-1.5 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "emailResetHint")}</p>}
           </FormField>
@@ -2620,7 +2626,7 @@ function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initia
             {t(lang, "continueWord")} <ChevronRight size={16} />
           </PrimaryButton>
         }>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label="Academic track">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="radiogroup" aria-label={t(lang, "trackGroup")}>
           {Object.entries(FIELD_META).map(([key, meta]) => (
             <TrackCard key={key} meta={meta} subjects={FIELD_SUBJECTS[key]} selected={form.field === key} onSelect={() => set("field", key)} lang={lang} />
           ))}
@@ -4314,7 +4320,12 @@ function UniLogo({ uni, size = 64 }) {
    student's onboarding profile — no ML, just transparent point values so every score comes with a
    plain-language reason. Returns 0 with no reasons for a high-school profile or a university with
    no UNI_PROFILE_INFO entry, so callers can render "no match data" instead of a fake 0% badge. */
-function scoreUniversityMatch(uni, up, info = UNI_PROFILE_INFO[uni.abbr]) {
+/* A word from the university data ("English", "Bachelor's", a country code) in the student's language; the value itself
+   when moreStrings.js has no word for it. */
+const uniWord = (lang, prefix, value) => moreText(lang, `${prefix}${String(value).replace(/'s$/, "s")}`) ?? value;
+const fieldLabel = (f, lang) => (lang === "km" ? f?.labelKm ?? f?.label : f?.label);
+
+function scoreUniversityMatch(uni, up, info = UNI_PROFILE_INFO[uni.abbr], lang = "en") {
   if (!info || !up) return { score: 0, reasons: [] };
   const goals = up.goals || [];
   let score = 0;
@@ -4322,15 +4333,15 @@ function scoreUniversityMatch(uni, up, info = UNI_PROFILE_INFO[uni.abbr]) {
   if (up.major && info.tags.includes(up.major)) {
     const majorLabel = UNI_FIELDS.find((f) => f.id === up.major);
     score += 50;
-    reasons.push({ key: "major", label: `Offers ${majorLabel?.label || up.major}` });
+    reasons.push({ key: "major", label: tf(lang, "uniReasonOffers", { major: fieldLabel(majorLabel, lang) || up.major }) });
   }
   if (goals.includes("study_abroad") && info.languageOfInstruction.includes("English")) {
     score += 15;
-    reasons.push({ key: "english", label: "English-medium — fits study-abroad pathways" });
+    reasons.push({ key: "english", label: tf(lang, "uniReasonEnglish") });
   }
   if (goals.includes("scholarship_prep") && UNI_SCHOLARSHIPS[uni.abbr]?.length) {
     score += 15;
-    reasons.push({ key: "scholarship", label: "Has scholarships you may qualify for" });
+    reasons.push({ key: "scholarship", label: tf(lang, "uniReasonScholarship") });
   }
   if (goals.includes("find_university") || goals.includes("prepare_university")) score += 10;
   return { score: Math.max(0, Math.min(100, score)), reasons };
@@ -4340,7 +4351,7 @@ function UniversityDetail({ uni, p, onBack, lang = "en" }) {
   const info = UNI_PROFILE_INFO[uni.abbr];
   const isUni = p?.educationLevel === "university";
   const up = p?.universityProfile;
-  const match = isUni && up ? scoreUniversityMatch(uni, up) : null;
+  const match = isUni && up ? scoreUniversityMatch(uni, up, undefined, lang) : null;
   return (
     <div className="space-y-5 eai-rise">
       <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>
@@ -4458,10 +4469,10 @@ function Universities({ p, lang = "en" }) {
         <div className="eai-card flex flex-wrap gap-2">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t(lang, "searchUniversities")}
             className={`eai-input eai-focus text-sm flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ minWidth: 160 }} />
-          <select value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className="eai-input eai-focus text-sm">
-            <option value="KH">Cambodia</option>
-            <option value="ANY">Any country</option>
-            {ABROAD_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          <select value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} className={`eai-input eai-focus text-sm ${lang === "km" ? "eai-km" : ""}`}>
+            <option value="KH">{t(lang, "uniCountryCambodia")}</option>
+            <option value="ANY">{t(lang, "uniCountryAny")}</option>
+            {ABROAD_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{uniWord(lang, "uniCountry_", c.id) === c.id ? c.label : uniWord(lang, "uniCountry_", c.id)}</option>)}
           </select>
           <select value={filterMajor} onChange={(e) => setFilterMajor(e.target.value)} className={`eai-input eai-focus text-sm ${lang === "km" ? "eai-km" : ""}`}>
             <option value="all">{t(lang, "allMajorsFilter")}</option>
@@ -4475,22 +4486,22 @@ function Universities({ p, lang = "en" }) {
           </select>
           <select value={filterLanguage} onChange={(e) => setFilterLanguage(e.target.value)} className={`eai-input eai-focus text-sm ${lang === "km" ? "eai-km" : ""}`}>
             <option value="all">{t(lang, "anyLanguage")}</option>
-            <option value="Khmer">Khmer</option>
-            <option value="English">English</option>
-            <option value="French">French</option>
+            <option value="Khmer">{t(lang, "uniInstruction_Khmer")}</option>
+            <option value="English">{t(lang, "uniInstruction_English")}</option>
+            <option value="French">{t(lang, "uniInstruction_French")}</option>
           </select>
         </div>
       )}
       {filterCountry === "ANY" && (
-        <p className="text-xs eai-muted">Cambodia's official university programs, plus a curated starting list of study-abroad options across the United States, Australia, Canada and New Zealand not an audited enrollment ranking. Abroad tuition figures are illustrative estimates.</p>
+        <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniNoteAny")}</p>
       )}
       {filterCountry !== "KH" && filterCountry !== "ANY" && (
-        <p className="text-xs eai-muted">A curated starting list of well-known universities Cambodian students commonly consider in {ABROAD_COUNTRIES.find((c) => c.id === filterCountry)?.label} — not an audited enrollment ranking. Tuition figures are illustrative estimates.</p>
+        <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "uniNoteCountry", { country: uniWord(lang, "uniCountry_", filterCountry) })}</p>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {ranked.map(({ scope, u }) => {
-          const match = isUni && up ? scoreUniversityMatch(u, up, scope === "abroad" ? u : undefined) : null;
+          const match = isUni && up ? scoreUniversityMatch(u, up, scope === "abroad" ? u : undefined, lang) : null;
           return (
             <button key={`${scope}-${u.abbr}`} onClick={() => setSelected({ scope, uni: u })} className="eai-card eai-tile eai-focus flex items-center gap-4 text-left w-full">
               <UniLogo uni={{ ...u, c: u.c || "var(--primary)" }} size={64} />
@@ -4501,13 +4512,13 @@ function Universities({ p, lang = "en" }) {
                 {match && match.reasons.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {match.reasons.slice(0, 2).map((r) => (
-                      <span key={r.key} className="text-xs px-2 py-0.5 rounded-full eai-soft">{r.label}</span>
+                      <span key={r.key} className={`text-xs px-2 py-0.5 rounded-full eai-soft ${lang === "km" ? "eai-km" : ""}`}>{r.label}</span>
                     ))}
                   </div>
                 )}
               </div>
               {match && match.score > 0 && (
-                <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{match.score}%</span>
+                <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{localizeNum(match.score, lang)}%</span>
               )}
               <ChevronRight size={18} className="eai-muted flex-shrink-0" />
             </button>
@@ -4529,7 +4540,7 @@ function Universities({ p, lang = "en" }) {
    school made the list. */
 function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
   const up = p?.universityProfile;
-  const match = up ? scoreUniversityMatch(uni, up, uni) : null;
+  const match = up ? scoreUniversityMatch(uni, up, uni, lang) : null;
 
   return (
     <div className="space-y-5 eai-rise">
@@ -4573,8 +4584,8 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
           {[
             { l: t(lang, "locationWord"), v: uni.location },
             { l: t(lang, "tuitionPerYear"), v: `$${uni.tuitionUSDPerYear.min.toLocaleString()}–${uni.tuitionUSDPerYear.max.toLocaleString()}` },
-            { l: t(lang, "languageWord"), v: uni.languageOfInstruction.join(" / ") },
-            { l: "Degrees offered", v: uni.degreeLevels.join(", ") },
+            { l: t(lang, "languageWord"), v: uni.languageOfInstruction.map((x) => uniWord(lang, "uniInstruction_", x)).join(" / ") },
+            { l: t(lang, "uniDegreesOffered"), v: uni.degreeLevels.map((d) => uniWord(lang, "uniDegree_", d)).join(lang === "km" ? " · " : ", ") },
           ].map((f) => (
             <div key={f.l} className="p-3 rounded-2xl eai-soft">
               <p className="text-xs eai-muted">{f.l}</p>
@@ -4587,12 +4598,12 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
       <div className="eai-card">
         <div className="flex items-center gap-2 mb-3">
           <BookOpen size={17} style={{ color: "var(--jade)" }} />
-          <h3 className="eai-display font-bold">Majors & fields</h3>
+          <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniMajorsAndFields")}</h3>
         </div>
         <div className="flex flex-wrap gap-2">
           {uni.tags.map((tagId) => {
             const f = UNI_FIELDS.find((x) => x.id === tagId);
-            return <span key={tagId} className="text-xs font-semibold px-2.5 py-1 rounded-full eai-soft">{f?.label || tagId}</span>;
+            return <span key={tagId} className={`text-xs font-semibold px-2.5 py-1 rounded-full eai-soft ${lang === "km" ? "eai-km" : ""}`}>{fieldLabel(f, lang) || tagId}</span>;
           })}
         </div>
       </div>
@@ -4600,7 +4611,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
       <div className="eai-card">
         <div className="flex items-center gap-2 mb-1">
           <Lightbulb size={17} style={{ color: "var(--ember)" }} />
-          <h3 className="eai-display font-bold">Why it's on this list</h3>
+          <h3 className={`eai-display font-bold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "uniWhyOnList")}</h3>
         </div>
         <p className="text-sm eai-muted leading-relaxed">{uni.note}</p>
       </div>
@@ -4613,7 +4624,7 @@ function AbroadUniversityDetail({ uni, p, onBack, lang = "en" }) {
    etc.) are deliberately NOT scored against, since no grade/IELTS data is tracked for university
    profiles — scoring against data we don't have would misrepresent a match. Those render as a
    plain unscored checklist instead (see Scholarships below). */
-function scoreScholarshipMatch(scholarship, up) {
+function scoreScholarshipMatch(scholarship, up, lang = "en") {
   if (!up) return { score: 0, reasons: [] };
   const goals = up.goals || [];
   let score = 0;
@@ -4621,14 +4632,14 @@ function scoreScholarshipMatch(scholarship, up) {
   if (up.major && scholarship.tags?.includes(up.major)) {
     const majorLabel = UNI_FIELDS.find((f) => f.id === up.major);
     score += 60;
-    reasons.push({ key: "major", label: `For ${majorLabel?.label || up.major} students` });
+    reasons.push({ key: "major", label: tf(lang, "uniReasonFor", { major: fieldLabel(majorLabel, lang) || up.major }) });
   }
   if (goals.includes("scholarship_prep")) score += 20;
   if (scholarship.needBased && goals.includes("scholarship_prep")) {
-    reasons.push({ key: "need", label: "Need-based — no entrance-exam ranking required" });
+    reasons.push({ key: "need", label: tf(lang, "uniReasonNeed") });
   }
   if (scholarship.meritBased) {
-    reasons.push({ key: "merit", label: "Merit-based — awarded by grades/exam rank" });
+    reasons.push({ key: "merit", label: tf(lang, "uniReasonMerit") });
   }
   return { score: Math.max(0, Math.min(100, score)), reasons };
 }
@@ -4644,10 +4655,10 @@ function Scholarships({ p, lang = "en" }) {
     const list = [];
     Object.entries(UNI_SCHOLARSHIPS).forEach(([abbr, scholarships]) => {
       const uni = UNIS.find((u) => u.abbr === abbr);
-      scholarships.forEach((s, i) => list.push({ abbr, i, uni, s, match: scoreScholarshipMatch(s, up) }));
+      scholarships.forEach((s, i) => list.push({ abbr, i, uni, s, match: scoreScholarshipMatch(s, up, lang) }));
     });
     return list.sort((a, b) => b.match.score - a.match.score);
-  }, [up.major, up.goals]);
+  }, [up.major, up.goals, lang]);
 
   if (selected) {
     const row = rows.find((r) => r.abbr === selected.abbr && r.i === selected.i);
@@ -4884,7 +4895,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
           action={<span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={12} /> {t(lang, "liveWord")}</span>} />
         <p className={`text-xs eai-muted -mt-2 mb-4 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "coachAnalyzes")}</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {analyticsSignals(p, live).map((sig, i) => (
+          {analyticsSignals(p, live, lang).map((sig, i) => (
             <div key={i} className="eai-tile p-3.5 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
               <div className="flex items-center justify-between">
                 <div className="grid place-items-center rounded-xl" style={{ width: 32, height: 32, background: "var(--bg-soft)" }}>
@@ -4928,7 +4939,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
                           <div className="flex-1 h-1.5 rounded-full eai-soft overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${t.score ?? 0}%`, background: LEVEL_COLOR[masteryLevel(t.score)] }} />
                           </div>
-                          <span className="text-xs w-9 text-right eai-muted">{t.score != null ? `${t.score}%` : "—"}</span>
+                          <span className="text-xs w-9 text-right eai-muted">{t.score != null ? `${localizeNum(t.score, lang)}%` : "—"}</span>
                           <span className={`text-xs w-20 text-right eai-muted ${lang === "km" ? "eai-km" : ""}`}>{levelLabel(masteryLevel(t.score), lang)}</span>
                         </div>
                       ))}
@@ -5053,7 +5064,7 @@ function UniversityMasteryWidget({ p, up, onPracticeCourse, lang = "en" }) {
               <div className="h-1.5 rounded-full eai-soft mt-3 overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${sub.m ?? 0}%`, background: sub.tag === "weak" ? "var(--ember)" : "var(--jade)" }} />
               </div>
-              <p className="text-xs eai-muted mt-1.5">{sub.m != null ? `${sub.m}% · ${sub.level}` : t(lang, "notAssessedYet")}</p>
+              <p className="text-xs eai-muted mt-1.5">{sub.m != null ? `${localizeNum(sub.m, lang)}% · ${levelLabel(sub.level, lang)}` : t(lang, "notAssessedYet")}</p>
             </button>
           );
         })}
@@ -5247,7 +5258,7 @@ function UniversityProgress({ p, lang = "en", leaderboard = null }) {
                 <div className="h-1.5 rounded-full eai-soft overflow-hidden flex-shrink-0" style={{ width: 100 }}>
                   <div className="h-full rounded-full" style={{ width: `${sub.m ?? 0}%`, background: sub.tag === "weak" ? "var(--ember)" : "var(--jade)" }} />
                 </div>
-                <span className="text-xs eai-muted flex-shrink-0" style={{ width: 70, textAlign: "right" }}>{sub.m != null ? `${sub.m}% ${sub.level}` : t(lang, "notAssessedYet")}</span>
+                <span className="text-xs eai-muted flex-shrink-0" style={{ width: 70, textAlign: "right" }}>{sub.m != null ? `${localizeNum(sub.m, lang)}% ${levelLabel(sub.level, lang)}` : t(lang, "notAssessedYet")}</span>
               </div>
             ))}
           </div>
@@ -5466,6 +5477,10 @@ class RagError extends Error {
 }
 
 const UNREACHABLE = "The AI coach server is not reachable.";
+const RAG_LOST = "The connection to the AI coach server was lost.";
+/* A RagError's text for the student. The two connection messages the app writes itself come in the student's language;
+   anything else is what the server said and stays as it wrote it. */
+const ragMessage = (err, lang) => (err.message === UNREACHABLE ? tf(lang, "coachUnreachable") : err.message === RAG_LOST ? tf(lang, "coachLost") : err.message);
 const UNCONFIGURED =
   "This site was built without an AI coach server address (set VITE_RAG_API_URL and redeploy).";
 
@@ -5568,7 +5583,7 @@ const REVEAL_CHARS_PER_SECOND = 180;
 const REVEAL_CATCHUP_SECONDS = 1;
 const REVEAL_TICK_MS = 40;
 
-async function ragStreamRequest(path, body, { signal, status }) {
+async function ragStreamRequest(path, body, { signal, status, waking: wakingText = WAKING }) {
   const send = () => ragRequest(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -5577,13 +5592,13 @@ async function ragStreamRequest(path, body, { signal, status }) {
   });
   // Only a hosted API sleeps; in dev the proxy reaches a server that is either up or not.
   if (!RAG_API) return send();
-  const waking = setTimeout(() => status(WAKING), COLD_START_MS);
+  const waking = setTimeout(() => status(wakingText), COLD_START_MS);
   try {
     return await send();
   } catch (err) {
     // Only a boot can be waited out: a configuration mistake or a real error cannot.
     if (err.status !== 0 || err.message !== UNREACHABLE || signal?.aborted) throw err;
-    status(WAKING);
+    status(wakingText);
     await sleep(COLD_START_RETRY_MS);
     return await send();
   } finally {
@@ -5595,7 +5610,7 @@ async function ragStreamRequest(path, body, { signal, status }) {
    asks for more while the model stops at its output limit: next(textSoFar) builds the body of the
    follow-up request. Resolves to { text, sources, stopReason }; a failure is thrown with what had
    arrived by then as err.partial (and err.sources) so the caller can keep it. */
-async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, onImages, initialStatus, stageLabels = STAGE_LABELS }) {
+async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, onImages, initialStatus, lang = "en", stageLabels = stageLabelsFor(lang) }) {
   let text = "";   // every delta received so far
   let shown = 0;   // how much of it is on screen
   let sources = [];
@@ -5603,7 +5618,6 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
   let since = 0;
   const paint = () => onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: null });
   const status = (notice) => { if (!shown) onUpdate({ text: "", rag: true, streaming: true, sources, notice }); };
-  const lost = "The connection to the AI coach server was lost.";
 
   const pump = () => {
     timer = 0;
@@ -5633,7 +5647,7 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
     const base = text.length; // a model switch rewinds this request's own output, not the answer so far
     let finished = false;
     let stopReason = null;
-    const res = await ragStreamRequest(path, JSON.stringify(requestBody), { signal, status });
+    const res = await ragStreamRequest(path, JSON.stringify(requestBody), { signal, status, waking: tf(lang, "coachWaking") });
     try {
       for await (const event of readNdjson(res)) {
         if (event.type === "status") status(stageLabels[event.stage]);
@@ -5647,7 +5661,7 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
           text = text.slice(0, base);
           shown = Math.min(shown, text.length);
           // Whatever earlier rounds had revealed stays on screen and keeps flowing.
-          onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: shown ? null : "Switching to another model…" });
+          onUpdate({ text: text.slice(0, shown), rag: true, streaming: true, sources, notice: shown ? null : tf(lang, "coachSwitchModel") });
           reveal();
         } else if (event.type === "error") throw new RagError(event.detail, event.status);
         else if (event.type === "done") {
@@ -5664,9 +5678,9 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
         }
       }
     } catch (err) {
-      throw err instanceof RagError || signal?.aborted ? err : new RagError(lost, 0);
+      throw err instanceof RagError || signal?.aborted ? err : new RagError(RAG_LOST, 0);
     }
-    if (!finished) throw new RagError(lost, 0);
+    if (!finished) throw new RagError(RAG_LOST, 0);
     return stopReason;
   };
 
@@ -5687,7 +5701,7 @@ async function ragStreamReply(path, body, next, { onUpdate = () => {}, signal, o
   }
 }
 
-async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages } = {}) {
+async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], signal, onImages, lang = "en" } = {}) {
   // The track picks the maths syllabus (the Social Science track has no complex numbers).
   const track = FIELD_META[p?.field] ? p.field : undefined;
   const first = {
@@ -5701,9 +5715,9 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
     // The question rides along so retrieval finds the same passages again; on its
     // own the continuation phrase matches nothing and the server would announce
     // mid-answer that the curriculum does not cover this.
-    const lang = KHMER_CHAR.test(text) ? "km" : "en";
+    const answerLang = KHMER_CHAR.test(text) ? "km" : "en";
     return {
-      prompt: `${CONTINUE_PROMPT[lang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
+      prompt: `${CONTINUE_PROMPT[answerLang]}\n\n${t || text.slice(-CONTINUE_QUERY_CHARS)}`,
       track,
       history: [
         ...toRagHistory(history),
@@ -5718,25 +5732,25 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
   };
   try {
     let { text, sources, stopReason } = await ragStreamReply("/api/query/stream", first, next, {
-      onUpdate, signal, onImages,
-      initialStatus: images.length ? STAGE_LABELS.reading_images : STAGE_LABELS.searching,
+      onUpdate, signal, onImages, lang,
+      initialStatus: images.length ? tf(lang, "coachStageReading") : tf(lang, "coachStageSearching"),
     });
-    if (TRUNCATED_STOPS.has(stopReason)) text += "\n\n*(This exercise is longer than I can answer in one go. Ask me to carry on from the last step.)*";
+    if (TRUNCATED_STOPS.has(stopReason)) text += `\n\n*${tf(lang, "coachTruncatedStudy")}*`;
     return { text: text || "…", rag: true, sources };
   } catch (err) {
     const { partial: text = "", sources = [] } = err;
     if (signal?.aborted) {
       return text
-        ? { text: `${text}\n\n*(Stopped)*`, rag: true, sources, error: true }
-        : { text: "Stopped.", error: true };
+        ? { text: `${text}\n\n*${tf(lang, "coachStopped")}*`, rag: true, sources, error: true }
+        : { text: tf(lang, "coachStoppedPlain"), error: true };
     }
     if (err.status === 0 && !text) {
       // A photo can only be read by the server, so there is no offline answer to fall back to.
-      if (images.length) return { text: `I can't read your photo right now: ${err.message}`, error: true };
-      return { text: `${coachReply(t, p)}\n\n(Offline demo reply: start the AI coach server for curriculum-grounded answers.)` };
+      if (images.length) return { text: tf(lang, "coachCantReadPhoto", { error: ragMessage(err, lang) }), error: true };
+      return { text: `${coachReply(t, p)}\n\n${tf(lang, "coachOfflineDemo")}` };
     }
-    if (text) return { text: `${text}\n\n*(The answer was cut off: ${err.message})*`, rag: true, sources, error: true };
-    return { text: `Sorry, I couldn't answer that: ${err.message}`, error: true };
+    if (text) return { text: `${text}\n\n*${tf(lang, "coachCutOffAnswer", { error: ragMessage(err, lang) })}*`, rag: true, sources, error: true };
+    return { text: tf(lang, "coachCouldntAnswer", { error: ragMessage(err, lang) }), error: true };
   }
 }
 
@@ -5745,17 +5759,17 @@ async function ragStudyReply(t, p, history, onUpdate = () => {}, { images = [], 
    per paper picks which past years the model studies, and the continuation rounds send it again
    so they see the same ones. */
 const EXAM_FOCUS_MAX = 1000;
-const EXAM_STAGE_LABELS = {
-  searching: "Studying past papers…",
-  generating: "Writing your paper and checking its answers (this takes a minute or two)…",
-};
+const examStageLabelsFor = (lang) => ({
+  searching: tf(lang, "coachStageStudying"),
+  generating: tf(lang, "coachStageWriting"),
+});
 
 /* A paper comes without answers so the student tries it first; asking for them afterwards
    ("ចម្លើយ II", "ចម្លើយទាំងអស់", "answer for III") gets the key of the last paper only. */
 const ANSWER_REQUEST = /ចម្លើយ|កំណែ|ដំណោះស្រាយ|\banswers?\b|\bsolutions?\b|\bkey\b/i;
 const lastExamPaper = (messages) => [...messages].reverse().find((m) => m.role === "ai" && m.exam && !m.exam.answers && !m.error && m.text);
 
-async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam } = {}) {
+async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam, lang = "en" } = {}) {
   const answering = Boolean(exam.paper);
   const first = {
     subject: subjectId(exam.subject),
@@ -5770,21 +5784,19 @@ async function examPaperReply(t, p, history, onUpdate = () => {}, { signal, exam
   const meta = { subject: exam.subject, answers: answering };
   try {
     let { text, sources, stopReason } = await ragStreamReply("/api/exam/stream", first, next, {
-      onUpdate, signal, initialStatus: EXAM_STAGE_LABELS.searching, stageLabels: EXAM_STAGE_LABELS,
+      onUpdate, signal, lang, initialStatus: examStageLabelsFor(lang).searching, stageLabels: examStageLabelsFor(lang),
     });
-    if (TRUNCATED_STOPS.has(stopReason)) text += (answering
-      ? "\n\n*(The answers ran longer than I can write in one go. Ask for fewer exercises at a time.)*"
-      : "\n\n*(The paper ran longer than I can write in one go. Generate it again.)*");
+    if (TRUNCATED_STOPS.has(stopReason)) text += `\n\n*${tf(lang, answering ? "coachPaperTruncAnswers" : "coachPaperTruncPaper")}*`;
     return { text: text || "…", rag: true, sources, exam: meta };
   } catch (err) {
     const { partial: text = "", sources = [] } = err;
     if (signal?.aborted) {
       return text
-        ? { text: `${text}\n\n*(Stopped)*`, rag: true, sources, exam: meta, error: true }
-        : { text: "Stopped.", error: true };
+        ? { text: `${text}\n\n*${tf(lang, "coachStopped")}*`, rag: true, sources, exam: meta, error: true }
+        : { text: tf(lang, "coachStoppedPlain"), error: true };
     }
-    if (text) return { text: `${text}\n\n*(The paper was cut off: ${err.message})*`, rag: true, sources, exam: meta, error: true };
-    return { text: `Sorry, I couldn't write that paper: ${err.message}`, error: true };
+    if (text) return { text: `${text}\n\n*${tf(lang, "coachPaperCutOff", { error: ragMessage(err, lang) })}*`, rag: true, sources, exam: meta, error: true };
+    return { text: tf(lang, "coachCouldntPaper", { error: ragMessage(err, lang) }), error: true };
   }
 }
 
@@ -6145,11 +6157,25 @@ async function prepareImageAttachment(file) {
   }
 }
 
-const STAGE_LABELS = {
-  reading_images: "Reading your photo…",
-  searching: "Searching the curriculum…",
-  generating: "Thinking…",
-};
+const stageLabelsFor = (lang) => ({
+  reading_images: tf(lang, "coachStageReading"),
+  searching: tf(lang, "coachStageSearching"),
+  generating: tf(lang, "coachStageGenerating"),
+});
+
+/* The words of each Coach mode (its tab, subtitle, composer hint, first-screen text and the suggestion buttons) in the
+   student's language. COACH_MODES keeps what a mode does; the words are in moreStrings.js. */
+function coachCopy(lang, id, p) {
+  const c = (key, vars) => tf(lang, `coach_${id}_${key}`, vars);
+  const subject = (s) => subjectLabel(s, lang);
+  const suggestions = {
+    study: [c("s1"), c("s2"), p.weak[0] ? c("weak", { subject: subject(p.weak[0].s) }) : c("plan")],
+    exam: [c("s1"), c("s2"), c("s3")],
+    major: [c("s1"), c("s2"), p.strong[0] ? c("strong", { subject: subject(p.strong[0].s) }) : c("math")],
+    university: [c("s1"), c("s2"), c("s3")],
+  }[id];
+  return { label: c("label"), subtitle: c("subtitle"), placeholder: c("placeholder"), intro: c("intro"), suggestions };
+}
 
 const historyTextFor = (text, readings) => [
   text || "(photo)",
@@ -6165,7 +6191,7 @@ function StatusLine({ text }) {
   );
 }
 
-function CopyButton({ text }) {
+function CopyButton({ text, lang = "en" }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard?.writeText(text).then(() => {
@@ -6174,33 +6200,33 @@ function CopyButton({ text }) {
     }).catch(() => {});
   };
   return (
-    <button onClick={copy} className="eai-icon-btn sm eai-focus" title={copied ? "Copied" : "Copy"} aria-label="Copy answer">
+    <button onClick={copy} className="eai-icon-btn sm eai-focus" title={tf(lang, copied ? "coachCopied" : "coachCopy")} aria-label={tf(lang, "coachCopyAnswer")}>
       {copied ? <Check size={15} /> : <Copy size={15} />}
     </button>
   );
 }
 
-function ImageReadings({ readings }) {
+function ImageReadings({ readings, lang = "en" }) {
   return (
     <details className="eai-reading">
-      <summary className="eai-focus"><ScanText size={13} /> Text read from {readings.length > 1 ? "photos" : "photo"} <ChevronDown size={13} /></summary>
+      <summary className="eai-focus"><ScanText size={13} /> {tf(lang, readings.length > 1 ? "coachReadFromMany" : "coachReadFromOne")} <ChevronDown size={13} /></summary>
       <div className="space-y-3">
         {readings.map((r) => (
           <div key={r.index}>
-            {readings.length > 1 && <p className="text-xs font-semibold mb-1">Photo {r.index}</p>}
+            {readings.length > 1 && <p className="text-xs font-semibold mb-1">{tf(lang, "coachPhotoN", { n: localizeNum(r.index, lang) })}</p>}
             {r.vision_text && <RichAnswer text={r.vision_text} />}
             {r.khmer_text && (
               <p className="mt-2" style={{ whiteSpace: "pre-wrap" }}>
-                {r.vision_text && <span className="eai-muted text-xs">Khmer OCR: </span>}{r.khmer_text}
+                {r.vision_text && <span className="eai-muted text-xs">{tf(lang, "coachKhmerOcr")}</span>}{r.khmer_text}
               </p>
             )}
-            {!r.vision_text && !r.khmer_text && <p className="eai-muted">Couldn't read this photo. Try a sharper, well-lit picture.</p>}
+            {!r.vision_text && !r.khmer_text && <p className="eai-muted">{tf(lang, "coachCantRead")}</p>}
             {r.warnings?.length > 0 && (
               <ul className="eai-muted text-[11px] mt-2 space-y-0.5">
                 {r.warnings.map((w, i) => <li key={i}>{w}</li>)}
               </ul>
             )}
-            <p className="eai-muted text-[11px] mt-2">{[r.vision_engine, r.khmer_engine].filter(Boolean).join(" + ") || "no engine answered"}</p>
+            <p className="eai-muted text-[11px] mt-2">{[r.vision_engine, r.khmer_engine].filter(Boolean).join(" + ") || tf(lang, "coachNoEngine")}</p>
           </div>
         ))}
       </div>
@@ -6208,25 +6234,25 @@ function ImageReadings({ readings }) {
   );
 }
 
-function UserMessage({ m, onOpenImage }) {
+function UserMessage({ m, onOpenImage, lang = "en" }) {
   return (
     <div className="flex flex-col items-end gap-1.5">
       {m.images?.length > 0 && (
         <div className="flex flex-wrap justify-end gap-2">
           {m.images.map((img) => (img.thumb
-            ? <button key={img.id} onClick={() => onOpenImage(img.thumb)} className="eai-focus" style={{ borderRadius: 14 }} aria-label={`Open ${img.name}`}>
+            ? <button key={img.id} onClick={() => onOpenImage(img.thumb)} className="eai-focus" style={{ borderRadius: 14 }} aria-label={tf(lang, "coachOpenPhoto", { name: img.name })}>
                 <img className="eai-chat-img" src={img.thumb} alt={img.name} />
               </button>
             : <div key={img.id} className="eai-user-bubble text-xs flex items-center gap-1.5"><ImagePlus size={14} /> {img.name}</div>))}
         </div>
       )}
       {m.text && <div className="eai-user-bubble">{m.text}</div>}
-      {m.readings?.length > 0 && <ImageReadings readings={m.readings} />}
+      {m.readings?.length > 0 && <ImageReadings readings={m.readings} lang={lang} />}
     </div>
   );
 }
 
-function AssistantMessage({ m, Icon }) {
+function AssistantMessage({ m, Icon, lang = "en" }) {
   const answerRef = useRef(null);
   const [printBlocked, setPrintBlocked] = useState(false);
   return (
@@ -6238,15 +6264,15 @@ function AssistantMessage({ m, Icon }) {
           : <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>}
         {!m.streaming && m.text && (
           <div className="eai-msg-actions">
-            <CopyButton text={m.text} />
+            <CopyButton text={m.text} lang={lang} />
             {m.exam && (
-              <button className="eai-icon-btn sm eai-focus" title="Print or save as PDF" aria-label="Print or save the paper as PDF"
+              <button className="eai-icon-btn sm eai-focus" title={tf(lang, "coachPrint")} aria-label={tf(lang, "coachPrintPaper")}
                 onClick={() => setPrintBlocked(!printExamPaper(answerRef.current, `${m.exam.subject} mock paper`))}>
                 <Download size={15} />
               </button>
             )}
-            {m.exam && !m.exam.answers && !m.error && <span className="text-xs eai-muted self-center">Try it first, then type “ចម្លើយ II” for one exercise or “ចម្លើយទាំងអស់” for all the answers.</span>}
-            {printBlocked && <span className="text-xs self-center" style={{ color: "var(--ember)" }}>Allow pop-ups to print the paper.</span>}
+            {m.exam && !m.exam.answers && !m.error && <span className="text-xs eai-muted self-center">{tf(lang, "coachExamTip")}</span>}
+            {printBlocked && <span className="text-xs self-center" style={{ color: "var(--ember)" }}>{tf(lang, "coachAllowPopups")}</span>}
           </div>
         )}
       </div>
@@ -6260,7 +6286,7 @@ function AssistantMessage({ m, Icon }) {
 const COACH_MODE_IDS_UNIVERSITY = ["university"];
 const COACH_MODE_IDS_HIGHSCHOOL = ["study", "exam", "major"];
 
-function Coach({ p }) {
+function Coach({ p, lang = "en" }) {
   const isUni = p.educationLevel === "university";
   const [mode, setMode] = useState(isUni ? "university" : "study");
   const [msgsByMode, setMsgsByMode] = useState({ study: [], exam: [], major: [], university: [] });
@@ -6296,9 +6322,12 @@ function Coach({ p }) {
   const menuRef = useRef(null);
   const abortRef = useRef(null);
   const dragDepth = useRef(0);
-  const active = COACH_MODES[mode];
+  const T = (key, vars) => tf(lang, key, vars);
+  const km = lang === "km" ? "eai-km" : "";
+  const copy = coachCopy(lang, mode, p);
+  const active = { ...COACH_MODES[mode], label: copy.label, subtitle: copy.subtitle, placeholder: copy.placeholder, intro: copy.intro };
   const msgs = msgsByMode[mode];
-  const suggestions = active.suggestions(p);
+  const suggestions = copy.suggestions;
   const preparing = attachments.some((a) => a.status === "processing");
   const readyAttachments = attachments.filter((a) => a.status === "ready");
   const canSend = !loading && !preparing && (input.trim() !== "" || readyAttachments.length > 0 || active.allowEmpty);
@@ -6340,8 +6369,9 @@ function Coach({ p }) {
   const addImages = (files) => {
     if (!active.canUpload) return;
     const room = COACH_MAX_IMAGES - attachments.length;
-    if (files.length > room) setNotice(`You can attach up to ${COACH_MAX_IMAGES} photos per question.`);
+    if (files.length > room) setNotice(T("coachMaxPhotos", { n: localizeNum(COACH_MAX_IMAGES, lang) }));
     files.slice(0, Math.max(0, room)).forEach((file) => {
+      if (file.size > COACH_MAX_IMAGE_MB * 1024 * 1024) { setNotice(T("coachImageTooBig", { name: file.name, mb: localizeNum(COACH_MAX_IMAGE_MB, lang) })); return; }
       const id = `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const preview = URL.createObjectURL(file);
       setAttachments((list) => [...list, { id, name: file.name || "photo", preview, status: "processing" }]);
@@ -6396,7 +6426,7 @@ function Coach({ p }) {
       : { ...examOptions };
     const shownText = !exam ? t
       : paper ? `🔑 ${t}`
-      : [`📝 ${exam.subject} mock paper · ${exam.language === "km" ? "Khmer" : "English"}`, t].filter(Boolean).join("\n");
+      : [`📝 ${T("coachMockPaper", { subject: subjectLabel(exam.subject, lang), language: T(exam.language === "km" ? "coachLangShortKm" : "coachLangShortEn") })}`, t].filter(Boolean).join("\n");
     setMsgsByMode((m) => ({
       ...m,
       [mode]: [...m[mode], {
@@ -6414,10 +6444,10 @@ function Coach({ p }) {
     // A minimum "thinking" delay keeps the typing indicator feeling natural for the instant
     // scripted mode, without adding extra wait on top of a real (already-slower) API call.
     const minDelay = new Promise((resolve) => setTimeout(resolve, 400));
-    const extras = { images, signal: controller.signal, onImages, exam };
+    const extras = { images, signal: controller.signal, onImages, exam, lang };
     Promise.all([Promise.resolve(active.reply(t, p, historyForReply, upsertReply, extras)), minDelay])
       .then(([reply]) => (typeof reply === "string" ? { text: reply } : reply))
-      .catch((err) => ({ text: `Sorry, something went wrong: ${err.message}`, error: true }))
+      .catch((err) => ({ text: T("coachSomethingWrong", { error: ragMessage(err, lang) }), error: true }))
       .then((reply) => {
         upsertReply({ ...reply, streaming: false, notice: null });
         setLoading(false);
@@ -6429,7 +6459,7 @@ function Coach({ p }) {
 
   // Adds documents to the coach's library via /api/ingest and reports progress in the chat.
   const uploadDocs = async (files) => {
-    if (uploading) { setNotice("Please wait for the current upload to finish."); return; }
+    if (uploading) { setNotice(T("coachWaitUpload")); return; }
     setUploading(true);
     for (const file of files) {
       const id = `upload-${Date.now()}-${file.name}`;
@@ -6437,14 +6467,14 @@ function Coach({ p }) {
         const others = m.study.filter((x) => x.id !== id);
         return { ...m, study: [...others, { id, role: "ai", text, ...extra }] };
       });
-      post("", { rag: true, streaming: true, notice: `Adding “${file.name}” to your study library… scanned pages can take a few minutes.` });
+      post("", { rag: true, streaming: true, notice: T("coachAdding", { name: file.name }) });
       try {
         const result = await waitForIngest(await ragUpload(file));
-        const formulas = result.formulas_protected ? `, ${result.formulas_protected} formulas` : "";
-        const notes = result.warnings?.length ? `\nNote: ${result.warnings.join(" ")}` : "";
-        post(`Added “${result.source}” to your study library (${result.chunks_added} passages${formulas}). Ask me anything about it!${notes}`);
+        const formulas = result.formulas_protected ? T("coachFormulasPart", { n: localizeNum(result.formulas_protected, lang) }) : "";
+        const notes = result.warnings?.length ? `\n${T("coachNotePrefix")} ${result.warnings.join(" ")}` : "";
+        post(T("coachAdded", { source: result.source, chunks: localizeNum(result.chunks_added, lang), formulas, notes }));
       } catch (err) {
-        post(`Couldn't add “${file.name}”: ${err.message}`, { error: true });
+        post(T("coachAddFailed", { name: file.name, error: ragMessage(err, lang) }), { error: true });
       }
     }
     setUploading(false);
@@ -6489,10 +6519,10 @@ function Coach({ p }) {
   const firstName = p.name.split(" ")[0];
 
   return (
-    <div className="eai-rise eai-coach-view flex flex-col relative" {...dragHandlers}>
+    <div className={`eai-rise eai-coach-view flex flex-col relative ${km}`} {...dragHandlers}>
       <div className="flex items-center justify-between gap-3 flex-wrap pb-2">
         <div className="flex items-center gap-2.5">
-          <h2 className="eai-display text-lg font-extrabold">AI Coach</h2>
+          <h2 className={`eai-display text-lg font-extrabold ${km}`}>{T("coachTitle")}</h2>
           <span className="text-xs eai-muted hidden md:inline">{active.subtitle}</span>
         </div>
         <div className="flex gap-1 p-1 rounded-full eai-soft">
@@ -6500,7 +6530,7 @@ function Coach({ p }) {
             <button key={id} onClick={() => setMode(id)}
               className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5"
               style={{ background: mode === id ? "var(--card)" : "transparent", color: mode === id ? "var(--ink)" : "var(--muted)", boxShadow: mode === id ? "var(--shadow)" : "none" }}>
-              <m.icon size={14} /> {m.label}
+              <m.icon size={14} /> {T(`coach_${id}_label`)}
             </button>
           ))}
         </div>
@@ -6512,7 +6542,7 @@ function Coach({ p }) {
             <div className="flex flex-col items-center text-center gap-4 pt-[8vh]">
               <div className="eai-avatar" style={{ width: 52, height: 52 }}><active.icon size={24} color="#fff" /></div>
               <div>
-                <h3 className="eai-display text-2xl font-extrabold">Hi {firstName}, what shall we work on?</h3>
+                <h3 className={`eai-display text-2xl font-extrabold ${km}`}>{T("coachHi", { name: firstName })}</h3>
                 <p className="eai-muted text-sm mt-1.5 max-w-lg">{active.intro}</p>
               </div>
               <div className="grid sm:grid-cols-2 gap-2 w-full mt-2">
@@ -6521,18 +6551,18 @@ function Coach({ p }) {
                 ))}
                 {active.canUpload && (
                   <button onClick={() => photoRef.current?.click()} className="eai-suggest eai-focus flex items-center gap-2">
-                    <ImagePlus size={16} /> Snap or upload a photo of a problem
+                    <ImagePlus size={16} /> {T("coachSnapPhoto")}
                   </button>
                 )}
               </div>
             </div>
           ) : msgs.map((m) => (m.role === "user"
-            ? <UserMessage key={m.id} m={m} onOpenImage={setLightbox} />
-            : <AssistantMessage key={m.id} m={m} Icon={active.icon} />))}
+            ? <UserMessage key={m.id} m={m} onOpenImage={setLightbox} lang={lang} />
+            : <AssistantMessage key={m.id} m={m} Icon={active.icon} lang={lang} />))}
           {loading && !msgs.some((m) => m.streaming) && (
             <div className="flex gap-3">
               <div className="eai-avatar"><active.icon size={15} color="#fff" /></div>
-              <StatusLine text="Thinking…" />
+              <StatusLine text={T("coachThinking")} />
             </div>
           )}
           <div ref={endRef} />
@@ -6542,20 +6572,20 @@ function Coach({ p }) {
       <div className="eai-composer-wrap">
         {notice && <p className="text-xs text-center mb-2" style={{ color: "var(--ember)" }} role="status">{notice}</p>}
         {mode === "exam" && (
-          <div className="eai-exam-options" role="group" aria-label="Paper options">
+          <div className="eai-exam-options" role="group" aria-label={T("coachPaperOptions")}>
             <label>
-              <span>Subject</span>
+              <span>{T("coachSubject")}</span>
               <select className="eai-focus" value={examOptions.subject} disabled={loading}
                 onChange={(e) => setExamOptions((o) => ({ ...o, subject: e.target.value }))}>
                 {examSubjects.map((s) => <option key={s} value={s}>{s} · {subjectLabel(s, "km")}</option>)}
               </select>
             </label>
             <label>
-              <span>Language</span>
+              <span>{T("coachLanguage")}</span>
               <select className="eai-focus" value={examOptions.language} disabled={loading}
                 onChange={(e) => setExamOptions((o) => ({ ...o, language: e.target.value }))}>
-                <option value="km">ខ្មែរ (Khmer)</option>
-                <option value="en">English</option>
+                <option value="km">{T("coachLangKm")}</option>
+                <option value="en">{T("coachLangEn")}</option>
               </select>
             </label>
           </div>
@@ -6567,32 +6597,32 @@ function Coach({ p }) {
                 <div key={a.id} className="eai-attach" title={a.name}>
                   <img src={a.preview} alt={a.name} />
                   {a.status === "processing" && <div className="eai-attach-busy"><LoaderCircle size={18} className="eai-spin" /></div>}
-                  <button onClick={() => removeAttachment(a.id)} aria-label={`Remove ${a.name}`}><X size={12} /></button>
+                  <button onClick={() => removeAttachment(a.id)} aria-label={T("coachRemove", { name: a.name })}><X size={12} /></button>
                 </div>
               ))}
             </div>
           )}
           <textarea ref={textRef} rows={1} className="eai-composer-input"
-            placeholder={attachments.length ? "Ask about your photo… (or just send it)" : active.placeholder}
+            placeholder={attachments.length ? T("coachAskAboutPhoto") : active.placeholder}
             value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
           <div className="flex items-center justify-between px-2 pb-2">
             <div className="relative" ref={menuRef}>
               {active.canUpload && (
                 <>
                   <button onClick={() => setMenuOpen((open) => !open)} className="eai-icon-btn eai-focus"
-                    aria-label="Add photos or files" aria-expanded={menuOpen} title="Add photos or files">
+                    aria-label={T("coachAddFiles")} aria-expanded={menuOpen} title={T("coachAddFiles")}>
                     <Plus size={20} />
                   </button>
                   {menuOpen && (
                     <div className="eai-menu" role="menu">
                       <button role="menuitem" onClick={() => { setMenuOpen(false); photoRef.current?.click(); }}>
                         <ImagePlus size={17} />
-                        <span><span className="block font-medium">Add photos</span><span className="block text-xs eai-muted">Ask about a problem (up to {COACH_MAX_IMAGES})</span></span>
+                        <span><span className="block font-medium">{T("coachAddPhotos")}</span><span className="block text-xs eai-muted">{T("coachAddPhotosHint", { n: localizeNum(COACH_MAX_IMAGES, lang) })}</span></span>
                       </button>
                       {canAddDocs && (
                         <button role="menuitem" onClick={() => { setMenuOpen(false); docRef.current?.click(); }} disabled={uploading}>
                           <FileUp size={17} />
-                          <span><span className="block font-medium">Add to study library</span><span className="block text-xs eai-muted">PDF, notes or scans the coach can search</span></span>
+                          <span><span className="block font-medium">{T("coachAddLibrary")}</span><span className="block text-xs eai-muted">{T("coachAddLibraryHint")}</span></span>
                         </button>
                       )}
                     </div>
@@ -6605,20 +6635,20 @@ function Coach({ p }) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {uploading && <span className="text-xs eai-muted flex items-center gap-1"><LoaderCircle size={13} className="eai-spin" /> Indexing…</span>}
+              {uploading && <span className="text-xs eai-muted flex items-center gap-1"><LoaderCircle size={13} className="eai-spin" /> {T("coachIndexing")}</span>}
               {loading && active.canStop
-                ? <button onClick={stop} className="eai-send eai-focus" aria-label="Stop generating" title="Stop"><Square size={13} fill="currentColor" /></button>
-                : <button onClick={() => send()} disabled={!canSend} className="eai-send eai-focus" aria-label="Send" title="Send (Enter)"><ArrowUp size={18} /></button>}
+                ? <button onClick={stop} className="eai-send eai-focus" aria-label={T("coachStopGenerating")} title={T("coachStop")}><Square size={13} fill="currentColor" /></button>
+                : <button onClick={() => send()} disabled={!canSend} className="eai-send eai-focus" aria-label={T("coachSend")} title={T("coachSendEnter")}><ArrowUp size={18} /></button>}
             </div>
           </div>
         </div>
-        <p className="eai-footnote">AI Coach can make mistakes. Double-check important steps.</p>
+        <p className="eai-footnote">{T("coachDisclaimer")}</p>
       </div>
 
-      {dragging && <div className="eai-drop"><div className="flex items-center gap-2 font-semibold"><ImagePlus size={20} /> {canAddDocs ? "Drop photos to ask about them, or documents to add to your library" : "Drop photos to ask about them"}</div></div>}
+      {dragging && <div className="eai-drop"><div className="flex items-center gap-2 font-semibold"><ImagePlus size={20} /> {canAddDocs ? T("coachDropBoth") : T("coachDropPhotos")}</div></div>}
       {lightbox && (
-        <div className="eai-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label="Photo preview">
-          <img src={lightbox} alt="Attached photo" />
+        <div className="eai-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label={T("coachPhotoPreview")}>
+          <img src={lightbox} alt={T("coachAttached")} />
         </div>
       )}
     </div>
@@ -6704,15 +6734,15 @@ const SUPER_PLANS = [
   },
 ];
 
-/* University-track twin of SUPER_PLANS above — same shape, English-only (no *Km fields; the
-   render below falls back to English for any plan missing them, so this doesn't need to
-   duplicate strings into featuresKm just to avoid crashing in Khmer mode). Copy mirrors the
-   Free/Standard/Premium structure drafted for the University Hub pricing strategy review. */
+/* University-track twin of SUPER_PLANS above — same shape, with the *Km fields too (the render below still falls back to
+   English for any plan missing them). Copy mirrors the Free/Standard/Premium structure drafted for the University Hub
+   pricing strategy review; the Khmer is a first draft for a native speaker to read. */
 const UNI_SUPER_PLANS = [
   {
-    id: "free", label: "Free", price: "$0", period: "",
+    id: "free", label: "Free", labelKm: "ឥតគិតថ្លៃ", price: "$0", period: "",
     tagline: "Free for every student — University Hub included",
-    button: "Start for Free",
+    taglineKm: "ឥតគិតថ្លៃសម្រាប់និស្សិតគ្រប់រូប — រួមទាំងមជ្ឈមណ្ឌលសាកលវិទ្យាល័យ",
+    button: "Start for Free", buttonKm: "ចាប់ផ្តើមឥតគិតថ្លៃ",
     features: [
       "First lesson of every course in your major",
       "Basic Discovery filters: major & location",
@@ -6720,11 +6750,18 @@ const UNI_SUPER_PLANS = [
       "A few AI Mentor questions a day",
       "Full user experience (XP, streaks, leaderboards)",
     ],
+    featuresKm: [
+      "មេរៀនដំបូងនៃគ្រប់វគ្គសិក្សាក្នុងជំនាញរបស់អ្នក",
+      "តម្រងស្វែងរកមូលដ្ឋាន៖ ជំនាញ និងទីតាំង",
+      "បញ្ជីអាហារូបករណ៍សាធារណៈ ដោយគ្មានការបង់ប្រាក់",
+      "សំណួរអ្នកណែនាំ AI ខ្លះក្នុងមួយថ្ងៃ",
+      "បទពិសោធន៍ប្រើប្រាស់ពេញលេញ (XP ថ្ងៃជាប់គ្នា តារាងចំណាត់ថ្នាក់)",
+    ],
   },
   {
-    id: "standard", label: "Standard", price: "$1.99", period: "/ month",
-    tagline: "Everything in Free, plus:",
-    button: "Get Standard",
+    id: "standard", label: "Standard", labelKm: "ស្តង់ដារ", price: "$1.99", period: "/ month", periodKm: "/ ខែ",
+    tagline: "Everything in Free, plus:", taglineKm: "អ្វីៗគ្រប់យ៉ាងក្នុងគម្រោងឥតគិតថ្លៃ បូក៖",
+    button: "Get Standard", buttonKm: "ទទួលបានស្តង់ដារ",
     features: [
       "Every course, every year, fully unlocked",
       "Quizzes with real mastery tracking, not just checkmarks",
@@ -6732,17 +6769,31 @@ const UNI_SUPER_PLANS = [
       "Full Scholarship Center, matched to your profile",
       "More AI Mentor time — aware of your weak spots",
     ],
+    featuresKm: [
+      "គ្រប់វគ្គសិក្សា គ្រប់ឆ្នាំ បើកពេញលេញ",
+      "កម្រងសំណួរដែលតាមដានភាពស្ទាត់ជំនាញពិតប្រាកដ មិនមែនគ្រាន់តែសញ្ញាធីកទេ",
+      "តម្រងស្វែងរកកម្រិតខ្ពស់ + «ហេតុអ្វីបានជាសមនឹងអ្នក»",
+      "មជ្ឈមណ្ឌលអាហារូបករណ៍ពេញលេញ ផ្គូផ្គងតាមប្រវត្តិរូបរបស់អ្នក",
+      "ពេលវេលាជាមួយអ្នកណែនាំ AI កាន់តែច្រើន — ដឹងពីចំណុចខ្សោយរបស់អ្នក",
+    ],
   },
   {
-    id: "premium", label: "Premium", price: "$3.99", period: "/ month", best: true,
-    tagline: "Everything in Standard, plus:",
-    button: "Get Premium",
+    id: "premium", label: "Premium", labelKm: "ព្រីមៀម", price: "$3.99", period: "/ month", periodKm: "/ ខែ", best: true,
+    tagline: "Everything in Standard, plus:", taglineKm: "អ្វីៗគ្រប់យ៉ាងក្នុងគម្រោងស្តង់ដារ បូក៖",
+    button: "Get Premium", buttonKm: "ទទួលបានព្រីមៀម",
     features: [
       "AI builds your Learn → Practice → Quiz path automatically",
       "Unlimited AI Mentor access",
       "Scholarship Gap Analysis — what's missing, how to fix it",
       "Full mock exams, past papers, advanced IELTS/TOEFL prep",
       "Application tracker + document checklist",
+    ],
+    featuresKm: [
+      "AI បង្កើតផ្លូវ រៀន → ហាត់ → កម្រងសំណួរ ឱ្យអ្នកដោយស្វ័យប្រវត្តិ",
+      "ការប្រើអ្នកណែនាំ AI គ្មានដែនកំណត់",
+      "ការវិភាគគម្លាតអាហារូបករណ៍ — អ្វីដែលខ្វះ និងរបៀបកែ",
+      "ប្រឡងសាកល្បងពេញលេញ ក្រដាសប្រឡងឆ្នាំមុន និងការត្រៀម IELTS/TOEFL កម្រិតខ្ពស់",
+      "កម្មវិធីតាមដានពាក្យសុំ + បញ្ជីពិនិត្យឯកសារ",
     ],
   },
 ];
@@ -6761,7 +6812,7 @@ function SuperBondus({ p, lang = "en" }) {
         <div>
           <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "superBondusTitle")}</h2>
           <p className={`eai-muted text-sm mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>
-            {p?.educationLevel === "university" ? "Unlock the full University Hub deeper AI mentorship, every test-prep engine, and application tools." : t(lang, "superBondusDesc")}
+            {p?.educationLevel === "university" ? t(lang, "uniSuperDesc") : t(lang, "superBondusDesc")}
           </p>
         </div>
       </div>
@@ -7347,9 +7398,24 @@ const STRINGS = {
     commitUntil: "រហូតដល់", commitTargetWord: "ដោយសម្រេចឱ្យបាន",
     commitHoldInstruction: "ចុចសង្កត់ដើម្បីបញ្ជាក់", commitHoldFallback: "មិនអាចសង្កត់បានទេ? ចុចទីនេះដើម្បីបញ្ជាក់",
     commitPrivacyNote: "នេះគឺសម្រាប់អ្នកតែម្នាក់ឯង — វាគ្រាន់តែកំណត់ទម្រង់ផែនការ និងការរំលឹករបស់អ្នក គ្មានអ្វីត្រូវបានចែករំលែកទេ។",
+    // University Hub and Discovery text that had no Khmer (it showed in English with Khmer switched on)
+    uniGoalsWhyWeAsk: "ព័ត៌មាននេះធ្វើឱ្យមជ្ឈមណ្ឌលសាកលវិទ្យាល័យ ការណែនាំស្វែងរក និងអ្នកណែនាំ AI ស្របតាមអ្នក — អ្នកជ្រើសរើសកាន់តែច្រើន ការណែនាំកាន់តែច្បាស់។",
+    uniHubYourProgress: "វឌ្ឍនភាពរបស់អ្នក", uniHubRecommendedNext: "បានណែនាំបន្ទាប់", practiceThisCourse: "ហាត់វគ្គសិក្សានេះ",
+    notAssessedYet: "មិនទាន់បានវាយតម្លៃ", whyMatchesYou: "ហេតុអ្វីបានជាសមនឹងអ្នក", whyYouMatch: "ហេតុអ្វីបានជាអ្នកសមនឹងវា", matchWord: "ត្រូវគ្នា",
+    admissionsAndCost: "ការចូលរៀន និងថ្លៃសិក្សា",
+    illustrativeDataNote: "តួលេខសម្រាប់ជាគំរូក្នុងការធ្វើផែនការ — សូមផ្ទៀងផ្ទាត់ជាមួយសាកលវិទ្យាល័យដោយផ្ទាល់ជានិច្ច។",
+    locationWord: "ទីតាំង", tuitionPerYear: "ថ្លៃសិក្សា / ឆ្នាំ", languageWord: "ភាសា", admissionsDeadlineWord: "ថ្ងៃផុតកំណត់ចូលរៀន",
+    searchUniversities: "ស្វែងរកសាកលវិទ្យាល័យ…", allMajorsFilter: "គ្រប់ជំនាញ", anyBudget: "គ្រប់ថវិកា",
+    budgetLow: "សន្សំសំចៃ", budgetMedium: "កម្រិតមធ្យម", budgetHigh: "ថ្លៃជាង", anyLanguage: "គ្រប់ភាសា",
+    noUniversitiesMatch: "គ្មានសាកលវិទ្យាល័យត្រូវនឹងតម្រងទាំងនេះទេ — សូមសាកល្បងពង្រីកការស្វែងរក។",
+    scholarshipsDesc: "អាហារូបករណ៍ពីគ្រប់សាកលវិទ្យាល័យ ផ្គូផ្គងតាមជំនាញ និងគោលដៅរបស់អ្នក។",
+    coverageWord: "ការគ្របដណ្តប់", requirementsWord: "លក្ខខណ្ឌ",
+    unscoredChecklistNote: "បញ្ជីនេះបង្ហាញតាមដើម — យើងមិនទាន់មានពិន្ទុ ឬលទ្ធផលតេស្តរបស់អ្នកទេ ដូច្នេះមិនអាចធីកជំនួសអ្នកបានទេ។",
   },
 };
-const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
+const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? moreText(lang, key) ?? key;
+// t() with the {placeholders} of the text filled in (the text lives in STRINGS or in moreStrings.js).
+const tf = (lang, key, vars) => fillText(t(lang, key), vars);
 // "48 minutes", "1 hour 5 minutes" (English) / the same in Khmer digits and words.
 const formatWait = (lang, seconds) => {
   const w = waitParts(seconds);
@@ -7372,7 +7438,7 @@ function loadSaved() {
   return null;
 }
 
-function WelcomeBackToast({ name, show }) {
+function WelcomeBackToast({ name, show, lang = "en" }) {
   return (
     <AnimatePresence>
       {show && (
@@ -7380,7 +7446,7 @@ function WelcomeBackToast({ name, show }) {
           className="eai-card eai-card--compact flex items-center gap-2.5"
           style={{ position: "fixed", top: 72, right: 16, zIndex: 50, boxShadow: "var(--shadow)" }}>
           <span aria-hidden="true">👋</span>
-          <span className="text-sm font-semibold">Welcome back, {name.split(" ")[0]}!</span>
+          <span className={`text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "toastWelcomeBack", { name: name.split(" ")[0] })}</span>
         </motion.div>
       )}
     </AnimatePresence>
@@ -7388,7 +7454,7 @@ function WelcomeBackToast({ name, show }) {
 }
 
 /* Same fixed-toast pattern as WelcomeBackToast above, fired off the level-up effect below. */
-function LevelUpToast({ level, show }) {
+function LevelUpToast({ level, show, lang = "en" }) {
   return (
     <AnimatePresence>
       {show && (
@@ -7396,7 +7462,7 @@ function LevelUpToast({ level, show }) {
           className="eai-card eai-card--compact flex items-center gap-2.5"
           style={{ position: "fixed", top: 72, right: 16, zIndex: 50, boxShadow: "var(--shadow)", borderColor: "var(--gold)" }}>
           <TrendingUp size={16} style={{ color: "var(--gold)" }} />
-          <span className="text-sm font-semibold">Level up! You're now Level {level}.</span>
+          <span className={`text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "toastLevelUp", { level: localizeNum(level, lang) })}</span>
         </motion.div>
       )}
     </AnimatePresence>
@@ -8137,8 +8203,8 @@ export default function App() {
     <div className={`eai-root ${dark ? "theme-dark" : "theme-light"} ${lang === "km" && !isUniProfile ? "eai-km-root" : ""}`}>
       <style>{STYLES}</style>
       <StreakFlameDefs />
-      <WelcomeBackToast name={profile.name} show={showWelcomeBack} />
-      <LevelUpToast level={levelUpToast} show={levelUpToast != null} />
+      <WelcomeBackToast name={profile.name} show={showWelcomeBack} lang={lang} />
+      <LevelUpToast level={levelUpToast} show={levelUpToast != null} lang={lang} />
       {noticeToast}
       <div className="flex">
         <aside className="hidden lg:flex sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex-col"
@@ -8147,7 +8213,7 @@ export default function App() {
             <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
               <BondusLogo />
             </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus {isUniProfile ? "University" : "Highschool"}</p></div>
+            <div><p className="eai-display font-extrabold leading-none">Bondus {t(lang, isUniProfile ? "trackUniversity" : "trackHighschool")}</p></div>
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
             {navItems.map((n) => {
@@ -8171,7 +8237,7 @@ export default function App() {
           <div className="p-3 space-y-2">
             <div className="eai-soft rounded-2xl p-4 text-center">
               <span style={{ display: "block", margin: "0 auto", width: 20 }}><StreakFlame state={p.flame} size={20} ring={p.flameRing} /></span>
-              <p className="text-xs font-semibold mt-2">{p.streak}-day streak</p>
+              <p className={`text-xs font-semibold mt-2 ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "streakDays", { n: localizeNum(p.streak, lang) })}</p>
               <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{p.flame === "dormant" ? t(lang, "streakKeepIt") : p.flameLabel}</p>
             </div>
             <button onClick={() => go("profile")} className={`eai-focus w-full text-center text-xs font-semibold py-1.5 hover:underline ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ink)" }}>{t(lang, "profileTitle")}</button>
@@ -8181,8 +8247,8 @@ export default function App() {
 
         <div className="flex-1 min-w-0">
           <MobileTopBar logo={<BondusLogo />} initials={initials} dark={dark} onToggleDark={() => setDark((d) => !d)}
-            onProfile={() => go("profile")} profileLabel={tr("profileOpen")}
-            streak={p.streak} flame={p.flame} flameLabel={p.flameLabel} flameRing={p.flameRing} xp={(profile.xp + bonusXp).toLocaleString()}
+            onProfile={() => go("profile")} profileLabel={tr("profileOpen")} tr={tr}
+            streak={localizeNum(p.streak, lang)} flame={p.flame} flameLabel={p.flameLabel} flameRing={p.flameRing} xp={localizeNum((profile.xp + bonusXp).toLocaleString(), lang)}
             examChip={!isUniProfile && exam.current ? <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} /> : null} />
           <header className="hidden lg:block sticky top-0 z-10 border-b" style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)" }}>
             <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
