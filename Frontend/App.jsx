@@ -34,6 +34,11 @@ import { ProfilePage } from "./ProfileUi.jsx";
 import { serverFieldErrors } from "./profileForm.js";
 import { shrinkAvatar } from "./imageUtils.js";
 import { AvatarFace } from "./Avatar.jsx";
+import { HistoryToggle, NewChatButton, HistoryRail, HistorySheet, useMediaQuery } from "./CoachHistory.jsx";
+import {
+  loadHistory, saveHistory, clearHistory, userKeyOf, reopenMode, newChatId, makeChat, upsertMessage, changeMessage, withTitle,
+  putChat, removeChat, renameChat, chatsForModes,
+} from "./coachHistory.js";
 import { EXERCISE_SUBJECTS, canBrowseExercises, isAdmin } from "./exercises.js";
 import { MobileTopBar, MobileBottomNav } from "./MobileNav.jsx";
 import { splitMobileNav } from "./mobileNav.js";
@@ -763,6 +768,55 @@ input.eai-input::placeholder{ color:var(--muted); }
 .eai-exam-options select{ background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:5px 8px; font:inherit; font-size:13px; max-width:100%; }
 .eai-footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:6px; }
 @media (prefers-reduced-motion: reduce){ .eai-spin,.eai-shimmer{ animation:none; } .eai-shimmer{ color:var(--muted); background:none; } }
+/* AI Coach chat history (CoachHistory.jsx): the list beside the chat on a wide screen, a sheet on a phone or tablet */
+.eai-hist-toggle{ display:inline-flex; align-items:center; justify-content:center; gap:6px; height:36px; padding:0 12px; border-radius:99px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; flex:none; transition:background .15s ease, border-color .15s ease; }
+.eai-hist-toggle:hover{ background:var(--bg-soft); }
+.eai-hist-toggle[aria-pressed="true"], .eai-hist-toggle[aria-expanded="true"]{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary); }
+.eai-hist-rail{ width:272px; flex:none; display:flex; flex-direction:column; min-height:0; background:var(--card); border:1px solid var(--line); border-radius:20px; box-shadow:var(--shadow); overflow:hidden; }
+.eai-hist-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 12px 8px 16px; }
+.eai-hist-new{ width:100%; display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; border-radius:14px; border:0; background:var(--primary); color:#fff; font-size:14px; font-weight:700; cursor:pointer; transition:filter .15s ease; }
+.eai-hist-new:hover{ filter:brightness(1.07); }
+.eai-hist-search{ position:relative; margin:10px 12px 2px; }
+.eai-hist-search-icon{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
+.eai-hist-input{ width:100%; min-width:0; padding:10px 34px; border-radius:14px; border:1px solid var(--line); background:var(--bg-soft); color:var(--ink); font:inherit; font-size:16px; -webkit-appearance:none; appearance:none; }
+.eai-hist-input::-webkit-search-cancel-button{ display:none; }
+.eai-hist-input::placeholder{ color:var(--muted); }
+.eai-hist-input:focus{ outline:2px solid var(--primary); outline-offset:1px; }
+@media (hover:hover) and (pointer:fine){ .eai-hist-input{ font-size:14px; } }
+.eai-hist-search-clear{ position:absolute; right:6px; top:50%; transform:translateY(-50%); width:28px; height:28px; border-radius:99px; border:0; background:transparent; color:var(--muted); display:grid; place-items:center; cursor:pointer; }
+.eai-hist-scroll{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:0 8px 8px; }
+.eai-hist-group{ font-size:12px; font-weight:700; letter-spacing:.02em; color:var(--muted); padding:14px 8px 4px; }
+.eai-hist-row{ display:flex; align-items:center; border-radius:14px; transition:background .15s ease; }
+.eai-hist-row:hover{ background:var(--bg-soft); }
+.eai-hist-row.on{ background:var(--primary-soft); }
+.eai-hist-main{ flex:1; min-width:0; display:flex; align-items:center; gap:10px; min-height:52px; padding:6px 4px 6px 8px; border:0; border-radius:14px; background:none; color:var(--ink); text-align:left; cursor:pointer; }
+.eai-hist-icon{ width:32px; height:32px; border-radius:99px; flex:none; display:grid; place-items:center; background:var(--bg-soft); color:var(--muted); }
+.eai-hist-row:hover .eai-hist-icon{ background:var(--card); }
+.eai-hist-row.on .eai-hist-icon{ background:var(--primary); color:#fff; }
+.eai-hist-title{ display:block; font-size:14px; font-weight:600; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.eai-hist-meta{ display:block; margin-top:1px; font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.eai-hist-more{ width:40px; height:44px; flex:none; display:grid; place-items:center; border:0; border-radius:12px; background:none; color:var(--muted); cursor:pointer; }
+.eai-hist-more:hover, .eai-hist-more[aria-expanded="true"]{ color:var(--ink); }
+.eai-hist-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:2px 8px 8px 50px; }
+.eai-hist-chip{ display:inline-flex; align-items:center; flex:none; gap:5px; min-height:34px; padding:0 12px; border-radius:99px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer; }
+.eai-hist-chip.primary{ background:var(--primary); border-color:var(--primary); color:#fff; }
+.eai-hist-chip.danger{ color:var(--ember); }
+.eai-hist-chip.danger.solid{ background:var(--ember); border-color:var(--ember); color:#fff; }
+.eai-hist-empty{ display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; padding:28px 16px; }
+.eai-hist-empty-icon{ width:44px; height:44px; border-radius:99px; display:grid; place-items:center; background:var(--bg-soft); color:var(--muted); margin-bottom:4px; }
+.eai-hist-foot{ display:flex; flex-direction:column; gap:8px; padding:10px 16px 12px; border-top:1px solid var(--line); }
+.eai-hist-clear{ align-self:flex-start; border:0; background:none; padding:6px 0; color:var(--ember); font-size:13px; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+.eai-hist-backdrop{ position:fixed; inset:0; z-index:55; background:rgba(0,0,0,.4); animation:eai-hist-fade .2s ease; }
+.eai-hist-sheet{ position:fixed; z-index:60; left:0; right:0; bottom:0; height:min(84vh,720px); height:min(84dvh,720px); display:flex; flex-direction:column; background:var(--card); color:var(--ink); border-top:1px solid var(--line); border-radius:24px 24px 0 0; box-shadow:var(--shadow); padding-bottom:env(safe-area-inset-bottom); animation:eai-hist-up .25s ease; }
+.eai-hist-grip{ width:40px; height:4px; border-radius:99px; background:var(--line); margin:10px auto 0; flex:none; }
+@media (min-width:640px){
+  .eai-hist-sheet{ top:0; right:auto; width:360px; height:auto; border-radius:0 24px 24px 0; border-top:0; border-right:1px solid var(--line); animation-name:eai-hist-in; }
+  .eai-hist-grip{ display:none; }
+}
+@keyframes eai-hist-fade{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes eai-hist-up{ from{ transform:translateY(100%); } to{ transform:none; } }
+@keyframes eai-hist-in{ from{ transform:translateX(-100%); } to{ transform:none; } }
+@media (prefers-reduced-motion: reduce){ .eai-hist-backdrop,.eai-hist-sheet{ animation:none; } }
 /* AI Coach answers: Markdown + KaTeX */
 /* Khmer stacks diacritics above and below the line, so answers need more leading
    than Latin text before the rows of a derivation stop touching each other. */
@@ -6288,19 +6342,29 @@ function AssistantMessage({ m, Icon, lang = "en" }) {
 const COACH_MODE_IDS_UNIVERSITY = ["university"];
 const COACH_MODE_IDS_HIGHSCHOOL = ["study", "exam", "major"];
 
-function Coach({ p, lang = "en" }) {
+const NO_MESSAGES = [];
+const COACH_RAIL_KEY = "bondus_coach_rail"; // "0" once the student hides the side list on a wide screen
+
+function Coach({ p, lang = "en", userKey = null }) {
   const isUni = p.educationLevel === "university";
-  const [mode, setMode] = useState(isUni ? "university" : "study");
-  const [msgsByMode, setMsgsByMode] = useState({ study: [], exam: [], major: [], university: [] });
+  const availableModeIds = isUni ? COACH_MODE_IDS_UNIVERSITY : COACH_MODE_IDS_HIGHSCHOOL;
+  // Saved chats (coachHistory.js): read once when the Coach opens, written back as they change. A chat belongs to one mode;
+  // activeByMode says which chat each mode is showing, and a mode with none shows the blank "new chat" screen.
+  const [saved] = useState(() => loadHistory(safeStorage(), userKey));
+  const [chats, setChats] = useState(saved.chats);
+  const [activeByMode, setActiveByMode] = useState(saved.active);
+  const [mode, setMode] = useState(() => reopenMode(saved, availableModeIds) ?? (isUni ? "university" : "study"));
+  const wide = useMediaQuery("(min-width: 1280px)");
+  const [railOpen, setRailOpen] = useState(() => safeStorage()?.getItem(COACH_RAIL_KEY) !== "0");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const examSubjects = isUni ? [] : fieldSubjects(p.field, p.foreignLanguage);
   const [examOptions, setExamOptions] = useState(() => ({
     subject: (p.weak?.[0] && examSubjects.includes(p.weak[0].s) ? p.weak[0].s : examSubjects[0]) || "Mathematics",
     language: "km",
   }));
-  const availableModeIds = isUni ? COACH_MODE_IDS_UNIVERSITY : COACH_MODE_IDS_HIGHSCHOOL;
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingId, setLoadingId] = useState(null); // the chat a reply is being written into (one at a time)
   const [uploading, setUploading] = useState(false);
   // A public deployment runs with ALLOW_WRITES=false, where /api/ingest is a 403.
   // Ask once, so the library upload is hidden rather than failing when tapped.
@@ -6328,11 +6392,15 @@ function Coach({ p, lang = "en" }) {
   const km = lang === "km" ? "eai-km" : "";
   const copy = coachCopy(lang, mode, p);
   const active = { ...COACH_MODES[mode], label: copy.label, subtitle: copy.subtitle, placeholder: copy.placeholder, intro: copy.intro };
-  const msgs = msgsByMode[mode];
+  const activeChat = chats.find((c) => c.id === activeByMode[mode]) ?? null;
+  const activeId = activeChat?.id ?? null;
+  const msgs = activeChat?.messages ?? NO_MESSAGES;
+  const generating = loadingId !== null;
+  const loading = generating && loadingId === activeId; // the chat on screen is the one answering
   const suggestions = copy.suggestions;
   const preparing = attachments.some((a) => a.status === "processing");
   const readyAttachments = attachments.filter((a) => a.status === "ready");
-  const canSend = !loading && !preparing && (input.trim() !== "" || readyAttachments.length > 0 || active.allowEmpty);
+  const canSend = !generating && !preparing && (input.trim() !== "" || readyAttachments.length > 0 || active.allowEmpty);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs, loading]);
 
@@ -6364,9 +6432,85 @@ function Coach({ p, lang = "en" }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [lightbox]);
 
-  const updateMessage = (targetMode, id, change) => setMsgsByMode((m) => ({
-    ...m, [targetMode]: m[targetMode].map((x) => (x.id === id ? change(x) : x)),
-  }));
+  /* Changes one chat in place. With `create`, a chat that does not exist yet is made first (the first question on a blank
+     screen is what makes it). A reply for a chat that was deleted meanwhile finds nothing and is dropped. */
+  const patchChat = (id, chatMode, change, { create = false } = {}) => setChats((list) => {
+    const found = list.find((c) => c.id === id);
+    return found || create ? putChat(list, change(found ?? makeChat({ id, mode: chatMode }))) : list;
+  });
+
+  // Saved a moment after the last change (a streaming reply changes it many times a second), and straight away when the
+  // student leaves the page or the Coach. Only when something changed here, so a tab left open never overwrites a newer save.
+  const dirty = useRef(false);
+  const alive = useRef(true);
+  const latest = useRef(null);
+  latest.current = { chats, activeByMode, lang };
+  const flush = () => {
+    if (!dirty.current || userKey == null) return;
+    dirty.current = false;
+    const { chats: all, activeByMode: activeNow, lang: langNow } = latest.current;
+    const storage = safeStorage();
+    if (all.length === 0) clearHistory(storage, userKey);
+    else if (!saveHistory(storage, userKey, { chats: all, active: activeNow }) && alive.current) setNotice(tf(langNow, "histSaveFailed"));
+  };
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return undefined; }
+    dirty.current = true;
+    const timer = setTimeout(flush, 400);
+    return () => clearTimeout(timer);
+  }, [chats, activeByMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    alive.current = true;
+    const hidden = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", hidden);
+      alive.current = false;
+      flush();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (wide) setHistoryOpen(false); }, [wide]);
+
+  const shown = chatsForModes(chats, availableModeIds);
+  const modeInfo = useMemo(() => Object.fromEntries(Object.entries(COACH_MODES).map(([id, m]) => [id, { Icon: m.icon, label: tf(lang, `coach_${id}_label`) }])), [lang]);
+  const openChat = (id) => {
+    const chat = chats.find((c) => c.id === id);
+    if (!chat) return;
+    setMode(chat.mode);
+    setActiveByMode((a) => ({ ...a, [chat.mode]: id }));
+    setHistoryOpen(false);
+    setNotice("");
+  };
+  const newChat = () => {
+    setActiveByMode((a) => ({ ...a, [mode]: null }));
+    setHistoryOpen(false);
+    setNotice("");
+    // A keyboard with a mouse starts typing at once; on a phone the keyboard would hide the suggestions, so it waits for a tap.
+    if (window.matchMedia?.("(hover: hover)").matches) textRef.current?.focus();
+  };
+  const deleteChat = (id) => {
+    if (loadingId === id) abortRef.current?.abort();
+    setChats((list) => removeChat(list, id));
+  };
+  const clearChats = () => {
+    abortRef.current?.abort();
+    setChats([]);
+    setActiveByMode({});
+  };
+  const toggleHistory = () => {
+    if (!wide) { setHistoryOpen((open) => !open); return; }
+    const next = !railOpen;
+    setRailOpen(next);
+    try { safeStorage()?.setItem(COACH_RAIL_KEY, next ? "1" : "0"); } catch { /* storage blocked: it just reopens next time */ }
+  };
+  const historyProps = {
+    chats: shown, activeId, modeInfo, lang, T,
+    onSelect: openChat, onNew: newChat, onRename: (id, name) => setChats((list) => renameChat(list, id, name)), onDelete: deleteChat, onClearAll: clearChats,
+  };
+  const railShown = wide && railOpen;
 
   const addImages = (files) => {
     if (!active.canUpload) return;
@@ -6407,21 +6551,19 @@ function Coach({ p, lang = "en" }) {
   const send = (text) => {
     const t = (text ?? input).trim();
     const images = active.canUpload && text === undefined ? readyAttachments : [];
-    if ((!t && !images.length && !active.allowEmpty) || loading || (preparing && text === undefined)) return;
+    if ((!t && !images.length && !active.allowEmpty) || generating || (preparing && text === undefined)) return;
     const historyForReply = msgs; // snapshot before the new user message is appended
     const replyMode = mode;
     const stamp = Date.now();
     const userId = `user-${stamp}`;
     const replyId = `reply-${stamp}`;
-    // Streaming replies update one message in place until they finish.
-    const upsertReply = (reply) => setMsgsByMode((m) => {
-      const list = m[replyMode];
-      const message = { id: replyId, role: "ai", ...reply };
-      return { ...m, [replyMode]: list.some((x) => x.id === replyId) ? list.map((x) => (x.id === replyId ? message : x)) : [...list, message] };
-    });
-    const onImages = (readings) => updateMessage(replyMode, userId, (msg) => ({
+    const chatId = activeId ?? newChatId(stamp); // the first question on a blank screen starts a new chat
+    // Streaming replies update one message in place until they finish. A reply goes into the chat it was asked in, wherever
+    // the student has looked since.
+    const upsertReply = (reply) => patchChat(chatId, replyMode, (c) => upsertMessage(c, { id: replyId, role: "ai", ...reply }));
+    const onImages = (readings) => patchChat(chatId, replyMode, (c) => changeMessage(c, userId, (msg) => ({
       ...msg, readings, historyText: historyTextFor(t, readings),
-    }));
+    })));
     const paper = mode === "exam" && ANSWER_REQUEST.test(t) ? lastExamPaper(msgs) : null;
     const exam = mode !== "exam" ? null
       : paper ? { ...examOptions, subject: paper.exam.subject, paper: paper.text }
@@ -6429,18 +6571,16 @@ function Coach({ p, lang = "en" }) {
     const shownText = !exam ? t
       : paper ? `🔑 ${t}`
       : [`📝 ${T("coachMockPaper", { subject: subjectLabel(exam.subject, lang), language: T(exam.language === "km" ? "coachLangShortKm" : "coachLangShortEn") })}`, t].filter(Boolean).join("\n");
-    setMsgsByMode((m) => ({
-      ...m,
-      [mode]: [...m[mode], {
-        id: userId, role: "user", text: shownText,
-        images: images.map((a) => ({ id: a.id, name: a.name, thumb: a.thumb })),
-      }],
-    }));
+    patchChat(chatId, replyMode, (c) => withTitle(upsertMessage(c, {
+      id: userId, role: "user", text: shownText,
+      images: images.map((a) => ({ id: a.id, name: a.name, thumb: a.thumb })),
+    }), shownText), { create: true });
+    setActiveByMode((a) => (a[replyMode] === chatId ? a : { ...a, [replyMode]: chatId }));
     if (text === undefined) {
       setInput("");
       setAttachments([]); // previews stay alive: the sent message still shows them
     }
-    setLoading(true);
+    setLoadingId(chatId);
     const controller = new AbortController();
     abortRef.current = controller;
     // A minimum "thinking" delay keeps the typing indicator feeling natural for the instant
@@ -6452,7 +6592,7 @@ function Coach({ p, lang = "en" }) {
       .catch((err) => ({ text: T("coachSomethingWrong", { error: ragMessage(err, lang) }), error: true }))
       .then((reply) => {
         upsertReply({ ...reply, streaming: false, notice: null });
-        setLoading(false);
+        setLoadingId((id) => (id === chatId ? null : id));
         abortRef.current = null;
       });
   };
@@ -6463,12 +6603,12 @@ function Coach({ p, lang = "en" }) {
   const uploadDocs = async (files) => {
     if (uploading) { setNotice(T("coachWaitUpload")); return; }
     setUploading(true);
+    // The progress goes into the Study Help chat on screen (the library upload is only offered there), or a new one.
+    const chatId = activeId ?? newChatId();
+    setActiveByMode((a) => (a.study === chatId ? a : { ...a, study: chatId }));
     for (const file of files) {
       const id = `upload-${Date.now()}-${file.name}`;
-      const post = (text, extra = {}) => setMsgsByMode((m) => {
-        const others = m.study.filter((x) => x.id !== id);
-        return { ...m, study: [...others, { id, role: "ai", text, ...extra }] };
-      });
+      const post = (text, extra = {}) => patchChat(chatId, "study", (c) => withTitle(upsertMessage(c, { id, role: "ai", text, ...extra }), file.name), { create: true });
       post("", { rag: true, streaming: true, notice: T("coachAdding", { name: file.name }) });
       try {
         const result = await waitForIngest(await ragUpload(file));
@@ -6521,138 +6661,145 @@ function Coach({ p, lang = "en" }) {
   const firstName = p.name.split(" ")[0];
 
   return (
-    <div className={`eai-rise eai-coach-view flex flex-col relative ${km}`} {...dragHandlers}>
-      <div className="flex items-center justify-between gap-3 flex-wrap pb-2">
-        <div className="flex items-center gap-2.5">
-          <h2 className={`eai-display text-lg font-extrabold ${km}`}>{T("coachTitle")}</h2>
-          <span className="text-xs eai-muted hidden md:inline">{active.subtitle}</span>
+    <div className={`eai-rise eai-coach-view flex gap-4 relative ${km}`} {...dragHandlers}>
+      {railShown && <HistoryRail {...historyProps} onHide={toggleHistory} />}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-center gap-x-3 gap-y-2 flex-wrap pb-2">
+          <div className="order-1 flex items-center gap-2.5 min-w-0 flex-1">
+            <HistoryToggle pressed={wide ? railOpen : historyOpen} wide={wide} onClick={toggleHistory} T={T} lang={lang} />
+            <h2 className={`eai-display text-lg font-extrabold shrink-0 whitespace-nowrap ${km}`}>{T("coachTitle")}</h2>
+            <span className="text-xs eai-muted hidden md:inline truncate">{active.subtitle}</span>
+          </div>
+          <div className="order-3 md:order-2 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex gap-1 p-1 rounded-full eai-soft">
+            {availableModeIds.map((id) => [id, COACH_MODES[id]]).map(([id, m]) => (
+              <button key={id} onClick={() => setMode(id)}
+                className="eai-focus text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+                style={{ background: mode === id ? "var(--card)" : "transparent", color: mode === id ? "var(--ink)" : "var(--muted)", boxShadow: mode === id ? "var(--shadow)" : "none" }}>
+                <m.icon size={14} className="max-[479px]:hidden" /> {T(`coach_${id}_label`)}
+              </button>
+            ))}
+          </div>
+          {!railShown && <NewChatButton className="order-2 md:order-3" onClick={newChat} T={T} lang={lang} />}
         </div>
-        <div className="flex gap-1 p-1 rounded-full eai-soft">
-          {availableModeIds.map((id) => [id, COACH_MODES[id]]).map(([id, m]) => (
-            <button key={id} onClick={() => setMode(id)}
-              className="eai-focus text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5"
-              style={{ background: mode === id ? "var(--card)" : "transparent", color: mode === id ? "var(--ink)" : "var(--muted)", boxShadow: mode === id ? "var(--shadow)" : "none" }}>
-              <m.icon size={14} /> {T(`coach_${id}_label`)}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto eai-scroll">
-        <div className="eai-chat-col">
-          {msgs.length === 0 ? (
-            <div className="flex flex-col items-center text-center gap-4 pt-[8vh]">
-              <div className="eai-avatar" style={{ width: 52, height: 52 }}><active.icon size={24} color="#fff" /></div>
-              <div>
-                <h3 className={`eai-display text-2xl font-extrabold ${km}`}>{T("coachHi", { name: firstName })}</h3>
-                <p className="eai-muted text-sm mt-1.5 max-w-lg">{active.intro}</p>
+        <div className="flex-1 overflow-y-auto eai-scroll">
+          <div className="eai-chat-col">
+            {msgs.length === 0 ? (
+              <div className="flex flex-col items-center text-center gap-4 pt-[8vh]">
+                <div className="eai-avatar" style={{ width: 52, height: 52 }}><active.icon size={24} color="#fff" /></div>
+                <div>
+                  <h3 className={`eai-display text-2xl font-extrabold ${km}`}>{T("coachHi", { name: firstName })}</h3>
+                  <p className="eai-muted text-sm mt-1.5 max-w-lg">{active.intro}</p>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2 w-full mt-2">
+                  {suggestions.map((s) => (
+                    <button key={s} onClick={() => send(s)} className="eai-suggest eai-focus">{s}</button>
+                  ))}
+                  {active.canUpload && (
+                    <button onClick={() => photoRef.current?.click()} className="eai-suggest eai-focus flex items-center gap-2">
+                      <ImagePlus size={16} /> {T("coachSnapPhoto")}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="grid sm:grid-cols-2 gap-2 w-full mt-2">
-                {suggestions.map((s) => (
-                  <button key={s} onClick={() => send(s)} className="eai-suggest eai-focus">{s}</button>
+            ) : msgs.map((m) => (m.role === "user"
+              ? <UserMessage key={m.id} m={m} onOpenImage={setLightbox} lang={lang} />
+              : <AssistantMessage key={m.id} m={m} Icon={active.icon} lang={lang} />))}
+            {loading && !msgs.some((m) => m.streaming) && (
+              <div className="flex gap-3">
+                <div className="eai-avatar"><active.icon size={15} color="#fff" /></div>
+                <StatusLine text={T("coachThinking")} />
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
+        </div>
+
+        <div className="eai-composer-wrap">
+          {notice && <p className="text-xs text-center mb-2" style={{ color: "var(--ember)" }} role="status">{notice}</p>}
+          {generating && !loading && <p className="text-xs text-center mb-2 eai-muted" role="status">{T("histBusy")}</p>}
+          {mode === "exam" && (
+            <div className="eai-exam-options" role="group" aria-label={T("coachPaperOptions")}>
+              <label>
+                <span>{T("coachSubject")}</span>
+                <select className="eai-focus" value={examOptions.subject} disabled={loading}
+                  onChange={(e) => setExamOptions((o) => ({ ...o, subject: e.target.value }))}>
+                  {examSubjects.map((s) => <option key={s} value={s}>{s} · {subjectLabel(s, "km")}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>{T("coachLanguage")}</span>
+                <select className="eai-focus" value={examOptions.language} disabled={loading}
+                  onChange={(e) => setExamOptions((o) => ({ ...o, language: e.target.value }))}>
+                  <option value="km">{T("coachLangKm")}</option>
+                  <option value="en">{T("coachLangEn")}</option>
+                </select>
+              </label>
+            </div>
+          )}
+          <div className={`eai-composer${dragging ? " drag" : ""}`}>
+            {attachments.length > 0 && (
+              <div className="flex gap-2 flex-wrap px-3 pt-3">
+                {attachments.map((a) => (
+                  <div key={a.id} className="eai-attach" title={a.name}>
+                    <img src={a.preview} alt={a.name} />
+                    {a.status === "processing" && <div className="eai-attach-busy"><LoaderCircle size={18} className="eai-spin" /></div>}
+                    <button onClick={() => removeAttachment(a.id)} aria-label={T("coachRemove", { name: a.name })}><X size={12} /></button>
+                  </div>
                 ))}
+              </div>
+            )}
+            <textarea ref={textRef} rows={1} className="eai-composer-input"
+              placeholder={attachments.length ? T("coachAskAboutPhoto") : active.placeholder}
+              value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
+            <div className="flex items-center justify-between px-2 pb-2">
+              <div className="relative" ref={menuRef}>
                 {active.canUpload && (
-                  <button onClick={() => photoRef.current?.click()} className="eai-suggest eai-focus flex items-center gap-2">
-                    <ImagePlus size={16} /> {T("coachSnapPhoto")}
-                  </button>
+                  <>
+                    <button onClick={() => setMenuOpen((open) => !open)} className="eai-icon-btn eai-focus"
+                      aria-label={T("coachAddFiles")} aria-expanded={menuOpen} title={T("coachAddFiles")}>
+                      <Plus size={20} />
+                    </button>
+                    {menuOpen && (
+                      <div className="eai-menu" role="menu">
+                        <button role="menuitem" onClick={() => { setMenuOpen(false); photoRef.current?.click(); }}>
+                          <ImagePlus size={17} />
+                          <span><span className="block font-medium">{T("coachAddPhotos")}</span><span className="block text-xs eai-muted">{T("coachAddPhotosHint", { n: localizeNum(COACH_MAX_IMAGES, lang) })}</span></span>
+                        </button>
+                        {canAddDocs && (
+                          <button role="menuitem" onClick={() => { setMenuOpen(false); docRef.current?.click(); }} disabled={uploading}>
+                            <FileUp size={17} />
+                            <span><span className="block font-medium">{T("coachAddLibrary")}</span><span className="block text-xs eai-muted">{T("coachAddLibraryHint")}</span></span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <input ref={photoRef} type="file" accept="image/*" multiple hidden
+                      onChange={(e) => { addImages([...e.target.files]); e.target.value = ""; }} />
+                    <input ref={docRef} type="file" accept={RAG_UPLOAD_ACCEPT} multiple hidden
+                      onChange={(e) => { uploadDocs([...e.target.files]); e.target.value = ""; }} />
+                  </>
                 )}
               </div>
-            </div>
-          ) : msgs.map((m) => (m.role === "user"
-            ? <UserMessage key={m.id} m={m} onOpenImage={setLightbox} lang={lang} />
-            : <AssistantMessage key={m.id} m={m} Icon={active.icon} lang={lang} />))}
-          {loading && !msgs.some((m) => m.streaming) && (
-            <div className="flex gap-3">
-              <div className="eai-avatar"><active.icon size={15} color="#fff" /></div>
-              <StatusLine text={T("coachThinking")} />
-            </div>
-          )}
-          <div ref={endRef} />
-        </div>
-      </div>
-
-      <div className="eai-composer-wrap">
-        {notice && <p className="text-xs text-center mb-2" style={{ color: "var(--ember)" }} role="status">{notice}</p>}
-        {mode === "exam" && (
-          <div className="eai-exam-options" role="group" aria-label={T("coachPaperOptions")}>
-            <label>
-              <span>{T("coachSubject")}</span>
-              <select className="eai-focus" value={examOptions.subject} disabled={loading}
-                onChange={(e) => setExamOptions((o) => ({ ...o, subject: e.target.value }))}>
-                {examSubjects.map((s) => <option key={s} value={s}>{s} · {subjectLabel(s, "km")}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>{T("coachLanguage")}</span>
-              <select className="eai-focus" value={examOptions.language} disabled={loading}
-                onChange={(e) => setExamOptions((o) => ({ ...o, language: e.target.value }))}>
-                <option value="km">{T("coachLangKm")}</option>
-                <option value="en">{T("coachLangEn")}</option>
-              </select>
-            </label>
-          </div>
-        )}
-        <div className={`eai-composer${dragging ? " drag" : ""}`}>
-          {attachments.length > 0 && (
-            <div className="flex gap-2 flex-wrap px-3 pt-3">
-              {attachments.map((a) => (
-                <div key={a.id} className="eai-attach" title={a.name}>
-                  <img src={a.preview} alt={a.name} />
-                  {a.status === "processing" && <div className="eai-attach-busy"><LoaderCircle size={18} className="eai-spin" /></div>}
-                  <button onClick={() => removeAttachment(a.id)} aria-label={T("coachRemove", { name: a.name })}><X size={12} /></button>
-                </div>
-              ))}
-            </div>
-          )}
-          <textarea ref={textRef} rows={1} className="eai-composer-input"
-            placeholder={attachments.length ? T("coachAskAboutPhoto") : active.placeholder}
-            value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
-          <div className="flex items-center justify-between px-2 pb-2">
-            <div className="relative" ref={menuRef}>
-              {active.canUpload && (
-                <>
-                  <button onClick={() => setMenuOpen((open) => !open)} className="eai-icon-btn eai-focus"
-                    aria-label={T("coachAddFiles")} aria-expanded={menuOpen} title={T("coachAddFiles")}>
-                    <Plus size={20} />
-                  </button>
-                  {menuOpen && (
-                    <div className="eai-menu" role="menu">
-                      <button role="menuitem" onClick={() => { setMenuOpen(false); photoRef.current?.click(); }}>
-                        <ImagePlus size={17} />
-                        <span><span className="block font-medium">{T("coachAddPhotos")}</span><span className="block text-xs eai-muted">{T("coachAddPhotosHint", { n: localizeNum(COACH_MAX_IMAGES, lang) })}</span></span>
-                      </button>
-                      {canAddDocs && (
-                        <button role="menuitem" onClick={() => { setMenuOpen(false); docRef.current?.click(); }} disabled={uploading}>
-                          <FileUp size={17} />
-                          <span><span className="block font-medium">{T("coachAddLibrary")}</span><span className="block text-xs eai-muted">{T("coachAddLibraryHint")}</span></span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <input ref={photoRef} type="file" accept="image/*" multiple hidden
-                    onChange={(e) => { addImages([...e.target.files]); e.target.value = ""; }} />
-                  <input ref={docRef} type="file" accept={RAG_UPLOAD_ACCEPT} multiple hidden
-                    onChange={(e) => { uploadDocs([...e.target.files]); e.target.value = ""; }} />
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {uploading && <span className="text-xs eai-muted flex items-center gap-1"><LoaderCircle size={13} className="eai-spin" /> {T("coachIndexing")}</span>}
-              {loading && active.canStop
-                ? <button onClick={stop} className="eai-send eai-focus" aria-label={T("coachStopGenerating")} title={T("coachStop")}><Square size={13} fill="currentColor" /></button>
-                : <button onClick={() => send()} disabled={!canSend} className="eai-send eai-focus" aria-label={T("coachSend")} title={T("coachSendEnter")}><ArrowUp size={18} /></button>}
+              <div className="flex items-center gap-2">
+                {uploading && <span className="text-xs eai-muted flex items-center gap-1"><LoaderCircle size={13} className="eai-spin" /> {T("coachIndexing")}</span>}
+                {loading && active.canStop
+                  ? <button onClick={stop} className="eai-send eai-focus" aria-label={T("coachStopGenerating")} title={T("coachStop")}><Square size={13} fill="currentColor" /></button>
+                  : <button onClick={() => send()} disabled={!canSend} className="eai-send eai-focus" aria-label={T("coachSend")} title={T("coachSendEnter")}><ArrowUp size={18} /></button>}
+              </div>
             </div>
           </div>
+          <p className="eai-footnote">{T("coachDisclaimer")}</p>
         </div>
-        <p className="eai-footnote">{T("coachDisclaimer")}</p>
-      </div>
 
+      </div>
       {dragging && <div className="eai-drop"><div className="flex items-center gap-2 font-semibold"><ImagePlus size={20} /> {canAddDocs ? T("coachDropBoth") : T("coachDropPhotos")}</div></div>}
       {lightbox && (
         <div className="eai-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label={T("coachPhotoPreview")}>
           <img src={lightbox} alt={T("coachAttached")} />
         </div>
       )}
+      {historyOpen && !wide && <HistorySheet {...historyProps} onClose={() => setHistoryOpen(false)} />}
     </div>
   );
 }
@@ -8213,7 +8360,7 @@ export default function App() {
       initials={initials} onUploadPhoto={handleUploadPhoto} onRemovePhoto={handleRemovePhoto}
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
       onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
-    universities: <Universities p={p} lang={lang} />, coach: <Coach p={p} lang={lang} />,
+    universities: <Universities p={p} lang={lang} />, coach: <Coach p={p} lang={lang} userKey={userKeyOf(profile)} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} leaderboard={leaderboard} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} leaderboard={leaderboard} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
     explore: <UniversityExplore p={p} go={go} lang={lang} />,
