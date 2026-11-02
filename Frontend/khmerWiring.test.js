@@ -13,6 +13,7 @@ const read = (name) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8
 const app = read("App.jsx");
 const nav = read("MobileNav.jsx");
 const profileUi = read("ProfileUi.jsx");
+const coachUi = read("CoachHistory.jsx");
 const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const between = (src, from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
 
@@ -55,7 +56,7 @@ test("t() looks in the table, then in moreStrings.js, and tf() fills the {placeh
 
 test("a key the screens ask for exists in a table (otherwise the screen would show the key itself)", () => {
   const known = new Set([...Object.keys(STRINGS.en), ...Object.keys(MORE_STRINGS.en)]);
-  const code = strip(app) + strip(nav) + strip(profileUi);
+  const code = strip(app) + strip(nav) + strip(profileUi) + strip(coachUi);
   const wanted = new Set();
   const patterns = [/\bT\("(\w+)"/g, /\btf\(lang, "(\w+)"/g, /\bt\(lang, "(\w+)"/g, /\btr\("(\w+)"/g, /\bword\(tr, "(\w+)"/g, /\bT\(\s*[a-z]+ \? "(\w+)" : "(\w+)"/g];
   for (const re of patterns) for (const m of code.matchAll(re)) m.slice(1).filter(Boolean).forEach((k) => wanted.add(k));
@@ -77,8 +78,8 @@ test("the mode tabs, subtitles and suggestions of the Coach come from the table,
 });
 
 test("the Coach is given the language, and passes it on to the replies, the messages and the streaming layer", () => {
-  assert.match(app, /<Coach p=\{p\} lang=\{lang\} \/>/);
-  assert.match(app, /function Coach\(\{ p, lang = "en" \}\) \{/);
+  assert.match(app, /<Coach p=\{p\} lang=\{lang\} userKey=\{userKeyOf\(profile\)\} \/>/);
+  assert.match(app, /function Coach\(\{ p, lang = "en", userKey = null \}\) \{/);
   assert.match(app, /const extras = \{ images, signal: controller\.signal, onImages, exam, lang \};/);
   assert.match(app, /<UserMessage key=\{m\.id\} m=\{m\} onOpenImage=\{setLightbox\} lang=\{lang\} \/>/);
   assert.match(app, /<AssistantMessage key=\{m\.id\} m=\{m\} Icon=\{active\.icon\} lang=\{lang\} \/>/);
