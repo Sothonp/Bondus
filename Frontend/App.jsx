@@ -2891,10 +2891,9 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
       />
 
       {/* Explore more */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           { icon: Target, fx: "eai-ico-target", label: t(lang, "navPractice"), desc: t(lang, "exploreSharpen"), tab: "practice", c: "var(--jade)" },
-          { icon: GraduationCap, fx: "eai-ico-cap", label: t(lang, "navUniversities"), desc: t(lang, "exploreBrowseMajors"), tab: "universities", c: "var(--primary)" },
           { icon: BookOpen, fx: "eai-ico-book", label: t(lang, "browseTitle"), desc: t(lang, "exploreBrowsePast"), tab: "browse", c: "var(--ember)" },
           { icon: BarChart3, fx: "eai-ico-chart", label: t(lang, "navProgress"), desc: t(lang, "exploreStats"), tab: "progress", c: "var(--gold)" },
         ].map((c, i) => (
@@ -5211,7 +5210,6 @@ function UniversityHub({ p, go, onPracticeCourse, lang = "en" }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
             { icon: Sparkles, label: t(lang, "askAiCoach"), tab: "coach" },
-            { icon: Landmark, label: t(lang, "navUniversities"), tab: "universities" },
           ].map((it) => (
             <button key={it.tab} onClick={() => go(it.tab)} className={`eai-tile eai-focus p-4 rounded-2xl border text-left ${lang === "km" ? "eai-km" : ""}`} style={{ borderColor: "var(--line)" }}>
               <it.icon size={20} style={{ color: "var(--primary)" }} />
@@ -5237,7 +5235,6 @@ function UniversityExplore({ p, go, lang = "en" }) {
       { icon: Sparkles, label: t(lang, "askAiCoach"), onClick: () => go("coach") },
     ] },
     { title: t(lang, "exploreDiscoverTitle"), items: [
-      { icon: Landmark, label: t(lang, "navUniversities"), onClick: () => go("universities") },
       { icon: DollarSign, label: t(lang, "scholarshipsWord"), onClick: () => go("scholarships") },
     ] },
     { title: t(lang, "explorePracticeTitle"), items: [
@@ -7033,7 +7030,6 @@ const NAV = [
   { id: "browse", label: "Browse exams", labelKm: "រកមើលកម្រងសំណួរ", icon: BookOpen },
   { id: "practice", label: "Practice", labelKm: "លំហាត់អនុវត្ត", icon: Target },
   { id: "exercises", label: "Exercises", labelKm: "លំហាត់ពីគ្រូ", icon: ClipboardCheck },
-  { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
   { id: "wardrobe", label: "Wardrobe", labelKm: "បន្ទប់ស្លៀកពាក់", icon: Shirt },
@@ -7046,7 +7042,6 @@ const NAV = [
 const UNI_NAV = [
   { id: "universityHub", label: "University Hub", labelKm: "មជ្ឈមណ្ឌលសាកលវិទ្យាល័យ", icon: LayoutDashboard },
   { id: "explore", label: "Explore", labelKm: "ស្វែងរក", icon: Compass },
-  { id: "universities", label: "Universities", labelKm: "សាកលវិទ្យាល័យ", icon: GraduationCap },
   { id: "coach", label: "AI coach", labelKm: "គ្រូបង្វឹក AI", icon: Sparkles },
   { id: "progress", label: "Progress", labelKm: "វឌ្ឍនភាព", icon: BarChart3 },
   { id: "wardrobe", label: "Wardrobe", labelKm: "បន្ទប់ស្លៀកពាក់", icon: Shirt },
@@ -8360,7 +8355,7 @@ export default function App() {
       initials={initials} onUploadPhoto={handleUploadPhoto} onRemovePhoto={handleRemovePhoto}
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
       onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
-    universities: <Universities p={p} lang={lang} />, coach: <Coach p={p} lang={lang} userKey={userKeyOf(profile)} />,
+    coach: <Coach p={p} lang={lang} userKey={userKeyOf(profile)} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} leaderboard={leaderboard} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} leaderboard={leaderboard} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
     explore: <UniversityExplore p={p} go={go} lang={lang} />,
