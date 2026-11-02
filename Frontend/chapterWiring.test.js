@@ -143,7 +143,7 @@ test("the server's chapters are fetched after sign-in without ever blocking it",
   assert.match(app, /chaptersRun\.current \+= 1; setServerChapters\(null\); setChapterQuiz\(\{\}\);/, "signing out forgets the previous student's chapters");
 });
 
-test("full past papers are locked until the subject's chapters are passed, and unknown progress never locks", () => {
+test("full past papers are locked (when LOCK_PAPERS is on) until the subject's chapters are passed, and unknown progress never locks", () => {
   const gate = app.slice(app.indexOf("const paperGate = (subject) =>"), app.indexOf("// Fetch the account, progress"));
   assert.match(gate, /if \(progress == null \|\| !list\.some\(\(ex\) => ex\.chapter\)\) return \{ locked: false \};/);
   assert.match(gate, /locked: !papersOpen\(rows\)/);
@@ -197,4 +197,9 @@ test("the locked-chapter sheet is centred on the screen and drawn outside the an
   // Opening and closing it must never scroll the page.
   assert.match(code, /primary\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(code, /returnTo\.current\?\.focus\?\.\(\{ preventScroll: true \}\)/);
+});
+
+test("the past papers are open to every student while LOCK_PAPERS is false", () => {
+  assert.match(app, /const LOCK_PAPERS = false;/);
+  assert.match(app, /if \(!LOCK_PAPERS\) return \{ locked: false \};/);
 });

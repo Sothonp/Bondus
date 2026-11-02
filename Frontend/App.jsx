@@ -6827,6 +6827,9 @@ function Coach({ p, lang = "en", userKey = null }) {
 /* ════════════════════════ Super Bondus (premium upsell) ════════════════════════
    A pricing/upgrade page reached from the "Super Bondus" nav item. This prototype has no payment
    backend, so "Upgrade" is honest about that instead of pretending to charge a card. */
+/* Full past papers in Browse exams: false = open to every student; true = locked until the subject's chapters are passed. */
+const LOCK_PAPERS = false;
+
 const SUPER_PLANS = [
   {
     id: "free", label: "Free", labelKm: "ឥតគិតថ្លៃ", price: "$0", period: "",
@@ -8036,7 +8039,10 @@ export default function App() {
     }
   };
   // Are a subject's full past papers locked until its chapters are passed? Unknown progress never locks (see above).
+  // The owner opened the papers to everyone (Nov 2026): while LOCK_PAPERS is false nothing is locked. Set it back to true to
+  // restore the chapter lock; the lock UI and its rules below are unchanged.
   const paperGate = (subject) => {
+    if (!LOCK_PAPERS) return { locked: false };
     const list = getExercises(subject, "en");
     const progress = chapterProgressFor(subject);
     if (progress == null || !list.some((ex) => ex.chapter)) return { locked: false };
