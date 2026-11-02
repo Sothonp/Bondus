@@ -12,6 +12,7 @@ const list = read("ChapterList.jsx");
 const rules = read("chapterProgress.js");
 const quizUi = read("ChapterQuiz.jsx");
 const lockUi = read("PapersLock.jsx");
+const drillUi = read("FormulaDrill.jsx");
 const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const subject = app.slice(app.indexOf("function PracticeSubject("), app.indexOf("function ExercisePlayer("));
 const browse = app.slice(app.indexOf("function Browse("), app.indexOf("function Exercises("));
@@ -22,7 +23,7 @@ test("Practice shows the chapter path and decides the open chapter from the prac
   assert.match(app, /import \{ chapterStates, [^}]*\} from "\.\/chapterProgress\.js";/);
   assert.match(subject, /const progress = hasChapters \? \(chapterProgress\?\.\(subject\) \?\? null\) : null;/);
   assert.match(subject, /chapterStates\(fullList, practice, progress\)/);
-  assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} \/>/);
+  assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} onDrill=\{setDrillChapter\} \/>/);
 });
 
 test("the chapter order rule lives in one place, not copied into the screen", () => {
@@ -72,7 +73,7 @@ test("every word the list asks for exists in English and Khmer", () => {
   const en = Object.keys(CHAPTER_STRINGS.en), km = Object.keys(CHAPTER_STRINGS.km);
   assert.deepEqual([...km].sort(), [...en].sort());
   const used = new Set();
-  for (const src of [list, quizUi, lockUi]) for (const m of src.matchAll(/\bw\(\s*"(\w+)"/g)) used.add(m[1]);
+  for (const src of [list, quizUi, lockUi, drillUi]) for (const m of src.matchAll(/\bw\(\s*"(\w+)"/g)) used.add(m[1]);
   for (const m of quizUi.matchAll(/\bw\(\s*\w+\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/g)) { used.add(m[1]); used.add(m[2]); } // w(last ? "quizFinish" : "quizNext")
   for (const m of quizUi.matchAll(/w\(\s*\w+\s*\?\s*"(\w+)"\s*:\s*\w+\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/g)) { used.add(m[1]); used.add(m[2]); used.add(m[3]); } // mastered ? .. : passed ? .. : ..
   for (const label of list.matchAll(/label: "(\w+)"/g)) used.add(label[1]); // the state names, looked up through LOOK

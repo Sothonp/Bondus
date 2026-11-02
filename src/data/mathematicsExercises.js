@@ -11,7 +11,12 @@
    students' saved progress is keyed on them, so the 8 starters keep positions 1–8 and the order below
    is load-bearing: new questions must only ever be added at the END of BANK. Chapter order in the
    picker and the formula-quiz-first order inside a chapter do not depend on array position — they come
-   from chapterOrder (chapters.js) and stage (drill()). */
+   from chapterOrder (chapters.js) and stage (drill()).
+
+   FORMULA_DRILLS (mathematics/formulaDrills.js) adds a second, larger round of stage-0 formula
+   questions to every chapter — quick, no-paper, tap-the-answer recall of the chapter's formulas, for
+   the "Formula drill" review mode (PracticeSubject in Frontend/App.jsx). It is appended at the very
+   end of BANK, same positional-id rule: only ever add new drill questions at the end of that file. */
 import { CHAPTER_ORDER, chapterOf } from "./mathematics/chapters.js";
 import { INDUCTION_1_1 } from "./mathematics/induction.js";
 import { SEQUENCES_1_2 } from "./mathematics/sequences.js";
@@ -28,6 +33,7 @@ import { CONICS_6_1 } from "./mathematics/conics.js";
 import { DIFFEQ_7_1 } from "./mathematics/diffEq.js";
 import { PROB_8_1 } from "./mathematics/probability.js";
 import { VECTORS_9_1 } from "./mathematics/vectors.js";
+import { FORMULA_DRILLS } from "./mathematics/formulaDrills.js";
 
 const BANK = [
   ...INDUCTION_1_1, ...SEQUENCES_1_2, ...LIMITS_1_3,
@@ -35,6 +41,7 @@ const BANK = [
   ...STUDY_4_1, ...EXP_4_2, ...LOG_4_3,
   ...COMPLEX_5_1, ...COMPLEX_5_2,
   ...CONICS_6_1, ...DIFFEQ_7_1, ...PROB_8_1, ...VECTORS_9_1,
+  ...FORMULA_DRILLS,
 ];
 
 export const MATHEMATICS_EXERCISES = BANK.map((e) => ({ ...e, chapterOrder: CHAPTER_ORDER[e.chapter] }));

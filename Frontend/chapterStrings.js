@@ -78,6 +78,11 @@ export const CHAPTER_STRINGS = {
     papersLockedBody: "Pass all {total} chapters to open them. You have passed {passed}.",
     papersTiersNote: "Chapter past-paper sets are coming soon.",
     papersGo: "Go to Practice",
+    // the quick Formula drill — review a chapter's formulas anytime, even while it is still locked; nothing is saved
+    drillButton: "Formula drill",
+    drillDoneTitle: "Drill done",
+    drillDoneScore: "{correct} of {total} right",
+    drillAgain: "Drill again",
   },
   km: {
     stateLocked: "ជាប់សោ",
@@ -148,6 +153,10 @@ export const CHAPTER_STRINGS = {
     papersLockedBody: "ជាប់ជំពូកទាំង {total} ដើម្បីបើកវា។ អ្នកបានជាប់ {passed} ហើយ។",
     papersTiersNote: "សំណុំវិញ្ញាសាតាមជំពូកនឹងមកដល់ឆាប់ៗនេះ។",
     papersGo: "ទៅកាន់លំហាត់អនុវត្ត",
+    drillButton: "ហាត់រូបមន្តរហ័ស",
+    drillDoneTitle: "ហាត់រួចរាល់",
+    drillDoneScore: "ត្រូវ {correct} ក្នុងចំណោម {total}",
+    drillAgain: "ហាត់ម្តងទៀត",
   },
 };
 

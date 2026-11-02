@@ -73,6 +73,8 @@ import WarmUpGate from "./WarmUpGate.jsx";
 import { useDayRollover } from "./dayRollover.js";
 import ChapterList from "./ChapterList.jsx";
 import ChapterQuiz, { QuizCard } from "./ChapterQuiz.jsx";
+import FormulaDrill from "./FormulaDrill.jsx";
+import { drillPool } from "./formulaDrill.js";
 import PapersLock from "./PapersLock.jsx";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
@@ -3449,9 +3451,13 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
   const chapterRows = hasChapters
     ? chapterStates(fullList, practice, progress).map((r) => ({
       ...r, canTestOut: quizAvailable && (r.state === "available" || r.state === "inProgress") && testOutEligible(fullList, r.key, mastery?.[subject]),
+      drillCount: drillPool(fullList, r.key).length,
     }))
     : [];
   const [pickedChapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
+  // The quick Formula drill: review, not progress — open for any chapter, even a locked one, and closed
+  // without touching `pickedChapter` or anything saved.
+  const [drillChapter, setDrillChapter] = useState(null);
   const [quiz, setQuiz] = useState(null); // { chapter, attemptId, alreadyPassed, ids } while a Master Quiz is on screen
   // The chapter on screen. A remembered or tapped chapter that is locked (or no longer exists) is not opened: back to the list.
   const chapter = pickedChapter != null && chapterRows.some((r) => r.key === pickedChapter && r.state !== "locked") ? pickedChapter : null;
@@ -3533,13 +3539,22 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
     );
   }
 
+  // Pure review: no progress, no saved state, open for any chapter including a locked one, so it is
+  // checked before the locked/open chapter split below ever applies.
+  if (drillChapter) {
+    return (
+      <FormulaDrill chapterName={chapterLabel(drillChapter)} list={fullList} chapterKey={drillChapter}
+        grade={gradeAnswerAny} lang={lang} onExit={() => setDrillChapter(null)} />
+    );
+  }
+
   if (hasChapters && chapter == null) {
     return (
       <div className="space-y-5 eai-rise">
         <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
         <h2 className={`eai-display text-2xl font-extrabold ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}</h2>
         <div>
-          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} />
+          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} onDrill={setDrillChapter} />
         </div>
       </div>
     );
