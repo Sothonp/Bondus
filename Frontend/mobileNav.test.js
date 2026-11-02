@@ -8,28 +8,28 @@ const item = (id, extra = {}) => ({ id, label: id, ...extra });
 const ids = (list) => list.map((n) => n.id);
 
 // The sidebar a science student sees (App.jsx's NAV with Exercises kept), then an admin's, a social student's, a university profile's.
-const STUDENT = ["dashboard", "browse", "practice", "exercises", "universities", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
+const STUDENT = ["dashboard", "browse", "practice", "exercises", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
 const ADMIN = [...STUDENT, item("adminExercises")];
 const SOCIAL = STUDENT.filter((n) => n.id !== "exercises");
-const UNIVERSITY = ["universityHub", "explore", "universities", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
+const UNIVERSITY = ["universityHub", "explore", "coach", "progress", "wardrobe", "super"].map((id) => item(id));
 
 test("the bottom bar holds Dashboard, Practice, AI coach and Wardrobe, in that order", () => {
   assert.deepEqual(ids(splitMobileNav(STUDENT).primary), ["dashboard", "practice", "coach", "wardrobe"]);
 });
 
 test("everything else is in More, in the sidebar's own order, with Super Bondus and Admin there", () => {
-  assert.deepEqual(ids(splitMobileNav(STUDENT).more), ["browse", "exercises", "universities", "progress", "super"]);
-  assert.deepEqual(ids(splitMobileNav(ADMIN).more), ["browse", "exercises", "universities", "progress", "super", "adminExercises"]);
+  assert.deepEqual(ids(splitMobileNav(STUDENT).more), ["browse", "exercises", "progress", "super"]);
+  assert.deepEqual(ids(splitMobileNav(ADMIN).more), ["browse", "exercises", "progress", "super", "adminExercises"]);
 });
 
 test("a social-science student has no Exercises in More", () => {
-  assert.deepEqual(ids(splitMobileNav(SOCIAL).more), ["browse", "universities", "progress", "super"]);
+  assert.deepEqual(ids(splitMobileNav(SOCIAL).more), ["browse", "progress", "super"]);
 });
 
 test("a university profile gets its hub, the coach and the wardrobe in the bar", () => {
   const { primary, more } = splitMobileNav(UNIVERSITY);
   assert.deepEqual(ids(primary), ["universityHub", "coach", "wardrobe"]);
-  assert.deepEqual(ids(more), ["explore", "universities", "progress", "super"]);
+  assert.deepEqual(ids(more), ["explore", "progress", "super"]);
 });
 
 test("no page becomes unreachable: every item appears exactly once", () => {
