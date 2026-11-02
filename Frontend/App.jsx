@@ -7052,6 +7052,16 @@ function SuperBondus({ p, lang = "en" }) {
     return () => { on = false; };
   }, []);
   const current = live?.plan ?? p?.plan ?? "free";
+  // The QR code to pay with (the admin can replace it): read when a paid plan is chosen. undefined while loading, null if the
+  // backend could not give one (then the owner's text, if any, is all there is).
+  const [pay, setPay] = useState(undefined);
+  const paying = Boolean(upgraded);
+  useEffect(() => {
+    if (!paying || !SERVER_MODE || !api.hasToken()) { setPay(null); return undefined; }
+    let on = true;
+    api.getPayment().then((res) => { if (on) setPay(res); }).catch(() => { if (on) setPay(null); });
+    return () => { on = false; };
+  }, [paying]);
 
   return (
     <div className="space-y-5 eai-rise">
@@ -7075,9 +7085,16 @@ function SuperBondus({ p, lang = "en" }) {
               {tf(lang, "planPayTitle", { plan: lang === "km" ? (upgraded.labelKm ?? upgraded.label) : upgraded.label, price: upgraded.price, period: upgraded.period ? ` ${lang === "km" ? (upgraded.periodKm ?? upgraded.period) : upgraded.period}` : "" })}
             </p>
             <p className={`text-sm eai-muted mt-1 leading-relaxed ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "planPayHow")}</p>
-            {PAY_INSTRUCTIONS
-              ? <pre className="eai-soft rounded-xl p-3 mt-3 text-sm" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", overflowWrap: "anywhere" }}>{PAY_INSTRUCTIONS}</pre>
-              : <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }}>{tf(lang, "planPayNotSet")}</p>}
+            {pay?.qrUrl && (
+              <div className="mt-3 flex flex-col items-center text-center gap-2">
+                <img src={pay.qrUrl} alt={tf(lang, "planPayQrAlt")} className="rounded-2xl border" style={{ width: "100%", maxWidth: 280, background: "#fff", borderColor: "var(--line)" }} />
+                <p className={`text-sm ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "planPayScan", { price: upgraded.price })}</p>
+                <a href={pay.qrUrl} target="_blank" rel="noopener noreferrer" className={`eai-focus text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{tf(lang, "planPaySave")}</a>
+              </div>
+            )}
+            {pay === undefined && SERVER_MODE && <p className={`text-sm eai-muted mt-3 ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "planPayQrLoading")}</p>}
+            {PAY_INSTRUCTIONS && <pre className="eai-soft rounded-xl p-3 mt-3 text-sm" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", overflowWrap: "anywhere" }}>{PAY_INSTRUCTIONS}</pre>}
+            {pay !== undefined && !pay?.qrUrl && !PAY_INSTRUCTIONS && <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }}>{tf(lang, "planPayNotSet")}</p>}
             <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`}><span className="eai-muted">{tf(lang, "planPayAccount")}: </span><strong style={{ overflowWrap: "anywhere" }}>{p?.email || p?.phone || p?.name}</strong></p>
             <button onClick={() => setUpgraded(null)} className={`eai-focus text-sm font-semibold mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{tf(lang, "planPayBack")}</button>
           </div>
