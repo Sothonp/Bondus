@@ -1,7 +1,7 @@
 /* Vercel serverless function: POST /api/major-guidance. The Netlify equivalent lives in
    netlify/functions/major-guidance.mjs; both call the same majorGuidance(). */
 import { majorGuidance } from "./major-guidance-core.js";
-import { refuseUnlessSignedIn } from "./_auth.js";
+import { refuseUnlessSignedIn, refuseIfOutOfQuestions } from "./_auth.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -9,6 +9,7 @@ export default async function handler(req, res) {
     return;
   }
   if (await refuseUnlessSignedIn(req, res)) return;
+  if (await refuseIfOutOfQuestions(req, res)) return;
   const { status, body } = await majorGuidance(req.body || {});
   res.status(status).json(body);
 }
