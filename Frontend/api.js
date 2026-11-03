@@ -149,7 +149,7 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     // the daily limit on AI questions (Free 5, VIP Bondus 60, Super Bondus 150): where the student stands, and counting one
     // question under an id made for it. Out of questions answers 402 `ai_limit_reached` with the usage in the error's body.
     getAiUsage: () => get("/ai/usage"),
-    consumeAi: (requestId) => send("POST", "/ai/consume", { requestId }),
+    consumeAi: (requestId, uploads = 0) => send("POST", "/ai/consume", uploads > 0 ? { requestId, uploads } : { requestId }),
 
     // where to pay for a plan: { qrUrl, updatedAt, isCustom }. qrUrl is a signed link an <img> can open without signing in.
     getPayment: () => get("/payment"),
