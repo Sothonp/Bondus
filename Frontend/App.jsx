@@ -1119,15 +1119,21 @@ ${riderKeyframesCss("eai-rider-go")}
 @media (prefers-reduced-motion: reduce){ .eai-lp-btn{ transition:none; } }
 
 /* Subject ribbon: the strip of subjects along the bottom of the landing page (SubjectRibbon.jsx). A 1px top border
-   in the page's line colour on the page background; names are small bold uppercase, muted until hovered. The track
-   scrolls sideways with the scrollbar hidden, and the list centres itself when it fits (auto margins fall back to
-   the start when it overflows, so nothing is cut off on the left). The arrows only show from 640px up: on a phone
-   the strip is dragged. Khmer has no letter case and breaks if letter-spaced, so it gets a plain, larger size. */
+   in the page's line colour on the page background; names are small bold uppercase, muted until hovered. The belt holds
+   the list three times and slides left by exactly one list's width, over and over, so it loops without a join; its ends
+   fade out. It pauses while a finger, the mouse or keyboard focus is on it. The arrows are only for people who ask for
+   reduced motion (below): then nothing moves, the copies are hidden and the track scrolls sideways by hand, the list
+   centring itself when it fits. Khmer has no letter case and breaks if letter-spaced, so it gets a plain, larger size. */
 .eai-ribbon{ background:var(--bg); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
 .eai-ribbon-inner{ display:flex; align-items:center; max-width:1680px; margin:0 auto; padding:0 8px; }
-.eai-ribbon-track{ flex:1 1 0; min-width:0; display:flex; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; }
+.eai-ribbon-track{ flex:1 1 0; min-width:0; display:flex; overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent); mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent); }
 .eai-ribbon-track::-webkit-scrollbar{ display:none; }
-.eai-ribbon-list{ display:flex; margin:0 auto; padding:0; list-style:none; }
+.eai-ribbon-belt{ display:flex; flex:none; width:max-content; animation:eai-ribbon-run var(--ribbon-seconds,50s) linear infinite; will-change:transform; }
+.eai-ribbon-belt:active, .eai-ribbon-belt:focus-within{ animation-play-state:paused; }
+@media (hover:hover){ .eai-ribbon-belt:hover{ animation-play-state:paused; } }
+@keyframes eai-ribbon-run{ from{ transform:translateX(0); } to{ transform:translateX(-33.33333%); } }
+.eai-ribbon-list{ display:flex; flex:none; margin:0; padding:0; list-style:none; }
 .eai-ribbon-item{ display:flex; align-items:center; gap:10px; min-height:56px; padding:0 14px; background:none; border:0; cursor:pointer; white-space:nowrap;
   font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); transition:color .15s ease; }
 .eai-ribbon-item:hover{ color:var(--ink); }
@@ -1137,7 +1143,12 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-ribbon-arrow:hover{ color:var(--ink); }
 .eai-ribbon-arrow[aria-disabled="true"]{ opacity:.3; cursor:default; }
 .eai-ribbon-arrow[data-idle="true"]{ visibility:hidden; }
-@media (min-width:640px){ .eai-ribbon-arrow{ display:grid; } }
+@media (prefers-reduced-motion: reduce){
+  .eai-ribbon-track{ overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; -webkit-mask-image:none; mask-image:none; }
+  .eai-ribbon-belt{ animation:none; will-change:auto; width:auto; margin:0 auto; }
+  .eai-ribbon-clone{ display:none; }
+}
+@media (min-width:640px) and (prefers-reduced-motion: reduce){ .eai-ribbon-arrow{ display:grid; } }
 @media (prefers-reduced-motion: reduce){ .eai-ribbon-item, .eai-ribbon-arrow{ transition:none; } }
 
 /* Duolingo-style MCQ layout: owl beside a bordered question card, options as full-width stacked
