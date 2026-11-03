@@ -2,8 +2,8 @@
    switching a student's plan on after they have paid. Pure presentation, like ExerciseUi.jsx: the api client, the translators
    (`tr(key)`, `trf(key, vars)`) and the language come from App.jsx and nothing is imported back from it. The rules (who may
    ask, what counts) are in aiQuota.js; the counting itself is on the backend. */
-import React, { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, Search } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { CheckCircle2, AlertTriangle, Search, Upload } from "lucide-react";
 
 const kmc = (lang) => (lang === "km" ? "eai-km" : "");
 
@@ -34,6 +34,73 @@ const dateText = (iso, lang) => {
 };
 
 const MONTH_CHOICES = [1, 3, 6, 12];
+
+const QR_MAX_BYTES = 2 * 1024 * 1024; // the backend refuses more (config bondus.payment_qr)
+const QR_TYPES = /^image\/(jpeg|png|webp)$/;
+
+/* Admin: the QR code students pay a plan with. Shows the current picture; uploading a new one replaces it for everyone, and
+   "use the original" goes back to the one that came with the app. */
+export function PaymentQrAdmin({ api, lang = "en", tr }) {
+  const [info, setInfo] = useState(undefined); // undefined while loading, null if it could not be read, else { qrUrl, isCustom }
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null); // { ok, key }
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.getPayment().then((res) => { if (alive) setInfo(res); }).catch(() => { if (alive) setInfo(null); });
+    return () => { alive = false; };
+  }, [api]);
+
+  const run = async (job) => {
+    setBusy(true); setMsg(null);
+    try { setInfo(await job()); setMsg({ ok: true, key: "adminQrSaved" }); }
+    catch { setMsg({ ok: false, key: "adminQrFailed" }); }
+    finally { setBusy(false); }
+  };
+  const pick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so choosing the same file again still fires
+    if (!file) return;
+    if (!QR_TYPES.test(file.type)) { setMsg({ ok: false, key: "adminQrNotImage" }); return; }
+    if (file.size > QR_MAX_BYTES) { setMsg({ ok: false, key: "adminQrTooBig" }); return; }
+    run(() => api.uploadPaymentQr(file));
+  };
+
+  return (
+    <section className="eai-card space-y-3" aria-labelledby="admin-qr-title">
+      <div>
+        <h3 id="admin-qr-title" className={`font-bold ${kmc(lang)}`}>{tr("adminQrTitle")}</h3>
+        <p className={`text-sm eai-muted mt-1 ${kmc(lang)}`}>{tr("adminQrDesc")}</p>
+      </div>
+      <div className="flex gap-4 items-start flex-wrap">
+        {info?.qrUrl
+          ? <img src={info.qrUrl} alt={tr("planPayQrAlt")} className="rounded-xl border" style={{ width: 150, background: "#fff", borderColor: "var(--line)" }} />
+          : <p className={`text-sm eai-muted ${kmc(lang)}`}>{info === undefined ? tr("planPayQrLoading") : tr("adminQrNone")}</p>}
+        <div className="space-y-2 min-w-0">
+          {info && <p className={`text-xs eai-muted ${kmc(lang)}`}>{info.isCustom ? tr("adminQrCustom") : tr("adminQrShipped")}</p>}
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={pick} className="sr-only" tabIndex={-1} aria-hidden="true" />
+          <div className="flex gap-2 flex-wrap items-center">
+            <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className={`eai-btn eai-focus px-3.5 py-2.5 text-sm flex items-center gap-2 ${kmc(lang)}`}
+              style={{ background: "var(--primary)", color: "#fff", opacity: busy ? 0.6 : 1 }}>
+              <Upload size={15} aria-hidden="true" /> {busy ? tr("adminQrUploading") : tr("adminQrUpload")}
+            </button>
+            {info?.isCustom && (
+              <button type="button" disabled={busy} onClick={() => run(() => api.resetPaymentQr())} className={`eai-focus text-sm font-semibold px-2 py-2.5 ${kmc(lang)}`} style={{ color: "var(--primary)", opacity: busy ? 0.6 : 1 }}>
+                {tr("adminQrReset")}
+              </button>
+            )}
+          </div>
+          {msg && (
+            <p className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: msg.ok ? "var(--jade)" : "var(--ember)" }} role={msg.ok ? "status" : "alert"}>
+              {msg.ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {tr(msg.key)}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 /* Admin: the students on a paid plan (or whoever the search finds), each with buttons to switch a plan on for N months. */
 export function AdminPlans({ api, lang = "en", tr, trf }) {
@@ -80,6 +147,8 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
         <h2 className={`eai-display text-2xl font-extrabold ${kmc(lang)}`}>{tr("adminPlansTitle")}</h2>
         <p className={`eai-muted text-sm mt-1 ${kmc(lang)}`}>{tr("adminPlansDesc")}</p>
       </div>
+
+      <PaymentQrAdmin api={api} lang={lang} tr={tr} />
 
       <div className="flex gap-3 flex-wrap items-end">
         <label className="flex-1 min-w-[220px]">

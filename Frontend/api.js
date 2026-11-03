@@ -151,6 +151,12 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     getAiUsage: () => get("/ai/usage"),
     consumeAi: (requestId) => send("POST", "/ai/consume", { requestId }),
 
+    // where to pay for a plan: { qrUrl, updatedAt, isCustom }. qrUrl is a signed link an <img> can open without signing in.
+    getPayment: () => get("/payment"),
+    // admin-only: replace the payment QR with an uploaded picture (a File or Blob), or go back to the one that came with the app.
+    uploadPaymentQr: (picture) => { const form = new FormData(); form.append("qr", picture, picture.name || "qr.png"); return send("POST", "/admin/payment-qr", form); },
+    resetPaymentQr: () => send("DELETE", "/admin/payment-qr"),
+
     // admin-only: switch a student's plan on after they have paid. No query lists the students on a paid plan.
     getAdminUsers: (q) => get(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
     setUserPlan: (id, { plan, months, noExpiry }) => send("PATCH", `/admin/users/${id}/plan`, { plan, months, noExpiry }),

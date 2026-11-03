@@ -72,3 +72,25 @@ test("every string the plan screens use exists in English and Khmer", () => {
     assert.ok(MORE_STRINGS.km[key], `km.${key}`);
   }
 });
+
+test("the plans page shows the payment QR the backend gives, and falls back to the owner's text", () => {
+  const pay = between(app, "const [pay, setPay] = useState(undefined);", "return (");
+  assert.match(pay, /api\.getPayment\(\)/);
+  assert.match(pay, /\.catch\(\(\) => \{ if \(on\) setPay\(null\)/, "a failing backend means no QR, never an error screen");
+  assert.match(app, /<img src=\{pay\.qrUrl\} alt=\{tf\(lang, "planPayQrAlt"\)\}/);
+  assert.match(app, /tf\(lang, "planPayScan", \{ price: upgraded\.price \}\)/);
+  assert.match(app, /\{PAY_INSTRUCTIONS && <pre/, "the owner's text still shows beside the QR");
+  assert.match(app, /pay !== undefined && !pay\?\.qrUrl && !PAY_INSTRUCTIONS/, "'not set up' only when there is neither");
+});
+
+test("an admin can replace the payment QR, and go back to the original", () => {
+  assert.match(ui, /export function PaymentQrAdmin/);
+  assert.match(between(ui, "export function AdminPlans", "\n}\n"), /<PaymentQrAdmin api=\{api\}/);
+  assert.match(ui, /api\.uploadPaymentQr\(file\)/);
+  assert.match(ui, /api\.resetPaymentQr\(\)/);
+  // refused on the phone before anything is sent
+  assert.match(ui, /QR_TYPES = \/\^image\\\/\(jpeg\|png\|webp\)\$\//);
+  assert.match(ui, /QR_MAX_BYTES = 2 \* 1024 \* 1024/);
+  assert.ok(ui.indexOf("adminQrNotImage") < ui.indexOf("api.uploadPaymentQr(file)"), "type check comes before the upload");
+  assert.match(ui, /info\?\.isCustom && \(/, "the reset button only exists while an uploaded QR is in use");
+});
