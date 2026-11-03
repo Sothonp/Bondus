@@ -94,3 +94,11 @@ test("an admin can replace the payment QR, and go back to the original", () => {
   assert.ok(ui.indexOf("adminQrNotImage") < ui.indexOf("api.uploadPaymentQr(file)"), "type check comes before the upload");
   assert.match(ui, /info\?\.isCustom && \(/, "the reset button only exists while an uploaded QR is in use");
 });
+
+test("an AI server that has not been updated yet (it refuses request_id) still answers: the website sends the question again without the id", () => {
+  // Breaks if: the website goes live before the AI server and every question fails with "Extra inputs are not permitted".
+  const rag = between(app, "let aiServerTakesRequestId = true;", "const ragFetch =");
+  assert.match(rag, /d\?\.type === "extra_forbidden" && Array\.isArray\(d\.loc\) && d\.loc\.includes\("request_id"\)/, "only that exact refusal");
+  assert.match(rag, /res\.status === 422 && !retried && refusesRequestId\(detail\)\) \{ aiServerTakesRequestId = false; return ragRequest\(path, init, true\); \}/, "retried once");
+  assert.match(rag, /if \(!aiServerTakesRequestId\) init = withoutRequestId\(init\);/, "and the id is left off afterwards");
+});
