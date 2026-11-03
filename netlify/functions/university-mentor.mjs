@@ -1,7 +1,7 @@
 /* Netlify function: POST /api/university-mentor (routed by netlify.toml).
    Shares its prompt and AI call with the Vercel function in api/. */
 import { universityMentor } from "../../api/university-mentor-core.js";
-import { refuseUnlessSignedInNetlify } from "../../api/_auth.js";
+import { refuseUnlessSignedInNetlify, refuseIfOutOfQuestionsNetlify } from "../../api/_auth.js";
 
 export default async (req) => {
   if (req.method !== "POST") {
@@ -10,6 +10,8 @@ export default async (req) => {
   const refused = await refuseUnlessSignedInNetlify(req);
   if (refused) return refused;
   const payload = await req.json().catch(() => ({}));
+  const outOfQuestions = await refuseIfOutOfQuestionsNetlify(req, payload);
+  if (outOfQuestions) return outOfQuestions;
   const { status, body } = await universityMentor(payload);
   return Response.json(body, { status });
 };

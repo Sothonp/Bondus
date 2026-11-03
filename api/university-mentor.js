@@ -1,7 +1,7 @@
 /* Vercel serverless function: POST /api/university-mentor. The Netlify equivalent lives in
    netlify/functions/university-mentor.mjs; both call the same universityMentor(). */
 import { universityMentor } from "./university-mentor-core.js";
-import { refuseUnlessSignedIn } from "./_auth.js";
+import { refuseUnlessSignedIn, refuseIfOutOfQuestions } from "./_auth.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -9,6 +9,7 @@ export default async function handler(req, res) {
     return;
   }
   if (await refuseUnlessSignedIn(req, res)) return;
+  if (await refuseIfOutOfQuestions(req, res)) return;
   const { status, body } = await universityMentor(req.body || {});
   res.status(status).json(body);
 }
