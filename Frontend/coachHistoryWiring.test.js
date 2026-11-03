@@ -84,3 +84,12 @@ test("the mode tabs scroll instead of running off a phone, and the title keeps i
   assert.match(coach, /overflow-x-auto \[scrollbar-width:none\]/);
   assert.match(coach, /shrink-0 whitespace-nowrap ?\$\{km\}`\}>\{T\("coachTitle"\)\}|font-extrabold shrink-0 whitespace-nowrap/);
 });
+
+test("the Coach header wraps instead of drawing the title under New chat and the mode tabs", () => {
+  // Breaks if: the title group goes back to flex-1 below lg. A flex-1 box starts from zero width, so the row never wraps and a title
+  // that will not shrink is drawn under the buttons (seen on a phone in Khmer after leaving the Coach and coming back).
+  assert.match(coach, /order-1 flex items-center gap-2\.5 min-w-0 flex-auto lg:flex-1/);
+  assert.doesNotMatch(coach, /order-1 flex items-center gap-2\.5 min-w-0 flex-1"/);
+  // the History button is icon-only on a phone, so the title and New chat fit on one line
+  assert.match(ui, /max-\[479px\]:hidden \$\{kmc\(lang\)\}`\}>\{T\("histButton"\)\}/);
+});
