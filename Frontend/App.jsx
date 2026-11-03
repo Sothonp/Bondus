@@ -5612,8 +5612,20 @@ const ragMessage = (err, lang) => (err.message === UNREACHABLE ? tf(lang, "coach
 const UNCONFIGURED =
   "This site was built without an AI coach server address (set VITE_RAG_API_URL and redeploy).";
 
+/* An AI coach server that has not been updated to the daily-limit release refuses the `request_id` field ("Extra inputs are not
+   permitted", 422), and with it every question. The website is deployed on its own, so it may go live first: when the server says
+   that, the question is sent again without the id and the id is left off from then on. The website has already counted the question
+   with the backend, so the student's limit still holds; only the server's own second count is missing until the server is updated. */
+let aiServerTakesRequestId = true;
+const refusesRequestId = (detail) => Array.isArray(detail) && detail.some((d) => d?.type === "extra_forbidden" && Array.isArray(d.loc) && d.loc.includes("request_id"));
+const withoutRequestId = (init) => {
+  if (typeof init?.body !== "string") return init;
+  try { const { request_id: _dropped, ...rest } = JSON.parse(init.body); return { ...init, body: JSON.stringify(rest) }; } catch { return init; }
+};
+
 /* Resolves to the Response when it is OK, otherwise throws a RagError with FastAPI's detail. */
-async function ragRequest(path, init) {
+async function ragRequest(path, init, retried = false) {
+  if (!aiServerTakesRequestId) init = withoutRequestId(init);
   let res;
   try {
     // The coach only answers signed-in students: it checks this token with the Laravel API.
@@ -5629,6 +5641,7 @@ async function ragRequest(path, init) {
     return res;
   }
   const detail = (await res.json().catch(() => null))?.detail;
+  if (res.status === 422 && !retried && refusesRequestId(detail)) { aiServerTakesRequestId = false; return ragRequest(path, init, true); }
   // A dev-proxy failure (server down) is a 5xx without a FastAPI error body. With no server address set, a host such as
   // Vercel answers "404 not found" for /api/query/...: that is the same "no AI server", not an error to show a student.
   if (!detail && (res.status >= 500 || (!RAG_API && res.status === 404))) throw new RagError(RAG_API ? UNREACHABLE : UNCONFIGURED, 0);
