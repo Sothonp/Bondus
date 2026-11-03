@@ -321,6 +321,9 @@ test("plans: usage is read, a question is counted by id, and a 402 keeps its usa
   assert.equal(calls[1].url, `${BASE}/ai/consume`);
   assert.equal(calls[1].init.method, "POST");
   assert.deepEqual(calls[1].body, { requestId: "req-12345678" });
+  // photos are reported with the question only when there are some
+  await assert.rejects(() => api.consumeAi("req-12345678", 2));
+  assert.deepEqual(calls[2].body, { requestId: "req-12345678", uploads: 2 });
 });
 
 test("plans: an admin lists students and switches a plan on", async () => {

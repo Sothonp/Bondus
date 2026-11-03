@@ -27,7 +27,7 @@ test("every AI reply function takes the question's id and puts it in what it sen
 
 test("the coach counts a question before asking it, once per question, and a refusal never reaches the AI", () => {
   const send = between(app, "const requestId = newAiRequestId();", "Promise.all([answer(), minDelay])");
-  assert.match(send, /await askAllowance\(api, requestId\)/);
+  assert.match(send, /await askAllowance\(api, requestId, images\.length\)/, "the photos are counted with the question");
   // the refusal returns before the reply function is called
   assert.ok(send.indexOf("if (!gate.ok)") < send.indexOf("active.reply("), "refusal comes before the AI is asked");
   assert.match(send, /error: true, upgrade: true/);
@@ -101,4 +101,32 @@ test("an AI server that has not been updated yet (it refuses request_id) still a
   assert.match(rag, /d\?\.type === "extra_forbidden" && Array\.isArray\(d\.loc\) && d\.loc\.includes\("request_id"\)/, "only that exact refusal");
   assert.match(rag, /res\.status === 422 && !retried && refusesRequestId\(detail\)\) \{ aiServerTakesRequestId = false; return ragRequest\(path, init, true\); \}/, "retried once");
   assert.match(rag, /if \(!aiServerTakesRequestId\) init = withoutRequestId\(init\);/, "and the id is left off afterwards");
+});
+
+test("the coach keeps photos and PDFs for paid plans: Free sees an upgrade prompt, never a file picker", () => {
+  const coach = between(app, "const addImages = (files) =>", "const removeAttachment");
+  // every way in (paste, drop, the menu, the suggestion) goes through the same check
+  assert.match(app, /const uploadsBlocked = \(n = 1\) => \{\s*const why = uploadRefusal\(usage, n\);\s*if \(why\) setUploadPrompt\(why\);/);
+  assert.match(coach, /uploadsBlocked\(attachments\.length \+ 1\)/);
+  assert.match(app, /const pickPhotos = \(\) => \{ if \(!uploadsBlocked\(attachments\.length \+ 1\)\) photoRef\.current\?\.click\(\); \};/);
+  assert.match(app, /const pickDocs = \(\) => \{ if \(!uploadsBlocked\(1\)\) docRef\.current\?\.click\(\); \};/);
+  const docs = between(app, "const uploadDocs = async (files) =>", "const onKeyDown");
+  assert.match(docs, /if \(uploadsBlocked\(files\.length\)\) return;/);
+  assert.match(docs, /refreshUsage\(\)/, "a document used one of today's uploads");
+  // nothing opens a picker directly any more
+  assert.equal((app.match(/photoRef\.current\?\.click\(\)/g) || []).length, 1, "only pickPhotos opens the photo picker");
+  assert.equal((app.match(/docRef\.current\?\.click\(\)/g) || []).length, 1, "only pickDocs opens the document picker");
+  // the prompt offers the plans, but not to someone already on the top one
+  assert.match(app, /uploadPrompt && \([\s\S]*usage\?\.plan !== "premium"[\s\S]*aiUpgrade/);
+  // a photo that does not fit is refused by the backend too, and the reply says why
+  const send = between(app, "const requestId = newAiRequestId();", "Promise.all([answer(), minDelay])");
+  assert.match(send, /gate\.reason === "uploads"/);
+  assert.match(send, /coachUploadsPaid/);
+  assert.match(send, /coachUploadsUsedUp/);
+});
+
+test("the plans page promises the uploads the plans give", () => {
+  assert.match(app, /"10 photo\/PDF uploads\/day"/);
+  assert.match(app, /"40 photo\/PDF uploads\/day"/);
+  assert.doesNotMatch(app, /Limited photos\/PDF uploads|Advanced photos\/PDF uploads/);
 });

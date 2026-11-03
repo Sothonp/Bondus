@@ -48,7 +48,7 @@ from src.auth import (
     TokenVerifier,
     bearer_token,
 )
-from src.quota import LaravelQuota, Quota, QuotaUnavailable, question_id
+from src.quota import REASON_UPLOADS, LaravelQuota, Quota, QuotaUnavailable, question_id
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -2128,30 +2128,49 @@ def create_app(
                 headers={"Retry-After": str(wait)},
             )
 
-    async def count_question(request: Request) -> None:
-        """Count this request against the student's plan, and refuse it when the plan's questions for today are used up."""
+    async def count_request(
+        request: Request, request_id: object, *, uploads: int = 0, question: bool = True
+    ) -> None:
+        """Count a request against the student's plan, and refuse it when the plan's allowance for today is used up."""
         if counter is None:
             return
         token = bearer_token(request.headers.get("authorization"))
         if token is None:  # require_signed_in already refused this
             return
         try:
-            body = await request.json()
-        except ValueError:  # not JSON: the route itself answers 422
-            return
-        supplied = body.get("request_id") if isinstance(body, dict) else None
-        try:
-            verdict = await counter.consume(token, question_id(supplied))
+            verdict = await counter.consume(token, question_id(request_id), uploads=uploads, question=question)
         except QuotaUnavailable:
             # Only the API's own "no" stops a question: if it cannot be asked (or does not have this feature yet), a student
             # is not shut out of studying because of it.
             logger.warning("Could not count a question against the plan", exc_info=True)
             return
-        if not verdict.allowed:
+        if verdict.allowed:
+            return
+        if verdict.reason == REASON_UPLOADS:
             raise HTTPException(
                 status.HTTP_402_PAYMENT_REQUIRED,
-                "You have used all of today's AI questions on your plan. They come back tomorrow, or upgrade for more.",
+                "You have used all of today's photo and document uploads on your plan. They come back tomorrow, or upgrade for more."
+                if verdict.upload_limit
+                else "Photo and document uploads are not part of the Free plan. Upgrade to VIP Bondus or Super Bondus to send them.",
             )
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "You have used all of today's AI questions on your plan. They come back tomorrow, or upgrade for more.",
+        )
+
+    async def count_question(request: Request) -> None:
+        """Count this request (and any photos with it) against the student's plan."""
+        if counter is None:
+            return
+        try:
+            body = await request.json()
+        except ValueError:  # not JSON: the route itself answers 422
+            return
+        if not isinstance(body, dict):
+            return
+        images = body.get("images")
+        uploads = len(images) if isinstance(images, list) else 0
+        await count_request(request, body.get("request_id"), uploads=uploads)
 
     signed_in = [Depends(require_signed_in)]
 
@@ -2408,7 +2427,7 @@ def create_app(
         response_model=IngestResponse | IngestJob,
         responses={**WRITE_RESPONSES, 202: {"model": IngestJob, "description": "Background job started"}},
         tags=["ingest"],
-        dependencies=writes_only,
+        dependencies=[*writes_only, *signed_in],
     )
     async def ingest(
         request: Request,
@@ -2434,6 +2453,8 @@ def create_app(
                 detect_format(filename)
             except UnsupportedFileTypeError as exc:
                 raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(exc)) from exc
+            # A document added by a student is an upload on their plan (Free has none); it is not an AI question.
+            await count_request(request, None, uploads=1, question=False)
             data = await _read_limited(file, settings.max_upload_bytes)
             await file.close()
             if not data:

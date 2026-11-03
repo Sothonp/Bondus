@@ -41,10 +41,13 @@ def store_path(tmp_path):
 class FakeLaravel:
     """The Laravel API as far as the coach can see it: who am I, and count this question. Records every count."""
 
-    def __init__(self, *, refuse: bool = False, count_status: int = 200) -> None:
+    def __init__(self, *, refuse: bool = False, count_status: int = 200, refuse_uploads: bool = False, upload_limit: int = 0) -> None:
         self.refuse = refuse
+        self.refuse_uploads = refuse_uploads
+        self.upload_limit = upload_limit
         self.count_status = count_status
         self.counted: list[dict] = []  # {"token": ..., "requestId": ...} for each question reported
+        self.bodies: list[dict] = []  # the whole body of each report (uploads and question when they were sent)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         header = request.headers.get("authorization") or ""
@@ -54,9 +57,12 @@ class FakeLaravel:
         if str(request.url) == CONSUME_URL and request.method == "POST":
             body = json.loads(request.content)
             self.counted.append({"token": token, "requestId": body["requestId"]})
+            self.bodies.append(body)
             if self.count_status != 200:
                 return httpx.Response(self.count_status, json={"message": "nope"})
             usage = {"plan": "free", "limit": 5, "used": 5, "remaining": 0}
+            if self.refuse_uploads and body.get("uploads"):
+                return httpx.Response(402, json={"allowed": False, **usage, "uploadLimit": self.upload_limit, "code": "upload_limit_reached", "message": "no uploads"})
             if self.refuse:
                 return httpx.Response(402, json={"allowed": False, **usage, "code": "ai_limit_reached", "message": "used all"})
             return httpx.Response(200, json={"allowed": True, **usage, "used": 1, "remaining": 4})
@@ -117,6 +123,123 @@ def test_a_request_with_no_token_is_refused_without_counting_anything(store_path
     assert response.status_code == 401
     assert laravel.counted == []
     assert generator.seen == []
+
+
+# --- photos and documents ---------------------------------------------------------------------------------
+
+PHOTO = {"data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA", "mime_type": "image/png"}
+PHOTO_ROUTES = [
+    ("/api/query", {"prompt": "what is this", "images": [PHOTO, PHOTO], "request_id": ID}),
+    ("/api/query/stream", {"prompt": "what is this", "images": [PHOTO, PHOTO], "request_id": ID}),
+]
+
+
+@pytest.mark.parametrize(("route", "body"), PHOTO_ROUTES)
+def test_the_photos_of_a_question_are_reported_with_it(route, body, store_path):
+    # Breaks if: photos are not reported to the plan's daily uploads, so only the website's own check stops a Free student.
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        client.post(route, json=body, headers=bearer("good"))
+    assert laravel.bodies[0]["uploads"] == 2
+    assert laravel.bodies[0]["requestId"] == ID
+
+
+@pytest.mark.parametrize("body", [{"prompt": "hi", "request_id": ID}, {"prompt": "hi", "images": [], "request_id": ID}])
+def test_a_question_without_photos_reports_no_uploads(body, store_path):
+    # Breaks if: a plain question looks different to the API from the way it always has (an API without uploads yet).
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        client.post("/api/query/stream", json=body, headers=bearer("good"))
+    assert laravel.bodies[0] == {"requestId": ID}
+
+
+@pytest.mark.parametrize(("route", "body"), PHOTO_ROUTES)
+def test_a_free_student_s_photo_is_refused_before_any_model_call(route, body, store_path):
+    # Breaks if: Free students can send photos by calling the AI server directly.
+    laravel = FakeLaravel(refuse_uploads=True, upload_limit=0)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post(route, json=body, headers=bearer("good"))
+    assert response.status_code == 402
+    assert "not part of the Free plan" in response.json()["detail"]
+    assert generator.seen == []
+
+
+def test_a_student_out_of_uploads_is_told_they_come_back_tomorrow(store_path):
+    laravel = FakeLaravel(refuse_uploads=True, upload_limit=10)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post("/api/query", json=PHOTO_ROUTES[0][1], headers=bearer("good"))
+    assert response.status_code == 402
+    assert "used all of today's photo and document uploads" in response.json()["detail"]
+    assert generator.seen == []
+
+
+def test_a_question_without_photos_still_works_for_a_student_with_no_uploads(store_path):
+    # Breaks if: refusing uploads also shuts a Free student out of plain questions.
+    client, generator = make_client(FakeLaravel(refuse_uploads=True), store_path)
+    with client:
+        response = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 200
+    assert len(generator.seen) == 1
+
+
+def test_a_document_is_counted_as_an_upload_and_not_as_a_question(store_path):
+    # Breaks if: adding a document burns an AI question, or is not counted at all.
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        response = client.post(
+            "/api/ingest", files={"file": ("notes.md", b"# Notes\n\nSome text.", "text/markdown")}, headers=bearer("good")
+        )
+    assert response.status_code == 200
+    assert len(laravel.bodies) == 1
+    assert laravel.bodies[0]["uploads"] == 1
+    assert laravel.bodies[0]["question"] is False
+
+
+def test_a_free_student_cannot_add_a_document(store_path):
+    # Breaks if: documents are a way round the Free plan having no uploads, or the file is indexed before the count.
+    laravel = FakeLaravel(refuse_uploads=True)
+    client, _ = make_client(laravel, store_path)
+    with client:
+        response = client.post(
+            "/api/ingest", files={"file": ("notes.md", b"# Notes\n\nSome text.", "text/markdown")}, headers=bearer("good")
+        )
+        assert response.status_code == 402
+        assert client.get("/health").json()["documents"] == 0
+
+
+def test_adding_a_document_needs_a_sign_in(store_path):
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        response = client.post("/api/ingest", files={"file": ("notes.md", b"# Notes\n\nSome text.", "text/markdown")})
+    assert response.status_code == 401
+    assert laravel.bodies == []
+
+
+def test_pasted_text_is_not_an_upload(store_path):
+    # Breaks if: text typed into the library is counted as a file upload.
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        response = client.post("/api/ingest", data={"text": "# Notes\n\nSome text."}, headers=bearer("good"))
+    assert response.status_code == 200
+    assert laravel.bodies == []
+
+
+def test_the_client_reads_the_upload_verdict():
+    def api(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(402, json={"allowed": False, "plan": "free", "limit": 5, "uploadLimit": 0, "code": "upload_limit_reached"})
+
+    async def run() -> None:
+        quota = LaravelQuota(CONSUME_URL, client=httpx.AsyncClient(transport=httpx.MockTransport(api)))
+        assert await quota.consume("good", ID, uploads=1) == QuotaVerdict(False, "free", 5, "uploads", 0)
+
+    asyncio.run(run())
 
 
 # --- the id -----------------------------------------------------------------------------------------------

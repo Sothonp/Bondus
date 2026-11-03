@@ -78,7 +78,7 @@ import { drillPool } from "./formulaDrill.js";
 import PapersLock from "./PapersLock.jsx";
 import { RomdoulCluster, RomdoulBlossom, RomdoulSprig } from "./Romdoul.jsx";
 import { UsageStrip, AdminPlans, PLAN_NAMES } from "./PlanUi.jsx";
-import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage } from "./aiQuota.js";
+import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage, uploadRefusal, uploadsLeft } from "./aiQuota.js";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
 import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
@@ -6482,6 +6482,18 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
     api.getAiUsage().then((u) => { if (live) setUsage(readUsage(u)); }).catch(() => {});
     return () => { live = false; };
   }, []);
+  // Photos and PDFs are a paid feature (aiQuota.js): Free has none, VIP Bondus 10 a day, Super Bondus 40. `uploadPrompt` says why
+  // the student was stopped ("plan": their plan has none, "daily": today's are used up) and shows the way to upgrade.
+  const [uploadPrompt, setUploadPrompt] = useState(null);
+  useEffect(() => {
+    if (!uploadPrompt) return undefined;
+    const timer = setTimeout(() => setUploadPrompt(null), 9000);
+    return () => clearTimeout(timer);
+  }, [uploadPrompt]);
+  const refreshUsage = () => {
+    if (!SERVER_MODE || !api.hasToken()) return;
+    api.getAiUsage().then((u) => setUsage((was) => readUsage(u) ?? was)).catch(() => {});
+  };
   const endRef = useRef(null);
   const textRef = useRef(null);
   const photoRef = useRef(null);
@@ -6613,10 +6625,33 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
   };
   const railShown = wide && railOpen;
 
+  // True (and the upgrade prompt is up) when the plan has no room for `n` more photos or PDFs.
+  const uploadsBlocked = (n = 1) => {
+    const why = uploadRefusal(usage, n);
+    if (why) setUploadPrompt(why);
+    return Boolean(why);
+  };
+  // The line under a menu entry: what it does, or (when the plan has none left) what the student needs to get it.
+  const uploadHint = (usual) => {
+    const why = uploadRefusal(usage);
+    if (why === "plan") return T("coachUploadsLocked");
+    const left = uploadsLeft(usage);
+    if (!left) return usual;
+    return T("coachUploadsLeft", { n: localizeNum(left.n, lang), limit: localizeNum(left.limit, lang) });
+  };
+  const pickPhotos = () => { if (!uploadsBlocked(attachments.length + 1)) photoRef.current?.click(); };
+  const pickDocs = () => { if (!uploadsBlocked(1)) docRef.current?.click(); };
+
   const addImages = (files) => {
-    if (!active.canUpload) return;
-    const room = COACH_MAX_IMAGES - attachments.length;
-    if (files.length > room) setNotice(T("coachMaxPhotos", { n: localizeNum(COACH_MAX_IMAGES, lang) }));
+    if (!active.canUpload || uploadsBlocked(attachments.length + 1)) return;
+    const photoRoom = COACH_MAX_IMAGES - attachments.length;
+    const planRoom = usage ? usage.uploadsRemaining - attachments.length : photoRoom;
+    const room = Math.min(photoRoom, planRoom);
+    if (files.length > room) {
+      setNotice(planRoom < photoRoom
+        ? T("coachUploadsLeft", { n: localizeNum(usage.uploadsRemaining, lang), limit: localizeNum(usage.uploadLimit, lang) })
+        : T("coachMaxPhotos", { n: localizeNum(COACH_MAX_IMAGES, lang) }));
+    }
     files.slice(0, Math.max(0, room)).forEach((file) => {
       if (file.size > COACH_MAX_IMAGE_MB * 1024 * 1024) { setNotice(T("coachImageTooBig", { name: file.name, mb: localizeNum(COACH_MAX_IMAGE_MB, lang) })); return; }
       const id = `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -6692,8 +6727,12 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
     const requestId = newAiRequestId();
     const extras = { images, signal: controller.signal, onImages, exam, lang, requestId };
     const answer = async () => {
-      const gate = await askAllowance(api, requestId);
+      const gate = await askAllowance(api, requestId, images.length);
       if (gate.usage) setUsage(gate.usage);
+      if (!gate.ok && gate.reason === "uploads") {
+        const none = (gate.usage?.uploadLimit ?? 0) <= 0;
+        return { text: T(none ? "coachUploadsPaid" : "coachUploadsUsedUp"), error: true, upgrade: gate.usage?.plan !== "premium" };
+      }
       if (!gate.ok) {
         return { text: T("coachLimitReached", { limit: localizeNum(gate.usage?.limit ?? "", lang), plan: PLAN_NAMES[gate.usage?.plan] ?? PLAN_NAMES.free }), error: true, upgrade: true };
       }
@@ -6714,6 +6753,7 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
   // Adds documents to the coach's library via /api/ingest and reports progress in the chat.
   const uploadDocs = async (files) => {
     if (uploading) { setNotice(T("coachWaitUpload")); return; }
+    if (uploadsBlocked(files.length)) return;
     setUploading(true);
     // The progress goes into the Study Help chat on screen (the library upload is only offered there), or a new one.
     const chatId = activeId ?? newChatId();
@@ -6732,6 +6772,7 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
       }
     }
     setUploading(false);
+    refreshUsage(); // each document used one of today's uploads
   };
 
   const onKeyDown = (e) => {
@@ -6818,8 +6859,8 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
                     <button key={s} onClick={() => send(s)} className="eai-suggest eai-focus">{s}</button>
                   ))}
                   {active.canUpload && (
-                    <button onClick={() => photoRef.current?.click()} className="eai-suggest eai-focus flex items-center gap-2">
-                      <ImagePlus size={16} /> {T("coachSnapPhoto")}
+                    <button onClick={pickPhotos} className="eai-suggest eai-focus flex items-center gap-2">
+                      {uploadRefusal(usage) === "plan" ? <Lock size={16} /> : <ImagePlus size={16} />} {T("coachSnapPhoto")}
                     </button>
                   )}
                 </div>
@@ -6838,6 +6879,17 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
         </div>
 
         <div className="eai-composer-wrap">
+          {uploadPrompt && (
+            <div className={`flex items-center justify-center flex-wrap gap-x-2 gap-y-1 mb-2 text-xs ${km}`} role="status">
+              <Lock size={13} aria-hidden="true" style={{ color: "var(--ember)" }} />
+              <span className="font-semibold" style={{ color: "var(--ember)" }}>{T(uploadPrompt === "plan" ? "coachUploadsPaid" : "coachUploadsUsedUp")}</span>
+              {onUpgrade && usage?.plan !== "premium" && (
+                <button type="button" onClick={onUpgrade} className="eai-focus font-bold rounded-full px-2.5 py-1" style={{ background: "var(--gold-soft)", color: "var(--gold)" }}>
+                  {T("aiUpgrade")}
+                </button>
+              )}
+            </div>
+          )}
           {notice && <p className="text-xs text-center mb-2" style={{ color: "var(--ember)" }} role="status">{notice}</p>}
           {generating && !loading && <p className="text-xs text-center mb-2 eai-muted" role="status">{T("histBusy")}</p>}
           {mode === "exam" && (
@@ -6884,14 +6936,14 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
                     </button>
                     {menuOpen && (
                       <div className="eai-menu" role="menu">
-                        <button role="menuitem" onClick={() => { setMenuOpen(false); photoRef.current?.click(); }}>
-                          <ImagePlus size={17} />
-                          <span><span className="block font-medium">{T("coachAddPhotos")}</span><span className="block text-xs eai-muted">{T("coachAddPhotosHint", { n: localizeNum(COACH_MAX_IMAGES, lang) })}</span></span>
+                        <button role="menuitem" onClick={() => { setMenuOpen(false); pickPhotos(); }}>
+                          {uploadRefusal(usage) ? <Lock size={17} /> : <ImagePlus size={17} />}
+                          <span><span className="block font-medium">{T("coachAddPhotos")}</span><span className="block text-xs eai-muted">{uploadHint(T("coachAddPhotosHint", { n: localizeNum(COACH_MAX_IMAGES, lang) }))}</span></span>
                         </button>
                         {canAddDocs && (
-                          <button role="menuitem" onClick={() => { setMenuOpen(false); docRef.current?.click(); }} disabled={uploading}>
-                            <FileUp size={17} />
-                            <span><span className="block font-medium">{T("coachAddLibrary")}</span><span className="block text-xs eai-muted">{T("coachAddLibraryHint")}</span></span>
+                          <button role="menuitem" onClick={() => { setMenuOpen(false); pickDocs(); }} disabled={uploading}>
+                            {uploadRefusal(usage) ? <Lock size={17} /> : <FileUp size={17} />}
+                            <span><span className="block font-medium">{T("coachAddLibrary")}</span><span className="block text-xs eai-muted">{uploadHint(T("coachAddLibraryHint"))}</span></span>
                           </button>
                         )}
                       </div>
@@ -6965,7 +7017,7 @@ const SUPER_PLANS = [
       "Personalized study plans",
       "AI Coach & explanations",
       "60 AI questions/day",
-      "Limited photos/PDF uploads",
+      "10 photo/PDF uploads/day",
       "Basic weakness detection",
       "Personalized recommendations",
     ],
@@ -6974,7 +7026,7 @@ const SUPER_PLANS = [
       "ផែនការសិក្សាផ្ទាល់ខ្លួន",
       "គ្រូបង្វឹក AI និងការពន្យល់",
       "សំណួរ AI ៦០ ក្នុងមួយថ្ងៃ",
-      "ផ្ទុករូបថត/PDF ដែលមានកំណត់",
+      "ផ្ទុករូបថត/PDF ១០ ក្នុងមួយថ្ងៃ",
       "ការរកឃើញចំណុចខ្សោយមូលដ្ឋាន",
       "អនុសាសន៍ផ្ទាល់ខ្លួន",
     ],
@@ -6986,7 +7038,7 @@ const SUPER_PLANS = [
     features: [
       "Everything in VIP Bondus+",
       "Higher AI usage limits (150 questions/day)",
-      "Advanced photos/PDF uploads",
+      "40 photo/PDF uploads/day",
       "Detailed performance analysis",
       "Automatic weakness detection",
       "Adaptive practice",
@@ -6997,7 +7049,7 @@ const SUPER_PLANS = [
     featuresKm: [
       "អ្វីៗគ្រប់យ៉ាងក្នុងគម្រោង VIP Bondus បូក៖",
       "ដែនកំណត់ប្រើប្រាស់ AI ខ្ពស់ជាង (សំណួរ ១៥០ ក្នុងមួយថ្ងៃ)",
-      "ផ្ទុករូបថត/PDF កម្រិតខ្ពស់",
+      "ផ្ទុករូបថត/PDF ៤០ ក្នុងមួយថ្ងៃ",
       "ការវិភាគលទ្ធផលលម្អិត",
       "ការរកឃើញចំណុចខ្សោយស្វ័យប្រវត្តិ",
       "ការអនុវត្តសម្របតាមកម្រិត",
