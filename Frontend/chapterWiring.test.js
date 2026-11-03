@@ -203,3 +203,16 @@ test("the past papers are open to every student while LOCK_PAPERS is false", () 
   assert.match(app, /const LOCK_PAPERS = false;/);
   assert.match(app, /if \(!LOCK_PAPERS\) return \{ locked: false \};/);
 });
+
+test("a chapter card answers the pointer as a whole, with nothing that moves", () => {
+  // Breaks if: the inner "open chapter" button gets .eai-tile back. That class lifts the element 3px and gives it its own shadow, so
+  // inside a card the title row jumped up and looked like a second card sitting on the first (the Formula drill tag stayed put).
+  assert.match(list, /className="eai-card eai-chapter flex-1 min-w-0"/);
+  assert.match(list, /className="eai-chapter-open eai-focus text-left block w-full"/);
+  assert.doesNotMatch(list, /className="[^"]*eai-tile/);
+  const css = app.slice(app.indexOf(".eai-chapter{"), app.indexOf(".eai-chapter{") + 700);
+  assert.match(css, /\.eai-chapter\{ transition:border-color \.2s ease, box-shadow \.2s ease; \}/);
+  assert.match(css, /@media \(hover:hover\)\{ \.eai-chapter:hover\{ border-color:var\(--primary\); box-shadow:/);
+  assert.doesNotMatch(css.slice(0, css.indexOf("@media (prefers-reduced-motion")), /transform/, "no transform on the card or its button");
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\{ \.eai-chapter\{ transition:none; \} \}/);
+});

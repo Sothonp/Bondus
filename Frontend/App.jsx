@@ -574,6 +574,13 @@ const STYLES = `
 .eai-nav:hover{ background:var(--bg-soft); }
 .eai-tile{ transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; cursor:pointer; }
 .eai-tile:hover{ transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--primary); }
+/* A chapter card on the chapter path (ChapterList.jsx): the whole card answers the pointer with a border and shadow that fade in. Nothing
+   moves or changes size, so the title, "15 exercises" and the Formula drill button stay exactly where they are. Only on devices that really
+   hover, so a tap on a phone does not leave the card stuck in its hover look. */
+.eai-chapter{ transition:border-color .2s ease, box-shadow .2s ease; }
+.eai-chapter-open{ cursor:pointer; border-radius:12px; }
+@media (hover:hover){ .eai-chapter:hover{ border-color:var(--primary); box-shadow:var(--shadow), 0 8px 22px rgba(60,60,120,.10); } }
+@media (prefers-reduced-motion: reduce){ .eai-chapter{ transition:none; } }
 .eai-focus:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
 input.eai-input, select.eai-input{ height:44px; padding:0 16px; background:var(--glass-bg); color:var(--ink); border:1px solid var(--glass-line); border-radius:14px; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow); }
 input.eai-input::placeholder{ color:var(--muted); }
