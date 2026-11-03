@@ -109,9 +109,12 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
               </div>
               {/* A plain div, not a button, so the main "open chapter" button and the Formula drill button below it can
                   sit as two separate, independently focusable controls — a button cannot contain another button. */}
-              <div className="eai-card flex-1 min-w-0" style={{ marginBottom: last ? 0 : 12, opacity: locked ? 0.85 : 1 }}>
+              {/* The hover effect belongs to the whole card (.eai-chapter): a border and shadow that fade in, nothing that moves. It used to
+                  be .eai-tile on the button inside, which lifted that button 3px and gave it its own shadow *inside* the card,
+                  so the title row jumped up and looked like a second card sitting on the first. */}
+              <div className="eai-card eai-chapter flex-1 min-w-0" style={{ marginBottom: last ? 0 : 12, opacity: locked ? 0.85 : 1 }}>
                 <button type="button" onClick={(e) => open(row, e.currentTarget)} aria-haspopup={locked ? "dialog" : undefined}
-                  className="eai-tile eai-focus text-left block w-full">
+                  className="eai-chapter-open eai-focus text-left block w-full">
                   <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
                     <h3 className={`eai-display font-bold min-w-0 ${km}`} style={{ color: locked ? "var(--muted)" : "var(--ink)", overflowWrap: "anywhere" }}>{labelOf(row.key)}</h3>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${km}`}
