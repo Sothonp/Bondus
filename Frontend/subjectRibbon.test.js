@@ -42,3 +42,24 @@ test("scrollStep moves about three quarters of the visible width, never less tha
   assert.equal(scrollStep(100, 1), 160);
   assert.equal(scrollStep(100, -1), -160);
 });
+
+/* The endless loop is CSS (STYLES in App.jsx) plus the three copies in SubjectRibbon.jsx. */
+import { readFileSync } from "node:fs";
+const css = (() => { const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8"); const a = app.indexOf(".eai-ribbon{"); return app.slice(a, app.indexOf("/* ", a + 2000)); })();
+
+test("the belt slides left by one list's width (a third of three lists), forever, and pauses while touched or focused", () => {
+  // Breaks if: the loop stutters at its join (the shift is not exactly one list), stops after one pass, or cannot be tapped.
+  assert.match(css, /\.eai-ribbon-belt\{[^}]*animation:eai-ribbon-run var\(--ribbon-seconds,50s\) linear infinite/);
+  assert.match(css, /@keyframes eai-ribbon-run\{ from\{ transform:translateX\(0\); \} to\{ transform:translateX\(-33\.33333%\); \} \}/);
+  assert.match(css, /\.eai-ribbon-belt:active, \.eai-ribbon-belt:focus-within\{ animation-play-state:paused; \}/);
+  assert.match(css, /@media \(hover:hover\)\{ \.eai-ribbon-belt:hover\{ animation-play-state:paused; \} \}/);
+});
+
+test("with reduced motion nothing moves: copies hidden, hand scrolling and the arrows come back", () => {
+  // Breaks if: people who ask their device for less motion get a strip that never stops moving.
+  const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce){"));
+  assert.match(reduced, /\.eai-ribbon-belt\{ animation:none;/);
+  assert.match(reduced, /\.eai-ribbon-clone\{ display:none; \}/);
+  assert.match(reduced, /\.eai-ribbon-track\{ overflow-x:auto;/);
+  assert.match(reduced, /@media \(min-width:640px\) and \(prefers-reduced-motion: reduce\)\{ \.eai-ribbon-arrow\{ display:grid; \} \}/);
+});

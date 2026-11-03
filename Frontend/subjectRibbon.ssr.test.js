@@ -33,10 +33,20 @@ test("is a labelled region with two arrow buttons that start idle", () => {
 
 test("icons are decorative: hidden from assistive tech", () => {
   const html = s.render(s.h(SubjectRibbon, { lang: "en" }));
-  assert.equal((html.match(/class="eai-ribbon-tile"[^>]*aria-hidden="true"/g) || []).length, 11);
+  assert.equal((html.match(/class="eai-ribbon-tile"[^>]*aria-hidden="true"/g) || []).length, 33, "every icon, in all three copies of the list");
 });
 
 test("extra classes go on the region", () => {
   const html = s.render(s.h(SubjectRibbon, { lang: "en", className: "self-stretch -mx-6" }));
   assert.match(html, /<section[^>]*class="eai-ribbon self-stretch -mx-6"/);
+});
+
+test("the list is drawn three times so the strip can loop; only the first copy is read out and tabbed to", () => {
+  // Breaks if: the extra copies get in the way of screen readers or the keyboard (33 buttons instead of 11), or the loop loses its copies.
+  const html = s.render(s.h(SubjectRibbon, { lang: "en" }));
+  assert.equal((html.match(/<ul[^>]*class="eai-ribbon-list/g) || []).length, 3);
+  assert.equal((html.match(/<ul[^>]*class="eai-ribbon-list eai-ribbon-clone"[^>]*aria-hidden="true"/g) || []).length, 2);
+  assert.equal((html.match(/class="eai-ribbon-copy eai-ribbon-item[^"]*"/g) || []).length, 22);
+  assert.equal((html.match(/class="eai-ribbon-copy[^"]*"[^>]*tabindex="-1"|tabindex="-1"[^>]*class="eai-ribbon-copy/g) || []).length, 22);
+  assert.equal(labels(html).length, 11, "the real buttons are still the eleven");
 });
