@@ -136,6 +136,14 @@ for (const name of ["major-guidance", "university-mentor"]) {
   });
 }
 
+test("IELTS grading is deliberately not counted: it needs sign-in but spends none of the day's AI questions", () => {
+  // Breaks if: the grader is limited by mistake. It is an English-language skill check, not an AI coach question, so it is left out
+  // on purpose (decided by the owner); change this test together with that decision.
+  const v = read("api/ielts-grade.js");
+  assert.match(v, /refuseUnlessSignedIn\(req, res\)/);
+  assert.doesNotMatch(v, /refuseIfOutOfQuestions|createQuotaCheck/);
+});
+
 /* End to end through the real handlers, with Laravel faked at the network level (needs the site's packages, like aiAuth.test.js). */
 const ME = "https://api.example.test/api/v1/me";
 function production(users, { limit }) {
