@@ -17,7 +17,7 @@ test("the Coach keeps a list of saved chats instead of one list of messages per 
   assert.match(coach, /const \[chats, setChats\] = useState\(saved\.chats\);/);
   assert.match(coach, /const \[activeByMode, setActiveByMode\] = useState\(saved\.active\);/);
   assert.match(coach, /loadHistory\(safeStorage\(\), userKey\)/);
-  assert.match(app, /<Coach p=\{p\} lang=\{lang\} userKey=\{userKeyOf\(profile\)\} \/>/, "saved per student");
+  assert.match(app, /<Coach p=\{p\} lang=\{lang\} userKey=\{userKeyOf\(profile\)\} onUpgrade=\{\(\) => go\("super"\)\} \/>/, "saved per student");
 });
 
 test("a reply is written into the chat it was asked in, and only one reply is written at a time", () => {

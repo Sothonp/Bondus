@@ -54,6 +54,11 @@ class QueryRequest(_StrictModel):
         None, description="The student's BAC II track; picks the maths syllabus the answer follows"
     )
     generate: bool = Field(True, description="Set false to return retrieved chunks only")
+    request_id: str | None = Field(
+        None, max_length=64,
+        description="The id the website counted this question under (src/quota.py). Every round of one long answer carries "
+        "the same one, so the question is counted once; left out, the request is counted under a fresh id",
+    )
     continues_math: bool = Field(
         False,
         description="This request carries on an answer that stopped inside a $$ block, so the "
@@ -192,6 +197,11 @@ class ExamRequest(_StrictModel):
     partial: str = Field(
         "", max_length=200_000,
         description="The paper so far, when a previous round stopped at max_tokens: the model continues it",
+    )
+    request_id: str | None = Field(
+        None, max_length=64,
+        description="The id the website counted this question under (src/quota.py). Every round of one long answer carries "
+        "the same one, so the question is counted once; left out, the request is counted under a fresh id",
     )
     continues_math: bool = Field(
         False, description="The partial paper stops inside a $$ block (see QueryRequest.continues_math)"
