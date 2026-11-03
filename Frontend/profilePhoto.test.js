@@ -109,7 +109,7 @@ test("the face shows the photo, and the initials when there is none or it will n
 test("the phone's top bar and the desktop header both show the photo", () => {
   assert.match(nav, /export function MobileTopBar\(\{ logo, initials, avatarUrl = null,/);
   assert.match(nav, /<AvatarFace src=\{avatarUrl\} initials=\{initials\} \/>/);
-  assert.match(app, /<MobileTopBar logo=\{<BondusLogo \/>\} initials=\{initials\} avatarUrl=\{profile\.avatarUrl\}/);
+  assert.match(app, /<MobileTopBar logo=\{<BondusWordmark height=\{22\} \/>\} initials=\{initials\} avatarUrl=\{profile\.avatarUrl\}/);
   assert.match(app, /<AvatarFace src=\{profile\.avatarUrl\} initials=\{initials\} \/><\/button>/);
   // the round button clips the picture to its circle
   assert.match(nav, /rounded-full overflow-hidden[^"]*w-9 h-9/);
