@@ -6746,10 +6746,12 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
       {railShown && <HistoryRail {...historyProps} onHide={toggleHistory} />}
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center gap-x-3 gap-y-2 flex-wrap pb-2">
-          <div className="order-1 flex items-center gap-2.5 min-w-0 flex-1">
+          {/* flex-auto, not flex-1, below lg: a flex-1 box starts from zero width, so the row never wraps and the title (which will not
+              shrink) gets drawn under the New chat button and the mode tabs. Starting from its own width, the box makes them wrap. */}
+          <div className="order-1 flex items-center gap-2.5 min-w-0 flex-auto lg:flex-1">
             <HistoryToggle pressed={wide ? railOpen : historyOpen} wide={wide} onClick={toggleHistory} T={T} lang={lang} />
             <h2 className={`eai-display text-lg font-extrabold shrink-0 whitespace-nowrap ${km}`}>{T("coachTitle")}</h2>
-            <span className="text-xs eai-muted hidden md:inline truncate">{active.subtitle}</span>
+            <span className="text-xs eai-muted hidden lg:inline truncate">{active.subtitle}</span>
           </div>
           <div className="order-3 md:order-2 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex gap-1 p-1 rounded-full eai-soft">
             {availableModeIds.map((id) => [id, COACH_MODES[id]]).map(([id, m]) => (

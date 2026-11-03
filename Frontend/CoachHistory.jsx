@@ -33,7 +33,8 @@ export function HistoryToggle({ pressed, wide, onClick, T, lang }) {
     <button type="button" onClick={onClick} className="eai-hist-toggle eai-focus" aria-label={label} title={label}
       {...(wide ? { "aria-pressed": pressed } : { "aria-haspopup": "dialog", "aria-expanded": pressed })}>
       <History size={17} />
-      <span className={`text-sm font-semibold max-[340px]:hidden ${kmc(lang)}`}>{T("histButton")}</span>
+      {/* Icon only on a phone: the header has to fit the title and New chat beside it (the button keeps its name for screen readers). */}
+      <span className={`text-sm font-semibold max-[479px]:hidden ${kmc(lang)}`}>{T("histButton")}</span>
     </button>
   );
 }
