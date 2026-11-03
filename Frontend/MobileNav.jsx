@@ -22,10 +22,7 @@ export function MobileTopBar({ logo, initials, avatarUrl = null, dark, onToggleD
     <header className="lg:hidden sticky top-0 z-40 border-b"
       style={{ background: "color-mix(in srgb, var(--bg) 85%, transparent)", borderColor: "var(--line)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", paddingTop: "env(safe-area-inset-top)" }}>
       <div className="px-4 max-[360px]:px-3 h-14 flex items-center gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="grid place-items-center rounded-xl overflow-hidden flex-shrink-0" style={{ width: 34, height: 34 }}>{logo}</div>
-          <span className="eai-display font-extrabold text-base leading-none truncate">Bondus</span>
-        </div>
+        <div className="flex items-center min-w-0 flex-1">{logo}</div>
         <div className="flex items-center gap-2 max-[360px]:gap-1.5 flex-shrink-0">
           <div className="flex items-center gap-2 max-[360px]:gap-1.5 rounded-full px-2.5 max-[360px]:px-2 py-1.5" style={{ background: "var(--bg-soft)" }}>
             <span className="inline-flex items-center gap-1" role="img" aria-label={`${word(tr, "streakDays", { n: streak })}. ${flameLabel}`}>

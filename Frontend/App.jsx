@@ -581,6 +581,8 @@ const STYLES = `
 .eai-chapter-open{ cursor:pointer; border-radius:12px; }
 @media (hover:hover){ .eai-chapter:hover{ border-color:var(--primary); box-shadow:var(--shadow), 0 8px 22px rgba(60,60,120,.10); } }
 @media (prefers-reduced-motion: reduce){ .eai-chapter{ transition:none; } }
+.eai-wordmark{ display:block; flex:none; max-width:100%; background:var(--ink);
+  -webkit-mask:url(/logos/bondus-wordmark.png) center / contain no-repeat; mask:url(/logos/bondus-wordmark.png) center / contain no-repeat; }
 .eai-focus:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
 input.eai-input, select.eai-input{ height:44px; padding:0 16px; background:var(--glass-bg); color:var(--ink); border:1px solid var(--glass-line); border-radius:14px; backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); box-shadow:var(--glass-shadow); }
 input.eai-input::placeholder{ color:var(--muted); }
@@ -2196,14 +2198,12 @@ function HeroScene({ lang = "en" }) {
   );
 }
 
-function BondusLogo() {
-  return (
-    <img
-      src="/logos/Bondus_mascout_nobg.png"
-      alt="BONDUS"
-      style={{ width: "100%", height: "100%", objectFit: "contain" }}
-    />
-  );
+/* The "bondus" wordmark (the owl in a graduation cap is the o), drawn from /logos/bondus-wordmark.png as a mask so it takes the text
+   colour of the theme: dark ink in light mode, cream in dark mode, from the one white picture. `height` is in px; the width follows
+   the picture's shape (5326 x 1023). */
+const WORDMARK_RATIO = 5326 / 1023;
+function BondusWordmark({ height = 28 }) {
+  return <span role="img" aria-label="Bondus" className="eai-wordmark" style={{ height, width: Math.round(height * WORDMARK_RATIO) }} />;
 }
 
 // The corner chips (language + theme) on the landing page. LangToggle's own glass look is switched off
@@ -8534,11 +8534,8 @@ export default function App() {
       <div className="flex">
         <aside className="hidden lg:flex sticky top-0 z-30 h-screen w-64 flex-shrink-0 border-r flex-col"
           style={{ background: "var(--card)", borderColor: "var(--line)" }}>
-          <div className="p-5 flex items-center gap-2.5">
-            <div className="grid place-items-center rounded-xl overflow-hidden" style={{ width: 40, height: 40 }}>
-              <BondusLogo />
-            </div>
-            <div><p className="eai-display font-extrabold leading-none">Bondus {t(lang, isUniProfile ? "trackUniversity" : "trackHighschool")}</p></div>
+          <div className="p-5 flex items-center">
+            <BondusWordmark height={30} />
           </div>
           <nav className="px-3 space-y-1 flex-1 overflow-y-auto eai-scroll">
             {navItems.map((n) => {
@@ -8571,7 +8568,7 @@ export default function App() {
         </aside>
 
         <div className="flex-1 min-w-0">
-          <MobileTopBar logo={<BondusLogo />} initials={initials} avatarUrl={profile.avatarUrl} dark={dark} onToggleDark={() => setDark((d) => !d)}
+          <MobileTopBar logo={<BondusWordmark height={22} />} initials={initials} avatarUrl={profile.avatarUrl} dark={dark} onToggleDark={() => setDark((d) => !d)}
             onProfile={() => go("profile")} profileLabel={tr("profileOpen")} tr={tr}
             streak={localizeNum(p.streak, lang)} flame={p.flame} flameLabel={p.flameLabel} flameRing={p.flameRing} xp={localizeNum((profile.xp + bonusXp).toLocaleString(), lang)}
             examChip={!isUniProfile && exam.current ? <RunningChip session={exam.current} now={exam.now} lang={lang} onClick={() => go("browse")} /> : null} />

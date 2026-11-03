@@ -37,11 +37,11 @@ test("the page leaves room under the fixed bar, including the iPhone home-indica
   assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1\.0, viewport-fit=cover" \/>/);
 });
 
-test("the top bar is sticky, only on phones, with the logo and name, the streak and XP pill, the dark toggle and the avatar", () => {
+test("the top bar is sticky, only on phones, with the wordmark logo, the streak and XP pill, the dark toggle and the avatar", () => {
   const bar = nav.slice(nav.indexOf("export function MobileTopBar("), nav.indexOf("function MoreSheet("));
   assert.match(bar, /className="lg:hidden sticky top-0 z-40 border-b"/);
   assert.match(bar, /\{logo\}/);
-  assert.match(bar, />Bondus</);
+  assert.doesNotMatch(bar, />Bondus</, "the name is in the wordmark picture, not repeated as text beside it");
   assert.match(bar, /<StreakFlame /);
   assert.match(bar, /<Zap /);
   assert.match(bar, /onClick=\{onToggleDark\}/);
@@ -97,4 +97,16 @@ test("the study-plan form stacks into full-width controls on a phone and the sug
 
 test("the hero's buttons are full width and stacked on a phone", () => {
   assert.match(app, /@media \(max-width:639px\)\{ \.eai-hero-actions\{ flex-direction:column; align-items:stretch; \} \.eai-hero-actions button\{ width:100%; justify-content:center; \} \}/);
+});
+
+test("the brand is the 'bondus' wordmark in the sidebar and the phone's top bar, coloured by the theme", () => {
+  // Breaks if: the owl-and-text lockup comes back, or the wordmark stops following the theme (it is one white picture used as a mask
+  // over var(--ink), so it is dark on light and cream on dark).
+  const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  assert.match(app, /function BondusWordmark\(\{ height = 28 \}\)/);
+  assert.match(app, /<MobileTopBar logo=\{<BondusWordmark height=\{22\} \/>\}/);
+  assert.match(app, /<aside[\s\S]{0,600}<BondusWordmark height=\{30\} \/>/);
+  assert.doesNotMatch(app, /Bondus \{t\(lang, isUniProfile \? "trackUniversity" : "trackHighschool"\)\}/);
+  assert.match(app, /\.eai-wordmark\{[^}]*background:var\(--ink\);[^}]*mask:url\(\/logos\/bondus-wordmark\.png\)/);
+  assert.ok(existsSync(new URL("../public/logos/bondus-wordmark.png", import.meta.url)));
 });

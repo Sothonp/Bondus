@@ -60,6 +60,6 @@ test("in the landing scene the owl sits between the two plane layers, and both l
   const b = app.indexOf("<HeroPlaneBack"), owl = app.indexOf("<OwlMascot calm seated"), f = app.indexOf("<HeroPlaneFront");
   assert.ok(b > 0 && owl > b && f > owl, "back, then the owl, then the front");
   assert.ok(app.includes("<HeroPlaneDefs"), "the shared defs are in the scene");
-  const scene = app.slice(app.indexOf("function HeroScene"), app.indexOf("function BondusLogo"));
+  const scene = app.slice(app.indexOf("function HeroScene"), app.indexOf("const WORDMARK_RATIO"));
   assert.equal((scene.match(/<g className="eai-plane">/g) || []).length, 2, "one animated group per layer");
 });
