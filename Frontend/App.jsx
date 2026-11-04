@@ -7213,7 +7213,7 @@ const STRINGS = {
     createAccount: "Create an account", login: "Login",
     mascotMsg1: "Let's study together! 📚", mascotMsg2: "You've got this! 💪", mascotMsg3: "Ready when you are!",
     mascotMsg4: "Keep that streak alive! 🔥", mascotMsg5: "Small steps, big wins!", mascotMsg6: "I believe in you!",
-    heroAlt: "The BONDUS owl leads a dragon boat race at the Water Festival, with Angkor Wat behind the river and the crowd cheering on the bank",
+    heroAlt: "The BONDUS owl leads a dragon boat race at the Water Festival, with Angkor Wat rising behind",
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
     navMore: "More", moreLanguage: "Language",
@@ -7466,7 +7466,7 @@ const STRINGS = {
     createAccount: "បង្កើតគណនី", login: "ចូលគណនី",
     mascotMsg1: "តោះសិក្សាជាមួយគ្នា! 📚", mascotMsg2: "អ្នកអាចធ្វើវាបាន! 💪", mascotMsg3: "ត្រៀមខ្លួនហើយ ពេលណាក៏បាន!",
     mascotMsg4: "រក្សានិន្នាការឱ្យបន្ត! 🔥", mascotMsg5: "ជំហានតូចៗ ជោគជ័យធំ!", mascotMsg6: "ខ្ញុំជឿជាក់លើអ្នក!",
-    heroAlt: "ទីទុយ BONDUS ដឹកនាំទូកស្លាបព្រាក្នុងពិធីបុណ្យអុំទូក ដោយមានប្រាសាទអង្គរវត្តនៅពីក្រោយទន្លេ និងហ្វូងមនុស្សអបអរសាទរនៅតាមច្រាំង",
+    heroAlt: "ទីទុយ BONDUS ដឹកនាំទូកស្លាបព្រាក្នុងពិធីបុណ្យអុំទូក ដោយមានប្រាសាទអង្គរវត្តនៅពីក្រោយ",
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
     navMore: "ផ្សេងទៀត", moreLanguage: "ភាសា",

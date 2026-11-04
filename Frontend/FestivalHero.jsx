@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "./Landing.jsx";
 
 /* The landing hero's picture: a Bon Om Touk (Water Festival) dragon-boat race, as a lively looping video. The blue owl, in a krama,
-   leads the crew; Angkor Wat rises at sunrise behind the river and the riverbank crowd cheers.
+   leads the crew with Angkor Wat rising behind.
 
-   It is a real video (public/hero/hero-festival.mp4, 3.2 s loop, about 290 KB, no sound, plain H.264 so every phone plays it),
+   It is a real video (public/hero/hero-festival.mp4, 3.2 s loop, about 210 KB, no sound, plain H.264 so every phone plays it),
    made by animating the BONDUS illustration (not AI-generated footage): the crew rows (oars sweep, bodies lean into each pull,
-   the boat bobs and spray flies where the blades bite), the riverbank crowds bounce and wave, the flags flutter, the sun pulses
-   and light glints drift across the river. The sky and clouds of the original are cut away, so only the scene itself (Angkor
-   Wat, banks, crowds, river, boat) sits on the page's white background, with no picture frame or box around it.
+   the boat bobs and spray flies where the blades bite) on a pale-blue river, with Angkor Wat and its sun behind and a few
+   palm trees. Everything else from the original picture (sky, crowds, banks, flags, bunting) is taken out, so the scene sits
+   straight on the page's white background with no picture frame or box around it.
 
    Stillness. People who ask their device for less motion, who have Data Saver on, or when the video can't load or play get the
    poster (hero-festival-poster.webp / .jpg, one frame of the same picture) instead. The poster is also what shows while the video
@@ -18,10 +18,10 @@ import { usePrefersReducedMotion } from "./Landing.jsx";
    The speech bubble above the owl is passed in as `children` (Welcome builds it from MascotSpeechBubble) and is positioned over
    the owl's head by .eai-fh-bubblepos. Styles are the .eai-fh rules in festivalStyles.js. */
 
-export const VIDEO = { w: 960, h: 614, mp4: "/hero/hero-festival.mp4", posterWebp: "/hero/hero-festival-poster.webp", posterJpg: "/hero/hero-festival-poster.jpg" };
+export const VIDEO = { w: 960, h: 588, mp4: "/hero/hero-festival.mp4", posterWebp: "/hero/hero-festival-poster.webp", posterJpg: "/hero/hero-festival-poster.jpg" };
 
 // Where the owl's head is (the bubble sits above it), as a share of the picture.
-export const OWL_ANCHOR = { x: 43.6, y: 37 };
+export const OWL_ANCHOR = { x: 43.6, y: 35.5 };
 
 export default function FestivalScene({ alt, children }) {
   const reduce = usePrefersReducedMotion();
