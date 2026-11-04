@@ -117,3 +117,14 @@ test("the BONDUS Facebook page is built into the footer, and settings can replac
   assert.deepEqual(socialLinks(defaults).map((s) => s.id), ["facebook"], "the default passes the https check");
   assert.deepEqual(socialLinks({ ...defaults, VITE_SOCIAL_FACEBOOK: "" }), [], "an empty setting hides it");
 });
+
+test("the Romdoul flower decorates the landing page (hero corners, section headings, stats, closing) and stays decoration", () => {
+  const land = read("./Landing.jsx"), app = read("./App.jsx"), css = read("./landingStyles.js");
+  assert.ok(land.includes('from "./Romdoul.jsx"'));
+  assert.equal((land.match(/<Ornament \/>/g) || []).length, (land.match(/<h2 className=\{`eai-lph2/g) || []).length, "every section heading has the mark");
+  assert.ok(land.includes("eai-lpstats-flora") && land.includes("eai-lpclose-flora"));
+  const welcome = app.slice(app.indexOf("function Welcome("), app.indexOf("function GoogleSignInButton"));
+  assert.ok(welcome.includes("eai-lp-flora-a") && welcome.includes("eai-lp-flora-b"), "hero corners");
+  assert.match(css, /\.theme-dark \.eai-lporn\{ display:none; \}/, "hidden in dark mode like the app's other Romdoul pieces");
+  assert.match(read("./Romdoul.jsx"), /aria-hidden/, "the pieces are hidden from screen readers");
+});

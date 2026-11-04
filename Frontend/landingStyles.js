@@ -162,7 +162,7 @@ html.eai-lp-scroll{ scroll-padding-top:72px; }
 .eai-lpfeat-card p{ margin:0; font-size:15px; line-height:1.6; color:var(--muted); }
 
 /* ── Stats banner ── */
-.eai-lpstats{ padding:56px 24px; background:var(--primary-deep); color:#FFFFFF; }
+.eai-lpstats{ position:relative; overflow:hidden; padding:56px 24px; background:var(--primary-deep); color:#FFFFFF; }
 @media (min-width:1024px){ .eai-lpstats{ padding:72px 40px; } }
 .eai-lpstats-grid{ display:grid; gap:36px; grid-template-columns:1fr; text-align:center; }
 @media (min-width:640px){ .eai-lpstats-grid{ grid-template-columns:repeat(auto-fit, minmax(0,1fr)); gap:24px; } }
@@ -170,6 +170,31 @@ html.eai-lp-scroll{ scroll-padding-top:72px; }
 .eai-lpstat b{ font-family:'Sora', system-ui, sans-serif; font-weight:800; font-size:clamp(36px, 6vw, 56px); line-height:1.1; font-variant-numeric:tabular-nums; }
 .eai-lpstat > span{ font-size:15px; font-weight:600; opacity:.85; }
 @media (min-width:640px){ .eai-lpstat + .eai-lpstat{ border-left:1px solid rgba(255,255,255,.25); } }
+
+/* ── Romdoul flowers (Romdoul.jsx): Cambodia's national flower as quiet decoration. Light mode only (the app hides every Romdoul
+   piece in dark mode, and so does this). They take no space, ignore taps, and sit behind the text. ── */
+.eai-lporn{ display:flex; align-items:center; justify-content:center; gap:14px; margin:0 auto 18px; }
+.eai-lporn::before, .eai-lporn::after{ content:""; width:44px; height:2px; border-radius:2px; background:linear-gradient(90deg, transparent, var(--romdoul-edge)); opacity:.55; }
+.eai-lporn::after{ transform:scaleX(-1); }
+.theme-dark .eai-lporn{ display:none; }
+.eai-lp-hero{ position:relative; }
+.eai-lp-flora{ position:absolute; z-index:0; }
+.eai-lp-flora-a{ top:6px; right:-8px; width:78px; height:78px; }
+.eai-lp-flora-b{ display:none; left:-14px; bottom:72px; width:120px; height:120px; transform:scaleX(-1); }
+@media (min-width:640px){ .eai-lp-flora-a{ top:12px; right:0; width:112px; height:112px; } }
+@media (min-width:1024px){ .eai-lp-flora-a{ top:16px; right:8px; width:140px; height:140px; } .eai-lp-flora-b{ display:block; } }
+.eai-lpstats-flora{ position:absolute; z-index:0; width:110px; height:110px; opacity:.95; }
+.eai-lpstats-flora-r{ right:-20px; bottom:-30px; }
+.eai-lpstats-flora-l{ display:none; left:-20px; top:-30px; transform:scale(-1, -1); }
+@media (min-width:640px){ .eai-lpstats-flora{ width:140px; height:140px; } .eai-lpstats-flora-l{ display:block; } }
+.eai-lpstats-grid > *{ position:relative; z-index:1; }
+.eai-lpclose{ position:relative; overflow:hidden; }
+.eai-lpclose-in{ position:relative; z-index:1; }
+.eai-lpclose-flora{ display:none; position:absolute; z-index:0; width:120px; height:120px; }
+.eai-lpclose-flora-l{ left:4%; bottom:20px; transform:scaleX(-1); }
+.eai-lpclose-flora-r{ right:4%; top:20px; }
+@media (min-width:900px){ .eai-lpclose-flora{ display:block; } }
+@media (max-width:339px){ .eai-lp-flora, .eai-lpstats-flora{ display:none; } }
 
 /* ── How it works ── */
 .eai-lphow{ display:grid; gap:36px; margin:52px 0 0; padding:0; list-style:none; counter-reset:none; }
