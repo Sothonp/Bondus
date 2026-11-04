@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     ai_quota_url: str = ""
     # Turn the limit off without taking sign-in off (for example while the Laravel API is being upgraded).
     ai_quota_enforce: bool = True
+    # The most questions Free accounts may ask in a day from one network address, across all of them (src/rate_limit.py). Each Free
+    # account has its own daily questions, so without this a script that makes accounts spends the shared AI quota. Generous on
+    # purpose: a school or a mobile network shares one address. Paid plans are not counted. 0 turns it off.
+    free_ai_per_address_daily: int = Field(300, ge=0, le=100_000)
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
