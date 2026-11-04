@@ -12,13 +12,13 @@ import { usePrefersReducedMotion } from "./Landing.jsx";
 
    Stillness. People who ask their device for less motion, who have Data Saver on, or when the video can't load or play get the
    poster (hero-festival-poster.webp / .jpg, one frame of the same picture) instead. The poster is also what shows while the video
-   loads, and on an iPhone in Low Power Mode, which won't autoplay video. The video also pauses while it is scrolled out of view
-   to save battery.
+   loads, and on an iPhone in Low Power Mode, which won't autoplay video. The video starts once the page has loaded, and pauses while the
+   person scrolls and while it is scrolled out of view (battery, and so it never competes with scrolling on a phone).
 
    The speech bubble above the owl is passed in as `children` (Welcome builds it from MascotSpeechBubble) and is positioned over
    the owl's head by .eai-fh-bubblepos. Styles are the .eai-fh rules in festivalStyles.js. */
 
-export const VIDEO = { w: 1280, h: 934, mp4: "/hero/hero-festival.mp4", posterWebp: "/hero/hero-festival-poster.webp", posterJpg: "/hero/hero-festival-poster.jpg" };
+export const VIDEO = { w: 960, h: 700, mp4: "/hero/hero-festival.mp4", posterWebp: "/hero/hero-festival-poster.webp", posterJpg: "/hero/hero-festival-poster.jpg" };
 
 // Where the owl's head is (the bubble sits above it), as a share of the picture.
 export const OWL_ANCHOR = { x: 43.5, y: 44.5 };
@@ -30,16 +30,28 @@ export default function FestivalScene({ alt, children }) {
   const still = reduce || saveData || failed;
   const videoRef = useRef(null);
 
-  // Play while on screen, pause when scrolled away (and on a hidden tab, which browsers do themselves).
+  /* Play only while the picture is on screen and the page is idle: the video starts after the page has loaded, pauses while the
+     person is scrolling (so decoding never competes with the scroll on a phone), and pauses when scrolled away. */
   useEffect(() => {
     const v = videoRef.current;
     if (still || !v) return undefined;
     v.muted = true;
-    const play = () => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
-    if (typeof IntersectionObserver !== "function") { play(); return undefined; }
-    const io = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) play(); else v.pause(); }, { threshold: 0.1 });
-    io.observe(v);
-    return () => io.disconnect();
+    let visible = true, scrolling = false, started = false, timer = 0, idle = 0, io;
+    const sync = () => {
+      if (!started) return;
+      if (visible && !scrolling && !document.hidden) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } else v.pause();
+    };
+    const onScroll = () => { scrolling = true; v.pause(); clearTimeout(timer); timer = setTimeout(() => { scrolling = false; sync(); }, 220); };
+    const start = () => { started = true; sync(); };
+    if (typeof IntersectionObserver === "function") {
+      io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(); }, { threshold: 0.1 });
+      io.observe(v);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("visibilitychange", sync);
+    const kick = () => { idle = window.setTimeout(start, 300); };
+    if (document.readyState === "complete") kick(); else window.addEventListener("load", kick, { once: true });
+    return () => { clearTimeout(timer); clearTimeout(idle); io && io.disconnect(); window.removeEventListener("scroll", onScroll); window.removeEventListener("load", kick); document.removeEventListener("visibilitychange", sync); };
   }, [still]);
 
   return (
@@ -50,7 +62,7 @@ export default function FestivalScene({ alt, children }) {
           <img className="eai-fh-poster" src={VIDEO.posterJpg} alt="" width={VIDEO.w} height={VIDEO.h} decoding="async" fetchPriority="high" />
         </picture>
         {!still && (
-          <video className="eai-fh-video" src={VIDEO.mp4} poster={VIDEO.posterJpg} ref={videoRef} autoPlay loop muted playsInline preload="auto"
+          <video className="eai-fh-video" src={VIDEO.mp4} poster={VIDEO.posterJpg} ref={videoRef} loop muted playsInline preload="metadata"
             disablePictureInPicture tabIndex={-1} aria-hidden="true" onError={() => setFailed(true)} />
         )}
       </div>

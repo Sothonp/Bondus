@@ -27,7 +27,7 @@ test("the video is light enough for a phone on mobile data, and is a real mp4", 
 
 test("the video autoplays, loops silently inline, and sits on a white background", () => {
   const tag = hero.match(/<video[\s\S]*?\/>/)[0];
-  for (const attr of ["autoPlay", "loop", "muted", "playsInline", "poster="]) assert.ok(tag.includes(attr), `video lacks ${attr}`);
+  for (const attr of ["loop", "muted", "playsInline", "poster="]) assert.ok(tag.includes(attr), `video lacks ${attr}`);
   assert.match(css, /\.eai-fh-stage\{[^}]*background:#FFFFFF/);
   assert.match(css, /\.eai-fh-scene\{[^}]*background:#FFFFFF/);
 });
@@ -55,8 +55,9 @@ test("people who ask for less motion, have Data Saver on, or hit a video error g
   assert.ok(hero.includes("onError={() => setFailed(true)}"), "a video that fails to load falls back to the poster");
 });
 
-test("the video pauses while it is scrolled out of view", () => {
+test("the video starts after load, and pauses while scrolling and while scrolled out of view", () => {
   assert.ok(hero.includes("IntersectionObserver") && hero.includes("v.pause()"));
+  assert.ok(hero.includes('addEventListener("scroll", onScroll') && hero.includes('document.readyState === "complete"'));
 });
 
 test("the owl's chat bubble is a button above its head that shows the next line on a tap", () => {
@@ -66,6 +67,7 @@ test("the owl's chat bubble is a button above its head that shows the next line 
   assert.ok(hero.includes("OWL_ANCHOR"));
 });
 
-test("the headline sits on a frosted (backdrop-blur) card", () => {
+test("the headline sits on a frosted (backdrop-blur) card on laptops, and a solid soft card on phones", () => {
   assert.match(css, /\.eai-fh-card\{[^}]*backdrop-filter:blur\(16px\)/);
+  assert.match(css, /@media \(min-width:1024px\) and \(hover:hover\)\{\s*@supports/, "blur only on laptops");
 });

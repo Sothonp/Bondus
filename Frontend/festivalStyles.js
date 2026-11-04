@@ -5,9 +5,9 @@
    LANDING_CSS. The picture is a looping video whose edges fade into the page's white background; FestivalScene draws only its poster (a still frame) for
    people who asked for less motion, so there is a reduced-motion twin at the bottom as well. */
 export const FESTIVAL_CSS = `
-/* ── The scene: a white box with the video's own shape (1280 x 934); the poster sits under the video ── */
+/* ── The scene: a white box with the video's own shape (960 x 700); the poster sits under the video ── */
 .eai-fh-stage{ position:relative; width:100%; background:#FFFFFF; }
-.eai-fh-scene{ position:relative; width:100%; aspect-ratio:1280 / 934; overflow:hidden; background:#FFFFFF; }
+.eai-fh-scene{ position:relative; width:100%; aspect-ratio:960 / 700; overflow:hidden; background:#FFFFFF; }
 .eai-fh-poster, .eai-fh-video{ position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; background:#FFFFFF; }
 .eai-fh-video{ pointer-events:none; }
 
@@ -29,9 +29,13 @@ export const FESTIVAL_CSS = `
 .eai-fh-hero .eai-fh-stage{ margin-inline:-24px; width:calc(100% + 48px); }
 .eai-fh-card{ position:relative; z-index:10; margin:-36px 8px 0; padding:22px 20px 20px; border-radius:28px; text-align:center;
   background:var(--bg); border:1px solid var(--line); box-shadow:0 20px 44px -24px rgba(15,23,42,.4); }
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)){
-  .eai-fh-card{ background:color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter:blur(16px) saturate(1.4); backdrop-filter:blur(16px) saturate(1.4); }
+/* The frosted blur is only for laptops: on a phone a blur over a playing video is costly, so the card is a solid soft white. */
+@media (min-width:1024px) and (hover:hover){
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)){
+    .eai-fh-card{ background:color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter:blur(16px) saturate(1.4); backdrop-filter:blur(16px) saturate(1.4); }
+  }
 }
+@media not all and (min-width:1024px){ .eai-fh-card{ background:color-mix(in srgb, var(--bg) 94%, transparent); } }
 .eai-fh-card h1{ margin:0 0 10px; }
 .eai-fh-card p{ margin:0; }
 .eai-fh-actions{ display:flex; flex-direction:column; gap:12px; width:100%; margin-top:20px; }
