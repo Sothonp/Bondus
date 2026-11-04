@@ -271,12 +271,14 @@ function PreviewSection({ lang, universities, onCreate, createLabel }) {
           </div>
 
           <div className="eai-lpprev-phone">
-            <div className="eai-lpphone" role="tabpanel" id="eai-lp-panel" aria-labelledby={`eai-lp-tab-${tab}`}>
-              <div className={`eai-lpscreen ${km ? "eai-km" : ""}`} key={`${tab}-${lang}`}>
-                {tab === "exam" && <ExamDemo lang={lang} />}
-                {tab === "mentor" && <MentorDemo lang={lang} />}
-                {tab === "uni" && <UniDemo lang={lang} universities={universities} />}
-                {tab === "scholar" && <ScholarDemo lang={lang} />}
+            <div className="eai-lpdevice">
+              <div className="eai-lpphone" role="tabpanel" id="eai-lp-panel" aria-labelledby={`eai-lp-tab-${tab}`}>
+                <div className={`eai-lpscreen ${km ? "eai-km" : ""}`} key={`${tab}-${lang}`}>
+                  {tab === "exam" && <ExamDemo lang={lang} />}
+                  {tab === "mentor" && <MentorDemo lang={lang} />}
+                  {tab === "uni" && <UniDemo lang={lang} universities={universities} />}
+                  {tab === "scholar" && <ScholarDemo lang={lang} />}
+                </div>
               </div>
             </div>
             <p className={`eai-lp-note ${km ? "eai-km" : ""}`}>{text("previewNote")}</p>
