@@ -13,7 +13,11 @@ import { NAV_SECTIONS, contactEmail, countProgress, formatCount, practiceQuestio
    Nothing here is invented: the demo screens are labelled "sample", the practice-question number is the real size of the
    question bank rounded down, and the footer's social icons and contact address appear only when they are configured. */
 
-const ENV = (typeof import.meta !== "undefined" && import.meta.env) || {};
+const BUILD_ENV = (typeof import.meta !== "undefined" && import.meta.env) || {};
+/* BONDUS's own Facebook page is built in, so the footer shows it without any setup. Setting VITE_SOCIAL_FACEBOOK replaces it (set it
+   empty to hide the icon). The other channels still appear only when their VITE_SOCIAL_* address is set. */
+export const DEFAULT_SOCIALS = { VITE_SOCIAL_FACEBOOK: "https://www.facebook.com/share/1d4HVDhr66/" };
+const ENV = { ...DEFAULT_SOCIALS, ...BUILD_ENV };
 
 /* True when the visitor's device asks for less motion. Counters, reveals and demos then show their final state at once. */
 function usePrefersReducedMotion() {
