@@ -98,7 +98,7 @@ from src.ingestion.llm_chunk import LlamaChunker, build_chunker
 from src.ingestion.image_ocr import HybridImageOCR, ImageInputError, ImageReading, build_image_ocr, decode_image
 from src.ingestion.ocr import CachedPageOCR, PageImage, build_ocr
 from src.retrieval.retriever import RetrievedChunk, Retriever
-from src.rate_limit import RateLimiter, client_ip
+from src.rate_limit import DailyBudget, RateLimiter, client_ip
 from src.subjects import get_subject, subject_named_in
 from src.vectorstore import EmbeddingMismatchError, InMemoryVectorStore
 
@@ -2094,6 +2094,7 @@ def create_app(
     # The daily limit on AI questions (src/quota.py). Built from the settings only where the real sign-in check is (not when a
     # test hands in its own verifier), and only when sign-in is on: it needs the student's own token to count against.
     counter: Quota | None = quota
+    free_budget = DailyBudget(settings.free_ai_per_address_daily)
     if counter is None and token_verifier is None and settings.resolved_quota_url:
         counter = LaravelQuota(settings.resolved_quota_url)
 
@@ -2137,14 +2138,21 @@ def create_app(
         token = bearer_token(request.headers.get("authorization"))
         if token is None:  # require_signed_in already refused this
             return
+        counted_id = question_id(request_id)
         try:
-            verdict = await counter.consume(token, question_id(request_id), uploads=uploads, question=question)
+            verdict = await counter.consume(token, counted_id, uploads=uploads, question=question)
         except QuotaUnavailable:
             # Only the API's own "no" stops a question: if it cannot be asked (or does not have this feature yet), a student
             # is not shut out of studying because of it.
             logger.warning("Could not count a question against the plan", exc_info=True)
             return
         if verdict.allowed:
+            # Free accounts are cheap to make, so the questions they ask are also counted per network address.
+            if question and verdict.plan == "free" and not free_budget.take(client_ip(request), counted_id):
+                raise HTTPException(
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    "Too many free questions have been asked from your network today. Try again tomorrow, or upgrade to VIP Bondus.",
+                )
             return
         if verdict.reason == REASON_UPLOADS:
             raise HTTPException(

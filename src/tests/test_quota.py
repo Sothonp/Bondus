@@ -41,7 +41,8 @@ def store_path(tmp_path):
 class FakeLaravel:
     """The Laravel API as far as the coach can see it: who am I, and count this question. Records every count."""
 
-    def __init__(self, *, refuse: bool = False, count_status: int = 200, refuse_uploads: bool = False, upload_limit: int = 0) -> None:
+    def __init__(self, *, refuse: bool = False, count_status: int = 200, refuse_uploads: bool = False, upload_limit: int = 0, plan: str = "free") -> None:
+        self.plan = plan
         self.refuse = refuse
         self.refuse_uploads = refuse_uploads
         self.upload_limit = upload_limit
@@ -60,7 +61,7 @@ class FakeLaravel:
             self.bodies.append(body)
             if self.count_status != 200:
                 return httpx.Response(self.count_status, json={"message": "nope"})
-            usage = {"plan": "free", "limit": 5, "used": 5, "remaining": 0}
+            usage = {"plan": self.plan, "limit": 5, "used": 5, "remaining": 0}
             if self.refuse_uploads and body.get("uploads"):
                 return httpx.Response(402, json={"allowed": False, **usage, "uploadLimit": self.upload_limit, "code": "upload_limit_reached", "message": "no uploads"})
             if self.refuse:
@@ -75,13 +76,13 @@ def quota_down(request: httpx.Request) -> httpx.Response:
     raise httpx.ConnectError("connection refused", request=request)
 
 
-def make_client(handler, store_path, *, quota_url: str = CONSUME_URL):
+def make_client(handler, store_path, *, quota_url: str = CONSUME_URL, **settings_extra):
     transport = httpx.MockTransport(handler)
     verifier = LaravelTokenVerifier(ME_URL, client=httpx.AsyncClient(transport=transport))
     quota = LaravelQuota(quota_url, client=httpx.AsyncClient(transport=transport))
     settings = Settings(
         _env_file=None, embedding_backend="hashing", llm_provider="none", vector_store_path=store_path,
-        auth_verify_url=ME_URL, answer_cache_ttl_seconds=0,
+        auth_verify_url=ME_URL, answer_cache_ttl_seconds=0, **settings_extra,
     )
     generator = ScriptedGenerator(["ok"])
     return TestClient(create_app(settings, generator=generator, token_verifier=verifier, quota=quota)), generator
@@ -240,6 +241,71 @@ def test_the_client_reads_the_upload_verdict():
         assert await quota.consume("good", ID, uploads=1) == QuotaVerdict(False, "free", 5, "uploads", 0)
 
     asyncio.run(run())
+
+
+# --- Free accounts, per network address ---------------------------------------------------------------------
+
+
+def ask_from(client, address, request_id):
+    return client.post(
+        "/api/query/stream", json={"prompt": "hi", "request_id": request_id},
+        headers={**bearer("good"), "x-forwarded-for": address},
+    )
+
+
+def test_free_questions_are_capped_per_network_address_across_accounts(store_path):
+    # Breaks if: a script that makes Free accounts can spend the shared AI quota without limit from one connection.
+    client, generator = make_client(FakeLaravel(), store_path, free_ai_per_address_daily=2)
+    with client:
+        assert ask_from(client, "198.51.100.7", "question-aaaa1111").status_code == 200
+        assert ask_from(client, "198.51.100.7", "question-bbbb2222").status_code == 200
+        refused = ask_from(client, "198.51.100.7", "question-cccc3333")
+    assert refused.status_code == 429
+    assert "Try again tomorrow" in refused.json()["detail"]
+    assert len(generator.seen) == 2
+
+
+def test_another_address_is_not_affected_by_the_cap(store_path):
+    client, generator = make_client(FakeLaravel(), store_path, free_ai_per_address_daily=1)
+    with client:
+        assert ask_from(client, "198.51.100.7", "question-aaaa1111").status_code == 200
+        assert ask_from(client, "198.51.100.8", "question-bbbb2222").status_code == 200
+    assert len(generator.seen) == 2
+
+
+def test_the_rounds_of_one_long_answer_use_one_of_the_addresses_questions(store_path):
+    # Breaks if: a long answer (several requests with the same id) eats the cap several times over.
+    client, generator = make_client(FakeLaravel(), store_path, free_ai_per_address_daily=1)
+    with client:
+        for _round in range(3):
+            assert ask_from(client, "198.51.100.7", "question-aaaa1111").status_code == 200
+    assert len(generator.seen) == 3
+
+
+def test_paid_plans_are_not_held_to_the_address_cap(store_path):
+    # Breaks if: paying students on a shared network are limited by their neighbours.
+    client, generator = make_client(FakeLaravel(plan="standard"), store_path, free_ai_per_address_daily=1)
+    with client:
+        for i in range(3):
+            assert ask_from(client, "198.51.100.7", f"question-paid000{i}").status_code == 200
+    assert len(generator.seen) == 3
+
+
+def test_the_address_cap_can_be_turned_off(store_path):
+    client, generator = make_client(FakeLaravel(), store_path, free_ai_per_address_daily=0)
+    with client:
+        for i in range(5):
+            assert ask_from(client, "198.51.100.7", f"question-free000{i}").status_code == 200
+    assert len(generator.seen) == 5
+
+
+def test_a_question_the_plan_refused_is_not_counted_against_the_address(store_path):
+    # Breaks if: refused questions use up the address's allowance.
+    client, generator = make_client(FakeLaravel(refuse=True), store_path, free_ai_per_address_daily=1)
+    with client:
+        for i in range(3):
+            assert ask_from(client, "198.51.100.7", f"question-nope000{i}").status_code == 402
+    assert generator.seen == []
 
 
 # --- the id -----------------------------------------------------------------------------------------------
