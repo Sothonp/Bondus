@@ -24,6 +24,8 @@ import { UNIS, UNI_MAJORS, UNI_SCHOLARSHIPS, UNI_PROFILE_INFO } from "../src/dat
 import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
+import { LandingNav, ScrollCue, LandingBody, useLandingScroll } from "./Landing.jsx";
+import { LANDING_CSS } from "./landingStyles.js";
 import { moreText, fillText } from "./moreStrings.js";
 import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel, isPracticeLocked } from "./subjects.js";
 import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
@@ -2217,64 +2219,84 @@ function BondusWordmark({ height = 28 }) {
 // through its `style` prop so it matches the theme button: flat, 2px border, solid fill.
 const landingChip = { height: 44, borderRadius: 12, border: "2px solid var(--line)", background: "var(--card)", color: "var(--ink)", boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" };
 
+/* The size of the real question bank, for the landing page's stats banner (which rounds it down, so it never claims more). */
+const PRACTICE_QUESTION_COUNT = Object.values(RAW_EXERCISES).flat().length;
+
+/* The landing page. The first screen (the "top fold") is the hero: the owl scene, the headline, the two buttons and the subject
+   ribbon, with a bouncing "Scroll to explore" cue just above the ribbon. Scrolling reveals the rest (Landing.jsx): a sticky
+   navigation bar sits above everything, then the interactive preview, features, stats, how it works, FAQ and footer.
+   Smooth scrolling is switched on for the page while this is showing (useLandingScroll). */
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
+  useLandingScroll();
+  const km = lang === "km";
+  // The language + theme chips live in the sticky bar. Same 44px height and 2px border on both, so they sit square on the solid background.
+  const controls = (
+    <>
+      <LangToggle lang={lang} setLang={setLang} style={{ ...landingChip, minWidth: 44 }} />
+      <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+        style={{ ...landingChip, width: 44, display: "grid", placeItems: "center", cursor: "pointer" }}>
+        {dark ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+    </>
+  );
+  const createLabel = t(lang, "createAccount");
+  const loginLabel = t(lang, "login");
   return (
-    <div className={`eai-root eai-lp ${dark ? "theme-dark" : "theme-light"} ${lang === "km" ? "eai-km-root" : ""} relative flex flex-col items-center overflow-hidden px-6 pt-20 lg:px-10 lg:pt-12`}
+    <div className={`eai-root eai-lp ${dark ? "theme-dark" : "theme-light"} ${km ? "eai-km-root" : ""} relative`}
       style={{ minHeight: "100dvh" }}>
       <style>{STYLES}</style>
+      <style>{LANDING_CSS}</style>
 
-      {/* Theme + language toggles — flat bordered chips in the top-right corner of the page. Same 44px
-          height and 2px border on both, centred on one line, so they sit square on the solid background
-          (they scroll away with the page instead of floating over it). */}
-      <div className="absolute right-5 top-5 z-50 flex items-center gap-2">
-        <LangToggle lang={lang} setLang={setLang} style={{ ...landingChip, minWidth: 44 }} />
-        <button onClick={() => setDark((d) => !d)} className="eai-focus" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          style={{ ...landingChip, width: 44, display: "grid", placeItems: "center", cursor: "pointer" }}>
-          {dark ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-      </div>
+      <LandingNav lang={lang} brand={<BondusWordmark height={26} />} controls={controls} onLogin={onLogin} />
 
-      {/* Duolingo-style landing layout.
+      {/* Top fold: exactly one screen tall (minus the bar). Duolingo-style layout.
           Laptop/desktop (lg, 1024px+): two equal columns side by side, centred on the screen — mascot
           + speech bubble on the left; title, subtitle and the two buttons stacked on the right.
           Phone/tablet (below lg): one column — mascot on top, title + subtitle right under it, buttons
           pinned to the bottom (thumb zone). The right-hand wrapper is `display: contents` below lg so
           its title block and buttons become direct children of <main>; the two `mt-auto`s then split
           the spare height so the mascot + title group floats between the top and the buttons. */}
-      <main className="relative z-10 flex w-full max-w-[1120px] flex-1 flex-col pb-8 lg:flex-row lg:items-center lg:gap-16 lg:pb-12 xl:gap-24">
-        {/* Left column — the hero scene: the owl flies its airplane in through the clouds, loops, and lands
-            on a phone, where its speech bubble appears. It sizes itself off both the column's width and
-            the screen's height, so it never pushes the page into a scroll on a short laptop screen. */}
-        <div className="mt-auto flex justify-center lg:mt-0 lg:flex-1 lg:basis-0">
-          <HeroScene lang={lang} />
-        </div>
-
-        {/* Right column — title, subtitle, buttons */}
-        <div className="contents lg:flex lg:flex-1 lg:basis-0 lg:flex-col lg:items-center">
-          <div className="mt-6 flex w-full flex-col items-center text-center lg:mt-0">
-            <h1 className={`text-balance [font-size:clamp(28px,5vw,44px)] lg:[font-size:clamp(30px,3.6vw,44px)] ${lang === "km" ? "eai-km" : ""}`} style={{ fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: lang === "km" ? undefined : "'Sora', system-ui, sans-serif" }}>
-              {t(lang, "welcomeHeading")} <span style={{ color: "var(--lp-link)" }}>{t(lang, "welcomeBrand")}</span>
-            </h1>
-            <p className={`text-balance ${lang === "km" ? "eai-km" : ""}`} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", lineHeight: "1.6" }}>
-              {t(lang, "welcomeSubtitle")}
-            </p>
+      <section id="top" className="eai-lp-hero px-6 lg:px-10">
+        <main className="relative z-10 flex w-full max-w-[1120px] flex-1 flex-col pb-4 lg:flex-row lg:items-center lg:gap-16 lg:pb-6 xl:gap-24">
+          {/* Left column — the hero scene: the owl flies its airplane in through the clouds, loops, and lands
+              on a phone, where its speech bubble appears. It sizes itself off both the column's width and
+              the screen's height, so it never pushes the page into a scroll on a short laptop screen. */}
+          <div className="mt-auto flex justify-center lg:mt-0 lg:flex-1 lg:basis-0">
+            <HeroScene lang={lang} />
           </div>
 
-          {/* Buttons — stacked, full width up to 420px. Styles live in the .eai-lp-btn rules in STYLES. */}
-          <div className="mt-auto flex w-full max-w-[420px] flex-col gap-3 self-center pt-8 lg:mt-10 lg:pt-0">
-            <button onClick={onCreate} className={`eai-lp-btn eai-lp-btn-secondary eai-focus ${lang === "km" ? "eai-km" : ""}`}>
-              {t(lang, "createAccount")}
-            </button>
-            <button onClick={onLogin} className={`eai-lp-btn eai-lp-btn-primary eai-focus ${lang === "km" ? "eai-km" : ""}`}>
-              {t(lang, "login")}
-            </button>
-          </div>
-        </div>
-      </main>
+          {/* Right column — title, subtitle, buttons */}
+          <div className="contents lg:flex lg:flex-1 lg:basis-0 lg:flex-col lg:items-center">
+            <div className="mt-6 flex w-full flex-col items-center text-center lg:mt-0">
+              <h1 className={`text-balance [font-size:clamp(28px,5vw,44px)] lg:[font-size:clamp(30px,3.6vw,44px)] ${km ? "eai-km" : ""}`} style={{ fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: km ? undefined : "'Sora', system-ui, sans-serif" }}>
+                {t(lang, "welcomeHeading")} <span style={{ color: "var(--lp-link)" }}>{t(lang, "welcomeBrand")}</span>
+              </h1>
+              <p className={`text-balance ${km ? "eai-km" : ""}`} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", lineHeight: "1.6" }}>
+                {t(lang, "welcomeSubtitle")}
+              </p>
+            </div>
 
-      {/* Subject ribbon — pinned to the bottom of the page. The page has side padding, so the negative margins
-          let the strip and its top border run edge to edge. Tapping a subject starts sign-up. */}
-      <SubjectRibbon lang={lang} onSelect={onCreate} className="relative z-10 self-stretch -mx-6 lg:-mx-10" />
+            {/* Buttons — stacked, full width up to 420px. Styles live in the .eai-lp-btn rules in STYLES. */}
+            <div className="mt-auto flex w-full max-w-[420px] flex-col gap-3 self-center pt-6 lg:mt-10 lg:pt-0">
+              <button onClick={onCreate} className={`eai-lp-btn eai-lp-btn-secondary eai-focus ${km ? "eai-km" : ""}`}>
+                {createLabel}
+              </button>
+              <button onClick={onLogin} className={`eai-lp-btn eai-lp-btn-primary eai-focus ${km ? "eai-km" : ""}`}>
+                {loginLabel}
+              </button>
+            </div>
+          </div>
+        </main>
+
+        <ScrollCue lang={lang} />
+
+        {/* Subject ribbon — the bottom of the top fold. The section has side padding, so the negative margins
+            let the strip and its top border run edge to edge. Tapping a subject starts sign-up. */}
+        <SubjectRibbon lang={lang} onSelect={onCreate} className="relative z-10 self-stretch -mx-6 lg:-mx-10" />
+      </section>
+
+      <LandingBody lang={lang} brand={<BondusWordmark height={30} />} onCreate={onCreate} onLogin={onLogin} createLabel={createLabel} loginLabel={loginLabel}
+        universities={UNIS} questionCount={PRACTICE_QUESTION_COUNT} />
     </div>
   );
 }
