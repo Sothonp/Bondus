@@ -108,3 +108,12 @@ test("the demo screens are labelled as samples", () => {
   assert.ok(LANDING_STRINGS.en.previewNote.toLowerCase().includes("sample"));
   assert.ok(LANDING_STRINGS.en.demoSchTag === "Sample");
 });
+
+test("the BONDUS Facebook page is built into the footer, and settings can replace or hide it", () => {
+  const land = read("./Landing.jsx");
+  assert.match(land, /DEFAULT_SOCIALS = \{ VITE_SOCIAL_FACEBOOK: "https:\/\/www\.facebook\.com\/share\/1d4HVDhr66\/" \}/);
+  assert.ok(land.includes("const ENV = { ...DEFAULT_SOCIALS, ...BUILD_ENV }"), "build settings override the default");
+  const defaults = { VITE_SOCIAL_FACEBOOK: "https://www.facebook.com/share/1d4HVDhr66/" };
+  assert.deepEqual(socialLinks(defaults).map((s) => s.id), ["facebook"], "the default passes the https check");
+  assert.deepEqual(socialLinks({ ...defaults, VITE_SOCIAL_FACEBOOK: "" }), [], "an empty setting hides it");
+});
