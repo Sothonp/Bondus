@@ -21,7 +21,7 @@ export const DEFAULT_SOCIALS = { VITE_SOCIAL_FACEBOOK: "https://www.facebook.com
 const ENV = { ...DEFAULT_SOCIALS, ...BUILD_ENV };
 
 /* True when the visitor's device asks for less motion. Counters, reveals and demos then show their final state at once. */
-function usePrefersReducedMotion() {
+export function usePrefersReducedMotion() {
   const [reduce, setReduce] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");

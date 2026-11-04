@@ -24,7 +24,9 @@ import { UNIS, UNI_MAJORS, UNI_SCHOLARSHIPS, UNI_PROFILE_INFO } from "../src/dat
 import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
 import { RAW_EXERCISES } from "../src/data/bacExercises.js";
-import { LandingNav, ScrollCue, LandingBody, useLandingScroll } from "./Landing.jsx";
+import { LandingNav, ScrollCue, LandingBody, useLandingScroll, usePrefersReducedMotion } from "./Landing.jsx";
+import FestivalScene from "./FestivalHero.jsx";
+import { FESTIVAL_CSS } from "./festivalStyles.js";
 import { LANDING_CSS } from "./landingStyles.js";
 import { moreText, fillText } from "./moreStrings.js";
 import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel, isPracticeLocked } from "./subjects.js";
@@ -48,7 +50,6 @@ import SubjectIcon from "./SubjectIcon.jsx";
 import { EXAM_PAPER_PDFS, EXAM_PAPER_IMAGES, newestPaperYear } from "./examPapers.js";
 import StudyOwlScene from "./StudyOwlScene.jsx";
 import SubjectRibbon from "./SubjectRibbon.jsx";
-import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
 import { todaysTasks, addTask, toggleTask, removeTask, remainingSuggestions, MAX_TITLE_LENGTH, MAX_TASKS_PER_DAY } from "./dailyPlan.js";
 import LoadingScreen from "./LoadingScreen.jsx";
@@ -84,7 +85,6 @@ import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage, u
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
 import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
-import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
 const FIELD_META = {
@@ -1046,39 +1046,6 @@ input.eai-input::placeholder{ color:var(--muted); }
    at it — a glow ring + slight scale-up, so the gesture visibly lands on something. */
 .eai-mascot-pointed{ box-shadow:0 0 0 4px var(--primary-soft), var(--shadow) !important; transform:scale(1.04); }
 
-/* ── Landing hero: the owl flies its airplane in, lands it on a phone, and stands ─────────────────────
-   One SVG drawing. Every movement is a CSS animation of the poses heroFlight.js generates, all on one clock
-   (TOTAL_S): the plane's keyframes end at its stop, the owl's at its standing spot, so nothing is measured in JS. */
-.eai-hero{ position:relative; width:min(100%, 560px, calc(60vh * 1.1818)); aspect-ratio:520 / 440; }
-.eai-hero-svg{ display:block; width:100%; height:100%; overflow:visible; }
-.eai-hero-bubble{ position:absolute; transform:translateX(-50%); }
-.eai-hero-cloud{ animation:eai-hero-drift linear infinite; animation-duration:var(--cd); animation-delay:var(--cdl); }
-@keyframes eai-hero-drift{ from{ transform:translateX(-260px); } to{ transform:translateX(620px); } }
-.eai-plane{ animation:eai-plane-go ${TOTAL_S}s linear both; }
-.eai-plane-vanish{ animation:eai-plane-vanish ${TOTAL_S}s linear both; }
-.eai-rider{ animation:eai-rider-go ${TOTAL_S}s linear both; }
-/* Once standing, the owl bobs up and down (3 scene units: about 3px at laptop size). */
-.eai-rider-bob{ animation:eai-rider-bob 3.6s ease-in-out ${TOTAL_S}s infinite; }
-@keyframes eai-rider-bob{ 0%, 100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
-/* The propeller turns in its own plane: the blades sit in a group whose matrix (heroPlane.js) lays that plane into the
-   scene's view, so spinning them about the hub here looks like a real disc turning. */
-.eai-prop-spin{ transform-origin:0 0; animation:eai-prop-spin .32s linear infinite; }
-@keyframes eai-prop-spin{ to{ transform:rotate(360deg); } }
-.eai-stand-shadow{ animation:eai-stand-shadow ${HOP_S}s ease-out ${HOP_AT}s both; }
-@keyframes eai-stand-shadow{ from{ opacity:0; } to{ opacity:1; } }
-${planeKeyframesCss("eai-plane-go")}
-${vanishKeyframesCss("eai-plane-vanish")}
-${riderKeyframesCss("eai-rider-go")}
-/* Coming back to the landing page from sign-up: the owl is already standing and nothing replays. */
-.eai-hero-skip .eai-plane{ display:none; }
-.eai-hero-skip .eai-rider{ animation:none; transform:${STAND_TRANSFORM}; }
-.eai-hero-skip .eai-rider-bob{ animation-delay:0s; }
-.eai-hero-skip .eai-stand-shadow{ animation:none; opacity:1; }
-@media (prefers-reduced-motion: reduce){
-  .eai-hero-cloud, .eai-plane, .eai-plane-vanish, .eai-rider, .eai-rider-bob, .eai-stand-shadow, .eai-prop-spin{ animation:none; }
-  .eai-plane{ display:none; }
-  .eai-rider{ transform:${STAND_TRANSFORM}; }
-}
 
 /* ── Landing page (Welcome): flat white, Duolingo-style ──────────────────────────────────────────
    Scoped to .eai-lp, so every other screen keeps the app's indigo theme. Rather than restyle each
@@ -1093,23 +1060,9 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-root.eai-lp.theme-light{
   --bg:#FFFFFF; --card:#FFFFFF; --ink:#111827; --muted:#6B7280; --line:#E5E5E5;
   --glass-bg:#FFFFFF; --glass-line:#E5E5E5; --glass-shadow:none; --lp-hover:#F7F7F7;
-  --hero-cloud-1:#DBE8FA; --hero-cloud-2:#E6EEF8; --hero-cloud-3:#D2E2F6;
-  --hero-phone:#1D4ED8; --hero-phone-edge:#1E3A8A; --hero-screen-a:#F7FAFF; --hero-screen-b:#DCE9FA;
-  --hero-park:#BFDBFE; --hero-block:#93C5FD; --hero-runway:#CBD5E1; --hero-runway-line:#FFFFFF;
-  --hero-plane-a:#3B82F6; --hero-plane-b:#1D4ED8; --hero-plane-wing:#60A5FA; --hero-plane-fin:#1E3A8A;
-  --hero-plane-edge:#1E40AF; --hero-rim:#F8FAFC; --hero-interior:#172554; --hero-seat:#C27A0E;
-  --hero-gold:#F5A623; --hero-prop:#374151;
-  --hero-ground:rgba(15,23,42,.16);
 }
 .eai-root.eai-lp.theme-dark{
   --primary:#2563EB; --primary-deep:#1D4ED8; --lp-hover:var(--card); --lp-link:#3B82F6;
-  --hero-cloud-1:#1A2348; --hero-cloud-2:#212B55; --hero-cloud-3:#172042;
-  --hero-phone:#2563EB; --hero-phone-edge:#1E3A8A; --hero-screen-a:#1F2B55; --hero-screen-b:#2A3A72;
-  --hero-park:#34478A; --hero-block:#4B5F9E; --hero-runway:#475569; --hero-runway-line:#E2E8F0;
-  --hero-plane-a:#60A5FA; --hero-plane-b:#2563EB; --hero-plane-wing:#3B82F6; --hero-plane-fin:#1E3A8A;
-  --hero-plane-edge:#1E3A8A; --hero-rim:#E2E8F0; --hero-interior:#0B1437; --hero-seat:#B7791F;
-  --hero-gold:#F5A623; --hero-prop:#CBD5E1;
-  --hero-ground:rgba(0,0,0,.45);
 }
 /* The speech bubble (an .eai-card) gets the same 2px outline as the buttons and corner chips; the
    bubble's tail is drawn with a 2px outline already, so it joins up. */
@@ -2067,145 +2020,7 @@ function MascotSpeechBubble({ text, lang = "en", bubbleRef, placement = "auto", 
   );
 }
 
-/* ════════════════════════ Landing hero: the owl flies its airplane in, lands it on a phone and stands ════════════════════════
-   One SVG drawing in scene units; heroFlight.js has the story and every pose. The phone lies flat in isometric view, so
-   its runway runs toward the viewer, and the airplane (HeroPlane.jsx) is a chunky 3D prop plane in the same view: as it
-   lines up, its nose points down the runway, toward the user. The owl sits inside the plane's open cockpit: the plane is
-   drawn in two layers with the owl between them, so the cockpit's near wall hides its feet and lower belly. At touchdown
-   the plane fades out, the owl hops out and stands on the runway, and then its speech bubble appears. Every movement is
-   a CSS animation of the poses heroFlight.js generates; React only waits for the owl to land. */
 const HERO_MESSAGE_KEYS = ["mascotMsg1", "mascotMsg2", "mascotMsg3", "mascotMsg4", "mascotMsg5", "mascotMsg6"];
-// Clouds drift left to right on a loop (.eai-hero-cloud). `x` is where a cloud starts, so the sky is already full on load.
-const HERO_CLOUDS = [
-  { id: 1, x: -20, y: 44, scale: 1.2, speed: 9, front: true },
-  { id: 2, x: 330, y: 22, scale: 0.95, speed: 6 },
-  { id: 3, x: 40, y: 246, scale: 0.8, speed: 12 },
-];
-const CLOUD_TRAVEL = 880;   // the drift runs from -260 to 620 (.eai-hero-drift)
-const BUBBLE_GAP = 8;       // between the bubble's tail and the owl's ears
-
-// Set once the owl has landed in this page load, so coming back to the landing page from sign-up shows the owl
-// standing at once instead of replaying the flight.
-let heroIntroPlayed = false;
-
-function HeroCloud({ uid, cloud }) {
-  const dur = CLOUD_TRAVEL / cloud.speed;
-  const delay = -((cloud.x + 260) / CLOUD_TRAVEL) * dur;   // start part-way along, so the sky is already full
-  return (
-    <g className="eai-hero-cloud" style={{ "--cd": `${dur.toFixed(1)}s`, "--cdl": `${delay.toFixed(1)}s` }}>
-      <use href={`#${uid}-cloud`} transform={`translate(0 ${cloud.y}) scale(${cloud.scale})`} style={{ fill: `var(--hero-cloud-${cloud.id})` }} />
-    </g>
-  );
-}
-
-// The phone, lying flat in isometric view: a slab with a screen. The runway runs down the middle toward the viewer,
-// with a little grass and a few buildings either side. Plan units: 520 along the runway, 290 across it.
-function HeroPhone({ uid }) {
-  return (
-    <g transform={`translate(${PHONE_C[0]} ${PHONE_C[1]})`}>
-      <g transform="translate(0 12)">{/* the slab's thickness, straight down the screen */}
-        <g transform={ISO_MATRIX}><rect x="-260" y="-145" width="520" height="290" rx="40" style={{ fill: "var(--hero-phone-edge)" }} /></g>
-      </g>
-      <g transform={ISO_MATRIX}>
-        <rect x="-260" y="-145" width="520" height="290" rx="40" style={{ fill: "var(--hero-phone)" }} />
-        <rect x="-238" y="-123" width="476" height="246" rx="26" fill={`url(#${uid}-screen)`} />
-        <rect x="-200" y="-104" width="120" height="56" rx="10" style={{ fill: "var(--hero-park)" }} />
-        <rect x="96" y="52" width="120" height="56" rx="10" style={{ fill: "var(--hero-park)" }} />
-        <rect x="-170" y="40" width="56" height="44" rx="8" style={{ fill: "var(--hero-block)" }} />
-        <rect x="104" y="-96" width="62" height="38" rx="8" style={{ fill: "var(--hero-block)" }} />
-        <rect x="-200" y="-30" width="400" height="60" rx="6" style={{ fill: "var(--hero-runway)" }} />
-        <rect x="-200" y="-26" width="400" height="2" style={{ fill: "var(--hero-runway-line)" }} />
-        <rect x="-200" y="24" width="400" height="2" style={{ fill: "var(--hero-runway-line)" }} />
-        {[-170, -110, -50, 10, 70, 130].map((u) => (
-          <rect key={u} x={u} y="-1.5" width="34" height="3" style={{ fill: "var(--hero-runway-line)" }} />
-        ))}
-      </g>
-    </g>
-  );
-}
-
-// The airplane is HeroPlane.jsx (geometry in heroPlane.js): a chunky 3D prop plane in the same view as the phone, drawn in
-// two layers with the owl between them so the owl sits inside its cockpit.
-
-function HeroScene({ lang = "en" }) {
-  const uid = useRef(Math.random().toString(36).slice(2, 8)).current;
-  const [skipIntro] = useState(() => heroIntroPlayed || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-  const [landed, setLanded] = useState(skipIntro);
-  const [msgIdx, setMsgIdx] = useState(0);
-
-  // The owl's landing is an animation event; the timer is only a backstop in case that event never arrives.
-  useEffect(() => {
-    if (landed) { heroIntroPlayed = true; return undefined; }
-    const id = setTimeout(() => setLanded(true), (TOTAL_S + 0.6) * 1000);
-    return () => clearTimeout(id);
-  }, [landed]);
-
-  // The bubble starts cycling through its lines once it appears.
-  useEffect(() => {
-    if (!landed) return undefined;
-    const id = setInterval(() => setMsgIdx((i) => (i + 1) % HERO_MESSAGE_KEYS.length), 4500);
-    return () => clearInterval(id);
-  }, [landed]);
-
-  const sky = `url(#${uid}-sky)`;
-  const bubbleBottom = (1 - (STAND[1] - OWL_HEAD - BUBBLE_GAP) / SCENE_H) * 100;
-  return (
-    <div className={`eai-hero${skipIntro ? " eai-hero-skip" : ""}`}>
-      <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} className="eai-hero-svg" role="img" aria-label={t(lang, "heroAlt")}>
-        <defs>
-          <g id={`${uid}-cloud`}>
-            <rect x="6" y="34" width="128" height="26" rx="13" />
-            <circle cx="42" cy="36" r="22" /><circle cx="74" cy="26" r="28" /><circle cx="106" cy="38" r="20" />
-          </g>
-          <linearGradient id={`${uid}-fade`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#000" /><stop offset=".07" stopColor="#fff" /><stop offset=".93" stopColor="#fff" /><stop offset="1" stopColor="#000" />
-          </linearGradient>
-          <mask id={`${uid}-sky`} maskUnits="userSpaceOnUse" x="0" y="-160" width={SCENE_W} height={SCENE_H + 320}>
-            <rect x="0" y="-160" width={SCENE_W} height={SCENE_H + 320} fill={`url(#${uid}-fade)`} />
-          </mask>
-          <linearGradient id={`${uid}-screen`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" style={{ stopColor: "var(--hero-screen-a)" }} /><stop offset="1" style={{ stopColor: "var(--hero-screen-b)" }} />
-          </linearGradient>
-          <HeroPlaneDefs uid={uid} />
-        </defs>
-
-        <g mask={sky}>{HERO_CLOUDS.filter((c) => !c.front).map((c) => <HeroCloud key={c.id} uid={uid} cloud={c} />)}</g>
-        <HeroPhone uid={uid} />
-        <ellipse className="eai-stand-shadow" cx={STAND[0]} cy={STAND[1] + 3} rx="40" ry="7" style={{ fill: "var(--hero-ground)" }} />
-
-        {/* The plane in two layers with the owl between them: everything behind the owl, the owl, then the near wall of the
-            body and the rest of the near side. Both plane layers play the same keyframes on the same clock. */}
-        <g mask={sky}>
-          <g className="eai-plane">
-            <g className="eai-plane-vanish"><HeroPlaneBack uid={uid} /></g>
-          </g>
-        </g>
-
-        <g mask={sky}>
-          <g className="eai-rider" onAnimationEnd={(e) => { if (e.animationName === "eai-rider-go") setLanded(true); }}>
-            <g className="eai-rider-bob">
-              <OwlMascot calm seated calmDelayS={skipIntro ? 0.5 : TOTAL_S + 0.05} svgProps={{ ...OWL_SVG, style: { width: undefined, height: undefined } }} />
-            </g>
-          </g>
-        </g>
-
-        <g mask={sky}>
-          <g className="eai-plane">
-            <g className="eai-plane-vanish"><HeroPlaneFront uid={uid} /></g>
-          </g>
-        </g>
-
-        <g mask={sky} opacity=".88">{HERO_CLOUDS.filter((c) => c.front).map((c) => <HeroCloud key={c.id} uid={uid} cloud={c} />)}</g>
-      </svg>
-
-      {landed && (
-        <div className="eai-hero-bubble" style={{ left: `${(STAND[0] / SCENE_W) * 100}%`, bottom: `${bubbleBottom}%` }}>
-          <MascotSpeechBubble text={t(lang, HERO_MESSAGE_KEYS[msgIdx])} lang={lang} placement="above" />
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* The "bondus" wordmark (the owl in a graduation cap is the o), drawn from /logos/bondus-wordmark.png as a mask so it takes the text
    colour of the theme: dark ink in light mode, cream in dark mode, from the one white picture. `height` is in px; the width follows
@@ -2222,13 +2037,23 @@ const landingChip = { height: 44, borderRadius: 12, border: "2px solid var(--lin
 /* The size of the real question bank, for the landing page's stats banner (which rounds it down, so it never claims more). */
 const PRACTICE_QUESTION_COUNT = Object.values(RAW_EXERCISES).flat().length;
 
-/* The landing page. The first screen (the "top fold") is the hero: the owl scene, the headline, the two buttons and the subject
-   ribbon, with a bouncing "Scroll to explore" cue just above the ribbon. Scrolling reveals the rest (Landing.jsx): a sticky
-   navigation bar sits above everything, then the interactive preview, features, stats, how it works, FAQ and footer.
-   Smooth scrolling is switched on for the page while this is showing (useLandingScroll). */
+/* The landing page. The first screen (the "top fold") is the hero: a living Bon Om Touk (Water Festival) dragon-boat scene
+   (FestivalHero.jsx) with the blue owl leading the boat and a chat bubble above its head, a frosted card with the headline,
+   tagline and the two buttons, a bouncing "Scroll to explore" cue and the subject ribbon. Scrolling reveals the rest
+   (Landing.jsx): a sticky navigation bar sits above everything, then the interactive preview, features, stats, how it works,
+   FAQ and footer. Smooth scrolling is switched on for the page while this is showing (useLandingScroll). */
 function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
   useLandingScroll();
   const km = lang === "km";
+  const reduceMotion = usePrefersReducedMotion();
+  // The owl's bubble shows its lines in turn (every 4.5 s; a tap on it shows the next at once). People who asked for less motion
+  // get the first line and change it only by tapping.
+  const [msgIdx, setMsgIdx] = useState(0);
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+    const id = setInterval(() => setMsgIdx((i) => (i + 1) % HERO_MESSAGE_KEYS.length), 4500);
+    return () => clearInterval(id);
+  }, [reduceMotion]);
   // The language + theme chips live in the sticky bar. Same 44px height and 2px border on both, so they sit square on the solid background.
   const controls = (
     <>
@@ -2246,47 +2071,39 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
       style={{ minHeight: "100dvh" }}>
       <style>{STYLES}</style>
       <style>{LANDING_CSS}</style>
+      <style>{FESTIVAL_CSS}</style>
 
       <LandingNav lang={lang} brand={<BondusWordmark height={26} />} controls={controls} onLogin={onLogin} />
 
-      {/* Top fold: exactly one screen tall (minus the bar). Duolingo-style layout.
-          Laptop/desktop (lg, 1024px+): two equal columns side by side, centred on the screen — mascot
-          + speech bubble on the left; title, subtitle and the two buttons stacked on the right.
-          Phone/tablet (below lg): one column — mascot on top, title + subtitle right under it, buttons
-          pinned to the bottom (thumb zone). The right-hand wrapper is `display: contents` below lg so
-          its title block and buttons become direct children of <main>; the two `mt-auto`s then split
-          the spare height so the mascot + title group floats between the top and the buttons. */}
+      {/* Top fold: one screen tall (minus the bar).
+          Phone/tablet: the festival picture on top, edge to edge, and the frosted card overlapping its lower edge.
+          Laptop (lg, 1024px+): the card on the left overlaps the picture's left edge; the picture is the bigger half. */}
       <section id="top" className="eai-lp-hero px-6 lg:px-10">
-        {/* Romdoul flowers (Romdoul.jsx) in the corners: decoration only, behind the content, hidden in dark mode. */}
-        <RomdoulCluster className="eai-lp-flora eai-lp-flora-a" />
-        <RomdoulCluster className="eai-lp-flora eai-lp-flora-b" />
-        <main className="relative z-10 flex w-full max-w-[1120px] flex-1 flex-col pb-4 lg:flex-row lg:items-center lg:gap-16 lg:pb-6 xl:gap-24">
-          {/* Left column — the hero scene: the owl flies its airplane in through the clouds, loops, and lands
-              on a phone, where its speech bubble appears. It sizes itself off both the column's width and
-              the screen's height, so it never pushes the page into a scroll on a short laptop screen. */}
-          <div className="mt-auto flex justify-center lg:mt-0 lg:flex-1 lg:basis-0">
-            <HeroScene lang={lang} />
-          </div>
+        <main className="eai-fh-hero relative z-10">
+          <FestivalScene alt={t(lang, "heroAlt")}>
+            <button type="button" className="eai-fh-bubble eai-focus" onClick={() => setMsgIdx((i) => (i + 1) % HERO_MESSAGE_KEYS.length)}>
+              <MascotSpeechBubble text={t(lang, HERO_MESSAGE_KEYS[msgIdx])} lang={lang} placement="above" />
+            </button>
+          </FestivalScene>
 
-          {/* Right column — title, subtitle, buttons */}
-          <div className="contents lg:flex lg:flex-1 lg:basis-0 lg:flex-col lg:items-center">
-            <div className="mt-6 flex w-full flex-col items-center text-center lg:mt-0">
-              <h1 className={`text-balance [font-size:clamp(28px,5vw,44px)] lg:[font-size:clamp(30px,3.6vw,44px)] ${km ? "eai-km" : ""}`} style={{ fontWeight: "700", color: "var(--ink)", marginBottom: "12px", fontFamily: km ? undefined : "'Sora', system-ui, sans-serif" }}>
+          <div className="eai-fh-body">
+            <div className="eai-fh-card">
+              <RomdoulCluster className="eai-lp-flora-card" />
+              <h1 className={`text-balance [font-size:clamp(28px,5vw,44px)] lg:[font-size:clamp(30px,3.4vw,44px)] ${km ? "eai-km" : ""}`} style={{ fontWeight: "700", color: "var(--ink)", fontFamily: km ? undefined : "'Sora', system-ui, sans-serif", lineHeight: 1.15 }}>
                 {t(lang, "welcomeHeading")} <span style={{ color: "var(--lp-link)" }}>{t(lang, "welcomeBrand")}</span>
               </h1>
               <p className={`text-balance ${km ? "eai-km" : ""}`} style={{ fontSize: "clamp(14px, 2vw, 18px)", color: "var(--muted)", lineHeight: "1.6" }}>
                 {t(lang, "welcomeSubtitle")}
               </p>
-            </div>
-
-            {/* Buttons — stacked, full width up to 420px. Styles live in the .eai-lp-btn rules in STYLES. */}
-            <div className="mt-auto flex w-full max-w-[420px] flex-col gap-3 self-center pt-6 lg:mt-10 lg:pt-0">
-              <button onClick={onCreate} className={`eai-lp-btn eai-lp-btn-secondary eai-focus ${km ? "eai-km" : ""}`}>
-                {createLabel}
-              </button>
-              <button onClick={onLogin} className={`eai-lp-btn eai-lp-btn-primary eai-focus ${km ? "eai-km" : ""}`}>
-                {loginLabel}
-              </button>
+              {/* Buttons — stacked, full width. Styles live in the .eai-lp-btn rules in STYLES. */}
+              <div className="eai-fh-actions">
+                <button onClick={onCreate} className={`eai-lp-btn eai-lp-btn-primary eai-focus ${km ? "eai-km" : ""}`}>
+                  {createLabel}
+                </button>
+                <button onClick={onLogin} className={`eai-lp-btn eai-lp-btn-secondary eai-focus ${km ? "eai-km" : ""}`}>
+                  {loginLabel}
+                </button>
+              </div>
             </div>
           </div>
         </main>
@@ -7391,12 +7208,12 @@ const STRINGS = {
   en: {
     ...CHEER_STRINGS.en, // the owl's encouraging lines (mascotCheers.js)
     // Welcome
-    welcomeHeading: "Welcome to", welcomeBrand: "BONDUS",
-    welcomeSubtitle: "Less Time Searching, More Time Learning!",
+    welcomeHeading: "Learn with", welcomeBrand: "BONDUS!",
+    welcomeSubtitle: "Discover your path with the best Cambodian learning app.",
     createAccount: "Create an account", login: "Login",
     mascotMsg1: "Let's study together! 📚", mascotMsg2: "You've got this! 💪", mascotMsg3: "Ready when you are!",
     mascotMsg4: "Keep that streak alive! 🔥", mascotMsg5: "Small steps, big wins!", mascotMsg6: "I believe in you!",
-    heroAlt: "The BONDUS owl lands its airplane on a phone",
+    heroAlt: "The BONDUS owl leads a dragon boat race at the Water Festival, with Angkor Wat behind the river and the crowd cheering on the bank",
     // Shell / nav
     logOut: "Log out", streakKeepIt: "Study today to keep it!",
     navMore: "More", moreLanguage: "Language",
@@ -7644,12 +7461,12 @@ const STRINGS = {
   km: {
     ...CHEER_STRINGS.km, // the owl's encouraging lines (mascotCheers.js)
     // Welcome
-    welcomeHeading: "សូមស្វាគមន៍មកកាន់", welcomeBrand: "BONDUS",
-    welcomeSubtitle: "សន្សំសំចៃពេលរក ទទួលបានការសិក្សាកាន់តែច្រើន!",
+    welcomeHeading: "រៀនជាមួយ", welcomeBrand: "BONDUS!",
+    welcomeSubtitle: "ស្វែងរកផ្លូវរបស់អ្នក ជាមួយកម្មវិធីសិក្សាដ៏ល្អបំផុតរបស់កម្ពុជា។",
     createAccount: "បង្កើតគណនី", login: "ចូលគណនី",
     mascotMsg1: "តោះសិក្សាជាមួយគ្នា! 📚", mascotMsg2: "អ្នកអាចធ្វើវាបាន! 💪", mascotMsg3: "ត្រៀមខ្លួនហើយ ពេលណាក៏បាន!",
     mascotMsg4: "រក្សានិន្នាការឱ្យបន្ត! 🔥", mascotMsg5: "ជំហានតូចៗ ជោគជ័យធំ!", mascotMsg6: "ខ្ញុំជឿជាក់លើអ្នក!",
-    heroAlt: "ទីទុយ BONDUS ចុះចតយន្តហោះរបស់វានៅលើទូរស័ព្ទ",
+    heroAlt: "ទីទុយ BONDUS ដឹកនាំទូកស្លាបព្រាក្នុងពិធីបុណ្យអុំទូក ដោយមានប្រាសាទអង្គរវត្តនៅពីក្រោយទន្លេ និងហ្វូងមនុស្សអបអរសាទរនៅតាមច្រាំង",
     // Shell / nav
     logOut: "ចាកចេញ", streakKeepIt: "សិក្សាថ្ងៃនេះដើម្បីរក្សានិន្នាការ!",
     navMore: "ផ្សេងទៀត", moreLanguage: "ភាសា",
