@@ -3,6 +3,7 @@ import {
   Award, Bell, Brain, Check, ChevronDown, ClipboardCheck, Facebook, Flame, GraduationCap, Languages, Mail,
   Music2, Search, Send, Target, TrendingUp, Youtube,
 } from "lucide-react";
+import { RomdoulBlossom, RomdoulCluster } from "./Romdoul.jsx";
 import { landingText, fillLanding } from "./landingStrings.js";
 import { NAV_SECTIONS, contactEmail, countProgress, formatCount, practiceQuestionStat, socialLinks, toKhmerDigits } from "./landing.js";
 
@@ -68,6 +69,16 @@ function Reveal({ children, className = "", delay = 0, as: Tag = "div", style, .
     <Tag ref={ref} className={`eai-reveal ${seen ? "is-in" : ""} ${className}`} style={{ ...style, transitionDelay: seen && delay ? `${delay}ms` : undefined }} {...rest}>
       {children}
     </Tag>
+  );
+}
+
+/* The Romdoul (Cambodia's national flower, Romdoul.jsx) as a small mark above each section heading: a blossom with a short line
+   either side. Decoration only, and hidden in dark mode like every other Romdoul piece in the app. */
+function Ornament() {
+  return (
+    <div className="eai-lporn" aria-hidden="true">
+      <RomdoulBlossom size={26} />
+    </div>
   );
 }
 
@@ -255,6 +266,7 @@ function PreviewSection({ lang, universities, onCreate, createLabel }) {
     <section id="preview" className="eai-lpsec">
       <div className="eai-lpwrap">
         <Reveal>
+          <Ornament />
           <h2 className={`eai-lph2 ${km ? "eai-km" : ""}`}>{text("previewTitle")}</h2>
           <p className={`eai-lpsub ${km ? "eai-km" : ""}`}>{text("previewSub")}</p>
         </Reveal>
@@ -311,6 +323,7 @@ function FeaturesSection({ lang }) {
     <section id="features" className="eai-lpsec eai-lpalt">
       <div className="eai-lpwrap">
         <Reveal>
+          <Ornament />
           <h2 className={`eai-lph2 ${km ? "eai-km" : ""}`}>{text("featuresTitle")}</h2>
           <p className={`eai-lpsub ${km ? "eai-km" : ""}`}>{text("featuresSub")}</p>
         </Reveal>
@@ -364,6 +377,8 @@ function StatsBanner({ lang, questionCount }) {
   const questions = practiceQuestionStat(questionCount);
   return (
     <section className="eai-lpstats" aria-label={text("statsLabel")}>
+      <RomdoulCluster className="eai-lpstats-flora eai-lpstats-flora-r" />
+      <RomdoulCluster className="eai-lpstats-flora eai-lpstats-flora-l" />
       <div className="eai-lpwrap eai-lpstats-grid">
         {questions > 0 && (
           <Reveal className="eai-lpstat"><b><CountUp to={questions} lang={lang} /></b><span className={km ? "eai-km" : ""}>{text("statQuestions")}</span></Reveal>
@@ -384,6 +399,7 @@ function HowSection({ lang, onCreate, createLabel }) {
     <section id="how" className="eai-lpsec">
       <div className="eai-lpwrap">
         <Reveal>
+          <Ornament />
           <h2 className={`eai-lph2 ${km ? "eai-km" : ""}`}>{text("howTitle")}</h2>
           <p className={`eai-lpsub ${km ? "eai-km" : ""}`}>{text("howSub")}</p>
         </Reveal>
@@ -415,6 +431,7 @@ function FaqSection({ lang }) {
     <section id="faq" className="eai-lpsec eai-lpalt">
       <div className="eai-lpwrap eai-lpfaq-wrap">
         <Reveal>
+          <Ornament />
           <h2 className={`eai-lph2 ${km ? "eai-km" : ""}`}>{text("faqTitle")}</h2>
           <p className={`eai-lpsub ${km ? "eai-km" : ""}`}>{text("faqSub")}</p>
         </Reveal>
@@ -449,7 +466,10 @@ function ClosingCta({ lang, onCreate, onLogin, createLabel, loginLabel }) {
   const text = (k) => landingText(lang, k);
   return (
     <section className="eai-lpsec eai-lpclose">
+      <RomdoulCluster className="eai-lpclose-flora eai-lpclose-flora-l" />
+      <RomdoulCluster className="eai-lpclose-flora eai-lpclose-flora-r" />
       <Reveal className="eai-lpwrap eai-lpclose-in">
+        <Ornament />
         <h2 className={`eai-lph2 ${km ? "eai-km" : ""}`}>{text("ctaTitle")}</h2>
         <p className={`eai-lpsub ${km ? "eai-km" : ""}`}>{text("ctaBody")}</p>
         <div className="eai-lpclose-btns">

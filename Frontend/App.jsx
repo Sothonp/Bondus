@@ -2257,6 +2257,9 @@ function Welcome({ dark, setDark, lang, setLang, onLogin, onCreate }) {
           its title block and buttons become direct children of <main>; the two `mt-auto`s then split
           the spare height so the mascot + title group floats between the top and the buttons. */}
       <section id="top" className="eai-lp-hero px-6 lg:px-10">
+        {/* Romdoul flowers (Romdoul.jsx) in the corners: decoration only, behind the content, hidden in dark mode. */}
+        <RomdoulCluster className="eai-lp-flora eai-lp-flora-a" />
+        <RomdoulCluster className="eai-lp-flora eai-lp-flora-b" />
         <main className="relative z-10 flex w-full max-w-[1120px] flex-1 flex-col pb-4 lg:flex-row lg:items-center lg:gap-16 lg:pb-6 xl:gap-24">
           {/* Left column — the hero scene: the owl flies its airplane in through the clouds, loops, and lands
               on a phone, where its speech bubble appears. It sizes itself off both the column's width and
