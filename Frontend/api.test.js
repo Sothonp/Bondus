@@ -326,6 +326,16 @@ test("plans: usage is read, a question is counted by id, and a 402 keeps its usa
   assert.deepEqual(calls[2].body, { requestId: "req-12345678", uploads: 2 });
 });
 
+test("Facebook sign-in sends the access token without a sign-in header and keeps the login it gets back", async () => {
+  const { api, calls } = make(() => json(201, { user: { id: 5, name: "Sophea" }, token: "tok-fb" }));
+  const res = await api.loginWithFacebook("fb-access-token");
+  assert.equal(res.user.id, 5);
+  assert.equal(calls[0].url, `${BASE}/auth/facebook`);
+  assert.equal(calls[0].init.method, "POST");
+  assert.deepEqual(calls[0].body, { accessToken: "fb-access-token" });
+  assert.equal(api.hasToken(), true);
+});
+
 test("plans: an admin lists students and switches a plan on", async () => {
   const { api, calls } = make(() => json(200, { users: [], user: { id: 7, plan: "standard" } }));
   await api.getAdminUsers();

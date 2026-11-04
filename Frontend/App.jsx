@@ -188,6 +188,8 @@ const SERVER_MODE = api.enabled;
 // "Sign in with Google": public by design (also shipped to Google's own GSI script, which this app
 // has no control over). Unset, the Google button simply doesn't render -- email/password still works.
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+// "Continue with Facebook" (the same value as the backend's FACEBOOK_APP_ID; public). Unset: the button simply does not appear.
+const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 // How a student pays for VIP Bondus or Super Bondus: free text the owner writes (bank account, KHQR, who to send the receipt to),
 // shown on the plans page. The app takes no payment itself; an admin switches the plan on afterwards (Admin > Plans). Write a
 // line break as \n in the environment variable.
@@ -1254,6 +1256,11 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-ob-input:hover{ border-color:var(--input-border-hover); }
 .eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
 .eai-ob-error{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ember); margin-top:6px; }
+/* Facebook's own blue, the same size as Google's button beside it. */
+.eai-fb-btn{ display:flex; align-items:center; justify-content:center; gap:10px; width:320px; max-width:100%; height:40px; border:0; border-radius:4px; background:#1877F2; color:#fff; font:500 14px/1 Roboto,Arial,sans-serif; cursor:pointer; transition:background .15s ease, opacity .15s ease; }
+.eai-fb-btn:hover{ background:#166FE5; }
+.eai-fb-btn:disabled{ opacity:.6; cursor:default; }
+.eai-fb-btn svg{ width:18px; height:18px; flex:none; }
 
 
 .eai-ob-tag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--glass-bg); border:1px solid var(--glass-line); color:var(--muted); }
@@ -2308,6 +2315,49 @@ function GoogleSignInButton({ onCredential, lang, text }) {
   return <div ref={boxRef} style={{ display: "flex", justifyContent: "center" }} />;
 }
 
+/* "Continue with Facebook": loads Facebook's own JS SDK (async, on first use) and opens its login pop-up, then hands the access
+   token to `onToken` (App.jsx's handleFacebookAuth); the backend checks it with Facebook. Like the Google button, it never appears
+   when it is not configured (no VITE_FACEBOOK_APP_ID), and stays disabled until the SDK has loaded (blocked or offline: it just
+   never turns on, nothing else is affected). FB.login has to run straight from the tap, which is why it is not wrapped in an await. */
+let facebookReady = false;
+function initFacebook() {
+  if (facebookReady || !window.FB) return;
+  window.FB.init({ appId: FACEBOOK_APP_ID, cookie: false, xfbml: false, version: "v19.0" });
+  facebookReady = true;
+}
+function FacebookSignInButton({ onToken, lang, text }) {
+  const [ready, setReady] = useState(Boolean(window.FB));
+  const onTokenRef = useRef(onToken);
+  onTokenRef.current = onToken;
+  useEffect(() => {
+    if (!FACEBOOK_APP_ID) return;
+    if (window.FB) { initFacebook(); setReady(true); return; }
+    window.fbAsyncInit = () => { initFacebook(); setReady(true); };
+    if (!document.getElementById("facebook-jssdk")) {
+      const script = document.createElement("script");
+      script.id = "facebook-jssdk"; script.async = true; script.defer = true; script.crossOrigin = "anonymous";
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      document.body.appendChild(script);
+    }
+  }, []);
+  if (!FACEBOOK_APP_ID) return null;
+  const click = () => {
+    if (!window.FB) return;
+    window.FB.login((response) => {
+      const token = response?.authResponse?.accessToken;
+      if (token) onTokenRef.current(token);
+    }, { scope: "public_profile,email" });
+  };
+  return (
+    <div style={{ display: "flex", justifyContent: "center" }}>
+      <button type="button" className={`eai-fb-btn eai-focus ${lang === "km" ? "eai-km" : ""}`} onClick={click} disabled={!ready}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.69.24 2.69.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.88v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z" /></svg>
+        {t(lang, text)}
+      </button>
+    </div>
+  );
+}
+
 /* The "── OR ──" rule between the Google button and the manual email/password fields. */
 function OrDivider({ lang }) {
   return (
@@ -2319,7 +2369,7 @@ function OrDivider({ lang }) {
   );
 }
 
-function Login({ dark, setDark, onBack, onLogin, onGoogleAuth, onCreateInstead, onForgot, lang = "en", setLang }) {
+function Login({ dark, setDark, onBack, onLogin, onGoogleAuth, onFacebookAuth, onCreateInstead, onForgot, lang = "en", setLang }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -2340,26 +2390,30 @@ function Login({ dark, setDark, onBack, onLogin, onGoogleAuth, onCreateInstead, 
       shake();
     } finally { setBusy(false); }
   };
-  const handleGoogle = async (credential) => {
+  // Google and Facebook hand back different things (an ID token, an access token) but are handled the same way.
+  const handleProvider = (signIn) => async (proof) => {
     if (busy) return;
     setError(""); setBusy(true);
     try {
-      const res = await onGoogleAuth(credential);
+      const res = await signIn(proof);
       // true: signed in, dashboard next. null: a brand-new account, now mid sign-up on its own screen.
       if (res === true || res === null) return;
       setError(apiErrorText(lang, res?.error, res?.retryAfter));
       shake();
     } finally { setBusy(false); }
   };
+  const handleGoogle = handleProvider(onGoogleAuth);
+  const handleFacebook = handleProvider(onFacebookAuth);
   return (
     <OnboardingLayout dark={dark} setDark={setDark} onBack={onBack} lang={lang} setLang={setLang} mascotState={mascotState}
       title={t(lang, "loginTitle")} description={t(lang, "loginDesc")}
       footer={
         <PrimaryButton onClick={submit} disabled={busy} className={`sm:w-auto ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "loginTitle")} <ChevronRight size={16} /></PrimaryButton>
       }>
-      {GOOGLE_CLIENT_ID && (
-        <div className="space-y-4 mb-4">
+      {(GOOGLE_CLIENT_ID || FACEBOOK_APP_ID) && (
+        <div className="space-y-3 mb-4">
           <GoogleSignInButton onCredential={handleGoogle} lang={lang} text="signin_with" />
+          <FacebookSignInButton onToken={handleFacebook} lang={lang} text="signinWithFacebook" />
           <OrDivider lang={lang} />
         </div>
       )}
@@ -2580,24 +2634,30 @@ function blankRegisterForm(overrides = {}) {
    `initialForm`/`initialStep` let App.jsx re-open this at a specific step — used when a student
    goes "Back" from the step-4 AssessmentChoice screen, or lands here fresh from Google sign-in
    already past step 1, so their answers (or Google's) aren't lost. */
-function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
+function Register({ onComplete, onGoogleAuth, onFacebookAuth, dark, setDark, initialForm, initialStep, onBack, lang = "en", setLang }) {
   const [step, setStep] = useState(initialStep ?? 1);
   const [form, setForm] = useState(initialForm ?? blankRegisterForm());
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const canFinish = form.name.trim() && form.field;
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const handleGoogle = async (credential) => {
+  const handleProvider = (signIn) => async (proof) => {
     if (submitting) return;
     setSubmitError(""); setSubmitting(true);
     try {
-      const res = await onGoogleAuth(credential);
+      const res = await signIn(proof);
       // true: an existing, already-onboarded account -- signed in. null: handled on its own screen
       // (a brand-new account resumes right here at step 2, or an existing-but-unfinished one too).
       if (res === true || res === null) return;
       setSubmitError(apiErrorText(lang, res?.error, res?.retryAfter));
     } finally { setSubmitting(false); }
   };
+  const handleGoogle = handleProvider(onGoogleAuth);
+  const handleFacebook = handleProvider(onFacebookAuth);
+  // With the server, accounts are only made with Google or Facebook (the backend refuses a typed-in email and password), so
+  // step 1 is just those two buttons; the grade and target a typed form used to ask for move to step 3. Without a server (the
+  // offline prototype) there is nothing to sign in to, and the original form stays.
+  const socialOnly = SERVER_MODE;
   // With the server, onComplete creates the account and may answer { error, step } (email already used, etc.).
   const finish = async (data) => {
     if (submitting) return;
@@ -2621,7 +2681,25 @@ function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initia
     ...f, universityGoals: f.universityGoals.includes(id) ? f.universityGoals.filter((x) => x !== id) : [...f.universityGoals, id],
   }));
 
-  // ── Step 1: account details (shared layout; grade/target only shown for high school) ──
+  // ── Step 1: create the account (Google or Facebook with the server; the typed form without one) ──
+  if (step === 1 && socialOnly) {
+    const anyProvider = Boolean(GOOGLE_CLIENT_ID || FACEBOOK_APP_ID);
+    return (
+      <OnboardingLayout dark={dark} setDark={setDark} step={1} onBack={onBack} lang={lang} setLang={setLang}
+        title={t(lang, "createAccountTitle")} description={t(lang, "signupSocialDesc")}>
+        {submitErrorBanner}
+        {anyProvider ? (
+          <div className="space-y-3">
+            <GoogleSignInButton onCredential={handleGoogle} lang={lang} text="signup_with" />
+            <FacebookSignInButton onToken={handleFacebook} lang={lang} text="signupWithFacebook" />
+            <p className={`text-xs eai-muted text-center pt-1 ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "signupSocialHint")}</p>
+          </div>
+        ) : (
+          <p className={`eai-ob-error ${lang === "km" ? "eai-km" : ""}`} role="alert"><AlertTriangle size={12} /> {t(lang, "signupUnavailable")}</p>
+        )}
+      </OnboardingLayout>
+    );
+  }
   if (step === 1) {
     return (
       <OnboardingLayout dark={dark} setDark={setDark} step={1} stepLabels={isUni ? UNI_ONBOARDING_STEPS : undefined} stepLabelsKm={isUni ? UNI_ONBOARDING_STEPS_KM : undefined}
@@ -2753,6 +2831,14 @@ function Register({ onComplete, onGoogleAuth, dark, setDark, initialForm, initia
       }>
       {submitErrorBanner}
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ columnGap: 16, rowGap: 22 }}>
+        {socialOnly && (
+          <>
+            <SelectField label={t(lang, "gradeLevelLabel")} value={form.grade} onChange={(e) => set("grade", e.target.value)}
+              options={[{ value: "11", label: t(lang, "grade11") }, { value: "12", label: t(lang, "grade12") }]} />
+            <SelectField label={t(lang, "targetGradeLabel")} value={form.target} onChange={(e) => set("target", e.target.value)}
+              options={["A", "B", "C", "D", "E"].map((g) => ({ value: g, label: `${t(lang, "gradeWord")} ${g}` }))} />
+          </>
+        )}
         <SelectField label={t(lang, "targetExamYearLabel")} value={form.targetExamYear} onChange={(e) => set("targetExamYear", Number(e.target.value))}
           options={EXAM_YEARS.map((y) => ({ value: y, label: String(y) }))} />
         <SelectField label={t(lang, "dailyStudyTimeLabel")} value={form.dailyMinutes} onChange={(e) => set("dailyMinutes", Number(e.target.value))}
@@ -7462,6 +7548,11 @@ const STRINGS = {
     coverageWord: "Coverage", requirementsWord: "Requirements",
     unscoredChecklistNote: "These are listed as-is — we don't have your grades or test scores yet, so we can't check them off for you.",
     createAccountTitle: "Create your account", createAccountDesc: "A few details so your AI coach and study plan fit you.",
+    signupSocialDesc: "Create your account with Google or Facebook: one tap, no password to remember.",
+    signupSocialHint: "We only read your name (and email, if you share it). We never post anything.",
+    signupUnavailable: "Sign-up isn't available right now. Please try again later.",
+    signupWithFacebook: "Sign up with Facebook", signinWithFacebook: "Sign in with Facebook",
+    errSocial: "That sign-in could not be verified. Please try again.",
     fullNameLabel: "Full name", emailLabel: "Email", passwordLabel: "Password", ageLabel: "Age", gradeLevelLabel: "Grade level",
     grade11: "Grade 11", grade12: "Grade 12 (BAC II)", targetGradeLabel: "Target grade", gradeWord: "Grade",
     continueToTrack: "Continue to academic track", continueWord: "Continue", continueWhereLeft: "Continue where you left off",
@@ -7698,6 +7789,11 @@ const STRINGS = {
     uniProgressDesc: "សកម្មភាពសិក្សារបស់អ្នកនៅលើ Bondus។",
     uniProgressComingSoon: "ការវិភាគលម្អិតអំពីវគ្គសិក្សា និងកម្រងសំណួរនឹងមកដល់ឆាប់ៗនេះ។",
     createAccountTitle: "បង្កើតគណនីរបស់អ្នក", createAccountDesc: "ព័ត៌មានមួយចំនួនដើម្បីឲ្យគ្រូបង្វឹក AI និងផែនការសិក្សាសមស្របនឹងអ្នក។",
+    signupSocialDesc: "បង្កើតគណនីរបស់អ្នកជាមួយ Google ឬ Facebook៖ ចុចមួយដង មិនបាច់ចាំពាក្យសម្ងាត់។",
+    signupSocialHint: "យើងអានតែឈ្មោះរបស់អ្នក (និងអ៊ីមែល ប្រសិនបើអ្នកចែករំលែក)។ យើងមិនបង្ហោះអ្វីទាំងអស់។",
+    signupUnavailable: "ការចុះឈ្មោះមិនទាន់អាចប្រើបាននៅពេលនេះទេ។ សូមព្យាយាមម្តងទៀតនៅពេលក្រោយ។",
+    signupWithFacebook: "ចុះឈ្មោះជាមួយ Facebook", signinWithFacebook: "ចូលជាមួយ Facebook",
+    errSocial: "មិនអាចផ្ទៀងផ្ទាត់ការចូលនេះបានទេ។ សូមព្យាយាមម្តងទៀត។",
     fullNameLabel: "ឈ្មោះពេញ", emailLabel: "អ៊ីមែល", passwordLabel: "ពាក្យសម្ងាត់", ageLabel: "អាយុ", gradeLevelLabel: "កម្រិតថ្នាក់",
     grade11: "ថ្នាក់ទី១១", grade12: "ថ្នាក់ទី១២ (បាក់ឌុប)", targetGradeLabel: "និទ្ទេសគោលដៅ", gradeWord: "និទ្ទេស",
     continueToTrack: "បន្តទៅផ្នែកសិក្សា", continueWord: "បន្ត", continueWhereLeft: "បន្តពីកន្លែងដែលអ្នកបានឈប់",
@@ -7957,13 +8053,13 @@ export default function App() {
   // into the same step-2 onboarding a manual sign-up walks through, same as going Back from
   // AssessmentChoice. `_key` forces Register to remount even when it's already on screen (clicking
   // the Google button from within Register's own step 1 instead of filling it in by hand).
-  const handleGoogleAuth = async (credential) => {
+  const handleSocialAuth = async (signIn) => {
     if (!SERVER_MODE) return { error: "api_disabled" };
     try {
-      const res = await api.loginWithGoogle(credential);
+      const res = await signIn();
       serverUserRef.current = res.user;
       if (!res.user.field && res.user.educationLevel !== "university") {
-        setResumeReg({ form: blankRegisterForm({ name: res.user.name, email: res.user.email }), step: 2, _key: Date.now() });
+        setResumeReg({ form: blankRegisterForm({ name: res.user.name, email: res.user.email ?? "" }), step: 2, _key: Date.now() });
         setEntry("create");
         return null;
       }
@@ -7974,6 +8070,9 @@ export default function App() {
       return { error: err?.code ?? "server_error", retryAfter: err?.retryAfter ?? null };
     }
   };
+  const handleGoogleAuth = (credential) => handleSocialAuth(() => api.loginWithGoogle(credential));
+  // "Continue with Facebook": the same, with the access token Facebook's login pop-up returned.
+  const handleFacebookAuth = (accessToken) => handleSocialAuth(() => api.loginWithFacebook(accessToken));
   // After "Forgot password": the reset already stored a fresh login, so just load the account.
   const handleSignedIn = async () => {
     try { await loadAccount(); setShowWelcomeBack(true); return true; }
@@ -8534,9 +8633,9 @@ export default function App() {
   if (pendingReg && !showDiagnostic) return <>{noticeToast}<AssessmentChoice reg={pendingReg} dark={dark} setDark={setDark} onStart={() => setShowDiagnostic(true)} onSkip={handleSkipDiagnostic} onBack={handleBackToPreferences} lang={lang} setLang={setLang} /></>;
   if (pendingReg) return <>{noticeToast}<Diagnostic reg={pendingReg} dark={dark} onComplete={handleDiagnosticComplete} lang={lang} /></>;
   if (!profile && entry === "welcome") return <Welcome dark={dark} setDark={setDark} lang={lang} setLang={setLang} onLogin={() => setEntry("login")} onCreate={() => setEntry("create")} />;
-  if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onGoogleAuth={handleGoogleAuth} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
+  if (!profile && entry === "login") return <>{noticeToast}<Login dark={dark} setDark={setDark} onBack={() => setEntry("welcome")} onLogin={handleLogin} onGoogleAuth={handleGoogleAuth} onFacebookAuth={handleFacebookAuth} onCreateInstead={() => setEntry("create")} onForgot={() => setEntry("forgot")} lang={lang} setLang={setLang} /></>;
   if (!profile && entry === "forgot" && SERVER_MODE) return <>{noticeToast}<ForgotPassword dark={dark} setDark={setDark} onBack={() => setEntry("login")} onSignedIn={handleSignedIn} lang={lang} setLang={setLang} /></>;
-  if (!profile) return <>{noticeToast}<Register key={resumeReg?._key ?? "register"} onComplete={handleRegister} onGoogleAuth={handleGoogleAuth} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
+  if (!profile) return <>{noticeToast}<Register key={resumeReg?._key ?? "register"} onComplete={handleRegister} onGoogleAuth={handleGoogleAuth} onFacebookAuth={handleFacebookAuth} dark={dark} setDark={setDark} initialForm={resumeReg?.form} initialStep={resumeReg?.step} onBack={() => setEntry("welcome")} lang={lang} setLang={setLang} /></>;
   if (retaking) return <RewardsContext.Provider value={rewardsApi}><Diagnostic reg={profile} dark={dark} onComplete={handleLaterDiagnosticComplete} lang={lang} /></RewardsContext.Provider>;
   if (justRegistered) return <SetupFlow p={p} dark={dark} lang={lang} onDone={() => setJustRegistered(false)} />;
   // Once a day, before the dashboard. It brings its own theme wrapper and the flame's gradient, like the toast above.
