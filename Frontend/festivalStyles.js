@@ -2,12 +2,12 @@
    LANDING_CSS. Motion only runs once the scene has every layer (.is-live) and never for people who asked for less motion
    (FestivalScene then draws just the poster), and there is a reduced-motion twin at the bottom anyway. */
 /* Styles for the Water Festival hero (FestivalHero.jsx) and its layout in Welcome. Rendered inside Welcome only, next to
-   LANDING_CSS. The picture is a looping video whose edges fade into the page's white background; FestivalScene draws only its poster (a still frame) for
+   LANDING_CSS. The picture is a looping video with the sky cut away, so it sits straight on the page's white background; FestivalScene draws only its poster (a still frame) for
    people who asked for less motion, so there is a reduced-motion twin at the bottom as well. */
 export const FESTIVAL_CSS = `
-/* ── The scene: a white box with the video's own shape (960 x 700); the poster sits under the video ── */
+/* ── The scene: a white box with the video's own shape (960 x 614); the poster sits under the video ── */
 .eai-fh-stage{ position:relative; width:100%; background:#FFFFFF; }
-.eai-fh-scene{ position:relative; width:100%; aspect-ratio:960 / 700; overflow:hidden; background:#FFFFFF; }
+.eai-fh-scene{ position:relative; width:100%; aspect-ratio:960 / 614; overflow:hidden; background:#FFFFFF; }
 .eai-fh-poster, .eai-fh-video{ position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; background:#FFFFFF; }
 .eai-fh-video{ pointer-events:none; }
 
