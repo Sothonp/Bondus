@@ -123,6 +123,9 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     // The credential is the ID token Google's own button hands back client-side -- the backend
     // verifies it, so this needs no password either way.
     loginWithGoogle: (credential) => send("POST", "/auth/google", { credential }, { auth: false }).then(remember),
+    // The access token Facebook's own login pop-up hands back -- the backend checks it with Facebook (and that it was issued to
+    // this app), so this needs no password either.
+    loginWithFacebook: (accessToken) => send("POST", "/auth/facebook", { accessToken }, { auth: false }).then(remember),
     logout: async () => { try { await send("POST", "/logout"); } catch { /* the session is going away either way */ } setToken(null); },
     getMe: () => get("/me"),
     patchMe: (fields) => send("PATCH", "/me", fields),
