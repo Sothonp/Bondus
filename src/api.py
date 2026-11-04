@@ -25,6 +25,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from prompts import (
     ALL_MODELS_BUSY,
@@ -48,7 +49,7 @@ from src.auth import (
     TokenVerifier,
     bearer_token,
 )
-from src.quota import REASON_UPLOADS, LaravelQuota, Quota, QuotaUnavailable, question_id
+from src.quota import NEW, REASON_UPLOADS, REPEAT, CountedRequests, LaravelQuota, Quota, QuotaUnavailable, question_id
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -1603,8 +1604,16 @@ def _source_chunks(context: Sequence[RetrievedChunk], settings: Settings) -> lis
 MAX_IMAGE_SEARCH_CHARS = 1500
 
 
-def _decode_images(state: RAGState, payload: QueryRequest) -> list[PageImage]:
-    """Validate attachments before any work starts (errors are plain HTTP errors)."""
+def _decode_images(state: RAGState, payload: QueryRequest, request: Request | None = None) -> list[PageImage]:
+    """Validate attachments before any work starts (errors are plain HTTP errors).
+
+    The daily-limit guard validates the photos before it counts them (so a request that is refused is never charged) and
+    leaves the result on the request, which is reused here rather than decoding the photos twice.
+    """
+    if request is not None:
+        already = getattr(request.state, "decoded_images", None)
+        if already is not None:
+            return already
     if not payload.images:
         return []
     settings = state.settings
@@ -2095,6 +2104,7 @@ def create_app(
     # test hands in its own verifier), and only when sign-in is on: it needs the student's own token to count against.
     counter: Quota | None = quota
     free_budget = DailyBudget(settings.free_ai_per_address_daily)
+    counted = CountedRequests()
     if counter is None and token_verifier is None and settings.resolved_quota_url:
         counter = LaravelQuota(settings.resolved_quota_url)
 
@@ -2139,14 +2149,34 @@ def create_app(
         if token is None:  # require_signed_in already refused this
             return
         counted_id = question_id(request_id)
+        # One question is counted once here, however many rounds its answer takes: the first round is reported to the API and
+        # the rest (same student, same id, no new photos) are recognised without asking again.
+        seen = counted.check(token, counted_id, uploads, question)
+        if seen == REPEAT:
+            return
+        if seen != NEW:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "This question has been continued too many times. Please ask it again as a new question.",
+            )
         try:
             verdict = await counter.consume(token, counted_id, uploads=uploads, question=question)
         except QuotaUnavailable:
+            if uploads:
+                # Photos and documents are a paid allowance, so when the API cannot say what is left they are not let through
+                # (a Free student has none). A plain question still goes ahead: our own outage is not a reason to shut a
+                # student out of studying.
+                logger.warning("Could not count photos against the plan", exc_info=True)
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "Could not check your photo allowance just now. Please try again in a moment.",
+                ) from None
             # Only the API's own "no" stops a question: if it cannot be asked (or does not have this feature yet), a student
             # is not shut out of studying because of it.
             logger.warning("Could not count a question against the plan", exc_info=True)
             return
         if verdict.allowed:
+            counted.remember(token, counted_id, uploads, question)
             # Free accounts are cheap to make, so the questions they ask are also counted per network address.
             if question and verdict.plan == "free" and not free_budget.take(client_ip(request), counted_id):
                 raise HTTPException(
@@ -2176,8 +2206,18 @@ def create_app(
             return
         if not isinstance(body, dict):
             return
-        images = body.get("images")
-        uploads = len(images) if isinstance(images, list) else 0
+        uploads = 0
+        if body.get("images"):
+            # Photos are checked before anything is counted: a request that is going to be refused (bad data, too many, too
+            # big, no OCR engine) costs the student nothing, and what is counted is the photos that really are images, not
+            # however many the body claims.
+            try:
+                payload = QueryRequest.model_validate(body)
+            except ValidationError:
+                return  # the route answers 422
+            images = _decode_images(get_state(request), payload)
+            request.state.decoded_images = images
+            uploads = len(images)
         await count_request(request, body.get("request_id"), uploads=uploads)
 
     signed_in = [Depends(require_signed_in)]
@@ -2231,7 +2271,7 @@ def create_app(
     async def query(payload: QueryRequest, request: Request) -> QueryResponse:
         state = get_state(request)
         started = time.perf_counter()
-        readings = await _read_images(state, _decode_images(state, payload))
+        readings = await _read_images(state, _decode_images(state, payload, request))
         language, context = await _retrieve_context(state, payload, readings)
         guide = _question_guide(payload, context)
         slot = _cache_slot(state, payload, readings, language, context, guide)
@@ -2296,7 +2336,7 @@ def create_app(
         state = get_state(request)
         started = time.perf_counter()
         # Invalid attachments are still ordinary HTTP errors.
-        images = _decode_images(state, payload)
+        images = _decode_images(state, payload, request)
         generator = state.generator
 
         async def events() -> AsyncIterator[str]:

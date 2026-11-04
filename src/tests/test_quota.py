@@ -8,6 +8,8 @@ routes are the real code.
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import json
 import re
 
@@ -15,8 +17,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from PIL import Image
+
 from src.api import create_app
 from src.auth import LaravelTokenVerifier
+from src.ingestion.image_ocr import HybridImageOCR
 from src.config import Settings
 from src.quota import LaravelQuota, QuotaUnavailable, QuotaVerdict, question_id
 from src.tests.test_api import ScriptedGenerator
@@ -70,6 +75,18 @@ class FakeLaravel:
         return httpx.Response(404, json={"code": "not_found"})
 
 
+class _Engine:
+    engine = model = "stub"
+
+    def transcribe_page(self, payload):
+        return "x = 1", False
+
+
+def StubOCR() -> HybridImageOCR:
+    """A photo reader that needs no model: only what reaches it (and whether it is reached) matters here."""
+    return HybridImageOCR(khmer=None, vision=[_Engine()])
+
+
 def quota_down(request: httpx.Request) -> httpx.Response:
     if str(request.url) == ME_URL:
         return httpx.Response(200, json=me(1))
@@ -85,7 +102,8 @@ def make_client(handler, store_path, *, quota_url: str = CONSUME_URL, **settings
         auth_verify_url=ME_URL, answer_cache_ttl_seconds=0, **settings_extra,
     )
     generator = ScriptedGenerator(["ok"])
-    return TestClient(create_app(settings, generator=generator, token_verifier=verifier, quota=quota)), generator
+    app = create_app(settings, generator=generator, token_verifier=verifier, quota=quota, image_ocr=StubOCR())
+    return TestClient(app), generator
 
 
 # --- who may ask ------------------------------------------------------------------------------------------
@@ -128,7 +146,16 @@ def test_a_request_with_no_token_is_refused_without_counting_anything(store_path
 
 # --- photos and documents ---------------------------------------------------------------------------------
 
-PHOTO = {"data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA", "mime_type": "image/png"}
+def real_photo(size=(8, 8)) -> dict:
+    """A small PNG that really decodes: the server now checks the photos before it counts them."""
+    buffer = io.BytesIO()
+    Image.new("RGB", size, "white").save(buffer, format="PNG")
+    return {"data": "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode(), "mime_type": "image/png"}
+
+
+PHOTO = real_photo()
+# Looks like a photo to the body (valid base64, long enough) but is not an image.
+NOT_A_PHOTO = {"data": "data:image/png;base64," + base64.b64encode(b"this is plain text, not a picture").decode(), "mime_type": "image/png"}
 PHOTO_ROUTES = [
     ("/api/query", {"prompt": "what is this", "images": [PHOTO, PHOTO], "request_id": ID}),
     ("/api/query/stream", {"prompt": "what is this", "images": [PHOTO, PHOTO], "request_id": ID}),
@@ -311,14 +338,14 @@ def test_a_question_the_plan_refused_is_not_counted_against_the_address(store_pa
 # --- the id -----------------------------------------------------------------------------------------------
 
 
-def test_the_rounds_of_one_long_answer_report_the_same_id(store_path):
-    # Breaks if: a long answer (several requests) is counted as several questions.
+def test_the_rounds_of_one_long_answer_are_reported_once(store_path):
+    # Breaks if: a long answer (several requests) is counted as several questions, or reported to the API once per round.
     laravel = FakeLaravel()
     client, _ = make_client(laravel, store_path)
     with client:
         for _round in range(3):
             client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
-    assert [c["requestId"] for c in laravel.counted] == [ID, ID, ID]
+    assert [c["requestId"] for c in laravel.counted] == [ID]  # one question, one report, however many rounds
 
 
 @pytest.mark.parametrize("body", [{"prompt": "hi"}, {"prompt": "hi", "request_id": "short"}, {"prompt": "hi", "request_id": "has spaces in it"}])
@@ -405,3 +432,116 @@ def test_with_no_sign_in_address_there_is_no_limit():
     # Local development and the existing tests leave AUTH_VERIFY_URL empty: nothing to count against.
     assert settings().resolved_quota_url == ""
     assert settings(auth_verify_url="https://api.example.test/something/else").resolved_quota_url == ""
+
+
+# --- the server checks the input before it counts anything -------------------------------------------------
+
+
+@pytest.mark.parametrize("route", ["/api/query", "/api/query/stream"])
+def test_a_photo_that_is_not_an_image_is_refused_and_not_counted(route, store_path):
+    # Breaks if: a request that is going to be refused still burns a question and an upload, or "photos" that are not images
+    # are counted (and sent to the model) as if they were.
+    laravel = FakeLaravel()
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post(
+            route, json={"prompt": "what is this", "images": [PHOTO, NOT_A_PHOTO], "request_id": ID}, headers=bearer("good")
+        )
+    assert response.status_code == 422
+    assert laravel.counted == []
+    assert generator.seen == []
+
+
+@pytest.mark.parametrize("route", ["/api/query", "/api/query/stream"])
+def test_too_many_photos_are_refused_and_not_counted(route, store_path):
+    # Breaks if: the per-question photo limit is only checked after the photos were counted against the day's uploads.
+    laravel = FakeLaravel()
+    client, generator = make_client(laravel, store_path, image_max_count=2)
+    with client:
+        response = client.post(
+            route, json={"prompt": "what is this", "images": [PHOTO, PHOTO, PHOTO], "request_id": ID}, headers=bearer("good")
+        )
+    assert response.status_code == 422
+    assert laravel.counted == []
+    assert generator.seen == []
+
+
+def test_a_photo_over_the_size_limit_is_refused_and_not_counted(store_path):
+    # Breaks if: the size limit is only applied after the photo was counted.
+    laravel = FakeLaravel()
+    client, generator = make_client(laravel, store_path, image_max_mb=0.00001)
+    with client:
+        response = client.post("/api/query", json={"prompt": "what is this", "images": [PHOTO], "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 413
+    assert laravel.counted == []
+    assert generator.seen == []
+
+
+def test_the_photos_counted_are_the_ones_that_were_checked(store_path):
+    # Breaks if: the number reported to the plan comes from the body's own claim instead of the photos that decoded.
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        response = client.post(
+            "/api/query", json={"prompt": "what is this", "images": [PHOTO, PHOTO, PHOTO], "request_id": ID}, headers=bearer("good")
+        )
+    assert response.status_code not in (402, 422, 503)
+    assert laravel.bodies[0]["uploads"] == 3
+
+
+@pytest.mark.parametrize("count_status", [404, 500, 401, 422])
+def test_when_the_api_cannot_count_photos_they_are_not_let_through(count_status, store_path):
+    # Breaks if: a broken or unreachable quota API lets photos past the plan (Free has none) while questions go ahead.
+    laravel = FakeLaravel(count_status=count_status)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post("/api/query", json={"prompt": "what is this", "images": [PHOTO], "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 503
+    assert generator.seen == []
+
+
+def test_when_the_api_is_unreachable_photos_are_not_let_through(store_path):
+    client, generator = make_client(quota_down, store_path)
+    with client:
+        response = client.post("/api/query/stream", json={"prompt": "what is this", "images": [PHOTO], "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 503
+    assert generator.seen == []
+
+
+def test_a_later_round_with_more_photos_is_reported_again(store_path):
+    # Breaks if: a question is first sent with no photos and the photos are added in a later round under the same id, which
+    # would get them past the plan because the id was already known.
+    laravel = FakeLaravel()
+    client, _ = make_client(laravel, store_path)
+    with client:
+        client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+        client.post("/api/query/stream", json={"prompt": "hi", "images": [PHOTO, PHOTO], "request_id": ID}, headers=bearer("good"))
+        client.post("/api/query/stream", json={"prompt": "hi", "images": [PHOTO], "request_id": ID}, headers=bearer("good"))
+    assert [b.get("uploads", 0) for b in laravel.bodies] == [0, 2]
+
+
+def test_one_id_cannot_be_reused_for_endless_answers(store_path):
+    # Breaks if: recognising the rounds of one answer lets a single id carry any number of questions.
+    laravel = FakeLaravel()
+    client, generator = make_client(laravel, store_path)
+    with client:
+        statuses = [
+            client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good")).status_code
+            for _ in range(12)
+        ]
+    assert statuses[:9] == [200] * 9
+    assert statuses[9:] == [429] * 3
+    assert len(generator.seen) == 9
+    assert len(laravel.counted) == 1
+
+
+def test_a_refused_question_is_not_remembered_as_counted(store_path):
+    # Breaks if: a refusal is remembered, so asking again with the same id slips through without asking the API.
+    laravel = FakeLaravel(refuse=True)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        first = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+        second = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+    assert first.status_code == second.status_code == 402
+    assert len(laravel.counted) == 2
+    assert generator.seen == []
