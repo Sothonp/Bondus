@@ -37,6 +37,15 @@ class QuotaUnavailable(Exception):
     """The API could not say whether the student may ask. The caller lets the question through (see api.py)."""
 
 
+class QuotaBusy(Exception):
+    """The API is refusing this student's requests because they sent too many (429). That is not "unsure": a student cannot
+    make the API throttle them and so get a free pass, so the caller refuses the question and says how long to wait."""
+
+    def __init__(self, retry_after: int = 30) -> None:
+        super().__init__(f"quota API throttled the student for {retry_after}s")
+        self.retry_after = retry_after
+
+
 # Which of the plan's two allowances a "no" is about.
 REASON_QUESTIONS = "questions"
 REASON_UPLOADS = "uploads"
@@ -58,7 +67,7 @@ class Quota(Protocol):
         """Count one question (and the photos that come with it) for the student who owns `token`.
 
         `question=False` counts a document added on its own: it uses an upload, not a question. Raises QuotaUnavailable when
-        unsure."""
+        unsure, and QuotaBusy when the API is throttling this student."""
 
 
 def question_id(supplied: object) -> str:
@@ -167,4 +176,10 @@ class LaravelQuota:
             return QuotaVerdict(False, body.get("plan"), body.get("limit"), REASON_QUESTIONS)
         if response.status_code == 402 and body.get("code") == "upload_limit_reached":
             return QuotaVerdict(False, body.get("plan"), body.get("limit"), REASON_UPLOADS, body.get("uploadLimit"))
+        if response.status_code == 429:
+            try:
+                wait = int(response.headers.get("retry-after", "30"))
+            except (TypeError, ValueError):
+                wait = 30
+            raise QuotaBusy(min(max(wait, 1), 300))
         raise QuotaUnavailable(f"quota API answered {response.status_code}")

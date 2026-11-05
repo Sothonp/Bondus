@@ -49,7 +49,8 @@ from src.auth import (
     TokenVerifier,
     bearer_token,
 )
-from src.quota import NEW, REASON_UPLOADS, REPEAT, CountedRequests, LaravelQuota, Quota, QuotaUnavailable, question_id
+from src.guard import RequestGuard
+from src.quota import NEW, REASON_UPLOADS, REPEAT, CountedRequests, LaravelQuota, Quota, QuotaBusy, QuotaUnavailable, question_id
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -2077,6 +2078,14 @@ def create_app(
         lifespan=lifespan,
     )
     origins = settings.cors_origin_list
+    # Added before CORS so that CORS wraps it: a refusal from the guard still carries the CORS headers, and the browser shows the
+    # message instead of a blocked request.
+    app.add_middleware(
+        RequestGuard,
+        max_body_bytes=max(settings.max_upload_bytes, int(settings.image_max_count * settings.image_max_mb * 1024 * 1024 * 4 / 3))
+        + 2 * 1024 * 1024,
+        max_in_flight=settings.max_in_flight_per_caller,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -2105,6 +2114,8 @@ def create_app(
     counter: Quota | None = quota
     free_budget = DailyBudget(settings.free_ai_per_address_daily)
     counted = CountedRequests()
+    # Plain questions let through while the quota API cannot answer, per student per day (see count_request).
+    outage_budget = DailyBudget(settings.outage_ai_per_student_daily)
     if counter is None and token_verifier is None and settings.resolved_quota_url:
         counter = LaravelQuota(settings.resolved_quota_url)
 
@@ -2161,6 +2172,14 @@ def create_app(
             )
         try:
             verdict = await counter.consume(token, counted_id, uploads=uploads, question=question)
+        except QuotaBusy as busy:
+            # The API is throttling this student for sending too many requests. Letting the question through would make
+            # flooding the API a way to ask without being counted, so they wait instead.
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "You are asking very fast. Please wait a moment and try again.",
+                headers={"Retry-After": str(busy.retry_after)},
+            ) from None
         except QuotaUnavailable:
             if uploads:
                 # Photos and documents are a paid allowance, so when the API cannot say what is left they are not let through
@@ -2174,6 +2193,13 @@ def create_app(
             # Only the API's own "no" stops a question: if it cannot be asked (or does not have this feature yet), a student
             # is not shut out of studying because of it.
             logger.warning("Could not count a question against the plan", exc_info=True)
+            student = hashlib.sha256(token.encode()).hexdigest()[:24]
+            if question and not outage_budget.take(student, counted_id):
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "We could not check your daily questions just now, and you have reached the temporary limit. Please try again later.",
+                    headers={"Retry-After": "300"},
+                )
             return
         if verdict.allowed:
             counted.remember(token, counted_id, uploads, question)

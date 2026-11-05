@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # account has its own daily questions, so without this a script that makes accounts spends the shared AI quota. Generous on
     # purpose: a school or a mobile network shares one address. Paid plans are not counted. 0 turns it off.
     free_ai_per_address_daily: int = Field(300, ge=0, le=100_000)
+    # When the quota API cannot say what a student has left (it is down, or answers something unexpected), a plain question
+    # still goes ahead, but only up to this many a day per student, so an outage is not an unlimited free pass. 0 = no cap.
+    outage_ai_per_student_daily: int = Field(30, ge=0, le=100_000)
+    # AI requests one caller may have running at once (an answer can stream for minutes, so the per-minute limit alone allows
+    # dozens open together). The caller is the student's token, else the network address. 0 turns it off. See src/guard.py.
+    max_in_flight_per_caller: int = Field(3, ge=0, le=50)
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
