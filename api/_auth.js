@@ -120,8 +120,10 @@ export async function refuseUnlessSignedInNetlify(req) {
    plan is used up. The website's own check only keeps honest students informed: anyone can call a function directly, so this is
    where the limit is real (the AI coach server does the same in src/quota.py).
 
-   Only the API's own "no" (402 ai_limit_reached) stops a question. If it cannot be reached, or does not have the feature yet,
-   the question goes ahead. */
+   The API's own "no" (402 ai_limit_reached) stops a question, and so does its 429: a student cannot make the API throttle
+   them and so get a free pass. If it cannot be reached, or does not have the feature yet, a question still goes ahead, but only
+   up to a few a day per student on this instance (a brake, not an exact quota: instances do not share memory), so an outage is
+   not an unlimited pass. */
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /* The id to count a request under: the one the website made, or a fresh one, so leaving it out is not a way round the limit. */
@@ -129,23 +131,43 @@ export function questionId(supplied) {
   return typeof supplied === "string" && REQUEST_ID.test(supplied) ? supplied : randomUUID().replaceAll("-", "");
 }
 
-export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 5_000 } = {}) {
-  /* Resolves to null when the question may go ahead, else { status, body } to answer with. */
+export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 5_000, now = Date.now, outagePerDay = 30 } = {}) {
+  const outage = new Map(); // `${Phnom Penh day}:${sha256(token)}` -> the question ids let through while the API could not answer
+
+  /* True when this question may go ahead although the API could not count it. */
+  function allowDuringOutage(token, id) {
+    if (outagePerDay <= 0) return true;
+    const day = new Date(now() + 7 * 3_600_000).toISOString().slice(0, 10);
+    for (const key of outage.keys()) if (!key.startsWith(day)) outage.delete(key);
+    const key = `${day}:${createHash("sha256").update(token).digest("hex")}`;
+    const ids = outage.get(key) ?? new Set();
+    if (!ids.has(id) && ids.size >= outagePerDay) return false;
+    ids.add(id);
+    outage.set(key, ids);
+    return true;
+  }
+  const outageRefusal = () => ({
+    status: 503,
+    body: { error: "We could not check your daily questions just now, and you have reached the temporary limit. Please try again later.", code: "quota_unavailable" },
+  });
+
+  /* Resolves to null when the question may go ahead, else { status, body, headers? } to answer with. */
   return async function count(authorization, suppliedId) {
     if (!url) return null;
     const token = bearerToken(authorization);
     if (!token) return null; // sign-in has already been checked; with no token there is no one to count
+    const id = questionId(suppliedId);
     let res;
     try {
       res = await fetchImpl(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: questionId(suppliedId) }),
+        body: JSON.stringify({ requestId: id }),
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       console.error("Could not count an AI question: the quota API is unreachable");
-      return null;
+      return allowDuringOutage(token, id) ? null : outageRefusal();
     }
     const body = await res.json().catch(() => null);
     if (res.status === 402 && body?.code === "ai_limit_reached") {
@@ -154,7 +176,14 @@ export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetc
         body: { error: "You have used all of today's AI questions on your plan.", code: "ai_limit_reached", plan: body.plan ?? null, limit: body.limit ?? null },
       };
     }
-    if (res.status !== 200) console.error(`Could not count an AI question: the quota API answered ${res.status}`);
+    if (res.status === 429) {
+      const wait = Math.min(300, Math.max(1, Number.parseInt(res.headers?.get?.("retry-after") ?? "", 10) || 30));
+      return { status: 429, body: { error: "You are asking very fast. Please wait a moment and try again." }, headers: { "Retry-After": String(wait) } };
+    }
+    if (res.status !== 200) {
+      console.error(`Could not count an AI question: the quota API answered ${res.status}`);
+      return allowDuringOutage(token, id) ? null : outageRefusal();
+    }
     return null;
   };
 }
@@ -181,6 +210,7 @@ function quota() {
 export async function refuseIfOutOfQuestions(req, res) {
   const refused = await quota()(req.headers?.authorization, req.body?.request_id);
   if (!refused) return false;
+  for (const [name, value] of Object.entries(refused.headers ?? {})) res.setHeader(name, value);
   res.status(refused.status).json(refused.body);
   return true;
 }
@@ -188,5 +218,5 @@ export async function refuseIfOutOfQuestions(req, res) {
 /* Netlify: the Response to send when the student is out of questions, else null. `payload` is the parsed request body. */
 export async function refuseIfOutOfQuestionsNetlify(req, payload) {
   const refused = await quota()(req.headers.get("authorization"), payload?.request_id);
-  return refused ? Response.json(refused.body, { status: refused.status }) : null;
+  return refused ? Response.json(refused.body, { status: refused.status, headers: refused.headers ?? {} }) : null;
 }

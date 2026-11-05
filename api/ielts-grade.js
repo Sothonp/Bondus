@@ -1,5 +1,6 @@
 import { generateText, hasAIProviderConfigured } from "./_ai.js";
 import { refuseUnlessSignedIn } from "./_auth.js";
+import { tooLongField } from "./_limits.js";
 
 const SYSTEM_INSTRUCTION = `You are an experienced, certified IELTS examiner grading a single response from a short placement diagnostic (not a full mock exam).
 
@@ -31,6 +32,12 @@ export default async function handler(req, res) {
   }
   if (!response || typeof response !== "string" || !response.trim()) {
     res.status(400).json({ error: "Missing 'response' in request body." });
+    return;
+  }
+
+  const tooLong = tooLongField({ prompt, response }, { prompt: 2000, response: 10000 });
+  if (tooLong) {
+    res.status(tooLong.status).json(tooLong.body);
     return;
   }
 

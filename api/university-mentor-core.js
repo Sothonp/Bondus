@@ -4,6 +4,7 @@
    separate prompts because a university student's context (major/year/goals, not a BAC II
    track/mastery %) is a different shape entirely. */
 import { generateText, hasAIProviderConfigured } from "./_ai.js";
+import { cleanChat } from "./_limits.js";
 
 const SYSTEM_INSTRUCTION = `You are Bondus's AI University Mentor for a student who is already at university, or preparing to enter one — never a Grade 11/12 BAC II student (a separate Study Help / Major Guidance mode handles those). Your job is to help with university coursework, career preparation, scholarships, and study-abroad questions, grounded in the student's own major, year and goals.
 
@@ -33,16 +34,15 @@ function buildStudentContext(context = {}) {
 }
 
 /* Resolves to { status, body } for either host to send as JSON. */
-export async function universityMentor({ message, history = [], context = {} } = {}) {
+export async function universityMentor(input = {}) {
   if (!hasAIProviderConfigured()) {
     return { status: 500, body: { error: "Server is missing GEMINI_API_KEY or GROQ_API_KEY. Add at least one in your host's environment variables." } };
   }
-  if (!message || typeof message !== "string" || !message.trim()) {
-    return { status: 400, body: { error: "Missing 'message' in request body." } };
-  }
+  const { error, message, history, context } = cleanChat(input ?? {});
+  if (error) return error;
 
   const contents = [
-    ...history.slice(-12).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] })),
+    ...history.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
     { role: "user", parts: [{ text: message }] },
   ];
 
