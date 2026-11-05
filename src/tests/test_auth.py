@@ -76,7 +76,9 @@ def laravel_odd_body(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={})
 
 
-def make_client(handler, store_path, *, per_minute: int = 20, cache_seconds: int = 60, clock=None):
+def make_client(
+    handler, store_path, *, per_minute: int = 20, cache_seconds: int = 60, clock=None, **settings_extra
+):
     extra = {"clock": clock} if clock else {}
     verifier = LaravelTokenVerifier(
         ME_URL,
@@ -91,6 +93,7 @@ def make_client(handler, store_path, *, per_minute: int = 20, cache_seconds: int
         vector_store_path=store_path,
         auth_verify_url=ME_URL,
         user_rate_limit_per_minute=per_minute,
+        **settings_extra,
         # These tests count the requests that reach a model; a cached answer would not.
         answer_cache_ttl_seconds=0,
     )
@@ -303,3 +306,88 @@ def test_the_browser_may_send_its_authorization_header(store_path):
         )
     assert response.status_code == 200
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+# --- made-up tokens ---------------------------------------------------------------------------------------
+
+
+def test_a_flood_of_made_up_tokens_stops_reaching_laravel(store_path):
+    # Breaks if: every new fake token costs Laravel a question -- Laravel limits by token, so a fresh token each time
+    # walks past its limit, and from there it only sees this server's address.
+    laravel = FakeLaravel({"good": 1})
+    client, generator = make_client(laravel, store_path, rejected_tokens_per_address_per_minute=3)
+    with client:
+        answers = [client.post("/api/query", json=ASK, headers=bearer(f"fake-{n}")) for n in range(8)]
+    assert [a.status_code for a in answers] == [401, 401, 401] + [429] * 5
+    assert len(laravel.calls) == 3
+    assert int(answers[-1].headers["retry-after"]) >= 1
+    assert generator.seen == []
+
+
+def test_a_student_already_checked_still_gets_in_while_fake_tokens_are_being_turned_away(store_path):
+    # Breaks if: the flood limit locks out real students sharing the attacker's address (a school, a phone network).
+    laravel = FakeLaravel({"good": 1})
+    client, generator = make_client(laravel, store_path, rejected_tokens_per_address_per_minute=3)
+    with client:
+        assert client.post("/api/query", json=ASK, headers=bearer("good")).status_code == 200
+        blocked = [client.post("/api/query", json=ASK, headers=bearer(f"fake-{n}")).status_code for n in range(5)]
+        again = client.post("/api/query", json=ASK, headers=bearer("good"))
+    assert blocked == [401, 401, 401, 429, 429]
+    assert again.status_code == 200
+    assert len(laravel.calls) == 4  # "good" once, then three fakes
+
+
+def test_tokens_laravel_accepts_do_not_use_up_the_allowance(store_path):
+    # Breaks if: a class of students behind one address runs out of lookups just by signing in.
+    laravel = FakeLaravel({f"good-{n}": n for n in range(1, 7)})
+    client, _ = make_client(laravel, store_path, rejected_tokens_per_address_per_minute=2)
+    with client:
+        statuses = [client.post("/api/query", json=ASK, headers=bearer(f"good-{n}")).status_code for n in range(1, 7)]
+    assert statuses == [200] * 6
+
+
+def test_when_laravel_is_down_the_allowance_is_not_used_up(store_path):
+    # Breaks if: an outage on our side makes honest students look like attackers once it is over.
+    client, _ = make_client(laravel_down, store_path, rejected_tokens_per_address_per_minute=2)
+    with client:
+        statuses = [client.post("/api/query", json=ASK, headers=bearer(f"good-{n}")).status_code for n in range(5)]
+    assert statuses == [503] * 5
+
+
+def test_one_address_flooding_does_not_stop_another(store_path):
+    # Breaks if: the per-address limit is really one limit for everybody.
+    laravel = FakeLaravel({"good": 1})
+    client, _ = make_client(laravel, store_path, rejected_tokens_per_address_per_minute=2)
+    with client:
+        for n in range(4):
+            client.post("/api/query", json=ASK, headers={**bearer(f"fake-{n}"), "X-Forwarded-For": "203.0.113.9"})
+        other = client.post("/api/query", json=ASK, headers={**bearer("good"), "X-Forwarded-For": "198.51.100.4"})
+    assert other.status_code == 200
+
+
+def test_a_flood_from_many_addresses_is_capped_in_all(store_path):
+    # Breaks if: spreading fake tokens over many addresses gets round the per-address limit.
+    laravel = FakeLaravel({})
+    client, _ = make_client(
+        laravel, store_path, rejected_tokens_per_address_per_minute=5, rejected_tokens_overall_per_minute=4
+    )
+    with client:
+        statuses = [
+            client.post("/api/query", json=ASK, headers={**bearer(f"fake-{n}"), "X-Forwarded-For": f"203.0.113.{n}"}).status_code
+            for n in range(7)
+        ]
+    assert statuses == [401] * 4 + [429] * 3
+    assert len(laravel.calls) == 4
+
+
+def test_a_token_that_is_not_shaped_like_laravels_is_refused_without_asking_laravel(store_path):
+    # Breaks if: the real wiring (AUTH_VERIFY_URL alone) still sends every junk string on to Laravel.
+    settings = Settings(
+        _env_file=None, embedding_backend="hashing", llm_provider="none",
+        vector_store_path=store_path, auth_verify_url=ME_URL,
+    )
+    generator = ScriptedGenerator(["ok"])
+    with TestClient(create_app(settings, generator=generator)) as client:  # no stand-in for Laravel: a call would fail
+        response = client.post("/api/query", json=ASK, headers=bearer("bogus"))
+    assert response.status_code == 401
+    assert generator.seen == []
