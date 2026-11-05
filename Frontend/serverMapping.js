@@ -87,13 +87,6 @@ export function answerEvent(ex, result, meta = {}, attemptId = newAttemptId()) {
   });
 }
 
-/* A manual Pending / In progress / Completed tick. "pending" tells the server nothing, so it returns null. The server
-   records the tick (it counts as studying today) but pays nothing for it: only a graded answer earns XP. */
-export function statusEvent(ex, status, attemptId = newAttemptId()) {
-  if (status !== "completed" && status !== "in_progress") return null;
-  return compact({ type: "answer", key: String(ex.id), attemptId, subject: ex.subject, topic: ex.topic, status });
-}
-
 /* A claimed treasure box. `itemId` is what dropped (or null for the consolation XP). */
 export function boxEvent({ setKey, total, retried, itemId }, attemptId = newAttemptId()) {
   return compact({ type: "box_claim", key: String(setKey), attemptId, total: Number(total) || 0, retried: Number(retried) || 0, itemId });

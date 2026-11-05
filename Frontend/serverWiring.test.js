@@ -127,9 +127,10 @@ test("the back arrow on the 'Can't reach the server' screen leaves for the login
   assert.match(app, /onBack=\{leaveSavedLogin\}/);
 });
 
-test("every answer and status handler sends a study event, and the XP guess is paired with it", () => {
+test("every answer handler sends a study event, and the XP guess is paired with it; opening an exercise sends nothing", () => {
   assert.equal((app.match(/sendStudy\(answerEvent\(ex, result, meta\), result === "correct" && !already \? XP_PER_CORRECT : 0\)/g) || []).length, 2);
-  assert.equal((app.match(/sendStudy\(statusEvent\(ex, status\)\);/g) || []).length, 2);
+  assert.doesNotMatch(app, /statusEvent/);
+  assert.doesNotMatch(app, /StatusControl/, "no manual status buttons");
   assert.match(app, /sendStudy\(boxEvent\(\{ setKey, total, retried, itemId: out\.result\.itemId \}\), out\.result\.xp\)/);
   assert.match(app, /sendStudy\(diagnosticEvent\(\)\)/);
 });

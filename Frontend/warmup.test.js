@@ -35,11 +35,11 @@ test("only multiple-choice questions whose answer is among the options can be as
   assert.equal(isWarmupQuestion({ id: "x", options: ["a", "b"], answer: "z" }), false);         // answer not offered
 });
 
-test("a question counts as practised when it was answered or ticked Completed, not when merely opened or ticked In progress", () => {
+test("a question counts as practised when it was answered, not when merely opened or ticked", () => {
   assert.equal(wasPractised({ status: "completed", result: "correct" }), true);
   assert.equal(wasPractised({ status: "in_progress", result: "incorrect" }), true);   // answered wrong: the best thing to review
-  assert.equal(wasPractised({ status: "completed", result: null }), true);            // ticked Completed
-  assert.equal(wasPractised({ status: "in_progress", result: null }), false);         // ticked In progress, never answered
+  assert.equal(wasPractised({ status: "completed", result: null }), false);           // an old manual Completed tick: no answer behind it
+  assert.equal(wasPractised({ status: "in_progress", result: null }), false);         // opened, never answered
   assert.equal(wasPractised({ status: "pending" }), false);
   assert.equal(wasPractised(undefined), false);
 });
