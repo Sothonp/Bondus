@@ -13,7 +13,7 @@ import { StreakFlame } from "./StreakFlame.jsx";
 import { WARMUP_SECONDS, warmupCurrentIndex, warmupFinished, warmupScore } from "./warmup.js";
 import { warmupText, fillWarmup } from "./warmupStrings.js";
 
-const SLOT_KEY = { weak: "slotWeak", review: "slotReview", missed: "slotMissed", again: "slotAgain" };
+const SLOT_KEY = { weak: "slotWeak", review: "slotReview", missed: "slotMissed", again: "slotAgain", starter: "slotStarter" };
 
 /* Props
    state        the saved progress (warmup.js): { day, slots, answers, before }

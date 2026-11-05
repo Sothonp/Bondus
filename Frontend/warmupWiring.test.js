@@ -31,12 +31,15 @@ test("the day is the server's Phnom Penh day, the device's own date only without
   assert.match(shell, /sendStudy\(warmupEvent\(warmupToday, warmupProgress\.slots\.length\)\)/);
 });
 
-test("the warm-up only reviews: its questions come from the student's own practice record, never from the whole bank", () => {
+test("the warm-up reviews the student's own practice record; only with nothing practised does it use easy starter questions", () => {
   const slots = shell.slice(shell.indexOf("const warmupSlots = useMemo("), shell.indexOf("const warmupBefore = useMemo("));
-  assert.match(slots, /practisedPool\(practiceNow\.current, \(id\) => getExercise\(id, "en"\), new Set\(fieldSubjects\(profile\.field, profile\.foreignLanguage\)\)\)/);
-  assert.doesNotMatch(slots, /getExercises\(/, "never build the pool from every question in the bank");
-  assert.doesNotMatch(shell, /warmupPool/, "no pool built from the bank");
+  assert.match(slots, /practisedPool\(practiceNow\.current, \(id\) => getExercise\(id, "en"\), new Set\(subjects\)\)/);
+  assert.match(slots, /const subjects = fieldSubjects\(profile\.field, profile\.foreignLanguage\);/);
   assert.match(slots, /practice: practiceNow\.current/);
+  // The whole bank is only ever read after the review came back empty, and only from the student's own subjects.
+  assert.match(slots, /if \(review\.length\) return review;[\s\S]*starterQuestions\(\{ pool: subjects\.flatMap\(\(subject\) => getExercises\(subject, "en"\)\)\.filter\(isWarmupQuestion\), seed \}\)/);
+  assert.equal(slots.split("getExercises(").length - 1, 1, "the bank is read in one place only: the starter fallback");
+  assert.doesNotMatch(shell, /warmupPool/, "no pool built from the bank");
 });
 
 test("the questions do not change while the student answers", () => {
