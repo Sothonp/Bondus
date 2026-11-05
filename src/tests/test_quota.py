@@ -23,7 +23,7 @@ from src.api import create_app
 from src.auth import LaravelTokenVerifier
 from src.ingestion.image_ocr import HybridImageOCR
 from src.config import Settings
-from src.quota import LaravelQuota, QuotaUnavailable, QuotaVerdict, question_id
+from src.quota import LaravelQuota, QuotaBusy, QuotaUnavailable, QuotaVerdict, question_id
 from src.tests.test_api import ScriptedGenerator
 from src.tests.test_auth import ME_URL, bearer, me
 
@@ -544,4 +544,56 @@ def test_a_refused_question_is_not_remembered_as_counted(store_path):
         second = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
     assert first.status_code == second.status_code == 402
     assert len(laravel.counted) == 2
+    assert generator.seen == []
+
+
+# --- a student cannot get a free pass by making the quota API fail or throttle them ------------------------------------
+
+
+@pytest.mark.parametrize("route", ["/api/query", "/api/query/stream"])
+def test_a_student_the_quota_api_is_throttling_is_refused_not_let_through(route, store_path):
+    # Breaks if: flooding the Laravel API until it answers 429 lets the student ask without being counted.
+    laravel = FakeLaravel(count_status=429)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post(route, json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+    assert generator.seen == []
+
+
+def test_the_client_reports_a_throttled_student_as_busy_not_as_unsure():
+    def api(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"message": "Too Many Attempts."}, headers={"Retry-After": "42"})
+
+    async def run() -> None:
+        quota = LaravelQuota(CONSUME_URL, client=httpx.AsyncClient(transport=httpx.MockTransport(api)))
+        with pytest.raises(QuotaBusy) as busy:
+            await quota.consume("good", ID)
+        assert busy.value.retry_after == 42
+
+    asyncio.run(run())
+
+
+def test_while_the_quota_api_is_down_a_student_gets_only_a_temporary_daily_allowance(store_path):
+    # Breaks if: an outage (or an API made to fail) is an unlimited free pass for plain questions.
+    client, generator = make_client(FakeLaravel(count_status=500), store_path, outage_ai_per_student_daily=2)
+    with client:
+        statuses = [
+            client.post("/api/query/stream", json={"prompt": "hi", "request_id": f"question-0000000{n}"}, headers=bearer("good")).status_code
+            for n in range(4)
+        ]
+        # The rounds of a question already allowed are not counted again.
+        again = client.post("/api/query/stream", json={"prompt": "hi", "request_id": "question-00000000"}, headers=bearer("good"))
+    assert statuses == [200, 200, 503, 503]
+    assert again.status_code == 200
+    assert len(generator.seen) == 3
+
+
+def test_a_request_body_over_the_limit_is_refused_before_it_is_read(store_path):
+    # Breaks if: a signed-in student can make the server read a body of any size.
+    client, generator = make_client(FakeLaravel(), store_path, max_upload_mb=1, image_max_mb=1.0, image_max_count=1)
+    with client:
+        response = client.post("/api/query", content=b"x" * (5 * 1024 * 1024), headers={**bearer("good"), "content-type": "application/json"})
+    assert response.status_code == 413
     assert generator.seen == []
