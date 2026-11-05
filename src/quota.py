@@ -9,13 +9,22 @@ Photos and documents are counted the same way: a question reports how many photo
 library is reported on its own (not as a question). The plan decides how many a day (Free none), and the API refuses with
 `upload_limit_reached` when they do not fit.
 
+This server checks the input before it counts anything: photos are decoded and measured first (type, size, how many), a
+request that is refused is never charged, and what is counted is the photos that really were images. A question is reported to
+the API once however many rounds its answer takes (CountedRequests), and when the API cannot say what is left, photos are not
+let through (a plain question still is).
+
 The website's own check only keeps honest students informed. Anyone can call this server directly, so this is where the
 limit is real.
 """
 from __future__ import annotations
 
+import hashlib
 import re
+import time
 import uuid
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -61,6 +70,66 @@ def question_id(supplied: object) -> str:
     if isinstance(supplied, str) and REQUEST_ID.fullmatch(supplied):
         return supplied
     return uuid.uuid4().hex
+
+
+# What `CountedRequests.check` says about a request.
+NEW = "new"  # not counted by this server yet: report it to the API
+REPEAT = "repeat"  # the same question again (the next round of a long answer): already counted, do not report it again
+TOO_MANY = "too_many"  # one id has been used for more rounds than any answer takes: it is being reused
+
+
+class CountedRequests:
+    """The requests this server has already counted, so one question is reported to the API once however many rounds it takes.
+
+    A long answer is several requests carrying the same id (the website sends the same `request_id` for every round). Each
+    used to be reported to the API again just to be told "already counted". Now the first round is reported and the rest are
+    recognised here, so a question is one report from this server. The API still holds the real count; this only saves it the
+    repeat calls.
+
+    It is not a way round the limit: a repeat is only recognised for the same student (by token), the same id, the same kind of
+    request and no more photos than were counted, and an id used for more rounds than an answer can take is refused. A new
+    process, or an entry that has expired, simply reports the request again, and the API counts one id once.
+    """
+
+    def __init__(
+        self, *, ttl: float = 3600.0, max_entries: int = 5000, max_rounds: int = 9, clock: Callable[[], float] = time.monotonic
+    ) -> None:
+        self._ttl = ttl
+        self._max_entries = max_entries
+        self._max_rounds = max_rounds
+        self._clock = clock
+        # key -> [uploads counted, rounds seen, expires at]; oldest first
+        self._seen: OrderedDict[str, list[float]] = OrderedDict()
+
+    @staticmethod
+    def _key(token: str, request_id: str, question: bool) -> str:
+        # The token is hashed so it is not kept in memory longer than the request.
+        return f"{hashlib.sha256(token.encode()).hexdigest()[:24]}:{request_id}:{int(question)}"
+
+    def check(self, token: str, request_id: str, uploads: int, question: bool) -> str:
+        key = self._key(token, request_id, question)
+        entry = self._seen.get(key)
+        now = self._clock()
+        if entry is None or entry[2] <= now or uploads > entry[0]:
+            return NEW
+        if entry[1] >= self._max_rounds:
+            return TOO_MANY
+        entry[1] += 1
+        return REPEAT
+
+    def remember(self, token: str, request_id: str, uploads: int, question: bool) -> None:
+        """Record that the API allowed this request, so its next round is a repeat."""
+        key = self._key(token, request_id, question)
+        entry = self._seen.pop(key, None)
+        now = self._clock()
+        if entry is not None and entry[2] > now:
+            entry[0] = max(entry[0], uploads)
+            entry[2] = now + self._ttl
+        else:
+            entry = [uploads, 1, now + self._ttl]
+        self._seen[key] = entry
+        while len(self._seen) > self._max_entries:
+            self._seen.popitem(last=False)
 
 
 class LaravelQuota:
