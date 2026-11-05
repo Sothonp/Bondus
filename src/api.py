@@ -45,6 +45,8 @@ from src.answer_format import sanitize_answer
 from src.auth import (
     AuthUnavailable,
     LaravelTokenVerifier,
+    LookupBudget,
+    LookupRefused,
     SlidingWindowLimiter,
     TokenVerifier,
     bearer_token,
@@ -2107,8 +2109,15 @@ def create_app(
 
     verifier: TokenVerifier | None = token_verifier
     if verifier is None and settings.auth_verify_url:
-        verifier = LaravelTokenVerifier(settings.auth_verify_url, cache_seconds=settings.auth_cache_seconds)
+        verifier = LaravelTokenVerifier(
+            settings.auth_verify_url,
+            cache_seconds=settings.auth_cache_seconds,
+            require_token_shape=settings.check_token_shape,
+        )
     limiter = SlidingWindowLimiter(settings.user_rate_limit_per_minute)
+    lookups = LookupBudget(
+        settings.rejected_tokens_per_address_per_minute, settings.rejected_tokens_overall_per_minute
+    )
     # The daily limit on AI questions (src/quota.py). Built from the settings only where the real sign-in check is (not when a
     # test hands in its own verifier), and only when sign-in is on: it needs the student's own token to count against.
     counter: Quota | None = quota
@@ -2128,14 +2137,30 @@ def create_app(
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED, "Sign in to use the AI coach.", headers={"WWW-Authenticate": "Bearer"}
             )
+        # A token we have not seen costs a question to Laravel, and made-up tokens are all new: cap how many a caller may try.
+        reservation = None
+        remembers = getattr(verifier, "remembers", None)
+        if remembers is not None and not remembers(token):
+            try:
+                reservation = lookups.reserve(client_ip(request))
+            except LookupRefused as refused:
+                raise HTTPException(
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    "Too many sign-in attempts. Please wait a moment and try again.",
+                    headers={"Retry-After": str(refused.retry_after)},
+                ) from None
         try:
             student = await verifier.verify(token)
         except AuthUnavailable:
+            if reservation is not None:
+                reservation.give_back()  # Laravel's trouble, not the caller's
             logger.warning("Could not check a sign-in", exc_info=True)
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "Could not check your sign-in just now. Please try again in a moment.",
             ) from None
+        if student is not None and reservation is not None:
+            reservation.give_back()
         if student is None:
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,

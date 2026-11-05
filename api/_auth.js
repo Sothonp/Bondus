@@ -7,7 +7,11 @@
 
    Checks are remembered for a short while, so a chat costs Laravel at most one request a minute per instance, and a
    student who logs out is locked out when the remembered check expires. Serverless instances do not share memory, so
-   the per-student limit below is per instance: a brake on a runaway page, not an exact quota. */
+   the per-student limit below is per instance: a brake on a runaway page, not an exact quota.
+
+   Laravel limits requests by token, and every made-up token is a new one, so a flood of fake tokens would reach Laravel
+   one question each. This turns away tokens not shaped like Laravel Sanctum's without asking, and lets one caller have
+   only a few tokens we have not seen turned down a minute (the AI coach server does the same in src/auth.py). */
 import { createHash, randomUUID } from "node:crypto";
 
 export function bearerToken(header) {
@@ -18,6 +22,58 @@ export function bearerToken(header) {
 
 class Unavailable extends Error {}
 
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32Hex(text) {
+  let c = 0xffffffff;
+  for (const byte of Buffer.from(text, "utf8")) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return ((c ^ 0xffffffff) >>> 0).toString(16).padStart(8, "0");
+}
+
+/* Whether `token` is shaped like one Laravel Sanctum hands out: `<id>|<40 random characters><8 hex characters>`, the
+   last 8 being the crc32 of the 40 before them (tokens from before Sanctum added that are 40 characters, with none).
+   Anyone can make such a string, so this proves nothing; it only turns most junk away without a question to Laravel. */
+export function looksLikeToken(token) {
+  if (typeof token !== "string") return false;
+  const bar = token.indexOf("|");
+  if (bar < 1 || !/^[0-9]{1,18}$/.test(token.slice(0, bar))) return false;
+  const body = token.slice(bar + 1);
+  if (!/^[A-Za-z0-9_-]{40,200}$/.test(body)) return false;
+  if (body.length === 40) return true;
+  if (body.length < 48) return false;
+  return crc32Hex(body.slice(-48, -8)) === body.slice(-8);
+}
+
+/* How many tokens we have not seen may be sent to Laravel: `perAddress` a minute from one caller, `overall` from all.
+   A lookup is counted when it starts (so a burst of parallel requests is counted) and given back when the token proves
+   good, so only tokens that fail use up an allowance. Returns { give_back } or { wait } (seconds) when refused. */
+function createLookupBudget({ perAddress, overall, now, windowMs = 60_000 }) {
+  const byAddress = new Map();
+  let all = [];
+  const fresh = (list, at) => list.filter((t) => at - t < windowMs);
+  const release = (address, at) => {
+    const mine = byAddress.get(address);
+    if (mine && mine.includes(at)) mine.splice(mine.indexOf(at), 1);
+    if (all.includes(at)) all.splice(all.indexOf(at), 1);
+  };
+  return function reserve(address) {
+    const at = now();
+    all = fresh(all, at);
+    const mine = fresh(byAddress.get(address) ?? [], at);
+    byAddress.set(address, mine);
+    for (const [held, limit] of [[mine, perAddress], [all, overall]]) {
+      if (held.length >= limit) return { wait: Math.max(1, Math.ceil((windowMs - (at - held[0])) / 1000)) };
+    }
+    mine.push(at);
+    all.push(at);
+    if (byAddress.size >= 4096) for (const [a, list] of byAddress) if (!fresh(list, at).length) byAddress.delete(a);
+    return { giveBack: () => release(address, at) };
+  };
+}
+
 export function createSignedInCheck({
   url,
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -26,7 +82,11 @@ export function createSignedInCheck({
   rejectedMs = 15_000,
   perMinute = 20,
   timeoutMs = 5_000,
+  requireTokenShape = false,
+  rejectedPerAddress = 20,
+  rejectedOverall = 300,
 } = {}) {
+  const reserveLookup = createLookupBudget({ perAddress: rejectedPerAddress, overall: rejectedOverall, now });
   const seen = new Map(); // sha256(token) -> { student, until }; the token itself is never kept
   const served = new Map(); // student -> timestamps of served requests in the last minute
 
@@ -50,11 +110,18 @@ export function createSignedInCheck({
     return String(student);
   }
 
+  const keyOf = (token) => createHash("sha256").update(token).digest("hex");
+  const remembers = (token) => {
+    const remembered = seen.get(keyOf(token));
+    return Boolean(remembered) && now() < remembered.until;
+  };
+
   async function studentFor(token) {
-    const key = createHash("sha256").update(token).digest("hex");
+    const key = keyOf(token);
     const at = now();
     const remembered = seen.get(key);
     if (remembered && at < remembered.until) return remembered.student;
+    if (requireTokenShape && !looksLikeToken(token)) return null; // never handed out by Laravel: no need to ask, or to remember
 
     const student = await ask(token);
     if (seen.size >= 1024) for (const [k, v] of seen) if (at >= v.until) seen.delete(k);
@@ -62,20 +129,31 @@ export function createSignedInCheck({
     return student;
   }
 
-  /* Resolves to null when the request may go ahead, else { status, body, headers } to answer with. */
-  return async function check(authorization) {
+  /* Resolves to null when the request may go ahead, else { status, body, headers } to answer with. `address` is the caller's. */
+  return async function check(authorization, address = "unknown") {
     if (!url) return null;
     const token = bearerToken(authorization);
     if (!token) return refuse(401, "Sign in to use the AI features.", { "WWW-Authenticate": "Bearer" });
+
+    // A token we have not seen costs a question to Laravel, and made-up tokens are all new: cap how many a caller may try.
+    let lookup = null;
+    if (!remembers(token)) {
+      lookup = reserveLookup(address);
+      if (lookup.wait) {
+        return refuse(429, "Too many sign-in attempts. Please wait a moment and try again.", { "Retry-After": String(lookup.wait) });
+      }
+    }
 
     let student;
     try {
       student = await studentFor(token);
     } catch (err) {
+      lookup?.giveBack?.(); // Laravel's trouble, not the caller's
       if (!(err instanceof Unavailable)) throw err;
       console.error("Could not check a sign-in:", err.message);
       return refuse(503, "Could not check your sign-in just now. Please try again in a moment.");
     }
+    if (student !== null) lookup?.giveBack?.();
     if (student === null) return refuse(401, "Your sign-in has expired. Please sign in again.", { "WWW-Authenticate": "Bearer" });
 
     const at = now();
@@ -95,13 +173,23 @@ export function createSignedInCheck({
 let current = null;
 function check() {
   const url = (process.env.AUTH_VERIFY_URL || "").trim();
-  if (!current || current.url !== url) current = { url, check: createSignedInCheck({ url }) };
+  const requireTokenShape = !/^(0|false|off|no)$/i.test((process.env.AUTH_CHECK_TOKEN_SHAPE || "").trim());
+  if (!current || current.url !== url || current.requireTokenShape !== requireTokenShape) {
+    current = { url, requireTokenShape, check: createSignedInCheck({ url, requireTokenShape }) };
+  }
   return current.check;
+}
+
+/* The caller's address as the host reports it. Vercel and Netlify set these themselves, so a caller cannot choose them. */
+function callerAddress(get, socket) {
+  const forwarded = String(get("x-vercel-forwarded-for") || get("x-nf-client-connection-ip") || get("x-real-ip") || "");
+  const hops = (forwarded || String(get("x-forwarded-for") || "")).split(",").map((h) => h.trim()).filter(Boolean);
+  return hops.at(-1) || socket || "unknown";
 }
 
 /* Vercel: true when the request was refused and already answered, so the handler returns. */
 export async function refuseUnlessSignedIn(req, res) {
-  const refused = await check()(req.headers?.authorization);
+  const refused = await check()(req.headers?.authorization, callerAddress((name) => req.headers?.[name], req.socket?.remoteAddress));
   if (!refused) return false;
   for (const [name, value] of Object.entries(refused.headers)) res.setHeader(name, value);
   res.status(refused.status).json(refused.body);
@@ -110,7 +198,7 @@ export async function refuseUnlessSignedIn(req, res) {
 
 /* Netlify: the Response to send when refused, else null. */
 export async function refuseUnlessSignedInNetlify(req) {
-  const refused = await check()(req.headers.get("authorization"));
+  const refused = await check()(req.headers.get("authorization"), callerAddress((name) => req.headers.get(name)));
   return refused ? Response.json(refused.body, { status: refused.status, headers: refused.headers }) : null;
 }
 

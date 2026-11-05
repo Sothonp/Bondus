@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     # AI requests one caller may have running at once (an answer can stream for minutes, so the per-minute limit alone allows
     # dozens open together). The caller is the student's token, else the network address. 0 turns it off. See src/guard.py.
     max_in_flight_per_caller: int = Field(3, ge=0, le=50)
+    # Tokens we have not seen that Laravel turns away, per caller address and in all, per minute. Past that, a token we do
+    # not already know gets a 429 without a question to Laravel. Real students are answered from memory and never count.
+    rejected_tokens_per_address_per_minute: int = Field(20, ge=1, le=10_000)
+    rejected_tokens_overall_per_minute: int = Field(300, ge=1, le=100_000)
+    # Turn away tokens that are not shaped like Laravel Sanctum's (see src/auth.py) without asking Laravel. Turn off only if
+    # the Laravel API sets SANCTUM_TOKEN_PREFIX or stops using Sanctum.
+    check_token_shape: bool = True
 
     # --- Answer generation ---
     llm_provider: LLMProvider = "auto"
