@@ -55,7 +55,7 @@ import LoadingScreen from "./LoadingScreen.jsx";
 import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, newAttemptId, apiErrorKey, waitParts, isCodeAlreadySent,
+  answerEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, newAttemptId, apiErrorKey, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 import { createEventQueue } from "./eventQueue.js";
 import { createStateSaver } from "./stateSaver.js";
@@ -83,6 +83,7 @@ import { UsageStrip, AdminPlans, PLAN_NAMES } from "./PlanUi.jsx";
 import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage, uploadRefusal, uploadsLeft } from "./aiQuota.js";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
+import { exerciseStatus, isExerciseDone, openedRecord } from "./exerciseStatus.js";
 import { practisedPool, pickWarmupQuestions, starterQuestions, isWarmupQuestion, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
@@ -3483,29 +3484,10 @@ const STATUS = {
 };
 const diffColor = (d) => (d === "Hard" ? "var(--ember)" : d === "Medium" ? "var(--gold)" : "var(--jade)");
 
-function StatusControl({ status, onChange, lang = "en" }) {
-  return (
-    <div className="flex gap-1 flex-shrink-0">
-      {Object.entries(STATUS).map(([key, s]) => {
-        const on = (status || "pending") === key;
-        const label = t(lang, `status_${key}`);
-        return (
-          <button key={key} onClick={(e) => { e.stopPropagation(); onChange(key); }}
-            className="eai-btn eai-focus text-xs px-2 py-1 flex items-center gap-1"
-            title={label}
-            style={{ background: on ? s.soft : "transparent", color: on ? s.color : "var(--muted)", border: `1px solid ${on ? s.color : "var(--line)"}` }}>
-            <s.icon size={12} /><span className={`hidden md:inline ${lang === "km" ? "eai-km" : ""}`}>{label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Practice({ p, practice, onAnswer, onSetStatus, lang = "en", chapterProgress, mastery, onSubmitQuiz }) {
+function Practice({ p, practice, onAnswer, onOpen, lang = "en", chapterProgress, mastery, onSubmitQuiz }) {
   const memory = useMemo(() => practiceMemory(safeStorage(), "bac", p.userId), [p.userId]);
   const [subject, setSubject] = useState(() => { const s = memory.get()?.subject; return fieldSubjects(p.field, p.foreignLanguage).includes(s) && !isPracticeLocked(s) ? s : null; });
-  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setSubject(null)} lang={lang} chapterProgress={chapterProgress} mastery={mastery} onSubmitQuiz={onSubmitQuiz} seedKey={String(p.userId ?? p.name ?? "")} />;
+  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onOpen={onOpen} onBack={() => setSubject(null)} lang={lang} chapterProgress={chapterProgress} mastery={mastery} onSubmitQuiz={onSubmitQuiz} seedKey={String(p.userId ?? p.name ?? "")} />;
 
   return (
     <div className="space-y-5 eai-rise">
@@ -3517,7 +3499,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en", chapterProg
         {/* Open subjects first; locked ones follow as greyed-out "Coming soon" cards that can't be opened. */}
         {[...fieldSubjects(p.field, p.foreignLanguage)].sort((a, b) => isPracticeLocked(a) - isPracticeLocked(b)).map((s) => {
           const list = getExercises(s, lang);
-          const doneN = list.filter((ex) => practice[ex.id]?.status === "completed").length;
+          const doneN = list.filter((ex) => isExerciseDone(practice[ex.id])).length;
           const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
           const isWeak = p.weak.some((w) => w.s === s);
           const locked = isPracticeLocked(s);
@@ -3551,7 +3533,7 @@ function Practice({ p, practice, onAnswer, onSetStatus, lang = "en", chapterProg
    question is on screen, whether the student is only reviewing a set that was already completed,
    whether the question on screen is a second try of one missed earlier, which questions were missed
    this session (for the summary) and the "set complete" screen. `progress` is the saved per-exercise
-   record (practice / uniPractice); a question counts as done once its status is "completed". Shared by
+   record (practice / uniPractice); a question counts as done once it has been answered correctly (exerciseStatus.js). Shared by
    PracticeSubject and UniversityPracticeCourse. */
 function useSetSession(list, progress, memory = null) {
   const [idx, setIdx] = useState(() => { const at = memory ? list.findIndex((e) => e.id === memory.get()?.exId) : -1; return at >= 0 ? at : null; }); // question on screen (index into `list`); null = the list view
@@ -3559,7 +3541,7 @@ function useSetSession(list, progress, memory = null) {
   const [isRetry, setIsRetry] = useState(false);
   const [finished, setFinished] = useState(null); // { from } once every question in the set is correct
   const [missed, setMissed] = useState({});
-  const isDone = (ex) => progress[ex.id]?.status === "completed";
+  const isDone = (ex) => isExerciseDone(progress[ex.id]);
   const show = (i) => { memory?.remember(list[i]); setIdx(i); setIsRetry(!isDone(list[i]) && progress[list[i].id]?.result === "incorrect"); };
   const onScreen = idx != null && list[idx] != null;
   const upNext = onScreen ? nextInSet(list, isDone, idx, reviewing) : null;
@@ -3600,7 +3582,7 @@ function ContinueButton({ list, session, doneN, lang }) {
 /* Chapter subjects also offer each chapter's Master Quiz. `chapterProgress(subject)` is what the server (or this session) knows
    about the quizzes, or null while that is not known; `mastery` is the topic-mastery store (for Test out); `onSubmitQuiz` sends
    a finished quiz to be graded (see submitChapterQuiz in App). */
-function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, onBack, lang = "en", chapterProgress, mastery, onSubmitQuiz, seedKey = "" }) {
+function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBack, lang = "en", chapterProgress, mastery, onSubmitQuiz, seedKey = "" }) {
   const fullList = getExercises(subject, lang);
   // Subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get an extra
   // chapter-picker step before the exercise list; every other subject is unaffected.
@@ -3670,7 +3652,7 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
       <ExercisePlayer ex={cur} entry={practice[cur.id]} subject={subject} index={session.pos - 1} total={session.size}
         progress={{ done: session.doneCount, total: session.size }} isRetry={session.isRetry} banner={banner}
         onAnswer={(ex, result, meta) => { onAnswer(ex, result, meta); handleResult(ex, result === "correct"); }}
-        onSetStatus={onSetStatus} onBack={session.exit}
+        onOpen={onOpen} onBack={session.exit}
         onNext={session.canAdvance ? session.advance : null} finishing={session.finishing} lang={lang} glass />
     );
   }
@@ -3721,7 +3703,7 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
     );
   }
 
-  const doneN = list.filter((ex) => practice[ex.id]?.status === "completed").length;
+  const doneN = list.filter((ex) => isExerciseDone(practice[ex.id])).length;
   const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
 
   return (
@@ -3747,12 +3729,13 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
       <div className="space-y-3">
         {list.map((ex, i) => {
           const entry = practice[ex.id];
-          const st = STATUS[entry?.status || "pending"];
+          const status = exerciseStatus(entry);
+          const st = STATUS[status];
           // A section header appears wherever the group changes (only for banks that use stages).
           const isDrill = stageOf(ex) === 0;
           const groupStarts = list.some((e) => e.stage != null) && (i === 0 || stageOf(list[i - 1]) !== stageOf(ex));
           const group = groupStarts ? list.filter((e) => (stageOf(e) === 0) === isDrill) : [];
-          const groupDone = group.filter((e) => practice[e.id]?.status === "completed").length;
+          const groupDone = group.filter((e) => isExerciseDone(practice[e.id])).length;
           return (
             <React.Fragment key={ex.id}>
             {groupStarts && (
@@ -3773,12 +3756,11 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
                   <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
-                  <span className={`text-xs font-semibold flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ color: st.color }}><st.icon size={12} /> {lang === "km" ? t(lang, `status_${entry?.status || "pending"}`) : st.label}</span>
+                  <span className={`text-xs font-semibold flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ color: st.color }}><st.icon size={12} /> {lang === "km" ? t(lang, `status_${status}`) : st.label}</span>
                 </div>
               </div>
-              <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
               <button onClick={() => session.start(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
-                {entry?.status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
+                {status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
               </button>
             </div>
             </React.Fragment>
@@ -3796,9 +3778,10 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onSetStatus, 
    reacts to every answer and says something encouraging (mascotCheers.js): a cheer for a right answer
    (a "you got it this time" one when the question had been missed before), a gentle one for a wrong
    answer. */
-function ExercisePlayer({ ex, entry, subject, index, total, progress, isRetry = false, banner, onAnswer, onSetStatus, onBack, onNext, finishing = false, lang = "en", glass = false }) {
+function ExercisePlayer({ ex, entry, subject, index, total, progress, isRetry = false, banner, onAnswer, onOpen, onBack, onNext, finishing = false, lang = "en", glass = false }) {
   const [choice, setChoice] = useState(null);
   const [phase, setPhase] = useState("answering"); // answering | mistake | result
+  useEffect(() => { onOpen?.(ex); }, [ex.id]); // eslint-disable-line react-hooks/exhaustive-deps -- opening it is what puts it in progress
   const isMcq = Array.isArray(ex.options);
   const submitted = phase !== "answering";
   const correct = submitted && gradeAnswer(ex, choice);
@@ -3860,7 +3843,6 @@ function ExercisePlayer({ ex, entry, subject, index, total, progress, isRetry = 
         <div className="eai-ex-card" ref={cardRef}>
           <div className="flex items-center justify-between gap-2 mb-2.5">
             <span className={`eai-ex-qlabel eai-display ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "questionWord")} {index + 1} {t(lang, "ofWord")} {total}</span>
-            <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
           </div>
           {progress && (
             <div className="h-1.5 rounded-full eai-soft mb-3 overflow-hidden" title={`${progress.done}/${progress.total}`}>
@@ -4015,12 +3997,12 @@ function SetComplete({ name, total, retried, setKey, onNextSet, onBack, lang = "
 }
 
 /* ════════════════════════ University Practice ════════════════════════
-   The university track's quiz UI — reuses ExercisePlayer/StatusControl/STATUS/getUniExercises
+   The university track's quiz UI — reuses ExercisePlayer/STATUS/getUniExercises
    as-is (they're subject-shape-agnostic) rather than re-deriving the exercise-answering screen.
    A course is one set and uses the same flow as PracticeSubject (useSetSession / practiceFlow.js):
    forward through the course, missed questions come round again, and the set is complete once every
    question is right. Same mastery tracking underneath via onAnswer -> handleUniAnswer -> recordAttempt. */
-function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCourseId, onConsumeInitialCourse, lang = "en" }) {
+function UniversityPractice({ p, uniPractice, onAnswer, onOpen, initialCourseId, onConsumeInitialCourse, lang = "en" }) {
   const up = p.universityProfile || {};
   const courses = UNI_COURSES[up.major] || [];
   const memory = useMemo(() => practiceMemory(safeStorage(), "uni", p.userId), [p.userId]);
@@ -4030,7 +4012,7 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
 
   if (course) {
     return <UniversityPracticeCourse course={course} major={up.major} memory={memory} uniPractice={uniPractice}
-      onAnswer={onAnswer} onSetStatus={onSetStatus} onBack={() => setCourseId(null)} lang={lang} />;
+      onAnswer={onAnswer} onOpen={onOpen} onBack={() => setCourseId(null)} lang={lang} />;
   }
 
   if (!courses.length) {
@@ -4054,7 +4036,7 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
         {courses.map((c) => {
           const key = `${up.major}::${c.title}`;
           const list = getUniExercises(key);
-          const doneN = list.filter((ex) => uniPractice[ex.id]?.status === "completed").length;
+          const doneN = list.filter((ex) => isExerciseDone(uniPractice[ex.id])).length;
           const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
           const isWeak = (p.universityInsights?.weak || []).some((w) => w.s === key);
           return (
@@ -4079,7 +4061,7 @@ function UniversityPractice({ p, uniPractice, onAnswer, onSetStatus, initialCour
   );
 }
 
-function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer, onSetStatus, onBack, lang = "en" }) {
+function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer, onOpen, onBack, lang = "en" }) {
   const key = `${major}::${course.title}`;
   const list = getUniExercises(key);
   const session = useSetSession(list, uniPractice, memory);
@@ -4091,7 +4073,7 @@ function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer
       <ExercisePlayer ex={cur} entry={uniPractice[cur.id]} subject={courseTitle} index={session.pos - 1} total={session.size}
         progress={{ done: session.doneCount, total: session.size }} isRetry={session.isRetry} banner={null}
         onAnswer={(ex, result, meta) => { onAnswer(ex, result, meta); if (result !== "correct") session.noteMiss(ex); }}
-        onSetStatus={onSetStatus} onBack={session.exit}
+        onOpen={onOpen} onBack={session.exit}
         onNext={session.canAdvance ? session.advance : null} finishing={session.finishing} lang={lang} />
     );
   }
@@ -4102,7 +4084,7 @@ function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer
       onNextSet={null} onBack={session.leaveFinished} lang={lang} />;
   }
 
-  const doneN = list.filter((ex) => uniPractice[ex.id]?.status === "completed").length;
+  const doneN = list.filter((ex) => isExerciseDone(uniPractice[ex.id])).length;
   const pct = list.length ? Math.round((doneN / list.length) * 100) : 0;
 
   return (
@@ -4124,7 +4106,8 @@ function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer
       <div className="space-y-3">
         {list.map((ex, i) => {
           const entry = uniPractice[ex.id];
-          const st = STATUS[entry?.status || "pending"];
+          const status = exerciseStatus(entry);
+          const st = STATUS[status];
           return (
             <div key={ex.id} className="eai-card flex flex-wrap items-center gap-3">
               <div className="grid place-items-center rounded-xl flex-shrink-0 eai-display font-bold" style={{ width: 36, height: 36, background: "var(--bg-soft)", color: "var(--muted)" }}>{setIndexes(list, i).indexOf(i) + 1}</div>
@@ -4133,12 +4116,11 @@ function UniversityPracticeCourse({ course, major, memory, uniPractice, onAnswer
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-xs px-2 py-0.5 rounded-full eai-soft eai-muted ${lang === "km" ? "eai-km" : ""}`}>{topicLabel(ex.topic, lang)}</span>
                   <span className="text-xs font-semibold" style={{ color: diffColor(ex.difficulty) }}>{ex.difficulty}</span>
-                  <span className={`text-xs font-semibold flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ color: st.color }}><st.icon size={12} /> {lang === "km" ? t(lang, `status_${entry?.status || "pending"}`) : st.label}</span>
+                  <span className={`text-xs font-semibold flex items-center gap-1 ${lang === "km" ? "eai-km" : ""}`} style={{ color: st.color }}><st.icon size={12} /> {lang === "km" ? t(lang, `status_${status}`) : st.label}</span>
                 </div>
               </div>
-              <StatusControl status={entry?.status} onChange={(s) => onSetStatus(ex, s)} lang={lang} />
               <button onClick={() => session.start(i)} className={`eai-btn eai-focus text-sm py-2 px-4 text-white flex items-center gap-1.5 flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ background: "var(--primary)" }}>
-                {entry?.status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
+                {status === "completed" ? t(lang, "reviewWord") : t(lang, "solveWord")} <ChevronRight size={15} />
               </button>
             </div>
           );
@@ -5037,7 +5019,7 @@ function Progress({ p, practice = {}, bonusXp = 0, lang = "en", weeklyStudyHours
   const entries = Object.values(practice);
   const isToday = (ts) => new Date(ts).toDateString() === new Date().toDateString();
   const attempted = entries.filter((e) => e.result);
-  const completed = entries.filter((e) => e.status === "completed");
+  const completed = entries.filter((e) => isExerciseDone(e));
   const todayCompleted = completed.filter((e) => isToday(e.at));
   const todayAttempts = attempted.filter((e) => isToday(e.at));
   const correctCount = attempted.filter((e) => e.result === "correct").length;
@@ -8545,15 +8527,10 @@ export default function App() {
     }));
     sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
-  // Manually set a status (Pending / In progress / Completed). It is recorded, but earns no XP: that comes from answering.
-  const handleSetStatus = (ex, status) => {
-    const already = practice[ex.id]?.xpAwarded;
-    const xpAwarded = already;
-    setPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    // A tick is the student's word, not proof of work: it earns no XP (the server pays only for graded answers).
-    sendStudy(statusEvent(ex, status));
-  };
-  // University-track twins of handleAnswer/handleSetStatus above — same logic, writing to the
+  // Opening an exercise marks it in progress. That is the only thing besides answering that changes its status, and it is not
+  // sent to the server: it earns nothing and does not count as studying. Finishing is decided by the answer alone.
+  const handleOpen = (ex) => setPractice((prev) => { const rec = openedRecord(prev[ex.id], ex); return rec ? { ...prev, [ex.id]: rec } : prev; });
+  // University-track twins of handleAnswer/handleOpen above — same logic, writing to the
   // uniPractice/uniTopicMastery stores instead so BAC-II and university progress never collide.
   const handleUniAnswer = (ex, result, meta = {}) => {
     const already = uniPractice[ex.id]?.xpAwarded;
@@ -8565,13 +8542,7 @@ export default function App() {
     }));
     sendStudy(answerEvent(ex, result, meta), result === "correct" && !already ? XP_PER_CORRECT : 0);
   };
-  const handleUniSetStatus = (ex, status) => {
-    const already = uniPractice[ex.id]?.xpAwarded;
-    const xpAwarded = already;
-    setUniPractice((prev) => ({ ...prev, [ex.id]: { ...(prev[ex.id] || { result: null }), status, at: Date.now(), subject: ex.subject, topic: ex.topic, xpAwarded } }));
-    // A tick is the student's word, not proof of work: it earns no XP (the server pays only for graded answers).
-    sendStudy(statusEvent(ex, status));
-  };
+  const handleUniOpen = (ex) => setUniPractice((prev) => { const rec = openedRecord(prev[ex.id], ex); return rec ? { ...prev, [ex.id]: rec } : prev; });
 
   // Warm-up answers are ordinary practice answers (mastery, XP, the study ledger), so they go through handleAnswer; the
   // progress is saved after each one so a closed app resumes at the same question. A timed-out question is a miss with no answer.
@@ -8693,7 +8664,7 @@ export default function App() {
     dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} paperGate={paperGate} onGoPractice={() => go("practice")} />,
     schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
-    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onSetStatus={handleSetStatus} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
+    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onOpen={handleOpen} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
     adminPlans: isAdmin(profile) ? <AdminPlans api={api} lang={lang} tr={tr} trf={(key, vars) => tf(lang, key, vars)} /> : null,
@@ -8711,7 +8682,7 @@ export default function App() {
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
     explore: <UniversityExplore p={p} go={go} lang={lang} />,
     scholarships: <Scholarships p={p} lang={lang} />,
-    uniPractice: <UniversityPractice p={p} uniPractice={uniPractice} onAnswer={handleUniAnswer} onSetStatus={handleUniSetStatus}
+    uniPractice: <UniversityPractice p={p} uniPractice={uniPractice} onAnswer={handleUniAnswer} onOpen={handleUniOpen}
       initialCourseId={uniPracticeTarget} onConsumeInitialCourse={() => setUniPracticeTarget(null)} lang={lang} />,
     super: <SuperBondus p={p} lang={lang} />,
     wardrobe: <Wardrobe lang={lang} renderOwl={(outfit) => <OwlMascot outfit={outfit} />} />,

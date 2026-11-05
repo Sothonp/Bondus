@@ -39,8 +39,9 @@ export function seededRandom(seed) {
 export const isWarmupQuestion = (ex) => Array.isArray(ex?.options) && ex.options.length >= 2 && ex.options.includes(ex.answer);
 
 /* Has the student done this question in Practice? `rec` is its entry in the practice store ({ status, result, at }):
-   answered (right or wrong), or ticked Completed. Opened or ticked In progress without an answer does not count. */
-export const wasPractised = (rec) => Boolean(rec) && (rec.result === "correct" || rec.result === "incorrect" || rec.status === "completed");
+   answered, right or wrong. Opened without an answer does not count, and neither does a "Completed" tick saved before
+   statuses became the system's to decide (exerciseStatus.js). */
+export const wasPractised = (rec) => Boolean(rec) && (rec.result === "correct" || rec.result === "incorrect");
 
 /* The questions a warm-up may ask: every practised question that can be asked as multiple choice, in the given subjects
    (null = any). `practice` is the practice store; `lookup(id)` returns the question for an id, or null. */

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  newAttemptId, answerEvent, statusEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
+  newAttemptId, answerEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 
 const form = {
@@ -111,11 +111,9 @@ test("time spent is clamped to what the server accepts", () => {
   assert.equal(answerEvent({ id: 1 }, "correct", { timeSec: -4 }, "a").timeSec, 0);
 });
 
-test("manual status ticks: completed and in_progress are sent, pending is not", () => {
-  const ex = { id: "e1", subject: "Chemistry", topic: "Acids" };
-  assert.equal(statusEvent(ex, "completed", "a").status, "completed");
-  assert.equal(statusEvent(ex, "in_progress", "a").status, "in_progress");
-  assert.equal(statusEvent(ex, "pending", "a"), null);
+test("there is no way to send a manual status: finishing an exercise is decided by the graded answer alone", async () => {
+  const mapping = await import("./serverMapping.js");
+  assert.equal(mapping.statusEvent, undefined);
 });
 
 test("a treasure box event carries the set, counts and the dropped item", () => {
