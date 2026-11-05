@@ -3,6 +3,7 @@
    helper (Gemini first, Groq fallback) rather than calling Gemini directly, so this stays in
    sync with how ielts-grade.js talks to the same providers. */
 import { generateText, hasAIProviderConfigured } from "./_ai.js";
+import { cleanChat } from "./_limits.js";
 import { UNI_MAJORS } from "../src/data/universities.js";
 
 // Condensed "university: major, major, ..." catalog built once at cold start — keeps every
@@ -44,16 +45,15 @@ function buildStudentContext(context = {}) {
 }
 
 /* Resolves to { status, body } for either host to send as JSON. */
-export async function majorGuidance({ message, history = [], context = {} } = {}) {
+export async function majorGuidance(input = {}) {
   if (!hasAIProviderConfigured()) {
     return { status: 500, body: { error: "Server is missing GEMINI_API_KEY or GROQ_API_KEY. Add at least one in your host's environment variables." } };
   }
-  if (!message || typeof message !== "string" || !message.trim()) {
-    return { status: 400, body: { error: "Missing 'message' in request body." } };
-  }
+  const { error, message, history, context } = cleanChat(input ?? {});
+  if (error) return error;
 
   const contents = [
-    ...history.slice(-12).map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] })),
+    ...history.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
     { role: "user", parts: [{ text: message }] },
   ];
 

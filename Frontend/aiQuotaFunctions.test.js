@@ -79,15 +79,43 @@ test("without an id each request is counted, so the limit still bites", async ()
   assert.equal((await g("Bearer t")).status, 402);
 });
 
-test("only the API's own 'no' stops a question: an unreachable or confused API lets it through", async () => {
+test("an unreachable or confused API does not take the mentor down: a question goes ahead, within a temporary daily allowance", async () => {
   // Breaks if: an outage of the Laravel API takes the mentor down for every student.
   console.error = () => {};
   try {
     assert.equal(await guard(laravel({ down: true }))("Bearer t", "question-abc123"), null);
-    for (const status of [401, 404, 429, 500, 503]) {
+    for (const status of [401, 404, 500, 503]) {
       assert.equal(await guard(laravel({ status }))("Bearer t", "question-abc123"), null, String(status));
     }
   } finally { console.error = originalError; }
+});
+
+test("while the API cannot answer, a student gets only a temporary daily allowance (and a day later it starts again)", async () => {
+  // Breaks if: an outage, or making the API fail, is an unlimited free pass.
+  console.error = () => {};
+  try {
+    let at = Date.UTC(2026, 10, 5, 3, 0, 0);
+    const check = createQuotaCheck({ url: CONSUME, fetchImpl: laravel({ status: 500 }).fetchImpl, now: () => at, outagePerDay: 2 });
+    assert.equal(await check("Bearer t", "question-000001"), null);
+    assert.equal(await check("Bearer t", "question-000002"), null);
+    assert.equal(await check("Bearer t", "question-000001"), null, "the same question again is not a new one");
+    const refused = await check("Bearer t", "question-000003");
+    assert.equal(refused.status, 503);
+    assert.equal(refused.body.code, "quota_unavailable");
+    assert.equal(await check("Bearer other", "question-000003"), null, "each student has their own allowance");
+    at += 24 * 3_600_000;
+    assert.equal(await check("Bearer t", "question-000003"), null, "a new day starts again");
+  } finally { console.error = originalError; }
+});
+
+test("a student the API is throttling is refused, not let through", async () => {
+  // Breaks if: flooding the Laravel API until it answers 429 lets a student ask without being counted.
+  const fetchImpl = async () => new Response("{}", { status: 429, headers: { "Retry-After": "42", "Content-Type": "application/json" } });
+  const refused = await createQuotaCheck({ url: CONSUME, fetchImpl })("Bearer t", "question-abc123");
+  assert.equal(refused.status, 429);
+  assert.equal(refused.headers["Retry-After"], "42");
+  const noHeader = await createQuotaCheck({ url: CONSUME, fetchImpl: async () => new Response("{}", { status: 429 }) })("Bearer t", "question-abc123");
+  assert.equal(noHeader.headers["Retry-After"], "30");
 });
 
 test("a 402 that is not the API's ai_limit_reached does not stop a question", async () => {
