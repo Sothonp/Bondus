@@ -11,7 +11,7 @@
      review   a question from the topic practised longest ago (spaced review)
      missed   a question the student last got wrong; when there is none, any other practised question ("again")
    Inside a topic, a question last answered wrong comes first, then the one done longest ago. A student who has not
-   practised anything yet has nothing to review, so there is no warm-up (the gate never blocks an empty pool).
+   practised anything yet has nothing to review, so she gets easy starter questions instead (starterQuestions below).
    Picking is seeded by user and day, so the same student gets the same questions on every device that day. It is only
    done once: the chosen ids are saved with the progress, because answering changes the scores the picking reads. */
 
@@ -103,6 +103,36 @@ export function pickWarmupQuestions({ pool, mastery = {}, practice = {}, seed, c
     add(q, "again", `${q.subject}\u0000${q.topic}`);
   }
   return chosen.slice(0, count);
+}
+
+/* A student who has not practised anything yet has nothing to review, which used to mean no warm-up at all: the day after
+   the diagnostic nothing asked her to study, so her streak sat at 1 and then ended. Until she has something to review,
+   the warm-up asks up to three easy starter questions from her own subjects instead. `pool` is every multiple-choice
+   question of those subjects. Easy ones come first, from different topics where it can, and the same student gets the
+   same questions all day. Answering them puts them in Practice, so from the next day on the warm-up is a real review. */
+export const STARTER_SLOT = "starter";
+export function starterQuestions({ pool, seed, count = WARMUP_COUNT }) {
+  const usable = pool.filter(isWarmupQuestion);
+  const rank = (q) => (q.difficulty === "Easy" ? 0 : q.difficulty === "Medium" ? 1 : 2);
+  const order = (a, b) => rank(a) - rank(b) || seedFrom(`${seed}|${a.id}`) - seedFrom(`${seed}|${b.id}`);
+  const topics = new Map();
+  for (const q of [...usable].sort(order)) {
+    const key = `${q.subject}\u0000${q.topic}`;
+    if (!topics.has(key)) topics.set(key, []);
+    topics.get(key).push(q);
+  }
+  // The topics with the easiest question first, ties broken by the seed so the day's choice is stable.
+  const byTopic = [...topics.entries()].sort(([ka, a], [kb, b]) => rank(a[0]) - rank(b[0]) || seedFrom(`${seed}|${ka}`) - seedFrom(`${seed}|${kb}`));
+  const chosen = [];
+  for (const [, questions] of byTopic) {
+    if (chosen.length >= count) break;
+    chosen.push(questions[0]);
+  }
+  for (const q of [...usable].sort(order)) {
+    if (chosen.length >= count) break;
+    if (!chosen.includes(q)) chosen.push(q);
+  }
+  return chosen.map((q) => ({ id: q.id, slot: STARTER_SLOT }));
 }
 
 /* ── Progress ─────────────────────────────────────────────────────────────────────────────────────────────────────

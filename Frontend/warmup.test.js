@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  WARMUP_COUNT, seedFrom, seededRandom, isWarmupQuestion, wasPractised, practisedPool, pickWarmupQuestions,
+  WARMUP_COUNT, seedFrom, seededRandom, isWarmupQuestion, wasPractised, practisedPool, pickWarmupQuestions, starterQuestions, STARTER_SLOT,
   newWarmup, recordWarmupAnswer, warmupAnswered, warmupFinished, finishWarmup, warmupScore, warmupCurrentIndex,
   loadWarmup, saveWarmup, needsWarmup,
 } from "./warmup.js";
@@ -202,4 +202,44 @@ test("the flame and streak at the start are kept with the progress", () => {
   saveWarmup(storage, "ana", s);
   assert.deepEqual(loadWarmup(storage, "ana", "2026-11-01").before, { flame: "dormant", streak: 12 });
   assert.equal(newWarmup("d", []).before, null);
+});
+
+// ── Starter questions: a student with nothing practised yet still gets a warm-up ──
+const starterBank = [
+  ...bank,
+  q("Math-5", "Math", "Limits", "Easy"), q("Math-6", "Math", "Derivatives", "Hard"), q("Phys-3", "Physics", "Kinematics", "Easy"),
+  { id: "Math-7", subject: "Math", topic: "Open", difficulty: "Easy", options: [], answer: "" }, // not multiple choice
+];
+
+test("starter questions: up to three, easy ones first, from different topics", () => {
+  const picks = starterQuestions({ pool: starterBank, seed: "ana|2026-11-05" });
+  assert.equal(picks.length, WARMUP_COUNT);
+  assert.ok(picks.every((p) => p.slot === STARTER_SLOT));
+  const found = picks.map((p) => starterBank.find((e) => e.id === p.id));
+  assert.ok(found.every((e) => e.difficulty === "Easy"), "easy questions are used while there are enough");
+  assert.equal(new Set(found.map((e) => `${e.subject}|${e.topic}`)).size, WARMUP_COUNT, "each from its own topic");
+});
+
+test("starter questions are the same all day and differ between days", () => {
+  const a = starterQuestions({ pool: starterBank, seed: "ana|2026-11-05" });
+  assert.deepEqual(a, starterQuestions({ pool: starterBank, seed: "ana|2026-11-05" }));
+  const days = new Set(["2026-11-05", "2026-11-06", "2026-11-07", "2026-11-08"].map((d) => JSON.stringify(starterQuestions({ pool: starterBank, seed: `ana|${d}` }))));
+  assert.ok(days.size > 1);
+});
+
+test("starter questions skip questions that are not multiple choice, and an empty bank gives none", () => {
+  const picks = starterQuestions({ pool: starterBank, seed: "x", count: 20 });
+  assert.ok(!picks.some((p) => p.id === "Math-7"));
+  assert.deepEqual(starterQuestions({ pool: [], seed: "x" }), []);
+});
+
+test("starter questions top up with harder ones when there are not enough easy topics", () => {
+  const small = [q("A-1", "Math", "Limits", "Easy"), q("A-2", "Math", "Limits", "Hard"), q("A-3", "Math", "Limits", "Medium")];
+  const picks = starterQuestions({ pool: small, seed: "x" });
+  assert.deepEqual(picks.map((p) => p.id), ["A-1", "A-3", "A-2"]);
+});
+
+test("with nothing practised there is no review but there are starter questions", () => {
+  assert.equal(pickWarmupQuestions({ pool: practisedPool({}, lookup), seed: "x" }).length, 0);
+  assert.equal(starterQuestions({ pool: bank, seed: "x" }).length, WARMUP_COUNT);
 });

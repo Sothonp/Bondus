@@ -15,7 +15,7 @@ test("every key the screen asks for is defined", () => {
   const used = new Set([...code.matchAll(/\bw\(\s*"(\w+)"/g)].map((m) => m[1]));
   for (const key of ["subtitleCold", "subtitleDormant", "subtitleLit"]) used.add(key); // chosen by a ternary
   const slotKeys = [...code.match(/const SLOT_KEY = (\{[^}]*\})/)[1].matchAll(/"(\w+)"/g)].map((m) => m[1]);
-  assert.equal(slotKeys.length, 4, "weak, review, missed, again");
+  assert.equal(slotKeys.length, 5, "weak, review, missed, again, starter");
   for (const key of slotKeys) used.add(key); // looked up through SLOT_KEY
   for (const key of used) assert.ok(key in WARMUP_STRINGS.en, `"${key}" is used by the screen but not defined`);
 });

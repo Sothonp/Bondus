@@ -83,7 +83,7 @@ import { UsageStrip, AdminPlans, PLAN_NAMES } from "./PlanUi.jsx";
 import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage, uploadRefusal, uploadsLeft } from "./aiQuota.js";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
-import { practisedPool, pickWarmupQuestions, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
+import { practisedPool, pickWarmupQuestions, starterQuestions, isWarmupQuestion, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
 
 /* ════════════════════════ Configuration / domain data ════════════════════════ */
@@ -8238,11 +8238,16 @@ export default function App() {
   // The warm-up is a review: it only asks questions this student has already done in Practice (never new ones), from their
   // own subjects. The questions are chosen once per student and day. Answering changes the scores and practice record the
   // choice reads, so they are deliberately not dependencies (they are read through refs): the same questions stay on
-  // screen, and are kept with the saved progress. A student with nothing practised yet has nothing to review: no warm-up.
+  // screen, and are kept with the saved progress. A student with nothing practised yet gets easy starter questions instead.
   const warmupSlots = useMemo(() => {
     if (!warmupEligible || !warmupUserKey) return [];
-    const pool = practisedPool(practiceNow.current, (id) => getExercise(id, "en"), new Set(fieldSubjects(profile.field, profile.foreignLanguage)));
-    return pickWarmupQuestions({ pool, mastery: masteryNow.current, practice: practiceNow.current, seed: `${warmupUserKey}|${warmupToday}` });
+    const subjects = fieldSubjects(profile.field, profile.foreignLanguage);
+    const pool = practisedPool(practiceNow.current, (id) => getExercise(id, "en"), new Set(subjects));
+    const seed = `${warmupUserKey}|${warmupToday}`;
+    const review = pickWarmupQuestions({ pool, mastery: masteryNow.current, practice: practiceNow.current, seed });
+    if (review.length) return review;
+    // Nothing practised yet (a new student the day after the diagnostic): easy starter questions, so the day still has a warm-up.
+    return starterQuestions({ pool: subjects.flatMap((subject) => getExercises(subject, "en")).filter(isWarmupQuestion), seed });
   }, [warmupEligible, warmupUserKey, warmupToday, profile?.field, profile?.foreignLanguage]);
   // How the flame stood when the day's warm-up began: the first answer already counts as studying, so the live flame
   // moves under the screen, which keeps showing the dormant one until the last answer.
