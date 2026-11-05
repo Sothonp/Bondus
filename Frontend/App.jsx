@@ -83,6 +83,7 @@ import { UsageStrip, AdminPlans, PLAN_NAMES } from "./PlanUi.jsx";
 import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage, uploadRefusal, uploadsLeft } from "./aiQuota.js";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
 import { MASTER_PERCENT } from "./progressionConfig.js";
+import { computeTopicScore, topicScoreOf, percent } from "./masteryScore.js";
 import { exerciseStatus, isExerciseDone, openedRecord } from "./exerciseStatus.js";
 import { practisedPool, pickWarmupQuestions, starterQuestions, isWarmupQuestion, newWarmup, recordWarmupAnswer, finishWarmup, loadWarmup, saveWarmup, needsWarmup } from "./warmup.js";
 import { SCENE_W, SCENE_H, TOTAL_S, HOP_AT, HOP_S, ISO_MATRIX, PHONE_C, STAND, OWL_HEAD, OWL_SVG, STAND_TRANSFORM, planeKeyframesCss, riderKeyframesCss, vanishKeyframesCss } from "./heroFlight.js";
@@ -223,23 +224,7 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 /* ════════════════════════ Mastery engine ════════════════════════
    Turns raw answer history into a 0-100 topic score:
    score = 70% recent accuracy + 20% difficulty performance + 10% consistency (answer streak).
-   Recent attempts (last 5) matter most, so mastery moves as the student actually improves. */
-const DIFF_WEIGHT = { Easy: 50, Medium: 75, Hard: 100 };
-
-function computeTopicScore(history) {
-  if (!history.length) return null;
-  const recent = history.slice(-5);
-  const recentAccuracy = (recent.filter((h) => h.correct).length / recent.length) * 100;
-  const difficultyScore = recent.reduce((sum, h) => sum + (h.correct ? DIFF_WEIGHT[h.difficulty] : DIFF_WEIGHT[h.difficulty] * 0.2), 0) / recent.length;
-  let streak = 0;
-  for (let i = recent.length - 1; i >= 0; i--) {
-    const dir = recent[i].correct ? 1 : -1;
-    if (streak === 0 || Math.sign(streak) === dir) streak += dir; else break;
-  }
-  const consistencyScore = clamp(50 + streak * 17, 0, 100);
-  return Math.round(recentAccuracy * 0.70 + difficultyScore * 0.20 + consistencyScore * 0.10);
-}
-
+   Recent attempts (last 5) matter most, so mastery moves as the student actually improves. The rules live in masteryScore.js. */
 function masteryLevel(score) {
   if (score == null) return "Not assessed";
   if (score < 40) return "Beginner";
@@ -364,7 +349,7 @@ function deriveInsights(p, topicMastery, streak = 0) {
     const topicNames = SUBJECT_TOPICS[s] || [];
     const topics = topicNames.map((t) => {
       const rec = topicMastery[s]?.[t];
-      return { t, score: rec?.score ?? null, attempts: rec?.history?.length ?? 0 };
+      return { t, score: topicScoreOf(rec), attempts: rec?.history?.length ?? 0 };
     });
     const assessedTopics = topics.filter((x) => x.score != null);
     const m = assessedTopics.length
@@ -408,7 +393,7 @@ function deriveInsights(p, topicMastery, streak = 0) {
   const avgTime = allAttemptsEver.length ? allAttemptsEver.reduce((a, h) => a + (h.timeSec || 45), 0) / allAttemptsEver.length : null;
   const speed = avgTime == null ? 60 : clamp(Math.round(100 - ((avgTime - 30) / 60) * 100), 10, 100);
   const consistency = clamp(30 + streak * 10, 0, 100);
-  const readiness = { overall: Math.round((avg ?? 0) * 0.5 + coverage * 0.2 + consistency * 0.15 + speed * 0.15), mastery: avg ?? 0, coverage, consistency, speed };
+  const readiness = { overall: percent((avg ?? 0) * 0.5 + coverage * 0.2 + consistency * 0.15 + speed * 0.15), mastery: percent(avg ?? 0), coverage: percent(coverage), consistency: percent(consistency), speed: percent(speed) };
 
   // Most common mistake type, for a targeted (not generic) recommendation.
   const mistakeCounts = {};
@@ -460,7 +445,7 @@ function deriveUniInsights(p, uniTopicMastery) {
     const topicNames = UNI_MASTERY_TOPICS[key] || [];
     const topics = topicNames.map((t) => {
       const rec = uniTopicMastery[key]?.[t];
-      return { t, score: rec?.score ?? null, attempts: rec?.history?.length ?? 0 };
+      return { t, score: topicScoreOf(rec), attempts: rec?.history?.length ?? 0 };
     });
     const assessedTopics = topics.filter((x) => x.score != null);
     const m = assessedTopics.length ? Math.round(assessedTopics.reduce((a, b) => a + b.score, 0) / assessedTopics.length) : null;
