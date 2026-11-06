@@ -210,7 +210,7 @@ def test_health_lists_each_provider_status(make_client):
 def test_nvidia_joins_the_chain_as_a_backstop():
     settings = Settings(
         _env_file=None, llm_provider="gemini", gemini_api_key="g", nvidia_api_key="nvapi-test",
-        openrouter_api_key="o", gemini_fallback_models="",
+        openrouter_api_key="o", gemini_fallback_models="", llm_disabled_providers="",
     )
     chain = build_generator(settings).chain
     first_nvidia = next(i for i, name in enumerate(chain) if name.startswith("nvidia:"))
@@ -287,3 +287,11 @@ def test_an_incomplete_photo_reading_hands_over_to_the_next_engine():
 
     alone = HybridImageOCR(khmer=None, vision=[Engine("groq", "១. ... ៤.", truncated=True)])
     assert alone._read_vision(object())[0] == "១. ... ៤.", "a partial reading beats none"
+
+
+def test_a_disabled_provider_is_left_out_even_with_a_key():
+    settings = Settings(_env_file=None, llm_provider="gemini", gemini_api_key="g", openrouter_api_key="o")
+    assert settings.llm_disabled_provider_list == ["openrouter"], "OpenRouter is off by default"
+    assert not any(name.startswith("openrouter:") for name in build_generator(settings).chain)
+    switched_on = settings.model_copy(update={"llm_disabled_providers": ""})
+    assert any(name.startswith("openrouter:") for name in build_generator(switched_on).chain)

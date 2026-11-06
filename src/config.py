@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     llm_router: bool = True
     llm_simple_order: str = "gemini:gemini-3.1-flash-lite,groq,cerebras,sea-lion"
     llm_advanced_order: str = "gemini:gemini-3.5-flash,groq,nvidia"
+    # Providers left out of every chain (tutor and exam) even with a key set.
+    # OpenRouter's free models never answered in scripts/eval_models.py (Nov 2026):
+    # rate limits and timeouts every time, so a question only waited on them.
+    llm_disabled_providers: str = "openrouter"
 
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = Field(
@@ -179,7 +183,9 @@ class Settings(BaseSettings):
     # key cannot reach (404) or that are often overloaded: test before adding.
     nvidia_api_key: SecretStr | None = None
     nvidia_model: str = "nvidia/nemotron-3-ultra-550b-a55b"
-    nvidia_fallback_models: str = "deepseek-ai/deepseek-v4.1-flash,google/gemma-4-31b-it"
+    # meta/muse-glimmer-30b first: best NVIDIA model for Khmer in scripts/eval_models.py (Nov 2026);
+    # DeepSeek last: NVIDIA answered it with 504s on every question then.
+    nvidia_fallback_models: str = "meta/muse-glimmer-30b,google/gemma-4-31b-it,deepseek-ai/deepseek-v4.1-flash"
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_temperature: float = Field(0.2, ge=0.0, le=2.0)
 
@@ -482,6 +488,10 @@ class Settings(BaseSettings):
     @property
     def llm_khmer_order_list(self) -> list[str]:
         return [name.strip().lower() for name in self.llm_khmer_order.split(",") if name.strip()]
+
+    @property
+    def llm_disabled_provider_list(self) -> list[str]:
+        return [name.strip().lower() for name in self.llm_disabled_providers.split(",") if name.strip()]
 
     @property
     def llm_simple_order_list(self) -> list[str]:
