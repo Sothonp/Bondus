@@ -13,6 +13,10 @@ export default defineConfig(({ mode }) => {
   return {
     // bondusSplash writes the loading screen into index.html, so the first load is not a blank white page.
     plugins: [react(), tailwindcss(), bondusSplash()],
+    // One KaTeX for the whole app: rehype-katex ships its own older copy, and the mhchem
+    // extension (\ce{...} chemical equations, imported in App.jsx) must register on the copy
+    // that renders. It also keeps the renderer on the version of the stylesheet main.jsx loads.
+    resolve: { dedupe: ['katex'] },
     server: {
       proxy: Object.fromEntries(ragPaths.map((path) => [path, {
         target: ragTarget,

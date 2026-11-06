@@ -109,4 +109,12 @@ def test_the_compact_prompt_keeps_the_rules_and_drops_the_bulk():
     for rule in ("How much to answer", "[Scope — strict]", "Solution style", "Attached images"):
         assert rule in COMPACT_SYSTEM_PROMPT
     assert "GeoGebra)" not in COMPACT_SYSTEM_PROMPT
+    assert "```geogebra" in COMPACT_SYSTEM_PROMPT, "a function study ends with a figure on every model"
     assert len(COMPACT_SYSTEM_PROMPT) < len(SYSTEM_PROMPT) * 0.9
+
+
+def test_function_integral_and_vector_exercises_must_end_with_a_figure():
+    from prompts import SYSTEM_PROMPT
+
+    for needed in ("Always end with a figure", "Integral(f, a, b)", "Vector(A, B)", "asymptote", "exp(x)"):
+        assert needed in SYSTEM_PROMPT
