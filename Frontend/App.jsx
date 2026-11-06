@@ -54,7 +54,8 @@ import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, adv
 import { addTask, toggleTask, removeTask } from "./dailyPlan.js";
 import LoadingScreen from "./LoadingScreen.jsx";
 import { GGB_SCRIPT, GGB_MAX_REPORTED, geogebraCommands, isSpatial, buildFigure } from "./geogebra.js";
-import { CircuitFigure, PhetFigure, MoleculeFigure, CompoundFigure } from "./Visuals.jsx";
+import { CircuitFigure, PhetFigure, MoleculeFigure, CompoundFigure, AnatomyFigure, GasFigure, MagnetFigure } from "./Visuals.jsx";
+import { parseThermo, thermoFigure } from "./visuals.js";
 import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
@@ -6214,6 +6215,22 @@ function GeoGebraFigure({ code, is3d }) {
   );
 }
 
+/* A P-V diagram computed in visuals.js (Carnot cycle or one process), drawn by GeoGebra. */
+function ThermoFigure({ code }) {
+  const process = parseThermo(code);
+  if (!process) return <div><p className="text-xs eai-muted">This diagram could not be drawn:</p><pre><code>{code}</code></pre></div>;
+  const figure = thermoFigure(process);
+  return (
+    <div>
+      <GeoGebraFigure code={figure.code} is3d={false} />
+      <table style={{ marginTop: 6, fontSize: 13 }}><tbody>
+        {figure.facts.map(([label, value]) => <tr key={label}><td>{label}</td><td style={{ paddingLeft: 12 }}><strong>{value}</strong></td></tr>)}
+      </tbody></table>
+      <p className="text-xs eai-muted">{figure.axes}. Computed from the values in the exercise.</p>
+    </div>
+  );
+}
+
 const hastText = (node) => (node.type === "text" ? node.value : (node.children || []).map(hastText).join(""));
 
 function markdownComponents(streaming) {
@@ -6225,7 +6242,7 @@ function markdownComponents(streaming) {
       const classes = code?.tagName === "code" ? code.properties?.className || [] : [];
       const is3d = classes.includes("language-geogebra-3d");
       const figure = is3d || classes.includes("language-geogebra") ? "graph"
-        : ["circuit", "phet", "molecule", "compound"].find((kind) => classes.includes(`language-${kind}`));
+        : ["circuit", "phet", "molecule", "compound", "anatomy", "thermo", "gas", "magnet"].find((kind) => classes.includes(`language-${kind}`));
       if (!figure) return <pre {...props} />;
       if (streaming) return <p className="text-xs eai-muted">Drawing {figure === "graph" ? "graph" : figure}…</p>;
       const text = hastText(code).trim();
@@ -6233,6 +6250,10 @@ function markdownComponents(streaming) {
       if (figure === "phet") return <PhetFigure code={text} />;
       if (figure === "molecule") return <MoleculeFigure code={text} />;
       if (figure === "compound") return <CompoundFigure code={text} />;
+      if (figure === "anatomy") return <AnatomyFigure code={text} />;
+      if (figure === "gas") return <GasFigure code={text} />;
+      if (figure === "magnet") return <MagnetFigure code={text} />;
+      if (figure === "thermo") return <ThermoFigure code={text} />;
       return <GeoGebraFigure code={text} is3d={is3d} />;
     },
   };

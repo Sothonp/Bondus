@@ -1315,6 +1315,8 @@ def _key_generators(settings: Settings, provider: str, key: str) -> list[AnswerG
 def _provider_generators(settings: Settings, provider: str) -> list[AnswerGenerator]:
     """Every generator of ``provider``: each model with each of its keys, model by
     model, so a rate-limited key hands the same model over to the next key."""
+    if provider in settings.llm_disabled_provider_list:
+        return []
     per_key = [_key_generators(settings, provider, key) for key in settings.api_keys(provider)]
     if len(per_key) > 1:
         for number, generators in enumerate(per_key, start=1):

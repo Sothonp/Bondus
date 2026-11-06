@@ -4,6 +4,9 @@
    ```phet       -> an embedded PhET simulation, from a fixed list
    ```molecule   -> a 3D molecule (3Dmol.js) from the Protein Data Bank, from a fixed list
    ```compound   -> a chemical compound by name, its structure and formula from PubChem
+   ```anatomy    -> a 3D anatomy or botany model (Sketchfab), from a fixed list
+   ```thermo     -> a P-V diagram (Carnot cycle or one process) computed here, drawn in GeoGebra
+   ```gas        -> a particle simulation of an ideal gas (gasSim.js)
 
    The tutor never writes simulator formats or URLs itself: it describes the circuit in a
    few lines and names a simulation or molecule, and this file builds the rest, so a
@@ -88,6 +91,16 @@ export const PHET_SIMS = {
   "balancing-chemical-equations": "Balancing Chemical Equations",
   "molecule-shapes": "Molecule Shapes",
   "reactants-products-and-leftovers": "Reactants, Products and Leftovers",
+  "gases-intro": "Gases Intro",
+  "states-of-matter": "States of Matter",
+  "diffusion": "Diffusion",
+  "energy-forms-and-changes": "Energy Forms and Changes",
+  "neuron": "Neuron",
+  "natural-selection": "Natural Selection",
+  "membrane-transport": "Membrane Transport",
+  "magnets-and-electromagnets": "Magnets and Electromagnets",
+  "magnet-and-compass": "Magnet and Compass",
+  "generator": "Generator",
 };
 export const PHET_CREDIT = "Simulation by PhET Interactive Simulations, University of Colorado Boulder, licensed under CC-BY-4.0";
 
@@ -135,3 +148,120 @@ export function compound(code) {
 
 /* "C4H8O2" -> "C₄H₈O₂", for the caption. */
 export const formulaText = (formula) => (formula || "").replace(/\d/g, (d) => "₀₁₂₃₄₅₆₇₈₉"[d]);
+
+/* ── Anatomy and botany in 3D (Sketchfab embeds). Fixed models, picked for the Grade 12
+   biology chapters and mostly from medical schools; the tutor names one by its key. */
+export const ANATOMY = {
+  eye: { uid: "f7745aaff145485fb02cf729c96c5f37", title: "Anatomy of the eye", by: "E-learning UMCG" },
+  ear: { uid: "4f5438fc9337454587ec4a2c30c8c42f", title: "Ear cross-section (outer, middle and inner ear)", by: "Ebers" },
+  "inner-ear": { uid: "f80bda64666c4b8aaac8f63b7b82a0a0", title: "Anatomy of the inner ear (cochlea, semicircular canals)", by: "University of Dundee School of Medicine" },
+  brain: { uid: "95b4e19bb32c4edeb46fcb3db048037c", title: "Human brain with internal structures", by: "The Center for BioMedical Visualization at SGU" },
+  neuron: { uid: "1552b08138764c4897ac262cc5721792", title: "Nerve cell (neuron and oligodendrocyte)", by: "Ebers" },
+  pancreas: { uid: "f7b30e11b5df445fbdfe0e262e777c85", title: "Human pancreas, cross-section", by: "arloopa" },
+  flower: { uid: "7e3186fec9b941aa97fde7ecb080828a", title: "Flower cross-section", by: "Ebers" },
+};
+
+export function anatomy(code) {
+  const key = code.trim().replace(/^(?:anatomy|model)\s*[:=]\s*/i, "").split(/\s+/)[0]?.toLowerCase();
+  if (!key || !Object.hasOwn(ANATOMY, key)) return null;
+  const entry = ANATOMY[key];
+  return {
+    key, ...entry,
+    url: `https://sketchfab.com/models/${entry.uid}/embed?autostart=1&ui_infos=0&ui_watermark=0&ui_hint=2&dnt=1`,
+    page: `https://sketchfab.com/3d-models/${entry.uid}`,
+  };
+}
+
+/* ── Thermodynamics: P-V diagrams computed here and drawn in GeoGebra.
+   Units: volume in L, pressure in kPa, temperature in K (so p·V in kPa·L is in J).
+     carnot Th 600 Tc 300 V1 1 V2 2 [n 1] [gamma 1.4]
+     isothermal T 300 V1 1 V2 2 [n 1]
+     isobaric p 100 V1 1 V2 3
+     isochoric V 2 p1 100 p2 300
+     adiabatic p1 200 V1 1 V2 2 [gamma 1.4]
+   The tutor gives the exercise's values; the curves, points, work and efficiency come
+   from the formulas here, so the figure cannot disagree with the physics. */
+export const GAS_CONSTANT = 8.31; // the value the Grade 12 textbook and its answers use
+const THERMO_KINDS = ["carnot", "isothermal", "isobaric", "isochoric", "adiabatic"];
+const NEEDS = {
+  carnot: ["Th", "Tc", "V1", "V2"], isothermal: ["T", "V1", "V2"], isobaric: ["p", "V1", "V2"],
+  isochoric: ["V", "p1", "p2"], adiabatic: ["p1", "V1", "V2"],
+};
+
+export function parseThermo(code) {
+  const text = code.trim();
+  const kind = THERMO_KINDS.find((name) => new RegExp(`^${name}\\b`, "i").test(text));
+  if (!kind) return null;
+  const values = { n: 1, gamma: 1.4 };
+  // Bare numbers in the documented order ("carnot 600 300 1 2") count as the named values.
+  const bare = text.slice(kind.length).trim();
+  if (/^[0-9.eE\s,+-]+$/.test(bare)) {
+    const order = [...NEEDS[kind], ...(kind === "isothermal" ? ["n"] : kind === "carnot" ? ["n", "gamma"] : kind === "adiabatic" ? ["gamma"] : [])];
+    bare.split(/[\s,]+/).filter(Boolean).forEach((number, i) => { if (order[i]) values[order[i]] = Number(number); });
+  }
+  for (const [, key, value] of text.matchAll(/\b(Th|Tc|T|V1|V2|V|p1|p2|p|n|gamma|γ)\s*[:=]?\s*([0-9]*\.?[0-9]+(?:e-?[0-9]+)?)/gi)) {
+    const name = key === "γ" ? "gamma" : ({ th: "Th", tc: "Tc", t: "T", v1: "V1", v2: "V2", v: "V", p1: "p1", p2: "p2", p: "p", n: "n", gamma: "gamma" })[key.toLowerCase()];
+    values[name] = Number(value);
+  }
+  const ok = NEEDS[kind].every((key) => values[key] > 0) && values.n > 0 && values.gamma > 1
+    && (kind !== "carnot" || (values.Th > values.Tc && values.V2 > values.V1))
+    && (!["isothermal", "isobaric", "adiabatic"].includes(kind) || values.V2 !== values.V1);
+  return ok ? { kind, ...values } : null;
+}
+
+const r = (value, digits = 4) => Number(value.toPrecision(digits));
+
+/* The GeoGebra commands for the diagram, and the numbers to show under it. */
+export function thermoFigure(t) {
+  const R = GAS_CONSTANT, g = t.gamma;
+  const lines = [], facts = [];
+  const view = (vmax, pmax) => `ZoomIn(0, 0, ${r(vmax * 1.15)}, ${r(pmax * 1.2)})`;
+  if (t.kind === "carnot") {
+    const ratio = (t.Th / t.Tc) ** (1 / (g - 1));
+    const [VA, VB, VC, VD] = [t.V1, t.V2, t.V2 * ratio, t.V1 * ratio];
+    const hot = t.n * R * t.Th, cold = t.n * R * t.Tc;
+    const [pA, pB] = [hot / VA, hot / VB];
+    // The upper side of the cycle is the hot isotherm then the adiabat B->C, the lower
+    // side the adiabat A->D then the cold isotherm; the work is the area between them.
+    lines.push(
+      `top(x) = If(${r(VA, 6)} <= x <= ${r(VC, 6)}, If(x <= ${r(VB, 6)}, ${r(hot, 6)} / x, ${r(pB * VB ** g, 6)} * x^(-${g})))`,
+      `bot(x) = If(${r(VA, 6)} <= x <= ${r(VC, 6)}, If(x <= ${r(VD, 6)}, ${r(pA * VA ** g, 6)} * x^(-${g}), ${r(cold, 6)} / x))`,
+      `W = IntegralBetween(top, bot, ${r(VA, 6)}, ${r(VC, 6)})`,
+      `A = (${r(VA)}, ${r(pA)})`, `B = (${r(VB)}, ${r(pB)})`,
+      `C = (${r(VC)}, ${r(cold / VC)})`, `D = (${r(VD)}, ${r(cold / VD)})`,
+      `Text("T1 = ${t.Th} K", (${r(VB)}, ${r(pB * 1.08)}))`, `Text("T2 = ${t.Tc} K", (${r(VD)}, ${r((cold / VD) * 0.8)}))`,
+      view(VC, pA),
+    );
+    const qHot = t.n * R * t.Th * Math.log(VB / VA), qCold = t.n * R * t.Tc * Math.log(VC / VD);
+    facts.push(["Q1 (from the hot source, A→B)", `${r(qHot)} J`], ["Q2 (to the cold source, C→D)", `${r(qCold)} J`],
+      ["W = Q1 − Q2 (shaded area)", `${r(qHot - qCold)} J`], ["η = 1 − T2/T1", `${r((1 - t.Tc / t.Th) * 100, 3)} %`]);
+  } else if (t.kind === "isothermal") {
+    const k = t.n * R * t.T, [a, b] = [Math.min(t.V1, t.V2), Math.max(t.V1, t.V2)];
+    lines.push(`f(x) = If(${a} <= x <= ${b}, ${r(k, 6)} / x)`, `W = Integral(f, ${a}, ${b})`,
+      `A = (${t.V1}, ${r(k / t.V1)})`, `B = (${t.V2}, ${r(k / t.V2)})`, view(b, k / a));
+    facts.push(["W by the gas = nRT ln(V2/V1) (shaded area)", `${r(k * Math.log(t.V2 / t.V1))} J`]);
+  } else if (t.kind === "isobaric") {
+    const [a, b] = [Math.min(t.V1, t.V2), Math.max(t.V1, t.V2)];
+    lines.push(`f(x) = If(${a} <= x <= ${b}, ${t.p})`, `W = Integral(f, ${a}, ${b})`,
+      `A = (${t.V1}, ${t.p})`, `B = (${t.V2}, ${t.p})`, view(b, t.p));
+    facts.push(["W by the gas = p(V2 − V1) (shaded area)", `${r(t.p * (t.V2 - t.V1))} J`]);
+  } else if (t.kind === "isochoric") {
+    // The graphing app has no Segment: a vertical line piece is a curve in its parameter.
+    lines.push(`A = (${t.V}, ${t.p1})`, `B = (${t.V}, ${t.p2})`,
+      `c = Curve(${t.V}, t, t, ${Math.min(t.p1, t.p2)}, ${Math.max(t.p1, t.p2)})`, view(t.V, Math.max(t.p1, t.p2)));
+    facts.push(["W by the gas (volume constant)", "0 J"]);
+  } else {
+    const k = t.p1 * t.V1 ** g, p2 = k * t.V2 ** -g, [a, b] = [Math.min(t.V1, t.V2), Math.max(t.V1, t.V2)];
+    lines.push(`f(x) = If(${a} <= x <= ${b}, ${r(k, 6)} * x^(-${g}))`, `W = Integral(f, ${a}, ${b})`,
+      `A = (${t.V1}, ${t.p1})`, `B = (${t.V2}, ${r(p2)})`, view(b, k * a ** -g));
+    facts.push(["p2 = p1 (V1/V2)^γ", `${r(p2)} kPa`], ["W by the gas = (p1V1 − p2V2)/(γ − 1) (shaded area)", `${r((t.p1 * t.V1 - p2 * t.V2) / (g - 1))} J`]);
+  }
+  return { code: lines.join("\n"), facts, axes: "V (L) horizontally, p (kPa) vertically" };
+}
+
+/* ── The ideal-gas particle simulation's settings: ```gas  T 300  [N 60] */
+export function parseGas(code) {
+  const T = Number(code.match(/\bT\s*[:=]?\s*([0-9]*\.?[0-9]+)/i)?.[1] ?? 300);
+  const N = Number(code.match(/\bN\s*[:=]?\s*([0-9]+)/)?.[1] ?? 60);
+  return { temperature: Math.min(1500, Math.max(50, T || 300)), count: Math.min(150, Math.max(10, N || 60)) };
+}

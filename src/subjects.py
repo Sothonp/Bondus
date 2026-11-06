@@ -80,6 +80,23 @@ _QUESTION_KM_NAMES: dict[str, tuple[str, ...]] = {
     "mathematics": ("គណិត",),
     "history": ("ប្រវត្តិសាស្ត្រ", "ប្រវត្តិសាស្រ្ត"),
     "khmer_literature": ("អក្សរសិល្ប៍",),
+    # Words only a Biology question uses, so one asked with no subject picked still
+    # searches Biology. "សរសៃប្រសាទ" (nerve) otherwise matches "ប្រាសាទ" (temple) in the
+    # Khmer Literature books. Not "ផ្កា" (a novel's title) or "ប្រូតេអ៊ីន" (Chemistry too).
+    "biology": (
+        "សរសៃប្រសាទ", "ប្រព័ន្ធប្រសាទ", "កោសិកាប្រសាទ", "អាំងពុលស៊ីប្រសាទ", "អាំងភ្លុចប្រសាទ",
+        "ណឺរ៉ូន", "ស៊ីណាប", "អ័រម៉ូន", "អរម៉ូន", "ក្រពេញ", "អង់ដូគ្រីន", "អង់ស៊ីម",
+        "ADN", "ARN", "ក្រូម៉ូសូម", "រ៉េទីន", "លំពែង", "អាំងស៊ុយលីន", "ដាវិន",
+        "រុក្ខជាតិ", "ស៊ីមណូស្ពែម", "អង់ស្យូស្ពែម", "រស្មីសំយោគ",
+    ),
+}
+# The same for questions in English, as whole words.
+_QUESTION_EN_WORDS: dict[str, frozenset[str]] = {
+    "biology": frozenset({
+        "neuron", "neurons", "nerve", "nerves", "synapse", "hormone", "hormones", "enzyme",
+        "enzymes", "dna", "rna", "mrna", "chromosome", "insulin", "pancreas", "retina",
+        "photosynthesis", "darwin", "gymnosperm", "angiosperm",
+    }),
 }
 # "Answer in English" asks for a language, not about the English subject.
 _IN_LANGUAGE = re.compile(r"ជាភាសា(?:អង់គ្លេស|បារាំង)|\bin (?:english|french)\b", re.IGNORECASE)
@@ -94,7 +111,7 @@ def subject_named_in(question: str) -> str | None:
         subject.id
         for subject in SUBJECTS
         if any(name in text for name in (*subject.km_names, *_QUESTION_KM_NAMES.get(subject.id, ())))
-        or words & {*subject.aliases, subject.en.lower()}
+        or words & {*subject.aliases, subject.en.lower(), *_QUESTION_EN_WORDS.get(subject.id, ())}
     }
     return named.pop() if len(named) == 1 else None
 

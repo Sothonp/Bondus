@@ -1238,6 +1238,7 @@ def test_build_generator_orders_fallback_chain(tmp_path):
         "openrouter_api_key": SecretStr("sk-or-test"),
         "sea_lion_api_key": SecretStr("sk-test"),
         "openrouter_fallback_models": "google/gemma-4-31b-it:free",
+        "llm_disabled_providers": "",  # OpenRouter is off by default; this checks its place when on
     })
     assert build_generator(with_backstops).chain == [
         "groq:openai/gpt-oss-120b", "gemini:gemini-3.6-flash",

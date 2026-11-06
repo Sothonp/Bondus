@@ -210,10 +210,11 @@ flowchart LR
 
 - **Routes by difficulty.** `src/router.py` sorts each question, for free and
   without asking a model: a greeting or a short definition ("តើលីមីតជាអ្វី?") is
-  *simple* and goes to `LLM_SIMPLE_ORDER` first (Gemini 3.1 Flash-Lite, Groq,
-  Cerebras, SEA-LION); solving, calculating, proving, explaining a concept, an essay, a
-  long question, a photo or a follow-up to any of them is *advanced* and goes
-  to `LLM_ADVANCED_ORDER` first (Gemini 3.5 Flash, Groq, then NVIDIA). Entries are `provider` or
+  *simple* and goes to `LLM_SIMPLE_ORDER` first (SEA-LION, Groq, Cerebras, Gemini 3.5 Flash,
+  then NVIDIA's Nemotron, Gemma 4 and DeepSeek); solving, calculating, proving, explaining a
+  concept, an essay, a long question, a photo or a follow-up to any of them is *advanced* and
+  goes to `LLM_ADVANCED_ORDER`, the frontier tier (Gemini 3.1 Flash-Lite, NVIDIA's
+  muse-glimmer-30b, then SEA-LION), the three best in `scripts/eval_models.py`. Entries are `provider` or
   `provider:model`, and the language order below follows them.
   `LLM_ROUTER=false` turns this off.
 - **Routes by language.** Khmer questions (almost all) follow `LLM_KHMER_ORDER`,
