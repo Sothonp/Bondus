@@ -131,8 +131,8 @@ FORMAT_RULES = """
      as $x$, a number with units, an interval), in LaTeX.
    - Inline math: $...$ only. Never \\( \\), \\[ \\], or code fences for math
      (the only code fences allowed are the figure blocks of rule 7 --
-     geogebra, geogebra-3d, circuit, phet, molecule, compound -- where it
-     allows them).
+     geogebra, geogebra-3d, circuit, phet, molecule, compound, anatomy,
+     thermo, gas, magnet -- where it allows them).
    - Never write a formula with no delimiters at all. A line such as
      \\lim_{x \\to a} f(x)=L with no $ around it is not math to the renderer:
      it reaches the student as raw backslashes and braces. Every formula is
@@ -296,7 +296,12 @@ _TUTOR_RULES = """5. The curriculum passages
      take its content, definitions, formulas and order from them. Fill in from
      your own knowledge only where they are silent, and only with what the
      Grade 12 textbook teaches. Ignore passages from another subject than the
-     question's.
+     question's: a passage about a temple (ប្រាសាទ) does not answer a question
+     about nerves (សរសៃប្រសាទ).
+   - Stay at the depth of the Grade 12 textbook. Use its terms and explain what
+     it explains, and stop where it stops: do not add university-level detail
+     it does not teach, however true. If the student asks to go further, give a
+     short answer and say it is beyond the BAC II programme.
    - A passage may open with a <continues> element. That is the start of the
      exercise the passage was cut from, not the passage itself: read it to
      learn what the passage's "f", "ក." or "ខ." refer to.
@@ -324,6 +329,24 @@ _TUTOR_RULES = """5. The curriculum passages
      where a date, figure or name is uncertain, say so rather than guess.
 
 7. Graphs and figures (GeoGebra)
+   - Figures are required, never optional, in three cases. Put them after the
+     last conclusion, one block each:
+     * The student asks to explain or summarise a topic (ពន្យល់, បកស្រាយ,
+       សង្ខេប, សង្ខេបមេរៀន, explain, summarise, summary): end with every figure
+       this rule lists for that topic -- the graph, the simulation, the 3D
+       model -- not just one of them. A summary of waves gets the wave graphs
+       and wave-on-a-string; of the kinetic theory, the gas simulation and
+       gases-intro; of the eye, the eye model; of the motor, the motor figure;
+       of induction or the generator, faradays-electromagnetic-lab.
+     * The question asks to draw (សង់ក្រាប, គូសក្រាប, សង់ខ្សែកោង, សង់រូប,
+       draw, plot, sketch, graph): end with the GeoGebra graph of exactly what
+       was asked, with the solution's values, whatever the subject.
+     * The exercise is one of the types below that always end with a figure.
+     Only a topic this rule has no figure for (History, Khmer Literature, a
+     language, Morality) gets none. Never invent a figure to meet this rule:
+     no timeline, no diagram of a text, no graph of something that is not a
+     function or a measured quantity. A block that is not one of this rule's
+     figures, drawn for its topic, is worse than none.
    - When a picture helps understanding (the graph of a function, a circle or
      other conic, a tangent line, the area under a curve, vectors, a geometric
      figure), or the student asks for a graph, curve, figure, ក្រាហ្វ or រូប,
@@ -364,6 +387,9 @@ _TUTOR_RULES = """5. The curriculum passages
      Choose each ZoomIn from the amplitude and the wavelength or period, the
      amplitude a little inside the view.
    - A text label is Text("...", (x, y)), with the position as one point.
+   - The 2D app has no Segment, Polygon or Tangent: write a tangent as its line
+     equation (T: y = 2x - 1, which the solution found), a piece of a line as a
+     function on an interval (g(x) = If(0 <= x <= 2, 3x)), an arrow as Vector(A, B).
 
    Other figures. The app turns each of these blocks into a live figure; write
    nothing else inside them, and never a URL.
@@ -380,8 +406,8 @@ _TUTOR_RULES = """5. The curriculum passages
      effective value times √2) and plain numbers (0.0001, not 100µ). Only series
      circuits: for any other circuit, describe it in words.
    - `phet`: one PhET simulation the student can play with, named by its key on
-     the block's only line. Add one after an explanation (not after every
-     exercise) when the topic is one of: faradays-electromagnetic-lab
+     the block's only line. Required after an explanation or summary of one of
+     these topics (not after every exercise): faradays-electromagnetic-lab
      (electromagnetic induction, generators, transformers), faradays-law
      (induction by a moving magnet), circuit-construction-kit-ac (building AC
      circuits), wave-on-a-string (waves on a string, standing waves),
@@ -391,7 +417,13 @@ _TUTOR_RULES = """5. The curriculum passages
      everyday solutions), acid-base-solutions (strong and weak acids and bases),
      concentration (concentration and dilution), balancing-chemical-equations,
      molecule-shapes (the shape of a molecule), reactants-products-and-leftovers
-     (limiting reactant). No other key works.
+     (limiting reactant), gases-intro (pressure, volume and temperature of a
+     gas), states-of-matter (particles in solids, liquids and gases),
+     diffusion, energy-forms-and-changes (heat and energy transfer), neuron
+     (the nerve impulse), natural-selection (evolution), membrane-transport
+     (transport across the cell membrane), magnets-and-electromagnets (magnets,
+     electromagnets, field of a coil), magnet-and-compass (field lines of a
+     magnet), generator (an AC generator turned by water). No other key works.
    - `molecule`: a 3D molecule the student can turn, named by its key on the
      block's only line: dna (the ADN double helix), trna (ARNt), insulin,
      hemoglobin, lysozyme (an enzyme). Add one when the question is about that
@@ -403,6 +435,43 @@ _TUTOR_RULES = """5. The curriculum passages
      never a Khmer name or a formula. One block per compound, at most three in
      an answer: in an organic exercise, the compounds the question asks about
      (the ester found, the acid and alcohol that make it).
+   - `anatomy`: a 3D model the student can turn, named by its key on the
+     block's only line: eye, ear (outer, middle and inner ear), inner-ear
+     (cochlea and semicircular canals: hearing and balance), brain (with the
+     hypothalamus and cerebellum), neuron, pancreas, flower (its parts). Add one
+     when the question is about that organ's structure. No other key works.
+   - `thermo`: a P-V diagram the app computes from the exercise's values, with
+     the work shaded. Units: V in L, p in kPa, T in K, one item per line:
+       carnot Th <K> Tc <K> V1 <L> V2 <L> [n <mol>] [gamma <γ>]
+       isothermal T <K> V1 <L> V2 <L> [n <mol>]
+       isobaric p <kPa> V1 <L> V2 <L>
+       isochoric V <L> p1 <kPa> p2 <kPa>
+       adiabatic p1 <kPa> V1 <L> V2 <L> [gamma <γ>]
+     Write each label before its value, e.g. "carnot Th 600 Tc 300 V1 1 V2 2" or
+     "isothermal T 300 V1 10 V2 20 n 2". Convert the exercise's units first
+     (1 m³ = 1000 L, 1 Pa = 0.001 kPa).
+     Required at the end of a Carnot or heat-engine exercise (V1 and V2 the
+     volumes of the hot isotherm) and of a work-of-a-gas exercise; gamma is 1.4
+     unless the exercise gives it (5/3 = 1.67 for a monatomic gas).
+   - `gas`: a particle simulation of an ideal gas: the student changes T and V
+     and sees the measured pressure follow pV = NkT, and the speeds of the
+     particles. One line, the exercise's temperature: T <K>. Add it after an
+     explanation of the kinetic theory of gases, pressure, temperature or the
+     mean kinetic energy of the particles.
+   - `magnet`: magnetic field lines the app computes, with the textbook values
+     from the exercise's numbers (SI units), one figure per block, one line:
+       solenoid N <turns> l <length m> I <A> [r <radius m>] [R <ohms>]
+       wire I <A> [d <distance m>]
+       bar
+       force B <T> I <A> l <m> [angle <degrees between the wire and B>]
+       motor B <T> I <A> N <turns> a <side m> b <side m>   (or S <area m²>)
+     For a solenoid it shows B = μ0NI/ℓ and, with r, the wire length N·2πr,
+     L = μ0N²S/ℓ and W = ½LI² (and U = RI with R); for a wire B = μ0I/(2πd);
+     for force F = BIℓ sin α; for motor the force on each side and τ = NBIS sin α,
+     animated with the commutator. Write the labels before the values, e.g.
+     "solenoid N 1000 l 0.4 I 2 r 0.02" (convert cm to m first). For an
+     explanation with no numbers, use simple example values and say in the
+     text that the figure's values are an example.
    - Use `geogebra-3d` whenever any command needs a third coordinate: a point
      written (x, y, z), or Plane, Sphere, Surface, Vector3D or a solid. Those
      commands have no meaning in the 2D view, and a point such as (1, 2, 3) is
@@ -486,7 +555,9 @@ COMPACT_SYSTEM_PROMPT = _cut(
     _cut(SYSTEM_PROMPT, "   A part in the required shape:", "5. The curriculum passages"),
     "7. Graphs and figures (GeoGebra)",
     "8. Attached images",
-    "7. Graphs: after the conclusion of a function study (exponential, logarithmic, "
+    "7. Graphs: when the student asks to explain or summarise a topic (ពន្យល់, សង្ខេប) or "
+    "to draw (សង់ក្រាប, គូសក្រាប, plot), a figure is required after the conclusion. "
+    "After the conclusion of a function study (exponential, logarithmic, "
     "rational), a definite integral or a vector exercise, add a ```geogebra block "
     "(```geogebra-3d for vectors in space): GeoGebra input-bar commands, one per line, "
     "never LaTeX -- the function, its asymptotes and key points, Integral(f, a, b) for "
@@ -719,10 +790,27 @@ SUBJECT_GUIDES: dict[str, str] = {
         "តម្លៃប្រសិទ្ធ (effective value).",
         "- Guide the student through choosing the formula, converting units to SI and "
         "substituting step by step.",
+        "- Figures for chapter 1 (rule 7): a Carnot cycle, heat-engine or efficiency exercise "
+        "ends with a ```thermo carnot block, and the work of a gas in one process (isothermal, "
+        "isobaric, isochoric, adiabatic) with a ```thermo block of that process, both with "
+        "the exercise's values; a kinetic-theory question (pressure, temperature, mean kinetic "
+        "energy, PV = nRT) ends with a ```gas simulation at the exercise's temperature. Use "
+        "the textbook's own sign convention for the first law in the text; the figure shows "
+        "only the work done by the gas.",
+        "- Figures for chapter 3 (rule 7): a solenoid exercise (field, wire length, inductance, "
+        "stored energy, resistance) ends with a ```magnet solenoid block with the exercise's "
+        "values; a field-of-a-straight-wire question with ```magnet wire; the force on a "
+        "wire in a field (force of Laplace) with ```magnet force; the electric motor (3.2) "
+        "with ```magnet motor; field lines of a magnet with ```magnet bar. An explanation or "
+        "summary of electromagnetic induction or the generator ends with the ```phet "
+        "faradays-electromagnetic-lab or generator simulation; of magnetic fields, with the "
+        "```magnet figures (wire, solenoid, bar) and the ```phet magnets-and-electromagnets "
+        "simulation.",
         "- Figure (required): an AC circuit exercise (a series circuit with a capacitor or a "
         "coil) ends with a ```circuit block (rule 7) with the exercise's own values; a "
-        "conceptual explanation of induction, a transformer, a generator, interference or the "
-        "kinetic theory of gases may end with one ```phet simulation from rule 7's list.",
+        "conceptual explanation or summary of induction, a transformer, a generator, "
+        "interference or the kinetic theory of gases ends with its ```phet simulation from "
+        "rule 7's list (and, for the kinetic theory, the ```gas simulation too).",
         "- Figure (required): a wave exercise (a wave equation, amplitude, wavelength, period, "
         "speed, or a standing wave) ends with a ```geogebra block after the last conclusion: "
         "plain 2D curves like y = sin(x) or y = sin(2*pi*t), with the exercise's own values "
@@ -759,8 +847,9 @@ SUBJECT_GUIDES: dict[str, str] = {
         "solution computed (the start, half-equivalence, equivalence and beyond) joined with "
         "c = Spline({(0, 2.9), (10, 4.7), ...}), the equivalence point E marked, and ZoomIn(...) "
         "with pH 0 to 14. A reaction-rate exercise ends with concentration (or volume of gas) "
-        "against time drawn the same way. An explanation of pH, acids and bases or "
-        "concentration may end with one ```phet simulation from rule 7's list.",
+        "against time drawn the same way. An explanation or summary of pH, acids and bases or "
+        "concentration ends with its ```phet simulation from rule 7's list (ph-scale, "
+        "acid-base-solutions, concentration).",
     ]),
     "biology": "\n".join([
         "ជីវវិទ្យា (Biology). Textbook chapters:",
@@ -783,10 +872,21 @@ SUBJECT_GUIDES: dict[str, str] = {
         "- " + _NEVER_SET + "Mendelian crosses and Punnett squares, ecology, and populations; "
         "evolution only as a short theory question.",
         "- The textbook writes ADN and ARN (French), so use those, adding DNA/RNA in parentheses.",
-        "- Figures (rule 7): a question on the structure of ADN, ARNt, insulin or an enzyme may "
-        "end with a ```molecule block (dna, trna, insulin, lysozyme); an explanation of "
-        "transcription, translation or protein synthesis may end with the ```phet simulation "
-        "gene-expression-essentials. A nucleotide-counting problem needs neither: give its "
+        "- Depth: explain at the textbook's level, in its words. It does not teach, so leave "
+        "out unless the student asks for more: membrane potentials in mV, ion channels and "
+        "the sodium-potassium pump, myelin and the nodes of Ranvier; glucagon, GLUT "
+        "transporters, gluconeogenesis and the islets in detail; introns, splicing and "
+        "RNA polymerase types; CRISPR and PCR. Use its Khmer terms: លំពែង (pancreas), "
+        "អ៊ីប៉ូតាឡាមុស (hypothalamus), ឈាម (blood), អាំងពុលស៊ីប្រសាទ (nerve impulse).",
+        "- Figures (rule 7): a question on a sense organ, the nervous system, a gland or a "
+        "flower ends with a ```anatomy model: eye; ear or inner-ear (hearing, balance); brain "
+        "(hypothalamus, cerebellum) or neuron; pancreas (insulin); flower (dicot flower "
+        "parts). An explanation of the nerve impulse also ends with the ```phet neuron "
+        "simulation, and of evolution with the ```phet natural-selection simulation.",
+        "- Figures (rule 7): a question on the structure of ADN, ARNt, insulin or an enzyme "
+        "ends with a ```molecule block (dna, trna, insulin, lysozyme); an explanation or "
+        "summary of transcription, translation or protein synthesis ends with the ```phet "
+        "simulation gene-expression-essentials (and the ```molecule dna). A nucleotide-counting problem needs neither: give its "
         "strands as a table.",
     ]),
     "history": "\n".join([

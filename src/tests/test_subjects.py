@@ -10,7 +10,7 @@ from src.embeddings.embedder import HashingEmbedder
 from src.ingestion import ExtractedDocument, Section, index_document
 from src.ingestion.khmer_segment import KhmerSegmenter
 from src.retrieval.retriever import Retriever
-from src.subjects import SUBJECT_IDS, subject_of
+from src.subjects import SUBJECT_IDS, subject_named_in, subject_of
 from src.vectorstore import InMemoryVectorStore
 
 
@@ -118,3 +118,36 @@ def test_function_integral_and_vector_exercises_must_end_with_a_figure():
 
     for needed in ("Always end with a figure", "Integral(f, a, b)", "Vector(A, B)", "asymptote", "exp(x)"):
         assert needed in SYSTEM_PROMPT
+
+
+def test_explanations_summaries_and_drawing_requests_require_figures():
+    from prompts import COMPACT_SYSTEM_PROMPT, SYSTEM_PROMPT, subject_guide
+
+    for trigger in ("ពន្យល់", "សង្ខេប", "សង់ក្រាប", "គូសក្រាប", "every figure"):
+        assert trigger in SYSTEM_PROMPT
+    for trigger in ("ពន្យល់", "សង្ខេប", "សង់ក្រាប"):
+        assert trigger in COMPACT_SYSTEM_PROMPT
+    for subject in ("physics", "chemistry", "biology"):
+        assert " may end with" not in subject_guide(subject), subject
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "ពន្យល់ពីការបញ្ជូនសរសៃប្រសាទ",
+        "ពន្យល់ពីតួនាទីរបស់អាំងស៊ុយលីន",
+        "គណនាចំនួននុយក្លេអូទីតនៃ ADN",
+        "explain how a nerve impulse travels",
+        "what does insulin do?",
+    ],
+)
+def test_a_biology_question_names_its_subject_without_saying_biology(question):
+    assert subject_named_in(question) == "biology"
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["ពន្យល់ពីប្រាសាទអង្គរវត្ត", "សង្ខេបរឿងផ្កាស្រពោន", "learn the formula", "ប្រូតេអ៊ីន និងអាមីត"],
+)
+def test_words_that_only_look_like_biology_do_not_name_it(question):
+    assert subject_named_in(question) != "biology"
