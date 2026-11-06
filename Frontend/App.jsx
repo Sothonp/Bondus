@@ -509,6 +509,26 @@ const STYLES = `
    on every new component remembering to tag itself with .eai-km. Never applied to the University
    track (see isUniProfile guard at each .eai-root that adds this class). */
 .eai-km-root, .eai-km-root *{ font-family:'Kantumruy Pro', system-ui, sans-serif !important; }
+/* Khmer needs more room than Latin. It stacks vowels and subscripts above and below each line and has no spaces
+   between words, so the Latin defaults (Tailwind's text-sm is 1.43 line height; headings are tracked -0.02em for
+   Sora) make it look cramped on a phone. In Khmer: taller lines, and no negative letter-spacing. The --text-*--line-height
+   and --leading-* values are Tailwind's own theme variables, so every text-xs/text-sm/leading-relaxed in the app follows
+   without touching each component; leading-none (big numbers) is left alone. */
+.eai-km-root{
+  --text-xs--line-height:1.8; --text-sm--line-height:1.75; --text-base--line-height:1.7; --text-lg--line-height:1.65;
+  --text-xl--line-height:1.55; --text-2xl--line-height:1.5; --text-3xl--line-height:1.45; --text-4xl--line-height:1.4;
+  --leading-tight:1.5; --leading-snug:1.6; --leading-normal:1.7; --leading-relaxed:1.85;
+  line-height:1.7;
+}
+.eai-km-root .eai-display, .eai-km-root .eai-hero-title, .eai-km-root .eai-lesson-title, .eai-km-root .eai-ob-title{ letter-spacing:0; }
+.eai-km-root .eai-user-bubble, .eai-km-root .eai-hero-message, .eai-km-root .eai-ob-desc{ line-height:1.8; }
+.eai-km-root .eai-composer-input{ line-height:1.7; }
+.eai-km-root .eai-hist-title{ line-height:1.7; }
+.eai-km-root .eai-ob-title, .eai-km-root .eai-lph2{ line-height:1.5; }
+.eai-km-root .eai-ex-question{ line-height:1.7; }
+.eai-km-root .eai-md{ line-height:1.9; }
+.eai-km-root .eai-lp-tab-desc, .eai-km-root .eai-lpscreen{ line-height:1.7; }
+.eai-km-root .eai-lp-btn{ line-height:1.6; }
 
 .theme-light{
   --bg:#FFFFFF; --bg-soft:#F2F1F7; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
@@ -1245,6 +1265,11 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-ob-input::placeholder{ color:var(--muted-2); }
 .eai-ob-input:hover{ border-color:var(--input-border-hover); }
 .eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
+/* Khmer sits taller than Latin (stacked vowels and subscripts above and below the line), and a fixed 48px box with no
+   vertical padding left it touching the border, or clipped at the bottom, on a phone. In Khmer the fields grow to fit their
+   text, with room above and below. */
+.eai-km-root .eai-ob-input, .eai-km-root input.eai-input, .eai-km-root select.eai-input{
+  height:auto; min-height:52px; padding-top:11px; padding-bottom:11px; line-height:1.7; }
 /* Dashboard "Today's exercises": each exercise is a roomy tappable row (at least 68px, 14px of padding, a two-line title, a
    chip and a topic line with generous line height) so Khmer has space. */
 .eai-todo-list{ display:flex; flex-direction:column; gap:12px; list-style:none; margin:0; padding:0; }
