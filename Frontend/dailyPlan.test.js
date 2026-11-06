@@ -83,11 +83,14 @@ test("suggestions already added today are not offered again, but are offered aga
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 const between = (from, to) => app.slice(app.indexOf(from), app.indexOf(to));
 
-test("App uses the shared plan helpers and hands add/remove to the Dashboard", () => {
+test("App uses the shared plan helpers, and the Dashboard shows today's exercises instead of the to-do form", () => {
   assert.match(app, /from "\.\/dailyPlan\.js"/);
   assert.match(app, /addTask\(plan, task, date, tempId\)/);
   assert.match(app, /setPlan\(\(arr\) => toggleTask\(arr, id\)\)/);
-  assert.match(app, /onAddPlanTask=\{addPlanTask\} onRemovePlanTask=\{removePlanTask\}/);
+  // The dashboard no longer shows the student's own to-do list: it shows exercises picked from their progress instead
+  // (todaysExercises.js). The list's data and handlers stay in App for now, so nothing already saved is lost.
+  assert.doesNotMatch(app, /onAddPlanTask=\{addPlanTask\}/);
+  assert.match(app, /<TodaysExercisesCard /);
 });
 
 test("new accounts start with an empty plan instead of a generated one", () => {
