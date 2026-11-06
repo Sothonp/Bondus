@@ -112,8 +112,13 @@ class Settings(BaseSettings):
     # models first. Entries are "provider" or "provider:model"; they come ahead of
     # the language order above, which still decides everything behind them.
     llm_router: bool = True
-    llm_simple_order: str = "gemini:gemini-3.1-flash-lite,groq,cerebras,sea-lion"
-    llm_advanced_order: str = "gemini:gemini-3.5-flash,groq,nvidia"
+    # The frontier tier is the three models that scored best in scripts/eval_models.py
+    # (Nov 2026: Flash-Lite 91, muse-glimmer 83, SEA-LION 75, all answering 8 of 8);
+    # every other model serves the simple tier first, after SEA-LION (fast, trained for
+    # Khmer), so a simple Khmer question is not left to the slow models. Either tier falls back to the
+    # language order and then the rest of the chain, so a question is always answered.
+    llm_simple_order: str = "sea-lion,groq,cerebras,gemini:gemini-3.5-flash,nvidia:nvidia/nemotron-3-ultra-550b-a55b,nvidia:google/gemma-4-31b-it,nvidia:deepseek-ai/deepseek-v4.1-flash"
+    llm_advanced_order: str = "gemini:gemini-3.1-flash-lite,nvidia:meta/muse-glimmer-30b,sea-lion"
     # Providers left out of every chain (tutor and exam) even with a key set.
     # OpenRouter's free models never answered in scripts/eval_models.py (Nov 2026):
     # rate limits and timeouts every time, so a question only waited on them.
