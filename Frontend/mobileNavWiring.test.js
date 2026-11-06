@@ -78,21 +78,24 @@ test("the new strings exist once in English and once in Khmer", () => {
   for (const key of ["navMore", "moreLanguage"]) assert.equal(defined(key), 2, `${key} should be defined in both languages, found ${defined(key)}`);
 });
 
-test("the dashboard puts the streak and level cards in a two-column row before the study plan", () => {
+test("the dashboard puts the streak and level cards in a two-column row before today's exercises", () => {
   assert.match(app, /function StreakStat\(/);
   assert.match(app, /function LevelStat\(/);
   const mobileStats = dashboard.indexOf('grid grid-cols-2 gap-3 lg:hidden');
   assert.ok(mobileStats > 0, "the two-column stats row is missing");
-  assert.ok(mobileStats < dashboard.indexOf('t(lang, "dashTodayPlan")'), "the stats row must come before the study plan");
+  assert.ok(mobileStats < dashboard.indexOf("<TodaysExercisesCard"), "the stats row must come before today's exercises");
   // Desktop keeps its single combined card.
   assert.match(dashboard, /eai-card p-6 hidden lg:flex flex-col gap-5 justify-center/);
 });
 
-test("the study-plan form stacks into full-width controls on a phone and the suggestions scroll sideways", () => {
-  assert.match(dashboard, /<div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">/);
-  assert.match(dashboard, /className=\{`eai-ob-input eai-focus w-full sm:w-\[84px\] sm:flex-shrink-0/);
-  assert.match(dashboard, /eai-glass eai-focus px-4 text-sm flex items-center justify-center gap-1\.5 w-full sm:w-auto/);
-  assert.match(dashboard, /flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible eai-scroll/);
+test("today's exercises are full-width rows on a phone, each tall enough for Khmer", () => {
+  const card = readFileSync(new URL("./TodaysExercisesCard.jsx", import.meta.url), "utf8");
+  assert.match(card, /<ul className="eai-todo-list">/);
+  assert.match(card, /className=\{`eai-todo-row eai-focus/);
+  const row = app.slice(app.indexOf(".eai-todo-row{"), app.indexOf("}", app.indexOf(".eai-todo-row{")));
+  assert.match(row, /width:100%/);
+  assert.match(row, /min-height:68px/);
+  assert.match(row, /padding:14px 16px/);
 });
 
 test("the hero's buttons are full width and stacked on a phone", () => {

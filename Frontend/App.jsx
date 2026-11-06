@@ -27,7 +27,7 @@ import { RAW_EXERCISES } from "../src/data/bacExercises.js";
 import { LandingNav, ScrollCue, LandingBody, useLandingScroll } from "./Landing.jsx";
 import { LANDING_CSS } from "./landingStyles.js";
 import { moreText, fillText } from "./moreStrings.js";
-import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel, isPracticeLocked } from "./subjects.js";
+import { FIELD_SUBJECTS, FOREIGN_LANGUAGE, FOREIGN_LANGUAGES, fieldSubjects, subjectId, subjectLabel, isPracticeLocked, OPEN_PRACTICE_SUBJECTS } from "./subjects.js";
 import { hasDiagnostic, diagnosticSubjects, buildSections, locate } from "./diagnosticPlan.js";
 import { useExamSessions } from "./useExamSessions.js";
 import { ExamTimerBar, SubmitSheet, ExamResultCard, RunningChip, JoinSchoolCard, SchoolReportPage } from "./ExamSessionUi.jsx";
@@ -50,7 +50,7 @@ import StudyOwlScene from "./StudyOwlScene.jsx";
 import SubjectRibbon from "./SubjectRibbon.jsx";
 import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
-import { todaysTasks, addTask, toggleTask, removeTask, remainingSuggestions, MAX_TITLE_LENGTH, MAX_TASKS_PER_DAY } from "./dailyPlan.js";
+import { addTask, toggleTask, removeTask } from "./dailyPlan.js";
 import LoadingScreen from "./LoadingScreen.jsx";
 import { createApi } from "./api.js";
 import {
@@ -79,6 +79,8 @@ import FormulaDrill from "./FormulaDrill.jsx";
 import { drillPool } from "./formulaDrill.js";
 import PapersLock from "./PapersLock.jsx";
 import { RomdoulCluster, RomdoulBlossom, RomdoulSprig } from "./Romdoul.jsx";
+import { TodaysExercisesCard } from "./TodaysExercisesCard.jsx";
+import { todaysExercises } from "./todaysExercises.js";
 import { UsageStrip, AdminPlans, PLAN_NAMES } from "./PlanUi.jsx";
 import { askAllowance, newAiRequestId, canUpgradeTo, isOut, leftOf, readUsage, uploadRefusal, uploadsLeft } from "./aiQuota.js";
 import { chapterStates, chaptersPassed, papersOpen, testOutEligible, pickQuizQuestions, localProgress, recordLocalQuiz, quizVerdict } from "./chapterProgress.js";
@@ -1263,17 +1265,32 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-ob-input::placeholder{ color:var(--muted-2); }
 .eai-ob-input:hover{ border-color:var(--input-border-hover); }
 .eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
-/* The "add a task" row on the dashboard: the fields and the Add button are one 42px tall in English. */
-.eai-plan-form .eai-ob-input{ height:42px; }
-.eai-plan-form .eai-btn{ min-height:42px; }
-/* Khmer sits taller than Latin (stacked vowels and subscripts above and below the line), and a fixed 42-48px box with no
+/* Khmer sits taller than Latin (stacked vowels and subscripts above and below the line), and a fixed 48px box with no
    vertical padding left it touching the border, or clipped at the bottom, on a phone. In Khmer the fields grow to fit their
-   text, with room above and below, and the rows are spaced a little further apart. */
+   text, with room above and below. */
 .eai-km-root .eai-ob-input, .eai-km-root input.eai-input, .eai-km-root select.eai-input{
   height:auto; min-height:52px; padding-top:11px; padding-bottom:11px; line-height:1.7; }
-.eai-km-root .eai-plan-form .eai-ob-input, .eai-km-root .eai-plan-form .eai-btn{
-  height:auto; min-height:52px; padding-top:11px; padding-bottom:11px; line-height:1.7; }
-.eai-km-root .eai-plan-form, .eai-km-root .eai-plan-form > div{ gap:12px; }
+/* Dashboard "Today's exercises": each exercise is a roomy tappable row (at least 68px, 14px of padding, a two-line title, a
+   chip and a topic line with generous line height) so Khmer has space. */
+.eai-todo-list{ display:flex; flex-direction:column; gap:12px; list-style:none; margin:0; padding:0; }
+.eai-todo-row{ display:flex; align-items:center; gap:14px; width:100%; min-height:68px; padding:14px 16px; text-align:left; cursor:pointer;
+  border-radius:18px; border:1px solid var(--line); background:var(--card); color:var(--ink); transition:border-color .15s ease, background-color .15s ease; }
+.eai-todo-row:hover{ border-color:var(--primary); }
+.eai-todo-skeleton{ cursor:default; opacity:.5; }
+.eai-todo-mark{ display:flex; flex:none; }
+.eai-todo-body{ display:flex; flex-direction:column; flex:1; min-width:0; }
+.eai-todo-title{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:15px; font-weight:600; line-height:1.5; }
+.eai-todo-row[data-done="true"] .eai-todo-title{ color:var(--muted); }
+.eai-todo-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin-top:8px; font-size:12px; color:var(--muted); line-height:1.6; }
+.eai-todo-chip{ padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; line-height:1.6; }
+.eai-todo-chip--retry{ background:var(--ember-soft); color:var(--ember); }
+.eai-todo-chip--weak{ background:var(--gold-soft); color:var(--gold); }
+.eai-todo-chip--next{ background:var(--primary-soft); color:var(--primary); }
+.eai-todo-empty{ display:flex; flex-direction:column; align-items:flex-start; gap:14px; padding:6px 0 2px; }
+.eai-todo-empty + .eai-todo-empty, .eai-todo-list + .eai-todo-empty{ margin-top:16px; }
+.eai-todo-more{ padding:12px 20px; min-height:46px; background:var(--primary); color:#fff; font-size:14px; }
+.eai-km-root .eai-todo-title{ line-height:1.75; }
+.eai-km-root .eai-todo-meta, .eai-km-root .eai-todo-chip{ line-height:1.8; }
 .eai-ob-error{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ember); margin-top:6px; }
 /* Facebook's own blue, the same size as Google's button beside it. */
 .eai-fb-btn{ display:flex; align-items:center; justify-content:center; gap:10px; width:320px; max-width:100%; height:40px; border:0; border-radius:4px; background:#1877F2; color:#fff; font:500 14px/1 Roboto,Arial,sans-serif; cursor:pointer; transition:background .15s ease, opacity .15s ease; }
@@ -2953,22 +2970,38 @@ function LevelStat({ p, xp, lang, stacked }) {
   );
 }
 
-function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask, bonusXp = 0, lang = "en" }) {
+function Dashboard({ p, go, practice, mastery, chapterProgress, bonusXp = 0, lang = "en" }) {
   const xp = p.xp + bonusXp;
-  // "Today's plan" is the student's own list: each day starts empty, older days stay stored but hidden.
-  const tasks = todaysTasks(plan, dateKey());
-  const done = tasks.filter((x) => x.done).length;
-  const planPct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-  const suggestions = remainingSuggestions(p.plan ?? [], plan, dateKey()).slice(0, 3);
-  const planFull = tasks.length >= MAX_TASKS_PER_DAY;
-  const subjectOptions = fieldSubjects(p.field, p.foreignLanguage); // the subjects this student sits: their chosen foreign language, not the "Foreign Language" placeholder
-  const [draft, setDraft] = useState({ title: "", subject: "", minutes: "" });
-  const canAdd = Boolean(draft.title.trim()) && !planFull;
-  const submitTask = (e) => {
-    e.preventDefault();
-    if (!canAdd) return;
-    onAddPlanTask({ title: draft.title, subject: draft.subject || null, minutes: draft.minutes });
-    setDraft((d) => ({ ...d, title: "", minutes: "" })); // keep the chosen subject: students often add several tasks for one subject
+  // "Today's exercises": Mathematics questions picked from the student's own progress (todaysExercises.js), chosen once a day.
+  const subject = OPEN_PRACTICE_SUBJECTS.find((s) => fieldSubjects(p.field, p.foreignLanguage).includes(s)) ?? null;
+  const progress = subject ? (chapterProgress?.(subject) ?? null) : null;
+  // With the server, which chapters are open is not known until its answer arrives: show a placeholder rather than pick (and keep)
+  // questions from a chapter that turns out to be locked.
+  const waiting = SERVER_MODE && subject != null && progress == null;
+  const exercises = useMemo(() => (subject ? getExercises(subject, lang) : []), [subject, lang]);
+  const picks = useMemo(() => (subject && !waiting
+    ? todaysExercises({ storage: safeStorage(), userKey: p.userId ?? "local", day: dateKey(), list: exercises, practice, mastery: mastery ?? {}, progress, exists: (id) => getExercise(id) != null })
+    : []), [subject, waiting, exercises, practice, mastery, progress, p.userId]);
+  const byId = new Map(exercises.map((e) => [e.id, e]));
+  const rows = picks.filter((pk) => byId.has(pk.id)).map((pk) => {
+    const e = byId.get(pk.id);
+    return {
+      id: e.id, title: String(e.prompt ?? "").replace(/\s+/g, " ").trim(), topic: topicLabel(e.topic, lang), difficulty: e.difficulty,
+      reason: pk.reason, reasonLabel: t(lang, pk.reason === "retry" ? "todayReasonRetry" : pk.reason === "weak" ? "todayReasonWeak" : "todayReasonNext"),
+      done: isExerciseDone(practice?.[e.id]),
+    };
+  });
+  // Opening one lands on that question: Practice resumes from the position remembered here, the same way it does for a student
+  // who left a set half-way (practiceResume.js).
+  const openExercise = (id) => {
+    const e = byId.get(id);
+    if (e) practiceMemory(safeStorage(), "bac", p.userId).remember(e);
+    go("practice");
+  };
+  const todayText = {
+    title: t(lang, "todayTitle"), sub: t(lang, "todaySub"), caughtUp: t(lang, "todayCaughtUp"), allDone: t(lang, "todayAllDone"),
+    more: t(lang, "todayMore"), openPractice: t(lang, "todayOpenPractice"), openAria: t(lang, "todayOpenAria"),
+    done: (n, total) => tf(lang, "todayDone", { done: localizeNum(n, lang), total: localizeNum(total, lang) }),
   };
 
   return (
@@ -2986,74 +3019,8 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Daily plan */}
-        <div className="eai-card lg:col-span-2">
-          <CardHead title={t(lang, "dashTodayPlan")} kh={lang === "km" ? null : "ផែនការសិក្សាថ្ងៃនេះ"}
-            action={<span className="text-xs font-bold eai-display" style={{ color: "var(--jade)" }}>{done}/{tasks.length} {t(lang, "dashDone")}</span>} />
-          <div className="h-1.5 rounded-full eai-soft mb-4 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${planPct}%`, background: "var(--jade)", transition: "width .3s" }} />
-          </div>
-          <form onSubmit={submitTask} className="eai-plan-form flex flex-col sm:flex-row gap-2 mb-4">
-            <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-              placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
-              className={`eai-ob-input eai-focus w-full sm:flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} />
-            {/* sm:flex-wrap is the safety net: the Min input and Add button below are sm:flex-shrink-0 (they
-                never shrink), so if the card is ever too narrow to fit select+Min+Add on one row, this wraps
-                the overflow onto a second line inside the card instead of spilling past its edge. */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-              <select value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
-                aria-label={t(lang, "planSubjectOptional")}
-                className={`eai-ob-input eai-focus w-full sm:flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ minWidth: 140 }}>
-                <option value="">{t(lang, "planSubjectOptional")}</option>
-                {subjectOptions.map((s) => <option key={s} value={s}>{subjectLabel(s, lang)}</option>)}
-              </select>
-              <input type="number" min="1" max="600" inputMode="numeric" value={draft.minutes}
-                onChange={(e) => setDraft((d) => ({ ...d, minutes: e.target.value }))}
-                placeholder={t(lang, "planMinutesShort")} aria-label={t(lang, "planMinutesShort")}
-                className={`eai-ob-input eai-focus w-full sm:w-[84px] sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} />
-              <button type="submit" disabled={!canAdd}
-                className={`eai-btn eai-glass eai-focus px-4 text-sm flex items-center justify-center gap-1.5 w-full sm:w-auto sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
-                style={{ opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
-                <Plus size={15} /> {t(lang, "planAdd")}
-              </button>
-            </div>
-          </form>
-          <div className="space-y-2.5">
-            {tasks.length === 0 && (
-              <div className="flex items-center gap-3 py-2">
-                <RomdoulSprig size={34} />
-                <p className={`text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}>{t(lang, "planEmpty")}</p>
-              </div>
-            )}
-            {tasks.map((task) => (
-              <div key={task.id} className="eai-nav flex items-center gap-2 p-3 rounded-2xl border" style={{ borderColor: "var(--line)" }}>
-                <button onClick={() => onTogglePlan(task.id)} aria-pressed={task.done} className="eai-focus flex-1 min-w-0 flex items-center gap-3 text-left rounded-xl">
-                  {task.done ? <CheckCircle2 size={22} style={{ color: "var(--jade)", flexShrink: 0 }} /> : <Circle size={22} className="eai-muted" style={{ flexShrink: 0 }} />}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate" style={{ textDecoration: task.done ? "line-through" : "none", opacity: task.done ? 0.5 : 1 }}>{task.task}</p>
-                    <p className="text-xs eai-muted">{[task.s ? subjectLabel(task.s, lang) : null, task.why === "My task" ? t(lang, "planMyTask") : task.why].filter(Boolean).join(" · ")}</p>
-                  </div>
-                  {task.min ? <span className="text-xs font-bold eai-muted flex items-center gap-1 flex-shrink-0"><Clock size={13} /> {task.min}m</span> : null}
-                </button>
-                <button onClick={() => onRemovePlanTask(task.id)} aria-label={t(lang, "planDeleteTask")} title={t(lang, "planDeleteTask")}
-                  className="eai-focus eai-muted p-1.5 rounded-lg flex-shrink-0"><Trash2 size={16} /></button>
-              </div>
-            ))}
-          </div>
-          {suggestions.length > 0 && (
-            <div className="mt-4">
-              <p className={`text-xs font-semibold eai-muted mb-2 flex items-center ${lang === "km" ? "eai-km" : ""}`}><RomdoulBlossom size={13} className="eai-romdoul-bullet" />{t(lang, "planSuggested")}</p>
-              <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible eai-scroll">
-                {suggestions.map((sg) => (
-                  <button key={sg.id} onClick={() => onAddPlanTask({ title: sg.task, subject: sg.s, minutes: sg.min, why: sg.why })} disabled={planFull}
-                    className="eai-focus eai-soft text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
-                    <Plus size={12} /> {sg.task}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Today's exercises */}
+        <TodaysExercisesCard rows={rows} text={todayText} loading={waiting} lang={lang} onOpen={openExercise} onMore={() => go("practice")} />
 
         {/* Streak + XP + Level (desktop: one card beside the plan; phones show the row above instead) */}
         <div className="eai-card p-6 hidden lg:flex flex-col gap-5 justify-center">
@@ -8677,7 +8644,7 @@ export default function App() {
   // On a phone the same items go in a bottom bar (the main pages) and a More sheet (the rest); see mobileNav.js.
   const mobileNav = splitMobileNav(navItems);
   const view = {
-    dashboard: <Dashboard p={p} go={go} plan={plan} onTogglePlan={togglePlanTask} onAddPlanTask={addPlanTask} onRemovePlanTask={removePlanTask} bonusXp={bonusXp} lang={lang} />,
+    dashboard: <Dashboard p={p} go={go} practice={practice} mastery={topicMastery} chapterProgress={chapterProgressFor} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} paperGate={paperGate} onGoPractice={() => go("practice")} />,
     schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onOpen={handleOpen} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,

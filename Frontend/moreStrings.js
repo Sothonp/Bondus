@@ -9,6 +9,18 @@
 export const MORE_STRINGS = {
   en: {
     // toasts and chrome
+    // dashboard: today's exercises (todaysExercises.js)
+    todayTitle: "Today's exercises",
+    todaySub: "Picked for you from your math progress",
+    todayDone: "{done}/{total} done",
+    todayReasonRetry: "Try again",
+    todayReasonWeak: "Weak spot",
+    todayReasonNext: "Next up",
+    todayAllDone: "All done for today. Great work!",
+    todayMore: "More exercises",
+    todayCaughtUp: "You've finished every exercise in your open chapters. Pass a chapter's Master Quiz to open the next one.",
+    todayOpenPractice: "Open Practice",
+    todayOpenAria: "Open this exercise",
     toastWelcomeBack: "Welcome back, {name}!",
     toastLevelUp: "Level up! You're now Level {level}.",
     streakDays: "{n}-day streak",
@@ -272,6 +284,18 @@ export const MORE_STRINGS = {
   },
 
   km: {
+    // dashboard: today's exercises (todaysExercises.js)
+    todayTitle: "លំហាត់ថ្ងៃនេះ",
+    todaySub: "ជ្រើសរើសសម្រាប់អ្នក ពីការរៀនគណិតវិទ្យារបស់អ្នក",
+    todayDone: "{done}/{total} បានធ្វើរួច",
+    todayReasonRetry: "ធ្វើម្តងទៀត",
+    todayReasonWeak: "ចំណុចខ្សោយ",
+    todayReasonNext: "បន្ទាប់",
+    todayAllDone: "អ្នកបានធ្វើរួចសម្រាប់ថ្ងៃនេះ។ ពូកែណាស់!",
+    todayMore: "លំហាត់បន្ថែម",
+    todayCaughtUp: "អ្នកបានធ្វើលំហាត់ទាំងអស់ក្នុងជំពូកដែលបានបើកហើយ។ ជាប់តេស្តជំពូក ដើម្បីបើកជំពូកបន្ទាប់។",
+    todayOpenPractice: "បើកលំហាត់អនុវត្ត",
+    todayOpenAria: "បើកលំហាត់នេះ",
     toastWelcomeBack: "សូមស្វាគមន៍ត្រឡប់មកវិញ {name}!",
     toastLevelUp: "ឡើងកម្រិត! ឥឡូវនេះអ្នកនៅកម្រិត {level}។",
     streakDays: "{n} ថ្ងៃជាប់គ្នា",
