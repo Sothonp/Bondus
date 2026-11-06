@@ -2976,7 +2976,7 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           <form onSubmit={submitTask} className="eai-plan-form flex flex-col sm:flex-row gap-2 mb-4">
             <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
               placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
-              className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} />
+              className={`eai-ob-input eai-focus w-full sm:flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} />
             {/* sm:flex-wrap is the safety net: the Min input and Add button below are sm:flex-shrink-0 (they
                 never shrink), so if the card is ever too narrow to fit select+Min+Add on one row, this wraps
                 the overflow onto a second line inside the card instead of spilling past its edge. */}
