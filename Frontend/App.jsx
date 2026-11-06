@@ -1263,6 +1263,17 @@ ${riderKeyframesCss("eai-rider-go")}
 .eai-ob-input::placeholder{ color:var(--muted-2); }
 .eai-ob-input:hover{ border-color:var(--input-border-hover); }
 .eai-ob-input:focus-visible{ outline:none; border-color:var(--focus-border); box-shadow:0 0 0 4px var(--primary-ring); }
+/* The "add a task" row on the dashboard: the fields and the Add button are one 42px tall in English. */
+.eai-plan-form .eai-ob-input{ height:42px; }
+.eai-plan-form .eai-btn{ min-height:42px; }
+/* Khmer sits taller than Latin (stacked vowels and subscripts above and below the line), and a fixed 42-48px box with no
+   vertical padding left it touching the border, or clipped at the bottom, on a phone. In Khmer the fields grow to fit their
+   text, with room above and below, and the rows are spaced a little further apart. */
+.eai-km-root .eai-ob-input, .eai-km-root input.eai-input, .eai-km-root select.eai-input{
+  height:auto; min-height:52px; padding-top:11px; padding-bottom:11px; line-height:1.7; }
+.eai-km-root .eai-plan-form .eai-ob-input, .eai-km-root .eai-plan-form .eai-btn{
+  height:auto; min-height:52px; padding-top:11px; padding-bottom:11px; line-height:1.7; }
+.eai-km-root .eai-plan-form, .eai-km-root .eai-plan-form > div{ gap:12px; }
 .eai-ob-error{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ember); margin-top:6px; }
 /* Facebook's own blue, the same size as Google's button beside it. */
 .eai-fb-btn{ display:flex; align-items:center; justify-content:center; gap:10px; width:320px; max-width:100%; height:40px; border:0; border-radius:4px; background:#1877F2; color:#fff; font:500 14px/1 Roboto,Arial,sans-serif; cursor:pointer; transition:background .15s ease, opacity .15s ease; }
@@ -2982,27 +2993,27 @@ function Dashboard({ p, go, plan, onTogglePlan, onAddPlanTask, onRemovePlanTask,
           <div className="h-1.5 rounded-full eai-soft mb-4 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${planPct}%`, background: "var(--jade)", transition: "width .3s" }} />
           </div>
-          <form onSubmit={submitTask} className="flex flex-col sm:flex-row gap-2 mb-4">
+          <form onSubmit={submitTask} className="eai-plan-form flex flex-col sm:flex-row gap-2 mb-4">
             <input value={draft.title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
               placeholder={t(lang, "planAddPlaceholder")} aria-label={t(lang, "planAddPlaceholder")}
-              className={`eai-ob-input eai-focus flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
+              className={`eai-ob-input eai-focus w-full sm:flex-1 min-w-0 ${lang === "km" ? "eai-km" : ""}`} />
             {/* sm:flex-wrap is the safety net: the Min input and Add button below are sm:flex-shrink-0 (they
                 never shrink), so if the card is ever too narrow to fit select+Min+Add on one row, this wraps
                 the overflow onto a second line inside the card instead of spilling past its edge. */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
               <select value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
                 aria-label={t(lang, "planSubjectOptional")}
-                className={`eai-ob-input eai-focus w-full sm:flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42, minWidth: 140 }}>
+                className={`eai-ob-input eai-focus w-full sm:flex-1 ${lang === "km" ? "eai-km" : ""}`} style={{ minWidth: 140 }}>
                 <option value="">{t(lang, "planSubjectOptional")}</option>
                 {subjectOptions.map((s) => <option key={s} value={s}>{subjectLabel(s, lang)}</option>)}
               </select>
               <input type="number" min="1" max="600" inputMode="numeric" value={draft.minutes}
                 onChange={(e) => setDraft((d) => ({ ...d, minutes: e.target.value }))}
                 placeholder={t(lang, "planMinutesShort")} aria-label={t(lang, "planMinutesShort")}
-                className={`eai-ob-input eai-focus w-full sm:w-[84px] sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} style={{ height: 42 }} />
+                className={`eai-ob-input eai-focus w-full sm:w-[84px] sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`} />
               <button type="submit" disabled={!canAdd}
                 className={`eai-btn eai-glass eai-focus px-4 text-sm flex items-center justify-center gap-1.5 w-full sm:w-auto sm:flex-shrink-0 ${lang === "km" ? "eai-km" : ""}`}
-                style={{ minHeight: 42, opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
+                style={{ opacity: canAdd ? 1 : 0.5, cursor: canAdd ? "pointer" : "not-allowed" }}>
                 <Plus size={15} /> {t(lang, "planAdd")}
               </button>
             </div>
