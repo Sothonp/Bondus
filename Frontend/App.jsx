@@ -507,6 +507,26 @@ const STYLES = `
    on every new component remembering to tag itself with .eai-km. Never applied to the University
    track (see isUniProfile guard at each .eai-root that adds this class). */
 .eai-km-root, .eai-km-root *{ font-family:'Kantumruy Pro', system-ui, sans-serif !important; }
+/* Khmer needs more room than Latin. It stacks vowels and subscripts above and below each line and has no spaces
+   between words, so the Latin defaults (Tailwind's text-sm is 1.43 line height; headings are tracked -0.02em for
+   Sora) make it look cramped on a phone. In Khmer: taller lines, and no negative letter-spacing. The --text-*--line-height
+   and --leading-* values are Tailwind's own theme variables, so every text-xs/text-sm/leading-relaxed in the app follows
+   without touching each component; leading-none (big numbers) is left alone. */
+.eai-km-root{
+  --text-xs--line-height:1.8; --text-sm--line-height:1.75; --text-base--line-height:1.7; --text-lg--line-height:1.65;
+  --text-xl--line-height:1.55; --text-2xl--line-height:1.5; --text-3xl--line-height:1.45; --text-4xl--line-height:1.4;
+  --leading-tight:1.5; --leading-snug:1.6; --leading-normal:1.7; --leading-relaxed:1.85;
+  line-height:1.7;
+}
+.eai-km-root .eai-display, .eai-km-root .eai-hero-title, .eai-km-root .eai-lesson-title, .eai-km-root .eai-ob-title{ letter-spacing:0; }
+.eai-km-root .eai-user-bubble, .eai-km-root .eai-hero-message, .eai-km-root .eai-ob-desc{ line-height:1.8; }
+.eai-km-root .eai-composer-input{ line-height:1.7; }
+.eai-km-root .eai-hist-title{ line-height:1.7; }
+.eai-km-root .eai-ob-title, .eai-km-root .eai-lph2{ line-height:1.5; }
+.eai-km-root .eai-ex-question{ line-height:1.7; }
+.eai-km-root .eai-md{ line-height:1.9; }
+.eai-km-root .eai-lp-tab-desc, .eai-km-root .eai-lpscreen{ line-height:1.7; }
+.eai-km-root .eai-lp-btn{ line-height:1.6; }
 
 .theme-light{
   --bg:#FFFFFF; --bg-soft:#F2F1F7; --card:#FFFFFF; --ink:#1A1B3A; --muted:#71728C;
