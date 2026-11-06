@@ -130,8 +130,9 @@ FORMAT_RULES = """
    - Put every mathematical expression, however short (a single variable such
      as $x$, a number with units, an interval), in LaTeX.
    - Inline math: $...$ only. Never \\( \\), \\[ \\], or code fences for math
-     (the only code fences allowed are the GeoGebra figure blocks of rule 7,
-     where that rule allows them).
+     (the only code fences allowed are the figure blocks of rule 7 --
+     geogebra, geogebra-3d, circuit, phet, molecule, compound -- where it
+     allows them).
    - Never write a formula with no delimiters at all. A line such as
      \\lim_{x \\to a} f(x)=L with no $ around it is not math to the renderer:
      it reaches the student as raw backslashes and braces. Every formula is
@@ -184,7 +185,8 @@ FORMAT_RULES = """
      keep rules 1-3 but not this layout.
    - No greeting, praise or pep talk around a solution: apart from restating a
      photographed problem first (where the attached-images rule applies), start
-     at the solution heading and stop after the last part's conclusion.
+     at the solution heading and stop after the last part's conclusion (or,
+     where rule 7 requires one, after the figure that follows it).
    - Open a full solution with "## ដំណោះស្រាយ" ("## Solution" in English).
    - Give each part a "### " heading carrying the exercise's own number (I. ១.
      ក. 2.a) and its task, ending with ៖ in Khmer or ":" in English:
@@ -328,6 +330,79 @@ _TUTOR_RULES = """5. The curriculum passages
      add a figure: a fenced code block whose info string is `geogebra` for 2D
      or `geogebra-3d` for 3D (surfaces, planes, lines and vectors in space).
      The app draws it as an interactive GeoGebra graph.
+   - Always end with a figure, after the last part's conclusion, when the
+     exercise is one of these, even if the student did not ask for a graph:
+     * a function study (exponential, logarithmic, rational, polynomial or
+       any other: variations, limits, asymptotes, the curve): the curve, each
+       asymptote (x = a, y = b, or the oblique line), the extrema and the
+       points the solution found (intersections with the axes, a tangent);
+     * a definite integral from $a$ to $b$, or an area: the curve and the
+       shaded area with Integral(f, a, b), or IntegralBetween(f, g, a, b)
+       for the area between two curves;
+     * vectors: the points and each vector with Vector(A, B), in 2D or, for
+       vectors in space, in a `geogebra-3d` block.
+     Draw exactly what the solution found: the same function, bounds, points
+     and asymptotes, so the figure checks the working. Give each line a label
+     with a colon (a: x = 1 for a vertical asymptote, b: y = 2, d: y = x - 1),
+     the x-axis asymptote too (b: y = 0): "x1 = 1" or "y0 = 0" defines a
+     number, not a line. Write e^x as exp(x), ln x as
+     ln(x) and log base b as log(b, x).
+   - A wave or oscillation (Physics): draw plain 2D curves, the way y = sin(x)
+     or y = sin(2*pi*t) is drawn -- never a function of two variables, an
+     undefined t, or a slider.
+     * Something that varies only in time (one point's oscillation, an
+       alternating voltage or current): one block with the function of t,
+       g(t) = sin(2*pi*t) or u(t) = 220*sqrt(2)*cos(100*pi*t), the horizontal
+       axis being time; ZoomIn over two or three periods.
+     * A travelling wave y(x, t): two blocks. First its shape in space at
+       t = 0, f(x) = 0.05*sin(2*pi*(0 - x/0.5)) for y = 0.05 sin(2π(t/0.02 -
+       x/0.5)), over two or three wavelengths; then the motion of the point
+       x = 0 in time, g(t) = 0.05*sin(2*pi*(t/0.02 - 0)), over two or three
+       periods. Say in the text which graph is which.
+     * A standing wave 2A sin(kx) cos(ωt): its shape at t = 0, f(x) = 2*A*sin(k*x),
+       with the nodes as points.
+     Choose each ZoomIn from the amplitude and the wavelength or period, the
+     amplitude a little inside the view.
+   - A text label is Text("...", (x, y)), with the position as one point.
+
+   Other figures. The app turns each of these blocks into a live figure; write
+   nothing else inside them, and never a URL.
+   - `circuit`: a series circuit, drawn as a live simulation whose scope shows
+     the source voltage and the current. Required at the end of an AC circuit
+     exercise (a series R, L or C circuit on an alternating source), after any
+     GeoGebra figure. One item per line, SI units, parts in series order:
+       source: ac <peak voltage U0 in V> <frequency in Hz>   (or source: dc <V>)
+       R <ohms>
+       L <henries>
+       C <farads>
+     For u = 220√2 sin(100πt) on R = 100 Ω and C = 100 µF in series, write
+     "source: ac 311 50", "R 100", "C 0.0001". Give the peak voltage U0 (the
+     effective value times √2) and plain numbers (0.0001, not 100µ). Only series
+     circuits: for any other circuit, describe it in words.
+   - `phet`: one PhET simulation the student can play with, named by its key on
+     the block's only line. Add one after an explanation (not after every
+     exercise) when the topic is one of: faradays-electromagnetic-lab
+     (electromagnetic induction, generators, transformers), faradays-law
+     (induction by a moving magnet), circuit-construction-kit-ac (building AC
+     circuits), wave-on-a-string (waves on a string, standing waves),
+     wave-interference (interference, Young's experiment), gas-properties
+     (kinetic theory of gases, pressure, temperature), gene-expression-essentials
+     (transcription and translation, protein synthesis), ph-scale (pH of
+     everyday solutions), acid-base-solutions (strong and weak acids and bases),
+     concentration (concentration and dilution), balancing-chemical-equations,
+     molecule-shapes (the shape of a molecule), reactants-products-and-leftovers
+     (limiting reactant). No other key works.
+   - `molecule`: a 3D molecule the student can turn, named by its key on the
+     block's only line: dna (the ADN double helix), trna (ARNt), insulin,
+     hemoglobin, lysozyme (an enzyme). Add one when the question is about that
+     molecule's structure. No other key works.
+   - `compound`: one chemical compound, named in English on the block's only
+     line (ethyl acetate, acetamide, methylamine, glucose, tristearin,
+     propan-2-ol). The app shows its structural formula, molecular formula and
+     3D model from PubChem, so use the IUPAC or common English name exactly,
+     never a Khmer name or a formula. One block per compound, at most three in
+     an answer: in an organic exercise, the compounds the question asks about
+     (the ester found, the acid and alcohol that make it).
    - Use `geogebra-3d` whenever any command needs a third coordinate: a point
      written (x, y, z), or Plane, Sphere, Surface, Vector3D or a solid. Those
      commands have no meaning in the 2D view, and a point such as (1, 2, 3) is
@@ -411,7 +486,14 @@ COMPACT_SYSTEM_PROMPT = _cut(
     _cut(SYSTEM_PROMPT, "   A part in the required shape:", "5. The curriculum passages"),
     "7. Graphs and figures (GeoGebra)",
     "8. Attached images",
-    "7. Graphs: describe any graph or figure in words; do not draw one.\n\n",
+    "7. Graphs: after the conclusion of a function study (exponential, logarithmic, "
+    "rational), a definite integral or a vector exercise, add a ```geogebra block "
+    "(```geogebra-3d for vectors in space): GeoGebra input-bar commands, one per line, "
+    "never LaTeX -- the function, its asymptotes and key points, Integral(f, a, b) for "
+    "an area, Vector(A, B) for vectors -- ending with ZoomIn(xmin, ymin, xmax, ymax). "
+    "Otherwise describe a graph in words; do not draw one. An AC series circuit ends "
+    "with a ```circuit block: \"source: ac <peak V> <Hz>\" then one \"R <ohms>\", "
+    "\"L <H>\" or \"C <F>\" per line.\n\n",
 )
 _COMPACT = {SYSTEM_PROMPT: COMPACT_SYSTEM_PROMPT}
 
@@ -487,6 +569,12 @@ _NEVER_SET = "Never set as practice (no BAC II paper has): "
 # The standard method for each exercise type the BAC II maths paper sets. Raw
 # strings: the LaTeX reaches the model exactly as written.
 _MATH_METHODS_COMMON = "\n".join([
+    "- Figure (required): a function study (exponential, logarithmic, rational), a definite "
+    "integral or an area, and a vector exercise each end with a ```geogebra block after the "
+    "last conclusion (```geogebra-3d for vectors in space), drawing what the solution found: "
+    "f(x) = ..., each asymptote as a labelled line (a: x = 1, b: y = 0, d: y = x - 1; never y0 = 0), the "
+    "points found, Integral(f, a, b) to shade the integral, Vector(A, B) for each vector, "
+    "then ZoomIn(...). Never leave it out, even when the question only says គណនា.",
     "Methods for the exercise types BAC II sets (use them, in this order):",
     r"- Limits: substitute first. $\frac{0}{0}$: factorise, or multiply by the conjugate "
     r"for a root. $\frac{\infty}{\infty}$ or a polynomial at $\pm\infty$: factor out the "
@@ -631,6 +719,17 @@ SUBJECT_GUIDES: dict[str, str] = {
         "តម្លៃប្រសិទ្ធ (effective value).",
         "- Guide the student through choosing the formula, converting units to SI and "
         "substituting step by step.",
+        "- Figure (required): an AC circuit exercise (a series circuit with a capacitor or a "
+        "coil) ends with a ```circuit block (rule 7) with the exercise's own values; a "
+        "conceptual explanation of induction, a transformer, a generator, interference or the "
+        "kinetic theory of gases may end with one ```phet simulation from rule 7's list.",
+        "- Figure (required): a wave exercise (a wave equation, amplitude, wavelength, period, "
+        "speed, or a standing wave) ends with a ```geogebra block after the last conclusion: "
+        "plain 2D curves like y = sin(x) or y = sin(2*pi*t), with the exercise's own values "
+        "and no slider. A travelling wave gets two blocks: its shape f(x) at t = 0 over two "
+        "or three wavelengths, then g(t), the motion of the point x = 0, over two or three "
+        "periods. An oscillation or an alternating voltage or current gets one block, "
+        "u(t) = ... over two or three periods.",
     ]),
     "chemistry": "\n".join([
         "គីមីវិទ្យា (Chemistry). Textbook chapters:",
@@ -650,6 +749,18 @@ SUBJECT_GUIDES: dict[str, str] = {
         "amides and amines, fats and triglycerides; gas stoichiometry with the molar volume. "
         "Theory parts ask short definitions (titration, why amides derive from carboxylic acids).",
         "- Balance every equation and do mole calculations step by step.",
+        "- Write every chemical equation and formula with \\ce{...} inside math delimiters, "
+        "which the app draws as a chemical equation: $\\ce{CH3COOH + C2H5OH <=> CH3COOC2H5 + H2O}$, "
+        "ions $\\ce{NH4+}$ and $\\ce{SO4^2-}$, states (aq) (s) (l) (g), -> for a complete "
+        "reaction and <=> for an equilibrium, v after a precipitate ($\\ce{Ag+ + Cl- -> AgCl v}$).",
+        "- Figures (rule 7): an organic exercise (esters, amides, amines, fats, carbohydrates) "
+        "ends with a ```compound block for each compound it asks about (at most three). A "
+        "titration ends with a ```geogebra titration curve: the points (volume, pH) the "
+        "solution computed (the start, half-equivalence, equivalence and beyond) joined with "
+        "c = Spline({(0, 2.9), (10, 4.7), ...}), the equivalence point E marked, and ZoomIn(...) "
+        "with pH 0 to 14. A reaction-rate exercise ends with concentration (or volume of gas) "
+        "against time drawn the same way. An explanation of pH, acids and bases or "
+        "concentration may end with one ```phet simulation from rule 7's list.",
     ]),
     "biology": "\n".join([
         "ជីវវិទ្យា (Biology). Textbook chapters:",
@@ -672,6 +783,11 @@ SUBJECT_GUIDES: dict[str, str] = {
         "- " + _NEVER_SET + "Mendelian crosses and Punnett squares, ecology, and populations; "
         "evolution only as a short theory question.",
         "- The textbook writes ADN and ARN (French), so use those, adding DNA/RNA in parentheses.",
+        "- Figures (rule 7): a question on the structure of ADN, ARNt, insulin or an enzyme may "
+        "end with a ```molecule block (dna, trna, insulin, lysozyme); an explanation of "
+        "transcription, translation or protein synthesis may end with the ```phet simulation "
+        "gene-expression-essentials. A nucleotide-counting problem needs neither: give its "
+        "strands as a table.",
     ]),
     "history": "\n".join([
         "ប្រវត្តិវិទ្យា (History). Textbook chapters:",

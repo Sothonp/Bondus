@@ -20,6 +20,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import "katex/contrib/mhchem"; // \ce{...} chemical equations (see vite.config.js resolve.dedupe)
 import { UNIS, UNI_MAJORS, UNI_SCHOLARSHIPS, UNI_PROFILE_INFO } from "../src/data/universities.js";
 import { UNI_QUIZ_BANK } from "../src/data/universityQuizBank.js";
 import { ABROAD_COUNTRIES, ABROAD_UNIVERSITIES } from "../src/data/abroadUniversities.js";
@@ -52,6 +53,8 @@ import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
 import { addTask, toggleTask, removeTask } from "./dailyPlan.js";
 import LoadingScreen from "./LoadingScreen.jsx";
+import { GGB_SCRIPT, GGB_MAX_REPORTED, geogebraCommands, isSpatial, buildFigure } from "./geogebra.js";
+import { CircuitFigure, PhetFigure, MoleculeFigure, CompoundFigure } from "./Visuals.jsx";
 import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
@@ -6141,13 +6144,7 @@ const hideUnclosed = (text, marker) => {
   return parts.length % 2 === 0 ? parts.slice(0, -1).join(marker) : text;
 };
 
-/* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 7) ── */
-const GGB_SCRIPT = "https://www.geogebra.org/apps/deployggb.js";
-const GGB_MAX_LINES = 30;
-// One missing object fails every later command that uses it, so report the first few
-// steps rather than the whole cascade.
-const GGB_MAX_REPORTED = 3;
-const GGB_BLOCKED = /^\s*(Execute|SetClickScript|SetUpdateScript|RunClickScript|RunUpdateScript|PlaySound|ReadText)\b/i;
+/* ── GeoGebra figures: ```geogebra / ```geogebra-3d blocks (see prompts.py rule 7; logic in geogebra.js) ── */
 let ggbLoader = null;
 let ggbCounter = 0;
 
@@ -6162,45 +6159,6 @@ function loadGeoGebra() {
     document.head.appendChild(script);
   });
   return ggbLoader;
-}
-
-const geogebraCommands = (code) => code.split("\n")
-  .map((line) => line.trim())
-  .filter((line) => line && !line.startsWith("#") && line.length <= 500 && !GGB_BLOCKED.test(line))
-  .slice(0, GGB_MAX_LINES);
-
-/* The model picks the fence, and it does not always pick `geogebra-3d` for a figure that
-   lives in space. In the 2D graphing app "A = (1, 2, 3)" is not a point, so Plane(A, B, C)
-   fails with "Illegal argument: Point A" -- and GeoGebra says so in a modal over the chat.
-   Read the commands instead of trusting the fence. */
-const GGB_SOLID = /\b(?:Plane|PerpendicularPlane|PlaneBisector|Sphere|Surface|Cube|Prism|Pyramid|Tetrahedron|Octahedron|Cone|Cylinder|InfiniteCone|Vector3D|IntersectConic)\s*\(/i;
-const GGB_TRIPLE = /\(\s*-?\d[\d.]*\s*,\s*-?\d[\d.]*\s*,\s*-?\d[\d.]*\s*\)/;
-const GGB_Z_AXIS = /(?:^|[\s(])z\s*[=:]/im;
-const isSpatial = (commands) => commands.some(
-  (command) => GGB_SOLID.test(command) || GGB_TRIPLE.test(command) || GGB_Z_AXIS.test(command));
-
-/* "A = (1,2,3)", "c: x + y = 1" and "f(x) = x^2" each name what they build; a bare
-   construction such as Plane(A,B,C) names nothing and is checked by its arguments. */
-const GGB_LABEL = /^\s*([A-Za-z]\w*)\s*(?:\(\s*[A-Za-z]\w*\s*\))?\s*[:=]/;
-const GGB_ARGUMENTS = /\(([^()]*)\)\s*$/;
-
-/* Build the figure in the order it was written, and report the step that would not build
-   rather than leaving GeoGebra to raise a dialog the student can do nothing about. */
-function buildFigure(api, commands) {
-  const unbuilt = [];
-  try { api.setErrorDialogsActive(false); } catch { /* an older applet may not have it */ }
-  for (const command of commands) {
-    const missing = (command.match(GGB_ARGUMENTS)?.[1] || "").split(",")
-      .map((argument) => argument.trim())
-      .filter((argument) => /^[A-Za-z]\w{0,2}$/.test(argument) && !api.exists(argument));
-    if (missing.length) { unbuilt.push(`${command} (no ${missing.join(", ")})`); continue; }
-    let built = false;
-    try { built = api.evalCommand(command) !== false; } catch { built = false; }
-    const label = command.match(GGB_LABEL)?.[1];
-    if (built && label && !api.exists(label)) built = false;
-    if (!built) unbuilt.push(command);
-  }
-  return unbuilt;
 }
 
 function GeoGebraFigure({ code, is3d }) {
@@ -6266,9 +6224,16 @@ function markdownComponents(streaming) {
       const code = node?.children?.[0];
       const classes = code?.tagName === "code" ? code.properties?.className || [] : [];
       const is3d = classes.includes("language-geogebra-3d");
-      if (!is3d && !classes.includes("language-geogebra")) return <pre {...props} />;
-      if (streaming) return <p className="text-xs eai-muted">Drawing graph…</p>;
-      return <GeoGebraFigure code={hastText(code).trim()} is3d={is3d} />;
+      const figure = is3d || classes.includes("language-geogebra") ? "graph"
+        : ["circuit", "phet", "molecule", "compound"].find((kind) => classes.includes(`language-${kind}`));
+      if (!figure) return <pre {...props} />;
+      if (streaming) return <p className="text-xs eai-muted">Drawing {figure === "graph" ? "graph" : figure}…</p>;
+      const text = hastText(code).trim();
+      if (figure === "circuit") return <CircuitFigure code={text} />;
+      if (figure === "phet") return <PhetFigure code={text} />;
+      if (figure === "molecule") return <MoleculeFigure code={text} />;
+      if (figure === "compound") return <CompoundFigure code={text} />;
+      return <GeoGebraFigure code={text} is3d={is3d} />;
     },
   };
 }
