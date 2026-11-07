@@ -6814,6 +6814,11 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
         upsertReply({ ...reply, streaming: false, notice: null });
         setLoadingId((id) => (id === chatId ? null : id));
         abortRef.current = null;
+        // askAllowance() only updates the badge on its own check (gate.usage), which it skips on an outage so an
+        // unreachable Laravel never blocks a question -- and the AI server's own refusal (the real limit, the one
+        // that actually counts) carries no usage numbers to read at all. Either way, re-asking here is the only way
+        // the badge ever catches up to what just happened, instead of sitting on a stale "N left" after a "no".
+        refreshUsage();
       });
   };
 
