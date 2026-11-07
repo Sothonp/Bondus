@@ -172,13 +172,11 @@ test("what is saved to the server is progress only: never XP, the plan, or the p
   assert.doesNotMatch(app, /putState\([^)]*password/);
 });
 
-test("the plan talks to the server in order, and undoes a change the server refused", () => {
-  const plan = between("const planChange = ", "const handleAnswer = ");
-  assert.match(plan, /api\.patchPlanTask\(sid, \{ done \}\)/);
-  assert.match(plan, /api\.addPlanTask\(/);
-  assert.match(plan, /api\.deletePlanTask\(sid\)/);
-  assert.match(plan, /planOps\.current = planOps\.current\.then\(job\)/);
-  assert.match(plan, /flash\("errPlanSave"\)/);
+test("the dashboard no longer has a student-written plan to send to the server", () => {
+  // The plan card was replaced by "Today's exercises" (todaysExercises.js), which is worked out on the phone and saves nothing.
+  // Breaks if: the old to-do handlers come back and start posting plan tasks again.
+  assert.doesNotMatch(app, /const (planChange|togglePlanTask|addPlanTask|removePlanTask) = /);
+  assert.doesNotMatch(app, /api\.(addPlanTask|patchPlanTask|deletePlanTask)\(/);
 });
 
 test("a rejected token sends the student back to the login screen", () => {

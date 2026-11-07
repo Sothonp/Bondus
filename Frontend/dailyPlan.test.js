@@ -83,12 +83,10 @@ test("suggestions already added today are not offered again, but are offered aga
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 const between = (from, to) => app.slice(app.indexOf(from), app.indexOf(to));
 
-test("App uses the shared plan helpers, and the Dashboard shows today's exercises instead of the to-do form", () => {
-  assert.match(app, /from "\.\/dailyPlan\.js"/);
-  assert.match(app, /addTask\(plan, task, date, tempId\)/);
-  assert.match(app, /setPlan\(\(arr\) => toggleTask\(arr, id\)\)/);
-  // The dashboard no longer shows the student's own to-do list: it shows exercises picked from their progress instead
-  // (todaysExercises.js). The list's data and handlers stay in App for now, so nothing already saved is lost.
+test("the Dashboard shows today's exercises, and App no longer has the to-do handlers", () => {
+  // The dashboard shows exercises picked from the student's progress (todaysExercises.js), not their own to-do list.
+  // The plan's stored data stays in App for now, so nothing already saved is lost.
+  assert.doesNotMatch(app, /from "\.\/dailyPlan\.js"/);
   assert.doesNotMatch(app, /onAddPlanTask=\{addPlanTask\}/);
   assert.match(app, /<TodaysExercisesCard /);
 });
@@ -98,8 +96,6 @@ test("new accounts start with an empty plan instead of a generated one", () => {
   assert.doesNotMatch(app, /setPlan\(insights\.plan\)/);
 });
 
-test("ticking, adding or removing a plan task pays no XP", () => {
-  const planHandlers = between("const togglePlanTask = ", "const handleAnswer = ");
-  assert.ok(planHandlers.includes("addPlanTask"), "found the plan handlers");
-  assert.doesNotMatch(planHandlers, /setBonusXp|XP_PER_CORRECT|sendStudy/);
+test("nothing in App can award XP for a plan task any more", () => {
+  assert.doesNotMatch(app, /const (togglePlanTask|addPlanTask|removePlanTask) = /);
 });
