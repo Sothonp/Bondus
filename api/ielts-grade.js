@@ -1,5 +1,5 @@
 import { generateText, hasAIProviderConfigured } from "./_ai.js";
-import { refuseUnlessSignedIn } from "./_auth.js";
+import { refuseUnlessSignedIn, refuseIfOverGraderLimit } from "./_auth.js";
 import { tooLongField } from "./_limits.js";
 
 const SYSTEM_INSTRUCTION = `You are an experienced, certified IELTS examiner grading a single response from a short placement diagnostic (not a full mock exam).
@@ -15,6 +15,7 @@ export default async function handler(req, res) {
     return;
   }
   if (await refuseUnlessSignedIn(req, res)) return;
+  if (await refuseIfOverGraderLimit(req, res)) return;
 
   if (!hasAIProviderConfigured()) {
     res.status(500).json({ error: "Server is missing GEMINI_API_KEY or GROQ_API_KEY. Add at least one in your Vercel project's Environment Variables." });

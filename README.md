@@ -127,7 +127,9 @@ server is read-only (`ALLOW_WRITES=false`): the index is built on the laptop,
 committed, and baked into the Docker image. The AI routes answer only signed-in
 students: `AUTH_VERIFY_URL` is the Laravel API's `/me` address, and the server asks it
 whether the Bearer token the site sends is valid (`src/auth.py`). The serverless AI
-functions do the same with that variable set on the site host (`api/_auth.js`). They call Gemini
+functions do the same with that variable set on the site host (`api/_auth.js`); in production they refuse
+(503) rather than run open if it is missing. Both also cap Free accounts per network address, and the IELTS
+grader has its own daily allowance (see `.env.example`). They call Gemini
 (`GEMINI_MODEL`, then each of `GEMINI_FALLBACK_MODELS`, 12 s each) and Groq
 (`GROQ_MODEL`) if all of those fail (`api/_ai.js`).
 

@@ -130,7 +130,7 @@ export function createSignedInCheck({
   }
 
   /* Resolves to null when the request may go ahead, else { status, body, headers } to answer with. `address` is the caller's. */
-  return async function check(authorization, address = "unknown") {
+  async function check(authorization, address = "unknown") {
     if (!url) return null;
     const token = bearerToken(authorization);
     if (!token) return refuse(401, "Sign in to use the AI features.", { "WWW-Authenticate": "Bearer" });
@@ -166,8 +166,80 @@ export function createSignedInCheck({
     recent.push(at);
     served.set(student, recent);
     return null;
+  }
+  /* Who a token belongs to, from the checks already remembered (null when it is not one: call `check` first). */
+  check.studentOf = (authorization) => {
+    const token = bearerToken(authorization);
+    const remembered = token ? seen.get(keyOf(token)) : null;
+    return remembered && now() < remembered.until ? remembered.student : null;
+  };
+  return check;
+}
+
+/* A Phnom Penh day, as the Laravel API counts a day (UTC+7, no daylight saving), and the seconds until it ends. */
+const phnomPenhDay = (at) => new Date(at + 7 * 3_600_000).toISOString().slice(0, 10);
+const secondsToMidnight = (at) => Math.max(1, Math.ceil((86_400_000 - ((at + 7 * 3_600_000) % 86_400_000)) / 1000));
+const dayRefusal = (at, error, code) => ({ status: 429, body: { error, code }, headers: { "Retry-After": String(secondsToMidnight(at)) } });
+
+/* Production with no AUTH_VERIFY_URL would leave every AI function open to the whole internet, spending the shared Gemini/Groq
+   quota, so there the functions refuse instead (503). Local development and preview deployments stay open; AUTH_REQUIRED=false
+   switches this off on purpose. */
+export function signInUnconfigured(env = process.env) {
+  if ((env.AUTH_VERIFY_URL || "").trim()) return false;
+  if (/^(0|false|off|no)$/i.test((env.AUTH_REQUIRED || "").trim())) return false;
+  return env.VERCEL_ENV === "production" || env.CONTEXT === "production";
+}
+const unconfigured = () => ({
+  status: 503,
+  body: { error: "The AI features are switched off until sign-in checking is set up on this server.", code: "auth_not_configured" },
+  headers: {},
+});
+let warnedUnconfigured = false;
+function refuseUnconfigured() {
+  if (!warnedUnconfigured) { warnedUnconfigured = true; console.error("AUTH_VERIFY_URL is not set in production: the AI functions are refusing every request. Set it to the Laravel API's /me address."); }
+  return unconfigured();
+}
+
+/* How many different questions one network address may ask in a day on Free accounts, across all of them. Each Free account has its
+   own daily questions, so a script that makes accounts would otherwise spend the shared AI quota (the AI coach server does the same,
+   src/rate_limit.py). Per instance, like the other brakes here: it starts again when an instance does, a leak and never a lockout. */
+export function createAddressBudget({ limit = 300, now = Date.now } = {}) {
+  let day = null;
+  let asked = new Map(); // address -> Set of question ids
+  return function take(address, id) {
+    if (limit <= 0) return true;
+    const today = phnomPenhDay(now());
+    if (today !== day) { day = today; asked = new Map(); }
+    const ids = asked.get(address) ?? new Set();
+    if (!ids.has(id) && ids.size >= limit) return false;
+    ids.add(id);
+    asked.set(address, ids);
+    return true;
   };
 }
+
+/* A feature the Laravel API does not count (the IELTS grader): a daily allowance per student, per network address and in all, kept
+   in memory per instance. `take({ student, address })` resolves to null, or the { status, body, headers } to answer with. */
+export function createDailyAllowance({ perStudent = 20, perAddress = 200, overall = 3000, now = Date.now } = {}) {
+  let day = null;
+  let students = new Map();
+  let addresses = new Map();
+  let total = 0;
+  return function take({ student, address }) {
+    const at = now();
+    const today = phnomPenhDay(at);
+    if (today !== day) { day = today; students = new Map(); addresses = new Map(); total = 0; }
+    if ((students.get(student) ?? 0) >= perStudent) return dayRefusal(at, "You have used today's turns of this feature. Please try again tomorrow.", "daily_limit_reached");
+    if ((addresses.get(address) ?? 0) >= perAddress) return dayRefusal(at, "Too many requests from this network today. Please try again tomorrow.", "address_limit_reached");
+    if (total >= overall) return dayRefusal(at, "This feature is very busy today. Please try again tomorrow.", "busy");
+    students.set(student, (students.get(student) ?? 0) + 1);
+    addresses.set(address, (addresses.get(address) ?? 0) + 1);
+    total += 1;
+    return null;
+  };
+}
+
+const intFrom = (value, fallback) => (Number.isInteger(Number(value)) && String(value ?? "").trim() !== "" && Number(value) >= 0 ? Number(value) : fallback);
 
 /* The address is read on each call so a changed environment variable takes effect, and tests can set it. */
 let current = null;
@@ -189,7 +261,7 @@ function callerAddress(get, socket) {
 
 /* Vercel: true when the request was refused and already answered, so the handler returns. */
 export async function refuseUnlessSignedIn(req, res) {
-  const refused = await check()(req.headers?.authorization, callerAddress((name) => req.headers?.[name], req.socket?.remoteAddress));
+  const refused = signInUnconfigured() ? refuseUnconfigured() : await check()(req.headers?.authorization, callerAddress((name) => req.headers?.[name], req.socket?.remoteAddress));
   if (!refused) return false;
   for (const [name, value] of Object.entries(refused.headers)) res.setHeader(name, value);
   res.status(refused.status).json(refused.body);
@@ -198,7 +270,7 @@ export async function refuseUnlessSignedIn(req, res) {
 
 /* Netlify: the Response to send when refused, else null. */
 export async function refuseUnlessSignedInNetlify(req) {
-  const refused = await check()(req.headers.get("authorization"), callerAddress((name) => req.headers.get(name)));
+  const refused = signInUnconfigured() ? refuseUnconfigured() : await check()(req.headers.get("authorization"), callerAddress((name) => req.headers.get(name)));
   return refused ? Response.json(refused.body, { status: refused.status, headers: refused.headers }) : null;
 }
 
@@ -219,7 +291,8 @@ export function questionId(supplied) {
   return typeof supplied === "string" && REQUEST_ID.test(supplied) ? supplied : randomUUID().replaceAll("-", "");
 }
 
-export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 5_000, now = Date.now, outagePerDay = 30 } = {}) {
+export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 5_000, now = Date.now, outagePerDay = 30, freePerAddressDaily = 300 } = {}) {
+  const freeBudget = createAddressBudget({ limit: freePerAddressDaily, now });
   const outage = new Map(); // `${Phnom Penh day}:${sha256(token)}` -> the question ids let through while the API could not answer
 
   /* True when this question may go ahead although the API could not count it. */
@@ -240,7 +313,7 @@ export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetc
   });
 
   /* Resolves to null when the question may go ahead, else { status, body, headers? } to answer with. */
-  return async function count(authorization, suppliedId) {
+  return async function count(authorization, suppliedId, address = "unknown") {
     if (!url) return null;
     const token = bearerToken(authorization);
     if (!token) return null; // sign-in has already been checked; with no token there is no one to count
@@ -272,6 +345,10 @@ export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetc
       console.error(`Could not count an AI question: the quota API answered ${res.status}`);
       return allowDuringOutage(token, id) ? null : outageRefusal();
     }
+    // The question is counted for this account. A Free account also counts against its network address, across accounts.
+    if (body?.plan === "free" && !freeBudget(address, id)) {
+      return dayRefusal(now(), "Too many questions from this network today. Please try again tomorrow.", "address_limit_reached");
+    }
     return null;
   };
 }
@@ -290,13 +367,13 @@ export function quotaUrl(env = process.env) {
 let counter = null;
 function quota() {
   const url = quotaUrl();
-  if (!counter || counter.url !== url) counter = { url, count: createQuotaCheck({ url }) };
+  if (!counter || counter.url !== url) counter = { url, count: createQuotaCheck({ url, freePerAddressDaily: intFrom(process.env.FREE_AI_PER_ADDRESS_DAILY, 300) }) };
   return counter.count;
 }
 
 /* Vercel: true when the question was refused (the student is out of questions) and already answered, so the handler returns. */
 export async function refuseIfOutOfQuestions(req, res) {
-  const refused = await quota()(req.headers?.authorization, req.body?.request_id);
+  const refused = await quota()(req.headers?.authorization, req.body?.request_id, callerAddress((name) => req.headers?.[name], req.socket?.remoteAddress));
   if (!refused) return false;
   for (const [name, value] of Object.entries(refused.headers ?? {})) res.setHeader(name, value);
   res.status(refused.status).json(refused.body);
@@ -305,6 +382,29 @@ export async function refuseIfOutOfQuestions(req, res) {
 
 /* Netlify: the Response to send when the student is out of questions, else null. `payload` is the parsed request body. */
 export async function refuseIfOutOfQuestionsNetlify(req, payload) {
-  const refused = await quota()(req.headers.get("authorization"), payload?.request_id);
+  const refused = await quota()(req.headers.get("authorization"), payload?.request_id, callerAddress((name) => req.headers.get(name)));
   return refused ? Response.json(refused.body, { status: refused.status, headers: refused.headers ?? {} }) : null;
+}
+
+/* The IELTS grader is not counted by the Laravel API (it is a short placement check, not a coach question), so it has its own
+   daily allowance here: per student, per network address and in all (IELTS_DAILY_PER_STUDENT 20, IELTS_DAILY_PER_ADDRESS 200,
+   IELTS_DAILY_OVERALL 3000). Call after `refuseUnlessSignedIn`, which remembers who the student is. */
+let allowance = null;
+function graderAllowance() {
+  const caps = [intFrom(process.env.IELTS_DAILY_PER_STUDENT, 20), intFrom(process.env.IELTS_DAILY_PER_ADDRESS, 200), intFrom(process.env.IELTS_DAILY_OVERALL, 3000)];
+  if (!allowance || allowance.caps.join() !== caps.join()) {
+    allowance = { caps, take: createDailyAllowance({ perStudent: caps[0], perAddress: caps[1], overall: caps[2] }) };
+  }
+  return allowance.take;
+}
+
+/* Vercel: true when the student is over today's allowance for the grader and already answered, so the handler returns. */
+export async function refuseIfOverGraderLimit(req, res) {
+  const token = bearerToken(req.headers?.authorization);
+  const student = check().studentOf(req.headers?.authorization) ?? (token ? `t:${createHash("sha256").update(token).digest("hex").slice(0, 24)}` : "anonymous");
+  const refused = graderAllowance()({ student, address: callerAddress((name) => req.headers?.[name], req.socket?.remoteAddress) });
+  if (!refused) return false;
+  for (const [name, value] of Object.entries(refused.headers)) res.setHeader(name, value);
+  res.status(refused.status).json(refused.body);
+  return true;
 }
