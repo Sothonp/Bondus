@@ -35,6 +35,18 @@ test("the coach counts a question before asking it, once per question, and a ref
   assert.equal((app.match(/newAiRequestId\(\)/g) || []).length, 1, "only the coach makes ids");
 });
 
+test("the badge is re-asked after every question, so a \"no\" never leaves it showing questions that are already gone", () => {
+  // Breaks if: the badge goes back to only updating from askAllowance()'s own check. That check is deliberately lenient on
+  // an outage (usage: null, so the badge is left alone) and the AI server's own refusal -- the one that actually enforces
+  // the limit -- carries no usage numbers at all, so without this the badge could sit on a stale "N left" right after the
+  // student was just told "no" (2026-11-07: shown "2 of 5 left" immediately under a "you have used all of today's
+  // questions" reply).
+  const send = between(app, "const requestId = newAiRequestId();", "const stop = () =>");
+  assert.match(send, /abortRef\.current = null;\s*\/\/[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*refreshUsage\(\);\s*\}\);/, "the badge is re-asked once the attempt (success or refusal) is over, right where loading is cleared");
+  // not only on the gate's own success path -- that path is already covered by `setUsage(gate.usage)` above it
+  assert.ok(send.indexOf("refreshUsage();") > send.indexOf(".catch((err) =>"), "covers the failure path too, not just the gate");
+});
+
 test("the coach shows where the student stands and offers the plans", () => {
   assert.match(app, /api\.getAiUsage\(\)\.then\(\(u\) => \{ if \(live\) setUsage\(readUsage\(u\)\)/);
   assert.match(app, /<UsageStrip /);
