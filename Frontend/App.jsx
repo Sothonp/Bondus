@@ -6232,9 +6232,17 @@ function ThermoFigure({ code }) {
 
 const hastText = (node) => (node.type === "text" ? node.value : (node.children || []).map(hastText).join(""));
 
+/* The AI's own answer, not something we wrote: a crafted question can get it to echo back a markdown link whose
+   address is "javascript:…" (or similarly "data:text/html,…"), which a browser runs on click like any other code
+   on the page -- including reading the signed-in token out of localStorage. Only http(s), mail and same-page
+   links are ever allowed through as a real <a href>; anything else keeps the link's text but not its address. */
+const isSafeMarkdownLink = (href) => typeof href === "string" && /^(https?:|mailto:|#|\/(?!\/))/i.test(href.trim());
+
 function markdownComponents(streaming) {
   return {
-    a: ({ node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+    a: ({ node, href, ...props }) => (isSafeMarkdownLink(href)
+      ? <a {...props} href={href} target="_blank" rel="noreferrer" />
+      : <span {...props} title={href} />),
     table: ({ node, ...props }) => <div style={{ overflowX: "auto" }}><table {...props} /></div>,
     pre: ({ node, ...props }) => {
       const code = node?.children?.[0];
