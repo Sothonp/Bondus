@@ -51,7 +51,6 @@ import StudyOwlScene from "./StudyOwlScene.jsx";
 import SubjectRibbon from "./SubjectRibbon.jsx";
 import { HeroPlaneDefs, HeroPlaneBack, HeroPlaneFront } from "./HeroPlane.jsx";
 import { emptyRewards, sanitizeRewards, claimBox, equipItem, sanitizeOutfit, advanceLevel } from "./rewards/rewardLogic.js";
-import { addTask, toggleTask, removeTask } from "./dailyPlan.js";
 import LoadingScreen from "./LoadingScreen.jsx";
 import { GGB_SCRIPT, GGB_MAX_REPORTED, geogebraCommands, isSpatial, buildFigure } from "./geogebra.js";
 import { CircuitFigure, PhetFigure, MoleculeFigure, CompoundFigure, AnatomyFigure, GasFigure, MagnetFigure } from "./Visuals.jsx";
@@ -8425,62 +8424,6 @@ export default function App() {
     equip: (slot, itemId) => setRewards((r) => equipItem(r, slot, itemId)),
     saveOutfit: (outfit) => setRewards((r) => ({ ...r, outfit: sanitizeOutfit(outfit, r.owned) })),
     openWardrobe: () => go("wardrobe"),
-  };
-
-  // The daily plan is the student's own to-do list (rules in dailyPlan.js): ticking a task earns no XP.
-  // With the server, each change shows on screen at once and is then sent in order; a failure undoes it and says so.
-  const planChange = (job) => {
-    planBusy.current += 1;
-    planOps.current = planOps.current.then(job).catch(() => {}).finally(() => { planBusy.current -= 1; });
-    return planOps.current;
-  };
-  const realTaskId = (id) => planIdMap.current.get(id) ?? id;
-  const togglePlanTask = (id) => {
-    const target = plan.find((x) => x.id === id);
-    setPlan((arr) => toggleTask(arr, id));
-    if (!SERVER_MODE || !target) return;
-    const done = !target.done;
-    planChange(async () => {
-      const sid = realTaskId(id);
-      if (sid < 0) return; // it never got saved (the add failed)
-      try { await api.patchPlanTask(sid, { done }); }
-      catch { setPlan((arr) => arr.map((x) => (x.id === id || x.id === sid ? { ...x, done: !done } : x))); flash("errPlanSave"); }
-    });
-  };
-  const addPlanTask = (task) => {
-    const date = dateKey();
-    const tempId = -(Date.now() * 1000 + Math.floor(Math.random() * 1000)); // negative: can never clash with a server id
-    const next = addTask(plan, task, date, tempId);
-    if (next === plan) return; // empty title, or today's list is full
-    setPlan(next);
-    if (!SERVER_MODE) return;
-    const added = next[next.length - 1];
-    planChange(async () => {
-      try {
-        const res = await api.addPlanTask({ title: added.task, subject: added.s ?? undefined, minutes: added.min ?? undefined, date });
-        const saved = taskFromServer(res.task);
-        planIdMap.current.set(tempId, saved.id);
-        setPlan((arr) => arr.map((x) => (x.id === tempId ? { ...saved, done: x.done } : x)));
-      } catch (err) {
-        setPlan((arr) => arr.filter((x) => x.id !== tempId));
-        flash(err?.code === "plan_limit_reached" ? "errPlanLimit" : "errPlanSave");
-      }
-    });
-  };
-  const removePlanTask = (id) => {
-    const removed = plan.find((x) => x.id === id);
-    setPlan((arr) => removeTask(arr, id));
-    if (!SERVER_MODE || !removed) return;
-    planChange(async () => {
-      const sid = realTaskId(id);
-      if (sid < 0) return;
-      try { await api.deletePlanTask(sid); }
-      catch (err) {
-        if (err?.status === 404) return; // already gone
-        setPlan((arr) => (arr.some((x) => x.id === sid) ? arr : [...arr, { ...removed, id: sid }]));
-        flash("errPlanSave");
-      }
-    });
   };
 
   // Record an answered exercise: bookkeeping for XP (unchanged) + feeding the topic-mastery engine
