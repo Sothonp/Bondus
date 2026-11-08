@@ -13,6 +13,7 @@ const rules = read("chapterProgress.js");
 const quizUi = read("ChapterQuiz.jsx");
 const lockUi = read("PapersLock.jsx");
 const drillUi = read("FormulaDrill.jsx");
+const sheetUi = read("FormulaSheet.jsx");
 const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const subject = app.slice(app.indexOf("function PracticeSubject("), app.indexOf("function ExercisePlayer("));
 const browse = app.slice(app.indexOf("function Browse("), app.indexOf("function Exercises("));
@@ -23,7 +24,21 @@ test("Practice shows the chapter path and decides the open chapter from the prac
   assert.match(app, /import \{ chapterStates, [^}]*\} from "\.\/chapterProgress\.js";/);
   assert.match(subject, /const progress = hasChapters \? \(chapterProgress\?\.\(subject\) \?\? null\) : null;/);
   assert.match(subject, /chapterStates\(fullList, practice, progress\)/);
-  assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} onDrill=\{setDrillChapter\} \/>/);
+  assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} onDrill=\{setDrillChapter\} onFormulaSheet=\{setSheetChapter\} \/>/);
+});
+
+test("the chapter list also offers a read-only formula sheet per chapter, with the same no-progress-touched guarantee as the drill", () => {
+  // Breaks if: the sheet starts tracking progress, or stops being offered on a locked chapter — it must stay exactly as
+  // safe to open as the Formula drill it sits beside.
+  assert.match(app, /import FormulaSheet from "\.\/FormulaSheet\.jsx";/);
+  assert.match(app, /import \{ chapterFormulas \} from "\.\/formulaSheet\.js";/);
+  assert.match(subject, /formulaCount: chapterFormulas\(fullList, r\.key\)\.length,/);
+  assert.match(subject, /const \[sheetChapter, setSheetChapter\] = useState\(null\);/);
+  assert.match(subject, /if \(sheetChapter\) \{\s*return \(\s*<FormulaSheet chapterName=\{chapterLabel\(sheetChapter\)\} list=\{fullList\} chapterKey=\{sheetChapter\}\s*lang=\{lang\} onExit=\{\(\) => setSheetChapter\(null\)\} \/>/);
+  // offered even on a locked chapter, exactly like onDrill, and checked before the locked/open split
+  assert.ok(subject.indexOf("if (sheetChapter)") < subject.indexOf("if (hasChapters && chapter == null)"));
+  assert.match(list, /import \{ SheetButton \} from "\.\/FormulaSheet\.jsx";/);
+  assert.match(list, /onFormulaSheet && row\.formulaCount > 0 && <SheetButton count=\{row\.formulaCount\} lang=\{lang\} onStart=\{\(\) => onFormulaSheet\(row\.key\)\} \/>/);
 });
 
 test("the chapter order rule lives in one place, not copied into the screen", () => {
@@ -73,7 +88,7 @@ test("every word the list asks for exists in English and Khmer", () => {
   const en = Object.keys(CHAPTER_STRINGS.en), km = Object.keys(CHAPTER_STRINGS.km);
   assert.deepEqual([...km].sort(), [...en].sort());
   const used = new Set();
-  for (const src of [list, quizUi, lockUi, drillUi]) for (const m of src.matchAll(/\bw\(\s*"(\w+)"/g)) used.add(m[1]);
+  for (const src of [list, quizUi, lockUi, drillUi, sheetUi]) for (const m of src.matchAll(/\bw\(\s*"(\w+)"/g)) used.add(m[1]);
   for (const m of quizUi.matchAll(/\bw\(\s*\w+\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/g)) { used.add(m[1]); used.add(m[2]); } // w(last ? "quizFinish" : "quizNext")
   for (const m of quizUi.matchAll(/w\(\s*\w+\s*\?\s*"(\w+)"\s*:\s*\w+\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/g)) { used.add(m[1]); used.add(m[2]); used.add(m[3]); } // mastered ? .. : passed ? .. : ..
   for (const label of list.matchAll(/label: "(\w+)"/g)) used.add(label[1]); // the state names, looked up through LOOK
