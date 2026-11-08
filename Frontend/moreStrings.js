@@ -115,6 +115,7 @@ export const MORE_STRINGS = {
     // plans and the daily limit on AI questions
     aiLeft: "{n} of {limit} AI questions left today",
     aiUsedUp: "No AI questions left today",
+    aiUnlimited: "Unlimited AI questions",
     aiUpgrade: "Upgrade",
     coachLimitReached: "You've used all {limit} of today's AI questions on the {plan} plan. They come back tomorrow, or upgrade to ask more.",
     coachLimitSeePlans: "See plans",
@@ -388,6 +389,7 @@ export const MORE_STRINGS = {
     // plans and the daily limit on AI questions
     aiLeft: "នៅសល់សំណួរ AI {n} ក្នុងចំណោម {limit} សម្រាប់ថ្ងៃនេះ",
     aiUsedUp: "អស់សំណួរ AI សម្រាប់ថ្ងៃនេះហើយ",
+    aiUnlimited: "សំណួរ AI គ្មានដែនកំណត់",
     aiUpgrade: "អាប់ក្រេត",
     coachLimitReached: "អ្នកបានប្រើសំណួរ AI ទាំង {limit} របស់ថ្ងៃនេះអស់ហើយ នៅលើគម្រោង {plan}។ ថ្ងៃស្អែកវានឹងមកវិញ ឬអាប់ក្រេតដើម្បីសួរបានច្រើនជាង។",
     coachLimitSeePlans: "មើលគម្រោង",

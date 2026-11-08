@@ -18,7 +18,10 @@ export const UPLOADS_BY_PLAN = { free: 0, standard: 10, premium: 40 };
 /* One id per question the student asks (not per continuation round): the backend accepts 8 to 64 letters, digits, - and _. */
 export const newAiRequestId = () => newAttemptId();
 
-/* A usage object from the backend (GET /ai/usage, a /ai/consume answer, or the body of its 402), or null if it is not one. */
+/* A usage object from the backend (GET /ai/usage, a /ai/consume answer, or the body of its 402), or null if it is not one.
+   `unlimited` is an admin account's own day (an older backend that has never heard of it just means "no", never crashes
+   the badge): `limit` is still a real, finite number underneath (so old code that only reads `limit`/`remaining` keeps
+   working), but the screen shows "Unlimited" instead of that number once this is true. */
 export function readUsage(body) {
   if (!body || typeof body !== "object") return null;
   const { plan, limit, used, remaining, resetsAt } = body;
@@ -28,7 +31,7 @@ export function readUsage(body) {
   const uploadsRemaining = Number.isFinite(body.uploadsRemaining) ? body.uploadsRemaining : Math.max(0, uploadLimit - uploadsUsed);
   return {
     plan, limit, used, remaining: Number.isFinite(remaining) ? remaining : Math.max(0, limit - used), resetsAt: resetsAt ?? null,
-    uploadLimit, uploadsUsed, uploadsRemaining,
+    uploadLimit, uploadsUsed, uploadsRemaining, unlimited: Boolean(body.unlimited),
   };
 }
 

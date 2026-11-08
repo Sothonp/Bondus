@@ -11,14 +11,18 @@ const kmc = (lang) => (lang === "km" ? "eai-km" : "");
 export const PLAN_NAMES = { free: "Free", standard: "VIP Bondus", premium: "Super Bondus" };
 
 /* A thin strip above the coach: how many AI questions are left today, with an Upgrade button while a better plan exists. */
-export function UsageStrip({ text, left, limit, exhausted, onUpgrade, upgradeLabel, lang = "en" }) {
+export function UsageStrip({ text, left, limit, exhausted, unlimited = false, onUpgrade, upgradeLabel, lang = "en" }) {
   const share = limit > 0 ? Math.min(1, Math.max(0, left / limit)) : 0;
   return (
     <div className={`flex items-center gap-3 pb-2 text-xs ${kmc(lang)}`} role="status">
       <span className="font-semibold" style={{ color: exhausted ? "var(--ember)" : "var(--muted)" }}>{text}</span>
-      <span aria-hidden="true" className="h-1.5 rounded-full overflow-hidden flex-shrink-0" style={{ width: 72, background: "var(--bg-soft)" }}>
-        <span className="block h-full rounded-full" style={{ width: `${share * 100}%`, background: exhausted ? "var(--ember)" : "var(--primary)", transition: "width .2s ease" }} />
-      </span>
+      {/* An admin's own "limit" is a real, large number, not a true cap -- a bar nearly full of it would read as
+          "almost out", the opposite of what "unlimited" means, so there is no bar at all once that's true. */}
+      {!unlimited && (
+        <span aria-hidden="true" className="h-1.5 rounded-full overflow-hidden flex-shrink-0" style={{ width: 72, background: "var(--bg-soft)" }}>
+          <span className="block h-full rounded-full" style={{ width: `${share * 100}%`, background: exhausted ? "var(--ember)" : "var(--primary)", transition: "width .2s ease" }} />
+        </span>
+      )}
       {onUpgrade && (
         <button type="button" onClick={onUpgrade} className="eai-focus font-bold rounded-full px-2.5 py-1" style={{ background: "var(--gold-soft)", color: "var(--gold)" }}>
           {upgradeLabel}
