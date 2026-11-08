@@ -6914,9 +6914,9 @@ function Coach({ p, lang = "en", userKey = null, onUpgrade = null }) {
         {usage && (() => {
           const left = leftOf(usage);
           return (
-            <UsageStrip lang={lang} left={left.n} limit={left.limit} exhausted={isOut(usage)}
-              text={isOut(usage) ? T("aiUsedUp") : T("aiLeft", { n: localizeNum(left.n, lang), limit: localizeNum(left.limit, lang) })}
-              onUpgrade={onUpgrade && usage.plan !== "premium" ? onUpgrade : null} upgradeLabel={T("aiUpgrade")} />
+            <UsageStrip lang={lang} left={left.n} limit={left.limit} exhausted={isOut(usage) && !usage.unlimited} unlimited={usage.unlimited}
+              text={usage.unlimited ? T("aiUnlimited") : (isOut(usage) ? T("aiUsedUp") : T("aiLeft", { n: localizeNum(left.n, lang), limit: localizeNum(left.limit, lang) }))}
+              onUpgrade={onUpgrade && usage.plan !== "premium" && !usage.unlimited ? onUpgrade : null} upgradeLabel={T("aiUpgrade")} />
           );
         })()}
         <div className="flex-1 overflow-y-auto eai-scroll">

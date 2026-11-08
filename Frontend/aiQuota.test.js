@@ -16,14 +16,17 @@ test("a request id is one the backend accepts (8-64 letters, digits, - and _), a
 });
 
 test("readUsage reads a usage body and refuses anything else", () => {
-  assert.deepEqual(readUsage(usage()), { ...usage(), uploadLimit: 0, uploadsUsed: 0, uploadsRemaining: 0 });
-  assert.deepEqual(readUsage(usage({ uploadLimit: 10, uploadsUsed: 4, uploadsRemaining: 6 })), { ...usage(), uploadLimit: 10, uploadsUsed: 4, uploadsRemaining: 6 });
+  assert.deepEqual(readUsage(usage()), { ...usage(), uploadLimit: 0, uploadsUsed: 0, uploadsRemaining: 0, unlimited: false });
+  assert.deepEqual(readUsage(usage({ uploadLimit: 10, uploadsUsed: 4, uploadsRemaining: 6 })), { ...usage(), uploadLimit: 10, uploadsUsed: 4, uploadsRemaining: 6, unlimited: false });
   assert.equal(readUsage(null), null);
   assert.equal(readUsage({}), null);
   assert.equal(readUsage({ plan: "free", limit: "5", used: 1 }), null);
   assert.equal(readUsage({ message: "x", code: "server_error" }), null);
   // `remaining` is worked out when the backend leaves it out
   assert.equal(readUsage({ plan: "free", limit: 5, used: 7 }).remaining, 0);
+  // an older backend that has never heard of `unlimited` reads as false, not a crash
+  assert.equal(readUsage({ plan: "free", limit: 5, used: 0 }).unlimited, false);
+  assert.equal(readUsage(usage({ unlimited: true })).unlimited, true);
 });
 
 test("a question the backend counts goes ahead, with the new usage", async () => {

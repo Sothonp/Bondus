@@ -52,8 +52,17 @@ test("the coach shows where the student stands and offers the plans", () => {
   assert.match(app, /<UsageStrip /);
   assert.match(app, /coach: <Coach [^>]*onUpgrade=\{\(\) => go\("super"\)\}/);
   assert.match(app, /\{m\.upgrade && onUpgrade && \(/);
-  // no upgrade offered to someone already on the top plan
-  assert.match(app, /usage\.plan !== "premium" \? onUpgrade : null/);
+  // no upgrade offered to someone already on the top plan, or to an unlimited (admin) account
+  assert.match(app, /usage\.plan !== "premium" && !usage\.unlimited \? onUpgrade : null/);
+});
+
+test("an unlimited account sees \"Unlimited\", never a count that is about to look alarming", () => {
+  // Breaks if: an admin's real-but-huge daily number (see AiQuota::ADMIN_DAILY_LIMIT) is shown as a count again, which
+  // would read as "99995 of 100000 AI questions left today" instead of what unlimited is supposed to mean.
+  const strip = between(app, "{usage && (() => {", "})()}");
+  assert.match(strip, /text=\{usage\.unlimited \? T\("aiUnlimited"\) : /, "unlimited is checked before the used-up/left wording");
+  assert.match(strip, /unlimited=\{usage\.unlimited\}/, "PlanUi's UsageStrip decides how to show it, not a count here");
+  assert.match(strip, /exhausted=\{isOut\(usage\) && !usage\.unlimited\}/, "an admin's huge number is never read as 'used up' either");
 });
 
 test("the plans page marks the student's plan, offers only a better one, and says how to pay", () => {
