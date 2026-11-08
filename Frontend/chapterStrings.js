@@ -83,6 +83,8 @@ export const CHAPTER_STRINGS = {
     drillDoneTitle: "Drill done",
     drillDoneScore: "{correct} of {total} right",
     drillAgain: "Drill again",
+    // the read-only Formula sheet — same review-anytime rules as the drill, just a list instead of a quiz
+    formulaSheetButton: "Formula sheet",
   },
   km: {
     stateLocked: "ជាប់សោ",
@@ -157,6 +159,7 @@ export const CHAPTER_STRINGS = {
     drillDoneTitle: "ហាត់រួចរាល់",
     drillDoneScore: "ត្រូវ {correct} ក្នុងចំណោម {total}",
     drillAgain: "ហាត់ម្តងទៀត",
+    formulaSheetButton: "សន្លឹករូបមន្ត",
   },
 };
 

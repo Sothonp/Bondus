@@ -80,6 +80,8 @@ import ChapterList from "./ChapterList.jsx";
 import ChapterQuiz, { QuizCard } from "./ChapterQuiz.jsx";
 import FormulaDrill from "./FormulaDrill.jsx";
 import { drillPool } from "./formulaDrill.js";
+import FormulaSheet from "./FormulaSheet.jsx";
+import { chapterFormulas } from "./formulaSheet.js";
 import PapersLock from "./PapersLock.jsx";
 import { RomdoulCluster, RomdoulBlossom, RomdoulSprig } from "./Romdoul.jsx";
 import { TodaysExercisesCard } from "./TodaysExercisesCard.jsx";
@@ -3581,12 +3583,15 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBac
     ? chapterStates(fullList, practice, progress).map((r) => ({
       ...r, canTestOut: quizAvailable && (r.state === "available" || r.state === "inProgress") && testOutEligible(fullList, r.key, mastery?.[subject]),
       drillCount: drillPool(fullList, r.key).length,
+      formulaCount: chapterFormulas(fullList, r.key).length,
     }))
     : [];
   const [pickedChapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
   // The quick Formula drill: review, not progress — open for any chapter, even a locked one, and closed
   // without touching `pickedChapter` or anything saved.
   const [drillChapter, setDrillChapter] = useState(null);
+  // The read-only Formula sheet: same rule as the drill above — pure review, open for any chapter, nothing saved.
+  const [sheetChapter, setSheetChapter] = useState(null);
   const [quiz, setQuiz] = useState(null); // { chapter, attemptId, alreadyPassed, ids } while a Master Quiz is on screen
   // The chapter on screen. A remembered or tapped chapter that is locked (or no longer exists) is not opened: back to the list.
   const chapter = pickedChapter != null && chapterRows.some((r) => r.key === pickedChapter && r.state !== "locked") ? pickedChapter : null;
@@ -3677,13 +3682,20 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBac
     );
   }
 
+  if (sheetChapter) {
+    return (
+      <FormulaSheet chapterName={chapterLabel(sheetChapter)} list={fullList} chapterKey={sheetChapter}
+        lang={lang} onExit={() => setSheetChapter(null)} />
+    );
+  }
+
   if (hasChapters && chapter == null) {
     return (
       <div className="space-y-5 eai-rise">
         <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
         <h2 className={`eai-display text-2xl font-extrabold flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}<RomdoulSprig size={34} /></h2>
         <div>
-          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} onDrill={setDrillChapter} />
+          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} onDrill={setDrillChapter} onFormulaSheet={setSheetChapter} />
         </div>
       </div>
     );
