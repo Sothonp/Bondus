@@ -85,7 +85,7 @@ test("the admin Plans page is in the admin menu after Admin, and only an admin g
 test("every string the plan screens use exists in English and Khmer", () => {
   const used = new Set([
     ...[...ui.matchAll(/\btrf?\("(\w+)"/g)].map((m) => m[1]),
-    ...[...app.matchAll(/\b(?:T|tf)\((?:lang, )?"((?:ai|plan|coachLimit|adminPlans)\w*)"/g)].map((m) => m[1]),
+    ...[...app.matchAll(/\b(?:T|tf)\((?:lang, )?"((?:ai|plan|coachLimit|adminPlans|claim)\w*)"/g)].map((m) => m[1]),
   ]);
   assert.ok(used.size >= 20, `found only ${used.size} keys`);
   for (const key of used) {
@@ -114,6 +114,43 @@ test("an admin can replace the payment QR, and go back to the original", () => {
   assert.match(ui, /QR_MAX_BYTES = 2 \* 1024 \* 1024/);
   assert.ok(ui.indexOf("adminQrNotImage") < ui.indexOf("api.uploadPaymentQr(file)"), "type check comes before the upload");
   assert.match(ui, /info\?\.isCustom && \(/, "the reset button only exists while an uploaded QR is in use");
+});
+
+test("a student can mark \"I paid\" from the plan screen, with a note and/or a screenshot", () => {
+  const page = between(app, "function SuperBondus(", "/* ════════════════════════ Shell");
+  // the backend refuses a second claim while one is pending, so the student's latest claim is read before the form shows
+  assert.match(page, /api\.getMyPaymentClaim\(\)\.then\(\(res\) => \{ if \(on\) setClaim\(res\.claim\)/);
+  assert.match(page, /const submitClaim = async \(\) => \{/);
+  // neither a note nor a screenshot is refused client-side before any request, matching the backend's own rule
+  assert.match(page, /if \(!claimNote\.trim\(\) && !claimScreenshot\) \{ setClaimErrorKey\("claimNeedOne"\); return; \}/);
+  assert.match(page, /api\.submitPaymentClaim\(\{ plan: upgraded\.id, note: claimNote\.trim\(\) \|\| undefined, screenshot: claimScreenshot \}\)/);
+  // a pending claim shows a status message instead of the form -- no way to submit a second one while it waits
+  assert.match(page, /claim\?\.status === "pending" \? \(/);
+  assert.match(page, /tf\(lang, "claimPendingTitle"\)/);
+  // a rejected claim explains why (if the admin left a reason) right above the form, which still shows so they can retry
+  assert.match(page, /claim\?\.status === "rejected" && \(/);
+  assert.match(page, /claim\.adminNote \? tf\(lang, "claimRejectedWithNote", \{ note: claim\.adminNote \}\) : tf\(lang, "claimRejectedNoNote"\)/);
+  // the screenshot is checked on the phone before it is ever sent, same pattern as the admin's QR upload
+  assert.match(app, /CLAIM_SCREENSHOT_TYPES = \/\^image\\\/\(jpeg\|png\|webp\)\$\//);
+  assert.match(app, /CLAIM_SCREENSHOT_MAX_BYTES = 4 \* 1024 \* 1024/);
+});
+
+test("the admin's payment-claims inbox approves (switching the plan on) or rejects, and the claim leaves the list either way", () => {
+  assert.match(ui, /export function PaymentClaimsInbox/);
+  assert.match(between(ui, "export function AdminPlans", "\n}\n"), /<PaymentClaimsInbox api=\{api\} lang=\{lang\} tr=\{tr\} trf=\{trf\}/);
+  const inbox = between(ui, "export function PaymentClaimsInbox", "\nexport function AdminPlans");
+  assert.match(inbox, /api\.getPaymentClaims\(\)\.then\(\(res\) => \{ if \(alive\) setClaims\(res\.claims\)/);
+  assert.match(inbox, /await api\.approvePaymentClaim\(claim\.id\);/);
+  assert.match(inbox, /await api\.rejectPaymentClaim\(claim\.id, reason\.trim\(\) \|\| undefined\);/);
+  // a reviewed claim (approved or rejected) is simply dropped from the pending list, not shown with a "done" state
+  assert.match(inbox, /setClaims\(\(list\) => list\.filter\(\(c\) => c\.id !== claim\.id\)\);/g);
+  assert.equal((inbox.match(/setClaims\(\(list\) => list\.filter\(\(c\) => c\.id !== claim\.id\)\);/g) || []).length, 2, "both approve and reject remove the row");
+  // the reject reason is a confirm step, not sent on the first click
+  assert.match(inbox, /rejecting === claim\.id \? \(/);
+  assert.match(inbox, /onClick=\{\(\) => \{ setRejecting\(claim\.id\); setReason\(""\); \}\}/);
+  // the screenshot, when there is one, opens in a new tab rather than being embedded inline
+  assert.match(inbox, /claim\.screenshotUrl && \(/);
+  assert.match(inbox, /<a href=\{claim\.screenshotUrl\} target="_blank"/);
 });
 
 test("an AI server that has not been updated yet (it refuses request_id) still answers: the website sends the question again without the id", () => {

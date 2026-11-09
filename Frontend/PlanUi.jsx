@@ -106,6 +106,135 @@ export function PaymentQrAdmin({ api, lang = "en", tr }) {
   );
 }
 
+/* Admin: the "I paid" inbox -- students who said they've paid (by bank/QR, outside the app) and are waiting to be
+   checked, each with the plan and months they claim, their note and/or screenshot. Approving switches the plan on
+   (the claim's own plan/months); rejecting dismisses it with an optional reason. Either way the claim drops out of
+   this list -- a reviewed claim is never shown here again, so there is nothing further to track. */
+export function PaymentClaimsInbox({ api, lang = "en", tr, trf }) {
+  const [claims, setClaims] = useState(undefined); // undefined while loading, null if it could not be read
+  const [busyId, setBusyId] = useState(null);
+  const [flash, setFlash] = useState({}); // claim id -> "error" (a success just removes the row)
+  const [rejecting, setRejecting] = useState(null); // the claim id being rejected, while its reason is typed
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    api.getPaymentClaims().then((res) => { if (alive) setClaims(res.claims); }).catch(() => { if (alive) setClaims(null); });
+    return () => { alive = false; };
+  }, [api]);
+
+  const approve = async (claim) => {
+    setBusyId(claim.id);
+    setFlash((f) => ({ ...f, [claim.id]: undefined }));
+    try {
+      await api.approvePaymentClaim(claim.id);
+      setClaims((list) => list.filter((c) => c.id !== claim.id));
+    } catch {
+      setFlash((f) => ({ ...f, [claim.id]: "error" }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmReject = async (claim) => {
+    setBusyId(claim.id);
+    try {
+      await api.rejectPaymentClaim(claim.id, reason.trim() || undefined);
+      setClaims((list) => list.filter((c) => c.id !== claim.id));
+      setRejecting(null);
+      setReason("");
+    } catch {
+      setFlash((f) => ({ ...f, [claim.id]: "error" }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <section className="eai-card space-y-3" aria-labelledby="claims-inbox-title">
+      <div>
+        <h3 id="claims-inbox-title" className={`font-bold ${kmc(lang)}`}>{tr("claimsInboxTitle")}</h3>
+        <p className={`text-sm eai-muted mt-1 ${kmc(lang)}`}>{tr("claimsInboxDesc")}</p>
+      </div>
+      {claims === undefined ? <p className={`text-sm eai-muted ${kmc(lang)}`}>{tr("claimsInboxLoading")}</p>
+        : claims === null ? (
+          <p className={`text-sm flex items-center gap-2 ${kmc(lang)}`} style={{ color: "var(--ember)" }} role="alert">
+            <AlertTriangle size={14} /> {tr("claimsInboxLoadError")}
+          </p>
+        )
+        : claims.length === 0 ? <p className={`text-sm eai-muted ${kmc(lang)}`}>{tr("claimsInboxEmpty")}</p>
+        : (
+          <ul className="space-y-3">
+            {claims.map((claim) => {
+              const busy = busyId === claim.id;
+              return (
+                <li key={claim.id} className="eai-soft rounded-xl p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{claim.student?.name}</p>
+                      <p className="text-xs eai-muted truncate">{[claim.student?.email, claim.student?.phone].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--gold)", color: "#fff" }}>
+                        {PLAN_NAMES[claim.plan] ?? claim.plan}
+                      </span>
+                      <p className={`text-xs eai-muted mt-0.5 ${kmc(lang)}`}>{trf("claimsInboxMonths", { months: claim.months })}</p>
+                    </div>
+                  </div>
+                  {claim.note && <p className={`text-sm ${kmc(lang)}`}>{trf("claimsInboxNote", { note: claim.note })}</p>}
+                  <div className="flex items-center gap-3 flex-wrap text-xs eai-muted">
+                    {claim.createdAt && <span className={kmc(lang)}>{trf("claimsInboxSubmitted", { date: dateText(claim.createdAt, lang) })}</span>}
+                    {claim.screenshotUrl && (
+                      <a href={claim.screenshotUrl} target="_blank" rel="noopener noreferrer" className={`eai-focus font-semibold ${kmc(lang)}`} style={{ color: "var(--primary)" }}>
+                        {tr("claimsInboxScreenshot")}
+                      </a>
+                    )}
+                  </div>
+                  {rejecting === claim.id ? (
+                    <div className="space-y-2">
+                      <label className="block">
+                        <span className={`text-xs eai-muted ${kmc(lang)}`}>{tr("claimsInboxRejectReason")}</span>
+                        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("claimsInboxRejectPlaceholder")}
+                          className={`eai-focus w-full mt-1 rounded-xl border px-3 py-2 text-sm outline-none ${kmc(lang)}`}
+                          style={{ background: "var(--card)", borderColor: "var(--line)", color: "var(--ink)" }} />
+                      </label>
+                      <div className="flex gap-2">
+                        <button type="button" disabled={busy} onClick={() => confirmReject(claim)}
+                          className={`eai-btn eai-focus px-3 py-2 text-sm ${kmc(lang)}`} style={{ background: "var(--ember)", color: "#fff", opacity: busy ? 0.6 : 1 }}>
+                          {tr("claimsInboxRejectConfirm")}
+                        </button>
+                        <button type="button" disabled={busy} onClick={() => { setRejecting(null); setReason(""); }}
+                          className={`eai-focus text-sm font-semibold px-2 py-2 ${kmc(lang)}`} style={{ color: "var(--primary)" }}>
+                          {tr("claimsInboxCancel")}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <button type="button" disabled={busy} onClick={() => approve(claim)}
+                        className={`eai-btn eai-focus px-3.5 py-2 text-sm ${kmc(lang)}`} style={{ background: "var(--jade)", color: "#fff", opacity: busy ? 0.6 : 1 }}>
+                        {tr("claimsInboxApprove")}
+                      </button>
+                      <button type="button" disabled={busy} onClick={() => { setRejecting(claim.id); setReason(""); }}
+                        className={`eai-focus text-sm font-semibold px-2 py-2 ${kmc(lang)}`} style={{ color: "var(--ember)", opacity: busy ? 0.6 : 1 }}>
+                        {tr("claimsInboxReject")}
+                      </button>
+                      {flash[claim.id] === "error" && (
+                        <span className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: "var(--ember)" }} role="alert">
+                          <AlertTriangle size={14} /> {tr("claimsInboxSaveError")}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+    </section>
+  );
+}
+
 /* Admin: the students on a paid plan (or whoever the search finds), each with buttons to switch a plan on for N months.
    A second view, toggled with the tabs below, browses every signed-up student instead -- paid or not, newest first,
    "Load more" a page at a time -- for the simple question "who actually has an account". A search always wins over
@@ -203,6 +332,8 @@ export function AdminPlans({ api, lang = "en", tr, trf, currentUserId }) {
       </div>
 
       <PaymentQrAdmin api={api} lang={lang} tr={tr} />
+
+      <PaymentClaimsInbox api={api} lang={lang} tr={tr} trf={trf} />
 
       <div className="flex gap-3 flex-wrap items-end">
         <label className="flex-1 min-w-[220px]">

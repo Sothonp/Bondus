@@ -160,6 +160,23 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     uploadPaymentQr: (picture) => { const form = new FormData(); form.append("qr", picture, picture.name || "qr.png"); return send("POST", "/admin/payment-qr", form); },
     resetPaymentQr: () => send("DELETE", "/admin/payment-qr"),
 
+    // "I paid": the student's own claim after paying by bank/QR outside the app, and its latest status, or
+    // { claim: null } if they've never submitted one.
+    getMyPaymentClaim: () => get("/payment-claim"),
+    // Submits the claim: which plan they paid for, with a note and/or a screenshot (a File/Blob) -- at least one of the
+    // two. The backend refuses a second claim while one is still pending.
+    submitPaymentClaim: ({ plan, months, note, screenshot }) => {
+      if (screenshot) {
+        const form = new FormData();
+        form.append("plan", plan);
+        if (months) form.append("months", String(months));
+        if (note) form.append("note", note);
+        form.append("screenshot", screenshot, screenshot.name || "receipt.jpg");
+        return send("POST", "/payment-claim", form);
+      }
+      return send("POST", "/payment-claim", { plan, months, note });
+    },
+
     // admin-only: who's on the app. No options lists the students on a paid plan (unchanged default).
     // { q }: substring search on name/email/phone, anyone, paid or not -- `q` always wins when both are given.
     // { all: true }: every signed-up student, newest first, 30 at a time; { page } (from 1) pages through it.
@@ -174,6 +191,15 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     // admin-only: shut an account off (or reopen one), independent of its plan. The backend refuses to let an
     // admin suspend their own, and signs a newly suspended account out of every device immediately.
     setUserSuspension: (id, suspended) => send("PATCH", `/admin/users/${id}/suspend`, { suspended }),
+
+    // admin-only: the "I paid" inbox. No options lists pending claims (the default); { status: "approved"|"rejected"|"all" }
+    // looks back at reviewed ones instead.
+    getPaymentClaims: ({ status } = {}) => get(`/admin/payment-claims${status ? `?status=${status}` : ""}`),
+    // admin-only: switches the student's plan on (the claim's own plan/months, or an override passed here) and marks it
+    // approved.
+    approvePaymentClaim: (id, { plan, months } = {}) => send("PATCH", `/admin/payment-claims/${id}/approve`, { plan, months }),
+    // admin-only: dismisses the claim without changing the student's plan.
+    rejectPaymentClaim: (id, note) => send("PATCH", `/admin/payment-claims/${id}/reject`, note ? { note } : {}),
 
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),

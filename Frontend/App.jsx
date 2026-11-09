@@ -7195,6 +7195,9 @@ const UNI_SUPER_PLANS = [
   },
 ];
 
+const CLAIM_SCREENSHOT_MAX_BYTES = 4 * 1024 * 1024; // the backend refuses more (config bondus.payment_claim)
+const CLAIM_SCREENSHOT_TYPES = /^image\/(jpeg|png|webp)$/;
+
 function SuperBondus({ p, lang = "en" }) {
   const plans = p?.educationLevel === "university" ? UNI_SUPER_PLANS : SUPER_PLANS;
   const [selected, setSelected] = useState("premium");
@@ -7218,6 +7221,47 @@ function SuperBondus({ p, lang = "en" }) {
     api.getPayment().then((res) => { if (on) setPay(res); }).catch(() => { if (on) setPay(null); });
     return () => { on = false; };
   }, [paying]);
+
+  // "I paid": the student's own latest claim -- a pending one blocks a new submission (only one can be pending at a
+  // time), a rejected one shows why (if the admin left a reason) before offering the form again.
+  const [claim, setClaim] = useState(undefined); // undefined while loading, null if there is none yet or it could not be read
+  useEffect(() => {
+    if (!paying || !SERVER_MODE || !api.hasToken()) { setClaim(null); return undefined; }
+    let on = true;
+    api.getMyPaymentClaim().then((res) => { if (on) setClaim(res.claim); }).catch(() => { if (on) setClaim(null); });
+    return () => { on = false; };
+  }, [paying]);
+  const [claimNote, setClaimNote] = useState("");
+  const [claimScreenshot, setClaimScreenshot] = useState(null);
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimErrorKey, setClaimErrorKey] = useState(null);
+  const claimFileRef = useRef(null);
+
+  const pickClaimScreenshot = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so choosing the same file again still fires
+    if (!file) return;
+    if (!CLAIM_SCREENSHOT_TYPES.test(file.type)) { setClaimErrorKey("claimScreenshotNotImage"); return; }
+    if (file.size > CLAIM_SCREENSHOT_MAX_BYTES) { setClaimErrorKey("claimScreenshotTooBig"); return; }
+    setClaimErrorKey(null);
+    setClaimScreenshot(file);
+  };
+
+  const submitClaim = async () => {
+    if (!claimNote.trim() && !claimScreenshot) { setClaimErrorKey("claimNeedOne"); return; }
+    setClaimBusy(true);
+    setClaimErrorKey(null);
+    try {
+      const res = await api.submitPaymentClaim({ plan: upgraded.id, note: claimNote.trim() || undefined, screenshot: claimScreenshot });
+      setClaim(res.claim);
+      setClaimNote("");
+      setClaimScreenshot(null);
+    } catch {
+      setClaimErrorKey("claimSubmitFailed");
+    } finally {
+      setClaimBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-5 eai-rise">
@@ -7252,6 +7296,54 @@ function SuperBondus({ p, lang = "en" }) {
             {PAY_INSTRUCTIONS && <pre className="eai-soft rounded-xl p-3 mt-3 text-sm" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", overflowWrap: "anywhere" }}>{PAY_INSTRUCTIONS}</pre>}
             {pay !== undefined && !pay?.qrUrl && !PAY_INSTRUCTIONS && <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }}>{tf(lang, "planPayNotSet")}</p>}
             <p className={`text-sm mt-3 ${lang === "km" ? "eai-km" : ""}`}><span className="eai-muted">{tf(lang, "planPayAccount")}: </span><strong style={{ overflowWrap: "anywhere" }}>{p?.email || p?.phone || p?.name}</strong></p>
+
+            {SERVER_MODE && api.hasToken() && claim !== undefined && (
+              claim?.status === "pending" ? (
+                <div className="eai-soft rounded-xl p-3 mt-4 flex items-start gap-2">
+                  <CheckCircle2 size={16} style={{ color: "var(--jade)", flexShrink: 0, marginTop: 2 }} />
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "claimPendingTitle")}</p>
+                    <p className={`text-xs eai-muted mt-0.5 ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "claimPendingBody")}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {claim?.status === "rejected" && (
+                    <p className={`text-sm ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }}>
+                      {claim.adminNote ? tf(lang, "claimRejectedWithNote", { note: claim.adminNote }) : tf(lang, "claimRejectedNoNote")}
+                    </p>
+                  )}
+                  <p className={`text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "claimFormTitle")}</p>
+                  <p className={`text-xs eai-muted ${lang === "km" ? "eai-km" : ""}`}>{tf(lang, "claimFormDesc")}</p>
+                  <label className="block">
+                    <span className="sr-only">{tf(lang, "claimNoteLabel")}</span>
+                    <textarea value={claimNote} onChange={(e) => setClaimNote(e.target.value)} placeholder={tf(lang, "claimNotePlaceholder")} rows={2}
+                      className={`eai-focus w-full rounded-xl border px-3 py-2 text-sm outline-none ${lang === "km" ? "eai-km" : ""}`}
+                      style={{ background: "var(--card)", borderColor: "var(--line)", color: "var(--ink)", resize: "vertical" }} />
+                  </label>
+                  <input ref={claimFileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={pickClaimScreenshot} className="sr-only" tabIndex={-1} aria-hidden="true" />
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <button type="button" onClick={() => claimFileRef.current?.click()}
+                      className={`eai-focus text-sm font-semibold px-2.5 py-1.5 rounded-full ${lang === "km" ? "eai-km" : ""}`}
+                      style={{ background: "var(--card)", border: "1px solid var(--line)", color: "var(--ink)" }}>
+                      {tf(lang, claimScreenshot ? "claimScreenshotChange" : "claimScreenshotChoose")}
+                    </button>
+                    {claimScreenshot && (
+                      <button type="button" onClick={() => setClaimScreenshot(null)} className={`eai-focus text-sm font-semibold ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }}>
+                        {tf(lang, "claimScreenshotRemove")}
+                      </button>
+                    )}
+                  </div>
+                  {claimErrorKey && <p className={`text-xs ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--ember)" }} role="alert">{tf(lang, claimErrorKey)}</p>}
+                  <button type="button" disabled={claimBusy} onClick={submitClaim}
+                    className={`eai-btn eai-focus w-full py-2.5 text-sm ${lang === "km" ? "eai-km" : ""}`}
+                    style={{ background: "var(--gold)", color: "#fff", opacity: claimBusy ? 0.6 : 1 }}>
+                    {tf(lang, claimBusy ? "claimSubmitting" : "claimSubmit")}
+                  </button>
+                </div>
+              )
+            )}
+
             <button onClick={() => setUpgraded(null)} className={`eai-focus text-sm font-semibold mt-3 ${lang === "km" ? "eai-km" : ""}`} style={{ color: "var(--primary)" }}>{tf(lang, "planPayBack")}</button>
           </div>
         </div>

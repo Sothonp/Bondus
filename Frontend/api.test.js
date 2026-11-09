@@ -370,6 +370,54 @@ test("plans: an admin suspends or reopens another account", async () => {
   assert.deepEqual(calls[1].body, { suspended: false });
 });
 
+test("payment claims: a student reads their own latest claim, or null if they've never submitted one", async () => {
+  const { api, calls } = make(() => json(200, { claim: null }));
+  await api.getMyPaymentClaim();
+  assert.equal(calls[0].url, `${BASE}/payment-claim`);
+  assert.equal(calls[0].init.method, "GET");
+});
+
+test("payment claims: a student submits one with a note alone", async () => {
+  const { api, calls } = make(() => json(201, { claim: { id: 5, plan: "standard", status: "pending" } }));
+  await api.submitPaymentClaim({ plan: "standard", months: 3, note: "Paid via ABA, ref #1234" });
+  assert.equal(calls[0].url, `${BASE}/payment-claim`);
+  assert.equal(calls[0].init.method, "POST");
+  assert.deepEqual(calls[0].body, { plan: "standard", months: 3, note: "Paid via ABA, ref #1234" });
+});
+
+test("payment claims: a screenshot is sent as a real FormData body, not JSON", async () => {
+  const { api, calls } = make(() => json(201, { claim: { id: 6, plan: "premium", status: "pending" } }));
+  const screenshot = new File(["bytes"], "receipt.png", { type: "image/png" });
+  await api.submitPaymentClaim({ plan: "premium", note: "paid", screenshot });
+
+  assert.ok(calls[0].body instanceof FormData, "a screenshot must send a FormData body");
+  assert.equal(calls[0].body.get("plan"), "premium");
+  assert.equal(calls[0].body.get("note"), "paid");
+  assert.equal(calls[0].body.get("screenshot").name, "receipt.png");
+  // A FormData body must never be forced to JSON, and must let the browser set its own boundary.
+  assert.equal(calls[0].init.headers["Content-Type"], undefined);
+});
+
+test("payment claims: admin-only inbox, approve and reject", async () => {
+  const { api, calls } = make(() => json(200, { claims: [], claim: { id: 5, status: "approved" } }));
+  await api.getPaymentClaims();
+  await api.getPaymentClaims({ status: "rejected" });
+  await api.approvePaymentClaim(5);
+  await api.approvePaymentClaim(5, { plan: "premium", months: 12 });
+  await api.rejectPaymentClaim(5);
+  await api.rejectPaymentClaim(5, "screenshot does not match");
+
+  assert.equal(calls[0].url, `${BASE}/admin/payment-claims`);
+  assert.equal(calls[1].url, `${BASE}/admin/payment-claims?status=rejected`);
+  assert.equal(calls[2].url, `${BASE}/admin/payment-claims/5/approve`);
+  assert.equal(calls[2].init.method, "PATCH");
+  assert.deepEqual(calls[2].body, {}); // JSON.stringify drops the undefined plan/months when neither is overridden
+  assert.deepEqual(calls[3].body, { plan: "premium", months: 12 });
+  assert.equal(calls[4].url, `${BASE}/admin/payment-claims/5/reject`);
+  assert.deepEqual(calls[4].body, {});
+  assert.deepEqual(calls[5].body, { note: "screenshot does not match" });
+});
+
 test("plans: an admin can browse every signed-up student, paid or not, a page at a time", async () => {
   const { api, calls } = make(() => json(200, { users: [], hasMore: false }));
   await api.getAdminUsers({ all: true });
