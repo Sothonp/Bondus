@@ -146,6 +146,28 @@ test("the coach keeps photos and PDFs for paid plans: Free sees an upgrade promp
   assert.match(send, /coachUploadsUsedUp/);
 });
 
+test("an admin can also browse every signed-up student, not just the paid ones, a page at a time", () => {
+  const admin = between(ui, "export function AdminPlans", "\n}\n");
+  // a second view, next to the existing paid-only one, picked with tabs
+  assert.match(admin, /\[view, setView\] = useState\("paid"\)/);
+  assert.match(admin, /const browsingAll = view === "all" && !searching;/);
+  assert.match(admin, /tr\(id === "all" \? "adminPlansViewAll" : "adminPlansViewPaid"\)/);
+  // the browse view asks the backend for everyone, a page at a time, never the paid-only default
+  assert.match(admin, /api\.getAdminUsers\(opts\)/);
+  assert.match(admin, /browsingAll \? \{ all: true, page \} : \{\}/);
+  // a search overrides either tab -- it is never limited to one view
+  assert.match(admin, /searching \? \{ q: query \}/);
+  // "Load more" appends rather than replacing, and only shows up once the backend says there is more
+  assert.match(admin, /setRows\(\(prev\) => \(firstPage \? res\.users : \[\.\.\.prev, \.\.\.res\.users\]\)\)/);
+  assert.match(admin, /browsingAll && !loading && !failed && hasMore/);
+  assert.match(admin, /setPage\(\(p\) => p \+ 1\)/);
+  // switching views (or starting a fresh search) always starts back on page 1, never mid-list
+  assert.match(admin, /const switchView = \(next\) => \{ setView\(next\); setPage\(1\); \};/);
+  assert.match(admin, /setQ\(e\.target\.value\); setPage\(1\);/);
+  // the signup date travels with every row once the backend sends one
+  assert.match(admin, /row\.signedUpAt && <p[^>]*>\{trf\("adminPlansSignedUp"/);
+});
+
 test("the plans page promises the uploads the plans give", () => {
   assert.match(app, /"10 photo\/PDF uploads\/day"/);
   assert.match(app, /"40 photo\/PDF uploads\/day"/);

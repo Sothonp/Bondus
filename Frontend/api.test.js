@@ -339,7 +339,7 @@ test("Facebook sign-in sends the access token without a sign-in header and keeps
 test("plans: an admin lists students and switches a plan on", async () => {
   const { api, calls } = make(() => json(200, { users: [], user: { id: 7, plan: "standard" } }));
   await api.getAdminUsers();
-  await api.getAdminUsers("sok ha");
+  await api.getAdminUsers({ q: "sok ha" });
   await api.setUserPlan(7, { plan: "standard", months: 3 });
   await api.setUserPlan(7, { plan: "premium", noExpiry: true });
   assert.equal(calls[0].url, `${BASE}/admin/users`);
@@ -348,4 +348,17 @@ test("plans: an admin lists students and switches a plan on", async () => {
   assert.equal(calls[2].init.method, "PATCH");
   assert.deepEqual(calls[2].body, { plan: "standard", months: 3 });
   assert.deepEqual(calls[3].body, { plan: "premium", noExpiry: true });
+});
+
+test("plans: an admin can browse every signed-up student, paid or not, a page at a time", async () => {
+  const { api, calls } = make(() => json(200, { users: [], hasMore: false }));
+  await api.getAdminUsers({ all: true });
+  await api.getAdminUsers({ all: true, page: 1 }); // page 1 is the default -- no &page= needed
+  await api.getAdminUsers({ all: true, page: 2 });
+  // q always wins when both are given, same as the backend contract
+  await api.getAdminUsers({ q: "sok ha", all: true, page: 3 });
+  assert.equal(calls[0].url, `${BASE}/admin/users?all=1`);
+  assert.equal(calls[1].url, `${BASE}/admin/users?all=1`);
+  assert.equal(calls[2].url, `${BASE}/admin/users?all=1&page=2`);
+  assert.equal(calls[3].url, `${BASE}/admin/users?q=sok%20ha`);
 });

@@ -106,30 +106,46 @@ export function PaymentQrAdmin({ api, lang = "en", tr }) {
   );
 }
 
-/* Admin: the students on a paid plan (or whoever the search finds), each with buttons to switch a plan on for N months. */
+/* Admin: the students on a paid plan (or whoever the search finds), each with buttons to switch a plan on for N months.
+   A second view, toggled with the tabs below, browses every signed-up student instead -- paid or not, newest first,
+   "Load more" a page at a time -- for the simple question "who actually has an account". A search always wins over
+   either tab: it looks across every student regardless of which view is showing. */
 export function AdminPlans({ api, lang = "en", tr, trf }) {
   const [q, setQ] = useState("");
+  const [view, setView] = useState("paid"); // "paid" | "all"
+  const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
   const [months, setMonths] = useState(1);
   const [busyId, setBusyId] = useState(null);
   const [flash, setFlash] = useState({}); // student id -> "saved" | "error"
   const query = q.trim();
   const searching = query.length >= 2;
+  const browsingAll = view === "all" && !searching;
+
+  const switchView = (next) => { setView(next); setPage(1); };
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setFailed(false);
+    const firstPage = page === 1;
+    if (firstPage) { setLoading(true); setFailed(false); } else { setLoadingMore(true); }
     // A moment after the last key, so typing a name is one request and not one per letter.
     const timer = setTimeout(() => {
-      api.getAdminUsers(searching ? query : "")
-        .then((res) => { if (alive) setRows(res.users); })
-        .catch(() => { if (alive) { setRows([]); setFailed(true); } })
-        .finally(() => { if (alive) setLoading(false); });
+      const opts = searching ? { q: query } : browsingAll ? { all: true, page } : {};
+      api.getAdminUsers(opts)
+        .then((res) => {
+          if (!alive) return;
+          setRows((prev) => (firstPage ? res.users : [...prev, ...res.users]));
+          setHasMore(Boolean(res.hasMore));
+        })
+        .catch(() => { if (alive) { if (firstPage) setRows([]); setFailed(true); setHasMore(false); } })
+        .finally(() => { if (alive) { setLoading(false); setLoadingMore(false); } });
     }, searching ? 300 : 0);
     return () => { alive = false; clearTimeout(timer); };
-  }, [api, query, searching]);
+  }, [api, query, searching, browsingAll, page]);
 
   const change = async (row, plan, extra = {}) => {
     setBusyId(row.id);
@@ -159,7 +175,7 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
           <span className="sr-only">{tr("adminPlansSearch")}</span>
           <span className="flex items-center gap-2 px-3 rounded-xl border" style={{ background: "var(--card)", borderColor: "var(--line)" }}>
             <Search size={16} className="eai-muted" aria-hidden="true" />
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("adminPlansSearch")}
+            <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder={tr("adminPlansSearch")}
               className={`eai-focus w-full py-3 bg-transparent text-sm outline-none ${kmc(lang)}`} style={{ color: "var(--ink)" }} />
           </span>
         </label>
@@ -171,7 +187,24 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
         </label>
       </div>
 
-      <h3 className={`text-sm font-bold ${kmc(lang)}`}>{searching ? tr("adminPlansResults") : tr("adminPlansPaidList")}</h3>
+      {/* Which students: the paid-only list the screen always opened with, or every signed-up student. A search
+          looks across either, so the tabs are disabled rather than hidden while one is in progress. */}
+      <div className="flex gap-2" role="tablist">
+        {["paid", "all"].map((id) => (
+          <button key={id} type="button" role="tab" aria-selected={view === id} disabled={searching} onClick={() => switchView(id)}
+            className={`eai-focus text-sm font-semibold px-3 py-1.5 rounded-full ${kmc(lang)}`}
+            style={{
+              background: view === id ? "var(--primary)" : "var(--card)",
+              color: view === id ? "#fff" : "var(--ink)",
+              border: view === id ? "none" : "1px solid var(--line)",
+              opacity: searching ? 0.6 : 1,
+            }}>
+            {tr(id === "all" ? "adminPlansViewAll" : "adminPlansViewPaid")}
+          </button>
+        ))}
+      </div>
+
+      <h3 className={`text-sm font-bold ${kmc(lang)}`}>{searching ? tr("adminPlansResults") : browsingAll ? tr("adminPlansAllList") : tr("adminPlansPaidList")}</h3>
 
       {loading ? <p className={`text-sm eai-muted ${kmc(lang)}`}>{tr("adminPlansLoading")}</p>
         : failed ? <p className={`text-sm flex items-center gap-2 ${kmc(lang)}`} style={{ color: "var(--ember)" }} role="alert"><AlertTriangle size={14} /> {tr("adminPlansLoadError")}</p>
@@ -186,6 +219,7 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
                     <div className="min-w-0">
                       <p className="font-semibold truncate">{row.name}</p>
                       <p className="text-xs eai-muted truncate">{[row.email, row.phone].filter(Boolean).join(" · ")}</p>
+                      {row.signedUpAt && <p className={`text-xs eai-muted mt-0.5 ${kmc(lang)}`}>{trf("adminPlansSignedUp", { date: dateText(row.signedUpAt, lang) })}</p>}
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: row.plan === "free" ? "var(--bg-soft)" : "var(--gold)", color: row.plan === "free" ? "var(--ink)" : "#fff" }}>{PLAN_NAMES[row.plan] ?? row.plan}</span>
@@ -216,6 +250,16 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
             })}
           </ul>
         )}
+
+      {browsingAll && !loading && !failed && hasMore && (
+        <div className="text-center">
+          <button type="button" disabled={loadingMore} onClick={() => setPage((p) => p + 1)}
+            className={`eai-focus text-sm font-semibold px-4 py-2.5 rounded-full ${kmc(lang)}`}
+            style={{ background: "var(--card)", color: "var(--ink)", border: "1px solid var(--line)", opacity: loadingMore ? 0.6 : 1 }}>
+            {loadingMore ? tr("adminPlansLoadingMore") : tr("adminPlansLoadMore")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
