@@ -10,6 +10,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, XCircle, Lightbulb } from "lucide-react";
 import { StreakFlame } from "./StreakFlame.jsx";
+import { LangToggle } from "./LangToggle.jsx";
 import { WARMUP_SECONDS, warmupCurrentIndex, warmupFinished, warmupScore } from "./warmup.js";
 import { warmupText, fillWarmup } from "./warmupStrings.js";
 
@@ -22,9 +23,11 @@ const SLOT_KEY = { weak: "slotWeak", review: "slotReview", missed: "slotMissed",
    topicLabel   (topic, lang) -> the topic's name in that language
    tr           App's translator, for wording that already exists there (Check answer, Explanation, ...)
    localize     (number, lang) -> the number in Khmer numerals when the language is Khmer
+   setLang      switch the UI language ("en" | "km"); the gate carries its own EN/ខ្មែរ toggle so a student is never
+                stuck in the wrong language for the one-a-day question that stands between them and the app
    onAnswer     (question, choice | null, correct, timeSec): record it (choice is null when time ran out)
    onFinish     the student pressed the last button: close the gate and send the warm-up event */
-export default function WarmUpGate({ state, lang = "en", tr, streak = 0, resolve, grade, topicLabel = (x) => x, localize = (n) => String(n), onAnswer, onFinish }) {
+export default function WarmUpGate({ state, lang = "en", setLang, tr, streak = 0, resolve, grade, topicLabel = (x) => x, localize = (n) => String(n), onAnswer, onFinish }) {
   const km = lang === "km" ? "eai-km" : "";
   const w = (key, vars) => fillWarmup(warmupText(lang, key), vars);
   const num = (n) => localize(n, lang);
@@ -101,7 +104,17 @@ export default function WarmUpGate({ state, lang = "en", tr, streak = 0, resolve
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="warmup-title" className="fixed inset-0 z-[200] overflow-y-auto"
       style={{ background: "var(--bg)", color: "var(--ink)", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <div className="eai-warmup mx-auto w-full max-w-md px-4 py-5 min-h-full flex flex-col">
+      {/* Fixed to the viewport, not the scroll container, so it stays put (and reachable) through every phase --
+          the gate has no close button, and a student mid-warm-up should never be stuck in the wrong language. */}
+      {setLang && (
+        <LangToggle lang={lang} setLang={setLang}
+          style={{ position: "fixed", top: "calc(env(safe-area-inset-top) + 14px)", right: 14, height: 38, padding: "0 12px", fontSize: 12, zIndex: 1 }} />
+      )}
+      {/* A phone's viewport is close enough to the card's own height that this reads as "full screen" either way;
+          on a laptop's taller, wider window it centers the card instead of pinning it to the top with the rest of
+          the window left blank below it. */}
+      <div className="min-h-full flex items-center justify-center">
+        <div className="eai-warmup w-full max-w-md px-4 py-5 flex flex-col">
         {phase !== "done" ? (
           <>
             <div className="flex items-center gap-3">
@@ -212,6 +225,7 @@ export default function WarmUpGate({ state, lang = "en", tr, streak = 0, resolve
             <button onClick={onFinish} className={`eai-btn eai-focus w-full mt-8 py-3 text-sm ${km}`} style={primary}>{w("go")}</button>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
