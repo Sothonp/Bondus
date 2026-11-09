@@ -169,6 +169,8 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
       return get("/admin/users");
     },
     setUserPlan: (id, { plan, months, noExpiry }) => send("PATCH", `/admin/users/${id}/plan`, { plan, months, noExpiry }),
+    // admin-only: grant or revoke the admin role itself. The backend refuses to let an admin revoke their own.
+    setUserRole: (id, admin) => send("PATCH", `/admin/users/${id}/role`, { admin }),
 
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),
