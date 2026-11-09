@@ -74,6 +74,7 @@ import { exerciseId, uniExerciseId } from "./exerciseCatalog.js";
 import { CHEER_STRINGS, pickCheer } from "./mascotCheers.js";
 import { flameState, phnomPenhDay } from "./streakFlame.js";
 import { StreakFlame, StreakFlameDefs, useFlameInfo } from "./StreakFlame.jsx";
+import { LangToggle } from "./LangToggle.jsx";
 import WarmUpGate from "./WarmUpGate.jsx";
 import { useDayRollover } from "./dayRollover.js";
 import ChapterList from "./ChapterList.jsx";
@@ -1479,22 +1480,6 @@ const UNI_ONBOARDING_STEPS_KM = ["ព័ត៌មានគណនី", "គោល
 
 /* Switches the app's UI language (English / Khmer). Styled inline so it can sit in a flex row next to the
    theme toggle, in the onboarding header and on the landing page. */
-function LangToggle({ lang, setLang, style }) {
-  return (
-    <button onClick={() => setLang((l) => (l === "en" ? "km" : "en"))} className="eai-focus eai-km"
-      style={{
-        height: 44, padding: "0 14px", borderRadius: 14, border: "1px solid var(--glass-line)",
-        background: "var(--glass-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)",
-        boxShadow: "var(--glass-shadow)", color: "var(--ink)", display: "grid", placeItems: "center",
-        fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background-color .15s ease, transform .12s ease",
-        ...style,
-      }}
-      aria-label={lang === "en" ? "ប្តូរទៅភាសាខ្មែរ" : "Switch to English"}>
-      {lang === "en" ? "ខ្មែរ" : "EN"}
-    </button>
-  );
-}
-
 function OnboardingProgress({ step, lang = "en", stepLabels, stepLabelsKm }) {
   const list = lang === "km" ? (stepLabelsKm || ONBOARDING_STEPS_KM) : (stepLabels || ONBOARDING_STEPS);
   const pct = (step / list.length) * 100;
@@ -8582,7 +8567,7 @@ export default function App() {
       <style>{STYLES}</style>
       <StreakFlameDefs />
       {noticeToast}
-      <WarmUpGate key={warmupProgress.day} state={warmupProgress} lang={lang} tr={tr} streak={liveStreak}
+      <WarmUpGate key={warmupProgress.day} state={warmupProgress} lang={lang} setLang={setLang} tr={tr} streak={liveStreak}
         resolve={getExercise} grade={gradeAnswer} topicLabel={topicLabel} localize={localizeNum}
         onAnswer={handleWarmupAnswer} onFinish={handleWarmupFinish} />
     </div>

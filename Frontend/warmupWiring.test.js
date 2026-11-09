@@ -70,6 +70,25 @@ test("the screen is a modal dialog with no way to close it, and never turns red"
   assert.doesNotMatch(code, /--ember|#[dD]9543[fF]|\bred\b/, "a miss is neutral and the timer amber, never an alarm colour");
 });
 
+test("the gate centers itself in a tall viewport instead of pinning the card to the top", () => {
+  // Breaks if: on a laptop-sized window the card sits flush against the top with empty space below it
+  // (2026-11-10: reported as "the testing box is up not middle of the browser").
+  assert.match(gate, /className="min-h-full flex items-center justify-center"/);
+});
+
+test("the gate carries its own EN/ខ្មែរ toggle, reachable in every phase since there is no close button", () => {
+  assert.match(gate, /import \{ LangToggle \} from "\.\/LangToggle\.jsx";/);
+  assert.match(gate, /setLang && \(\s*<LangToggle lang=\{lang\} setLang=\{setLang\}/);
+  // pinned to the viewport, not the scrollable card, so it is never scrolled out of reach
+  assert.match(gate, /position: "fixed", top: "calc\(env\(safe-area-inset-top\) \+ 14px\)", right: 14/);
+  assert.match(app, /<WarmUpGate key=\{warmupProgress\.day\} state=\{warmupProgress\} lang=\{lang\} setLang=\{setLang\}/);
+});
+
+test("LangToggle lives in its own file, imported wherever it's used, rather than redefined in App.jsx", () => {
+  assert.doesNotMatch(app, /function LangToggle\(/);
+  assert.match(app, /import \{ LangToggle \} from "\.\/LangToggle\.jsx";/);
+});
+
 test("the flame at the start is shown until the last answer, then lit with the ignite bloom", () => {
   assert.match(gate, /<StreakFlame state=\{before\.flame\} size=\{28\} \/>/);
   assert.match(gate, /<StreakFlame state=\{lit \? "lit" : before\.flame\} size=\{72\} slow \/>/);
