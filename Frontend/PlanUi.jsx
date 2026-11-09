@@ -110,7 +110,7 @@ export function PaymentQrAdmin({ api, lang = "en", tr }) {
    A second view, toggled with the tabs below, browses every signed-up student instead -- paid or not, newest first,
    "Load more" a page at a time -- for the simple question "who actually has an account". A search always wins over
    either tab: it looks across every student regardless of which view is showing. */
-export function AdminPlans({ api, lang = "en", tr, trf }) {
+export function AdminPlans({ api, lang = "en", tr, trf, currentUserId }) {
   const [q, setQ] = useState("");
   const [view, setView] = useState("paid"); // "paid" | "all"
   const [page, setPage] = useState(1);
@@ -152,6 +152,23 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
     setFlash((f) => ({ ...f, [row.id]: undefined }));
     try {
       const res = await api.setUserPlan(row.id, { plan, ...extra });
+      setRows((list) => list.map((r) => (r.id === row.id ? res.user : r)));
+      setFlash((f) => ({ ...f, [row.id]: "saved" }));
+    } catch {
+      setFlash((f) => ({ ...f, [row.id]: "error" }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Grant or revoke the admin role itself -- separate from the plan, and from `change()` above, since it is not a
+  // plan at all. The backend refuses a self-revoke, so the button for an admin's own row is left out entirely
+  // rather than shown disabled: there is nothing useful it could do there.
+  const changeRole = async (row) => {
+    setBusyId(row.id);
+    setFlash((f) => ({ ...f, [row.id]: undefined }));
+    try {
+      const res = await api.setUserRole(row.id, !row.isAdmin);
       setRows((list) => list.map((r) => (r.id === row.id ? res.user : r)));
       setFlash((f) => ({ ...f, [row.id]: "saved" }));
     } catch {
@@ -217,7 +234,14 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
                 <li key={row.id} className="eai-card space-y-3">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
-                      <p className="font-semibold truncate">{row.name}</p>
+                      <p className="font-semibold truncate flex items-center gap-1.5">
+                        <span className="truncate">{row.name}</span>
+                        {row.isAdmin && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${kmc(lang)}`} style={{ background: "var(--gold-soft)", color: "var(--gold)" }}>
+                            {tr("adminPlansAdminBadge")}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs eai-muted truncate">{[row.email, row.phone].filter(Boolean).join(" · ")}</p>
                       {row.signedUpAt && <p className={`text-xs eai-muted mt-0.5 ${kmc(lang)}`}>{trf("adminPlansSignedUp", { date: dateText(row.signedUpAt, lang) })}</p>}
                     </div>
@@ -240,6 +264,12 @@ export function AdminPlans({ api, lang = "en", tr, trf }) {
                     {row.plan !== "free" && (
                       <button type="button" disabled={busy} onClick={() => change(row, "free")} className={`eai-focus text-sm font-semibold px-2 py-2.5 ${kmc(lang)}`} style={{ color: "var(--primary)", opacity: busy ? 0.6 : 1 }}>
                         {tr("adminPlansSetFree")}
+                      </button>
+                    )}
+                    {row.id !== currentUserId && (
+                      <button type="button" disabled={busy} onClick={() => changeRole(row)} className={`eai-focus text-sm font-semibold px-2 py-2.5 ${kmc(lang)}`}
+                        style={{ color: row.isAdmin ? "var(--ember)" : "var(--primary)", opacity: busy ? 0.6 : 1 }}>
+                        {tr(row.isAdmin ? "adminPlansRevokeAdmin" : "adminPlansMakeAdmin")}
                       </button>
                     )}
                     {flash[row.id] === "saved" && <span className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: "var(--jade)" }} role="status"><CheckCircle2 size={14} /> {tr("adminPlansSaved")}</span>}

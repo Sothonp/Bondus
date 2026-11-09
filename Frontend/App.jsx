@@ -8589,7 +8589,7 @@ export default function App() {
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onOpen={handleOpen} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
-    adminPlans: isAdmin(profile) ? <AdminPlans api={api} lang={lang} tr={tr} trf={(key, vars) => tf(lang, key, vars)} /> : null,
+    adminPlans: isAdmin(profile) ? <AdminPlans api={api} lang={lang} tr={tr} trf={(key, vars) => tf(lang, key, vars)} currentUserId={profile.userId} /> : null,
     // Reached from the header avatar and the sidebar link, not from NAV. The form pieces are passed in (ProfileUi.jsx
     // cannot import App.jsx), so editing a profile uses the same fields and option lists as signing up.
     profile: <ProfilePage profile={profile} lang={lang} tr={tr}

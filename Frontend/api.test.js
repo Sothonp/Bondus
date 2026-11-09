@@ -350,6 +350,16 @@ test("plans: an admin lists students and switches a plan on", async () => {
   assert.deepEqual(calls[3].body, { plan: "premium", noExpiry: true });
 });
 
+test("plans: an admin grants or revokes another account's admin role", async () => {
+  const { api, calls } = make(() => json(200, { user: { id: 9, isAdmin: true } }));
+  await api.setUserRole(9, true);
+  await api.setUserRole(9, false);
+  assert.equal(calls[0].url, `${BASE}/admin/users/9/role`);
+  assert.equal(calls[0].init.method, "PATCH");
+  assert.deepEqual(calls[0].body, { admin: true });
+  assert.deepEqual(calls[1].body, { admin: false });
+});
+
 test("plans: an admin can browse every signed-up student, paid or not, a page at a time", async () => {
   const { api, calls } = make(() => json(200, { users: [], hasMore: false }));
   await api.getAdminUsers({ all: true });

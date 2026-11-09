@@ -168,6 +168,18 @@ test("an admin can also browse every signed-up student, not just the paid ones, 
   assert.match(admin, /row\.signedUpAt && <p[^>]*>\{trf\("adminPlansSignedUp"/);
 });
 
+test("an admin can grant or revoke another account's admin role, but never their own", () => {
+  const admin = between(ui, "export function AdminPlans", "\n}\n");
+  assert.match(admin, /const changeRole = async \(row\) => \{/);
+  assert.match(admin, /api\.setUserRole\(row\.id, !row\.isAdmin\)/);
+  // the button is left out entirely for an admin's own row, not shown disabled
+  assert.match(admin, /row\.id !== currentUserId && \(/);
+  assert.match(admin, /tr\(row\.isAdmin \? "adminPlansRevokeAdmin" : "adminPlansMakeAdmin"\)/);
+  // every admin wears a small badge next to their name, in every view
+  assert.match(admin, /row\.isAdmin && \(\s*<span[^>]*>\s*\{tr\("adminPlansAdminBadge"\)\}/);
+  assert.match(app, /<AdminPlans api=\{api\} lang=\{lang\} tr=\{tr\} trf=\{[^}]*\} currentUserId=\{profile\.userId\} \/>/);
+});
+
 test("the plans page promises the uploads the plans give", () => {
   assert.match(app, /"10 photo\/PDF uploads\/day"/);
   assert.match(app, /"40 photo\/PDF uploads\/day"/);
