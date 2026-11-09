@@ -124,6 +124,7 @@ export const diagnosticEvent = (attemptId = newAttemptId()) => ({ type: "diagnos
 /* Backend error code -> the App's STRINGS key for the English/Khmer message. Anything unknown falls back to errServer. */
 export const API_ERROR_KEYS = {
   invalid_credentials: "errInvalidCredentials",
+  account_suspended: "errSuspended",
   phone_taken: "errPhoneTaken",
   email_taken: "errEmailTaken",
   validation_failed: "errValidation",

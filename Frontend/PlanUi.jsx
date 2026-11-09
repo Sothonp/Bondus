@@ -178,6 +178,23 @@ export function AdminPlans({ api, lang = "en", tr, trf, currentUserId }) {
     }
   };
 
+  // Shut an account off, or reopen one -- independent of its plan, for a student sharing a login or abusing the
+  // AI coach rather than one who just hasn't paid. Same self-protection as changeRole(): the button is left off
+  // an admin's own row, and the backend refuses a self-suspend too.
+  const changeSuspension = async (row) => {
+    setBusyId(row.id);
+    setFlash((f) => ({ ...f, [row.id]: undefined }));
+    try {
+      const res = await api.setUserSuspension(row.id, !row.isSuspended);
+      setRows((list) => list.map((r) => (r.id === row.id ? res.user : r)));
+      setFlash((f) => ({ ...f, [row.id]: "saved" }));
+    } catch {
+      setFlash((f) => ({ ...f, [row.id]: "error" }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="space-y-5 eai-rise">
       <div>
@@ -241,6 +258,11 @@ export function AdminPlans({ api, lang = "en", tr, trf, currentUserId }) {
                             {tr("adminPlansAdminBadge")}
                           </span>
                         )}
+                        {row.isSuspended && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${kmc(lang)}`} style={{ background: "var(--ember-soft)", color: "var(--ember)" }}>
+                            {tr("adminPlansSuspendedBadge")}
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs eai-muted truncate">{[row.email, row.phone].filter(Boolean).join(" · ")}</p>
                       {row.signedUpAt && <p className={`text-xs eai-muted mt-0.5 ${kmc(lang)}`}>{trf("adminPlansSignedUp", { date: dateText(row.signedUpAt, lang) })}</p>}
@@ -270,6 +292,12 @@ export function AdminPlans({ api, lang = "en", tr, trf, currentUserId }) {
                       <button type="button" disabled={busy} onClick={() => changeRole(row)} className={`eai-focus text-sm font-semibold px-2 py-2.5 ${kmc(lang)}`}
                         style={{ color: row.isAdmin ? "var(--ember)" : "var(--primary)", opacity: busy ? 0.6 : 1 }}>
                         {tr(row.isAdmin ? "adminPlansRevokeAdmin" : "adminPlansMakeAdmin")}
+                      </button>
+                    )}
+                    {row.id !== currentUserId && (
+                      <button type="button" disabled={busy} onClick={() => changeSuspension(row)} className={`eai-focus text-sm font-semibold px-2 py-2.5 ${kmc(lang)}`}
+                        style={{ color: row.isSuspended ? "var(--jade)" : "var(--ember)", opacity: busy ? 0.6 : 1 }}>
+                        {tr(row.isSuspended ? "adminPlansUnsuspend" : "adminPlansSuspend")}
                       </button>
                     )}
                     {flash[row.id] === "saved" && <span className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: "var(--jade)" }} role="status"><CheckCircle2 size={14} /> {tr("adminPlansSaved")}</span>}

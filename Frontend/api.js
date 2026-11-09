@@ -171,6 +171,9 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     setUserPlan: (id, { plan, months, noExpiry }) => send("PATCH", `/admin/users/${id}/plan`, { plan, months, noExpiry }),
     // admin-only: grant or revoke the admin role itself. The backend refuses to let an admin revoke their own.
     setUserRole: (id, admin) => send("PATCH", `/admin/users/${id}/role`, { admin }),
+    // admin-only: shut an account off (or reopen one), independent of its plan. The backend refuses to let an
+    // admin suspend their own, and signs a newly suspended account out of every device immediately.
+    setUserSuspension: (id, suspended) => send("PATCH", `/admin/users/${id}/suspend`, { suspended }),
 
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),

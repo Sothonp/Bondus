@@ -360,6 +360,16 @@ test("plans: an admin grants or revokes another account's admin role", async () 
   assert.deepEqual(calls[1].body, { admin: false });
 });
 
+test("plans: an admin suspends or reopens another account", async () => {
+  const { api, calls } = make(() => json(200, { user: { id: 9, isSuspended: true } }));
+  await api.setUserSuspension(9, true);
+  await api.setUserSuspension(9, false);
+  assert.equal(calls[0].url, `${BASE}/admin/users/9/suspend`);
+  assert.equal(calls[0].init.method, "PATCH");
+  assert.deepEqual(calls[0].body, { suspended: true });
+  assert.deepEqual(calls[1].body, { suspended: false });
+});
+
 test("plans: an admin can browse every signed-up student, paid or not, a page at a time", async () => {
   const { api, calls } = make(() => json(200, { users: [], hasMore: false }));
   await api.getAdminUsers({ all: true });
