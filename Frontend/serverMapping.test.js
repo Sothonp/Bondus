@@ -159,6 +159,10 @@ test("a wrong current password maps to its own message key", () => {
   assert.equal(apiErrorKey("wrong_password"), "errWrongPassword");
 });
 
+test("a suspended account's sign-in attempt maps to its own message, not the generic wrong-password one", () => {
+  assert.equal(apiErrorKey("account_suspended"), "errSuspended");
+});
+
 test("the warm-up event is keyed by the server's day and has no attemptId, so a retry cannot count twice", () => {
   assert.deepEqual(warmupEvent("2026-11-01", 3), { type: "warmup", key: "2026-11-01", total: 3 });
   assert.equal("attemptId" in warmupEvent("2026-11-01"), false);

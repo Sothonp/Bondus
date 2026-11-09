@@ -180,6 +180,17 @@ test("an admin can grant or revoke another account's admin role, but never their
   assert.match(app, /<AdminPlans api=\{api\} lang=\{lang\} tr=\{tr\} trf=\{[^}]*\} currentUserId=\{profile\.userId\} \/>/);
 });
 
+test("an admin can suspend or reopen another account, but never their own", () => {
+  const admin = between(ui, "export function AdminPlans", "\n}\n");
+  assert.match(admin, /const changeSuspension = async \(row\) => \{/);
+  assert.match(admin, /api\.setUserSuspension\(row\.id, !row\.isSuspended\)/);
+  // the button is left out entirely for an admin's own row, same as the admin-role toggle
+  assert.match(admin, /onClick=\{\(\) => changeSuspension\(row\)\}/);
+  assert.match(admin, /tr\(row\.isSuspended \? "adminPlansUnsuspend" : "adminPlansSuspend"\)/);
+  // every suspended account wears its own badge next to the name, independent of the admin badge
+  assert.match(admin, /row\.isSuspended && \(\s*<span[^>]*>\s*\{tr\("adminPlansSuspendedBadge"\)\}/);
+});
+
 test("the plans page promises the uploads the plans give", () => {
   assert.match(app, /"10 photo\/PDF uploads\/day"/);
   assert.match(app, /"40 photo\/PDF uploads\/day"/);
