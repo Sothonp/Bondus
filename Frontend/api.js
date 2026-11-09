@@ -160,8 +160,14 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     uploadPaymentQr: (picture) => { const form = new FormData(); form.append("qr", picture, picture.name || "qr.png"); return send("POST", "/admin/payment-qr", form); },
     resetPaymentQr: () => send("DELETE", "/admin/payment-qr"),
 
-    // admin-only: switch a student's plan on after they have paid. No query lists the students on a paid plan.
-    getAdminUsers: (q) => get(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+    // admin-only: who's on the app. No options lists the students on a paid plan (unchanged default).
+    // { q }: substring search on name/email/phone, anyone, paid or not -- `q` always wins when both are given.
+    // { all: true }: every signed-up student, newest first, 30 at a time; { page } (from 1) pages through it.
+    getAdminUsers: ({ q, all, page } = {}) => {
+      if (q) return get(`/admin/users?q=${encodeURIComponent(q)}`);
+      if (all) return get(`/admin/users?all=1${page && page > 1 ? `&page=${page}` : ""}`);
+      return get("/admin/users");
+    },
     setUserPlan: (id, { plan, months, noExpiry }) => send("PATCH", `/admin/users/${id}/plan`, { plan, months, noExpiry }),
 
     // the student's own daily plan
