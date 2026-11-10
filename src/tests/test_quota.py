@@ -21,11 +21,13 @@ from PIL import Image
 
 from src.api import create_app
 from src.auth import LaravelTokenVerifier
+from src.embeddings.embedder import build_embedder
 from src.ingestion.image_ocr import HybridImageOCR
 from src.config import Settings
 from src.quota import LaravelQuota, QuotaBusy, QuotaUnavailable, QuotaVerdict, question_id
 from src.tests.test_api import ScriptedGenerator
 from src.tests.test_auth import ME_URL, bearer, me
+from src.tests.test_exam import make_store
 
 CONSUME_URL = "https://api.example.test/api/v1/ai/consume"
 ID = "question-12345678"
@@ -41,6 +43,19 @@ AI_ROUTES = [
 @pytest.fixture
 def store_path(tmp_path):
     return tmp_path / "vector_index"
+
+
+@pytest.fixture
+def exam_store_path(tmp_path):
+    """Like store_path, but seeded with an indexed physics past paper, the way test_exam.py's exam_client fixture
+    builds one. /api/exam/stream reads the store for the subject's past papers before it ever calls the model; with
+    nothing indexed, it refuses in band (see test_a_subject_with_no_past_papers_is_refused_in_band in test_exam.py),
+    so a quota test that wants exam-stream to actually reach the model needs a paper to copy, the same as a real
+    subject with its past papers indexed would have."""
+    path = tmp_path / "vector_index"
+    settings = Settings(_env_file=None, embedding_backend="hashing", llm_provider="none", vector_store_path=path)
+    make_store(path, build_embedder(settings).name).save()
+    return path
 
 
 class FakeLaravel:
@@ -110,8 +125,11 @@ def make_client(handler, store_path, *, quota_url: str = CONSUME_URL, **settings
 
 
 @pytest.mark.parametrize(("route", "body"), AI_ROUTES)
-def test_a_student_with_questions_left_gets_an_answer_and_is_counted_under_the_websites_id(route, body, store_path):
+def test_a_student_with_questions_left_gets_an_answer_and_is_counted_under_the_websites_id(route, body, store_path, request):
     # Breaks if: the guard blocks students who still have questions, or counts under the wrong id or token.
+    if route == "/api/exam/stream":
+        # Unlike the other two routes, exam-stream needs a past paper indexed before it will call the model at all.
+        store_path = request.getfixturevalue("exam_store_path")
     laravel = FakeLaravel()
     client, generator = make_client(laravel, store_path)
     with client:
