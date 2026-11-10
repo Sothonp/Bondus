@@ -15,3 +15,6 @@ jobs:
       - run: uv run pytest src/tests/test_quota.py
         continue-on-error: true
       - run: uv run pytest src/tests/
+      - run: >
+          uv run pytest src/tests/test_quota.py -v -k
+          "revoked or suspended or denied or cached"
