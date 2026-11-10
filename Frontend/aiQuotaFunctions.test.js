@@ -5,9 +5,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createQuotaCheck, questionId, quotaUrl } from "../api/_auth.js";
+import { createQuotaCheck, createSignedInCheck, questionId, quotaUrl } from "../api/_auth.js";
 
 const CONSUME = "https://api.example.test/api/v1/ai/consume";
+const ME = "https://api.example.test/api/v1/me";
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 /* The Laravel API as the guard sees it: `limit` questions a day, an id counted once. */
@@ -80,14 +81,48 @@ test("without an id each request is counted, so the limit still bites", async ()
 });
 
 test("an unreachable or confused API does not take the mentor down: a question goes ahead, within a temporary daily allowance", async () => {
-  // Breaks if: an outage of the Laravel API takes the mentor down for every student.
+  // Breaks if: an outage of the Laravel API takes the mentor down for every student. 401/403 are tested separately below:
+  // those are the API's own "no" about this token, not an outage, and must not go ahead.
   console.error = () => {};
   try {
     assert.equal(await guard(laravel({ down: true }))("Bearer t", "question-abc123"), null);
-    for (const status of [401, 404, 500, 503]) {
+    for (const status of [404, 500, 503]) {
       assert.equal(await guard(laravel({ status }))("Bearer t", "question-abc123"), null, String(status));
     }
   } finally { console.error = originalError; }
+});
+
+test("a 401 or 403 from the quota API is an explicit deny, not treated as an outage", async () => {
+  // Breaks if: a revoked token (401) or a suspended account whose token Laravel just deleted (403 -- EnsureNotSuspended
+  // on the Laravel side) is treated as "unsure" and the question goes through within the outage allowance meant for
+  // genuine infrastructure trouble.
+  for (const status of [401, 403]) {
+    const refused = await guard(laravel({ status }))("Bearer t", "question-abc123");
+    assert.equal(refused.status, 401, String(status));
+    assert.equal(refused.body.code, "unauthenticated", String(status));
+    assert.equal(refused.headers["WWW-Authenticate"], "Bearer", String(status));
+  }
+});
+
+test("a token revoked right after its sign-in check was cached is still denied by the quota check", async () => {
+  // Breaks if: the sign-in guard's own cache (cacheMs) means a token revoked moments ago still gets through, because
+  // only the sign-in check is cached -- createQuotaCheck's count() is never cached and asks Laravel fresh every time, so
+  // it must be the one that catches a revocation the sign-in cache is still blind to.
+  let revoked = false;
+  const fetchImpl = async (url, init = {}) => {
+    const u = String(url);
+    if (u === ME) return revoked ? json(401, { code: "unauthenticated" }) : json(200, { user: { id: 1 } });
+    if (u === CONSUME) return revoked ? json(401, { code: "unauthenticated" }) : json(200, { allowed: true, plan: "free", limit: 5 });
+    return json(404, {});
+  };
+  const signIn = createSignedInCheck({ url: ME, fetchImpl });
+  const count = createQuotaCheck({ url: CONSUME, fetchImpl });
+  assert.equal(await signIn("Bearer good"), null);
+  assert.equal(await count("Bearer good", "question-abc123"), null);
+  revoked = true; // the student's token is revoked the instant after it was checked and cached
+  assert.equal(await signIn("Bearer good"), null, "the sign-in check's own cache still says good");
+  const refused = await count("Bearer good", "question-def456");
+  assert.equal(refused.status, 401);
 });
 
 test("while the API cannot answer, a student gets only a temporary daily allowance (and a day later it starts again)", async () => {
@@ -173,7 +208,6 @@ test("IELTS grading is deliberately not counted: it needs sign-in but spends non
 });
 
 /* End to end through the real handlers, with Laravel faked at the network level (needs the site's packages, like aiAuth.test.js). */
-const ME = "https://api.example.test/api/v1/me";
 function production(users, { limit }) {
   const seen = new Set();
   const outbound = [];
