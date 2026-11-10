@@ -78,7 +78,7 @@ test("the sidebar gives science students an Exercises tab, and admins an Admin t
   assert.match(app, /import \{[^}]*\bEXERCISE_SUBJECTS\b[^}]*\} from "\.\/exercises\.js";/);
   assert.match(app, /import \{[^}]*\bcanBrowseExercises\b[^}]*\bisAdmin\b[^}]*\} from "\.\/exercises\.js";|import \{[^}]*\bisAdmin\b[^}]*\bcanBrowseExercises\b[^}]*\} from "\.\/exercises\.js";/);
   assert.match(app, /\{ id: "exercises", label: "Exercises"/);
-  assert.match(app, /const ADMIN_NAV = \[\s*\{ id: "adminExercises"/);
+  assert.match(app, /const ADMIN_NAV = \[[^[]*\{ id: "adminExercises"/);
   // The Exercises tab is hidden unless the student can browse them; the Admin tab only shows for an admin.
   assert.match(app, /n\.id !== "exercises" \|\| canBrowseExercises\(p\)/);
   assert.match(app, /isAdmin\(profile\) \? \[\.\.\.ADMIN_NAV\] : \[\]|isAdmin\(profile\) \? ADMIN_NAV : \[\]/);

@@ -78,8 +78,18 @@ test("the plans page marks the student's plan, offers only a better one, and say
 });
 
 test("the admin Plans page is in the admin menu after Admin, and only an admin gets it", () => {
-  assert.match(app, /const ADMIN_NAV = \[\s*\{ id: "adminExercises"[^\n]*\n\s*\{ id: "adminPlans"/);
+  assert.match(app, /const ADMIN_NAV = \[[^[]*\{ id: "adminExercises"[^\n]*\n\s*\{ id: "adminPlans"/);
   assert.match(app, /adminPlans: isAdmin\(profile\) \? <AdminPlans api=\{api\}/);
+});
+
+test("the admin numbers page leads the admin menu, is read-only, and only an admin gets it", () => {
+  assert.match(app, /const ADMIN_NAV = \[\s*\{ id: "adminStats"/);
+  assert.match(app, /function AdminStats\(\{ api, lang, tr \}\)/);
+  const page = between(app, "function AdminStats(", "\nconst topicLabel =");
+  assert.match(page, /api\.getAdminStats\(\)\.then\(\(res\) => \{ if \(alive\) setStats\(res\)/);
+  // plan names come from the same PLAN_NAMES the rest of the admin screens use, not a second translated copy
+  assert.match(page, /PLAN_NAMES\[id\]/);
+  assert.match(app, /adminStats: isAdmin\(profile\) \? <AdminStats api=\{api\}/);
 });
 
 test("every string the plan screens use exists in English and Khmer", () => {

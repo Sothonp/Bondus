@@ -177,6 +177,9 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
       return send("POST", "/payment-claim", { plan, months, note });
     },
 
+    // admin-only: the whole app at a glance -- plan counts, AI questions asked today, signups this week.
+    getAdminStats: () => get("/admin/stats"),
+
     // admin-only: who's on the app. No options lists the students on a paid plan (unchanged default).
     // { q }: substring search on name/email/phone, anyone, paid or not -- `q` always wins when both are given.
     // { all: true }: every signed-up student, newest first, 30 at a time; { page } (from 1) pages through it.

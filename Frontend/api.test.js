@@ -336,6 +336,14 @@ test("Facebook sign-in sends the access token without a sign-in header and keeps
   assert.equal(api.hasToken(), true);
 });
 
+test("stats: an admin fetches the whole app at a glance", async () => {
+  const { api, calls } = make(() => json(200, { plans: { free: 1, standard: 2, premium: 3 }, aiQuestionsToday: 42, signupsThisWeek: 5 }));
+  const res = await api.getAdminStats();
+  assert.equal(calls[0].url, `${BASE}/admin/stats`);
+  assert.equal(calls[0].init.method, "GET");
+  assert.deepEqual(res, { plans: { free: 1, standard: 2, premium: 3 }, aiQuestionsToday: 42, signupsThisWeek: 5 });
+});
+
 test("plans: an admin lists students and switches a plan on", async () => {
   const { api, calls } = make(() => json(200, { users: [], user: { id: 7, plan: "standard" } }));
   await api.getAdminUsers();

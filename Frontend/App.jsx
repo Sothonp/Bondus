@@ -3395,6 +3395,59 @@ const TOPIC_LABEL_KM = {};
 Object.values(RAW_EXERCISES).flat().forEach((r) => { if (r.topicKm) TOPIC_LABEL_KM[r.topic] = r.topicKm; });
 // University quiz topics (UNI_QUIZ_BANK) are deliberately English-only — no topicKm to register
 // here — so topicLabel() falls through to returning the raw English topic even in Khmer mode.
+
+/* Admin: the whole app at a glance -- students by plan, AI questions asked today, signups this week -- instead
+   of opening one student at a time to get any sense of it. Read-only, so there's nothing to save or retry beyond
+   reloading the numbers themselves. */
+function AdminStats({ api, lang, tr }) {
+  const [stats, setStats] = useState(undefined); // undefined while loading, null if it could not be read
+  const km = lang === "km" ? "eai-km" : "";
+
+  useEffect(() => {
+    let alive = true;
+    api.getAdminStats().then((res) => { if (alive) setStats(res); }).catch(() => { if (alive) setStats(null); });
+    return () => { alive = false; };
+  }, [api]);
+
+  const plans = stats?.plans ?? { free: 0, standard: 0, premium: 0 };
+  const totalStudents = plans.free + plans.standard + plans.premium;
+
+  const Tile = ({ label, value }) => (
+    <div className="eai-card">
+      <p className={`text-xs eai-muted ${km}`}>{label}</p>
+      <p className="eai-display text-3xl font-extrabold mt-1">{value}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5 eai-rise">
+      <div>
+        <h2 className={`eai-display text-2xl font-extrabold ${km}`}>{tr("adminStatsTitle")}</h2>
+        <p className={`eai-muted text-sm mt-1 ${km}`}>{tr("adminStatsDesc")}</p>
+      </div>
+      {stats === undefined ? <p className={`text-sm eai-muted ${km}`}>{tr("adminStatsLoading")}</p>
+        : stats === null ? (
+          <p className={`text-sm flex items-center gap-2 ${km}`} style={{ color: "var(--ember)" }} role="alert">
+            <AlertTriangle size={14} /> {tr("adminStatsLoadError")}
+          </p>
+        )
+        : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Tile label={tr("adminStatsTotalStudents")} value={totalStudents} />
+              {["free", "standard", "premium"].map((id) => (
+                <Tile key={id} label={PLAN_NAMES[id]} value={plans[id]} />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Tile label={tr("adminStatsAiToday")} value={stats.aiQuestionsToday} />
+              <Tile label={tr("adminStatsSignupsWeek")} value={stats.signupsThisWeek} />
+            </div>
+          </>
+        )}
+    </div>
+  );
+}
 const topicLabel = (topic, lang) => (lang === "km" ? (TOPIC_LABEL_KM[topic] ?? topic) : topic);
 
 // "BAC II" is the official exam's Latin-script name — most Khmer education sites and documents
@@ -7430,6 +7483,7 @@ const UNI_NAV = [
 
 /* Added to the sidebar for an admin account only (the server checks the role too): posting exercises. */
 const ADMIN_NAV = [
+  { id: "adminStats", label: "Numbers", labelKm: "ស្ថិតិ", icon: LayoutDashboard },
   { id: "adminExercises", label: "Admin", labelKm: "អ្នកគ្រប់គ្រង", icon: ShieldCheck },
   { id: "adminPlans", label: "Plans", labelKm: "គម្រោង", icon: Crown },
 ];
@@ -8682,6 +8736,7 @@ export default function App() {
     schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
     practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onOpen={handleOpen} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
+    adminStats: isAdmin(profile) ? <AdminStats api={api} lang={lang} tr={tr} /> : null,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,
     adminPlans: isAdmin(profile) ? <AdminPlans api={api} lang={lang} tr={tr} trf={(key, vars) => tf(lang, key, vars)} currentUserId={profile.userId} /> : null,
     // Reached from the header avatar and the sidebar link, not from NAV. The form pieces are passed in (ProfileUi.jsx
