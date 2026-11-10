@@ -235,6 +235,134 @@ export function PaymentClaimsInbox({ api, lang = "en", tr, trf }) {
   );
 }
 
+/* Admin: a plan queued for an email that hasn't signed up yet -- applied the moment an account with that email is
+   created (see PlanPreset::consume on the backend). Today a plan can only be switched on for an existing account;
+   this is the way around that for a student who already paid but hasn't opened the app yet. */
+export function PlanPresets({ api, lang = "en", tr, trf }) {
+  const [presets, setPresets] = useState(undefined); // undefined while loading, null if it could not be read
+  const [email, setEmail] = useState("");
+  const [months, setMonths] = useState(1);
+  const [queuing, setQueuing] = useState(false);
+  const [flash, setFlash] = useState(null); // "queued" | "applied" | "error"
+  const [cancelId, setCancelId] = useState(null);
+  const [cancelError, setCancelError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.getPlanPresets().then((res) => { if (alive) setPresets(res.presets); }).catch(() => { if (alive) setPresets(null); });
+    return () => { alive = false; };
+  }, [api]);
+
+  const queue = async (plan) => {
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    setQueuing(true);
+    setFlash(null);
+    try {
+      const res = await api.createPlanPreset(trimmed, { plan, months });
+      if (res.applied) {
+        setFlash("applied");
+      } else {
+        setPresets((list) => [res.preset, ...(list ?? []).filter((p) => p.email !== res.preset.email)]);
+        setFlash("queued");
+      }
+      setEmail("");
+    } catch {
+      setFlash("error");
+    } finally {
+      setQueuing(false);
+    }
+  };
+
+  const cancel = async (preset) => {
+    setCancelId(preset.id);
+    setCancelError(null);
+    try {
+      await api.cancelPlanPreset(preset.id);
+      setPresets((list) => list.filter((p) => p.id !== preset.id));
+    } catch {
+      setCancelError(preset.id);
+    } finally {
+      setCancelId(null);
+    }
+  };
+
+  return (
+    <section className="eai-card space-y-3" aria-labelledby="plan-presets-title">
+      <div>
+        <h3 id="plan-presets-title" className={`font-bold ${kmc(lang)}`}>{tr("presetSectionTitle")}</h3>
+        <p className={`text-sm eai-muted mt-1 ${kmc(lang)}`}>{tr("presetSectionDesc")}</p>
+      </div>
+
+      <div className="flex gap-3 flex-wrap items-end">
+        <label className="flex-1 min-w-[220px]">
+          <span className="sr-only">{tr("presetEmailLabel")}</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr("presetEmailPlaceholder")}
+            className={`eai-focus w-full py-3 px-3 rounded-xl border bg-transparent text-sm outline-none ${kmc(lang)}`}
+            style={{ background: "var(--card)", borderColor: "var(--line)", color: "var(--ink)" }} />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <span className={`eai-muted ${kmc(lang)}`}>{tr("adminPlansMonths")}</span>
+          <select value={months} onChange={(e) => setMonths(Number(e.target.value))} className="eai-focus rounded-xl border px-3 py-3 text-sm" style={{ background: "var(--card)", borderColor: "var(--line)", color: "var(--ink)" }}>
+            {MONTH_CHOICES.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex gap-2 flex-wrap items-center">
+        {["standard", "premium"].map((id) => (
+          <button key={id} type="button" disabled={queuing || !email.trim()} onClick={() => queue(id)}
+            className={`eai-btn eai-focus px-3.5 py-2.5 text-sm ${kmc(lang)}`}
+            style={{ background: id === "premium" ? "var(--gold)" : "var(--card)", color: id === "premium" ? "#fff" : "var(--ink)", border: id === "premium" ? "none" : "1px solid var(--line)", opacity: queuing || !email.trim() ? 0.6 : 1 }}>
+            {trf("presetQueueButton", { plan: PLAN_NAMES[id] })}
+          </button>
+        ))}
+        {flash === "queued" && <span className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: "var(--jade)" }} role="status"><CheckCircle2 size={14} /> {tr("presetQueuedFlash")}</span>}
+        {flash === "applied" && <span className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: "var(--jade)" }} role="status"><CheckCircle2 size={14} /> {tr("presetAppliedFlash")}</span>}
+        {flash === "error" && <span className={`text-xs flex items-center gap-1 ${kmc(lang)}`} style={{ color: "var(--ember)" }} role="alert"><AlertTriangle size={14} /> {tr("adminPlansSaveError")}</span>}
+      </div>
+
+      {presets === undefined ? <p className={`text-sm eai-muted ${kmc(lang)}`}>{tr("presetLoading")}</p>
+        : presets === null ? (
+          <p className={`text-sm flex items-center gap-2 ${kmc(lang)}`} style={{ color: "var(--ember)" }} role="alert">
+            <AlertTriangle size={14} /> {tr("presetLoadError")}
+          </p>
+        )
+        : presets.length === 0 ? <p className={`text-sm eai-muted ${kmc(lang)}`}>{tr("presetEmpty")}</p>
+        : (
+          <ul className="space-y-2">
+            {presets.map((preset) => (
+              <li key={preset.id} className="eai-soft rounded-xl p-3 flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">{preset.email}</p>
+                  <p className={`text-xs eai-muted mt-0.5 ${kmc(lang)}`}>
+                    {preset.createdAt && trf("presetQueuedOn", { date: dateText(preset.createdAt, lang) })}
+                    {preset.setByName ? ` ${trf("presetQueuedBy", { name: preset.setByName })}` : ""}
+                  </p>
+                  {cancelError === preset.id && (
+                    <p className={`text-xs flex items-center gap-1 mt-1 ${kmc(lang)}`} style={{ color: "var(--ember)" }} role="alert">
+                      <AlertTriangle size={14} /> {tr("presetCancelError")}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--gold)", color: "#fff" }}>
+                    {PLAN_NAMES[preset.plan] ?? preset.plan}
+                  </span>
+                  <p className={`text-xs eai-muted ${kmc(lang)}`}>{preset.noExpiry ? tr("adminPlansNoEnd") : trf("claimsInboxMonths", { months: preset.months })}</p>
+                  <button type="button" disabled={cancelId === preset.id} onClick={() => cancel(preset)}
+                    className={`eai-focus text-sm font-semibold px-2 py-1 ${kmc(lang)}`} style={{ color: "var(--ember)", opacity: cancelId === preset.id ? 0.6 : 1 }}>
+                    {tr("claimsInboxCancel")}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+    </section>
+  );
+}
+
 /* Admin: the students on a paid plan (or whoever the search finds), each with buttons to switch a plan on for N months.
    A second view, toggled with the tabs below, browses every signed-up student instead -- paid or not, newest first,
    "Load more" a page at a time -- for the simple question "who actually has an account". A search always wins over
@@ -334,6 +462,8 @@ export function AdminPlans({ api, lang = "en", tr, trf, currentUserId }) {
       <PaymentQrAdmin api={api} lang={lang} tr={tr} />
 
       <PaymentClaimsInbox api={api} lang={lang} tr={tr} trf={trf} />
+
+      <PlanPresets api={api} lang={lang} tr={tr} trf={trf} />
 
       <div className="flex gap-3 flex-wrap items-end">
         <label className="flex-1 min-w-[220px]">

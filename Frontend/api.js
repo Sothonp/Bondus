@@ -201,6 +201,13 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     // admin-only: dismisses the claim without changing the student's plan.
     rejectPaymentClaim: (id, note) => send("PATCH", `/admin/payment-claims/${id}/reject`, note ? { note } : {}),
 
+    // admin-only: plans queued for an email that hasn't signed up yet.
+    getPlanPresets: () => get("/admin/plan-presets"),
+    // If that email already has an account, the backend switches the plan on immediately instead of queuing it
+    // (the response says which: { applied: true, ... } or { applied: false, preset }).
+    createPlanPreset: (email, { plan, months, noExpiry }) => send("POST", "/admin/plan-presets", { email, plan, months, noExpiry }),
+    cancelPlanPreset: (id) => send("DELETE", `/admin/plan-presets/${id}`),
+
     // the student's own daily plan
     getPlan: (date) => get(`/plan${date ? `?date=${encodeURIComponent(date)}` : ""}`),
     addPlanTask: (task) => send("POST", "/plan/tasks", task),

@@ -153,6 +153,19 @@ test("the admin's payment-claims inbox approves (switching the plan on) or rejec
   assert.match(inbox, /<a href=\{claim\.screenshotUrl\} target="_blank"/);
 });
 
+test("plan presets let an admin queue a plan for an email that hasn't signed up yet, and it's wired into Admin Plans", () => {
+  assert.match(ui, /export function PlanPresets/);
+  assert.match(between(ui, "export function AdminPlans", "\n}\n"), /<PlanPresets api=\{api\} lang=\{lang\} tr=\{tr\} trf=\{trf\} \/>/);
+  const presets = between(ui, "export function PlanPresets", "\nexport function AdminPlans");
+  assert.match(presets, /api\.getPlanPresets\(\)\.then\(\(res\) => \{ if \(alive\) setPresets\(res\.presets\)/);
+  assert.match(presets, /await api\.createPlanPreset\(trimmed, \{ plan, months \}\);/);
+  // an email that already has an account is switched on right away instead of being added to the queued list
+  assert.match(presets, /if \(res\.applied\) \{\s*setFlash\("applied"\);/);
+  assert.match(presets, /setPresets\(\(list\) => \[res\.preset, \.\.\.\(list \?\? \[\]\)/);
+  assert.match(presets, /await api\.cancelPlanPreset\(preset\.id\);/);
+  assert.match(presets, /setPresets\(\(list\) => list\.filter\(\(p\) => p\.id !== preset\.id\)\);/);
+});
+
 test("an AI server that has not been updated yet (it refuses request_id) still answers: the website sends the question again without the id", () => {
   // Breaks if: the website goes live before the AI server and every question fails with "Extra inputs are not permitted".
   const rag = between(app, "let aiServerTakesRequestId = true;", "const ragFetch =");

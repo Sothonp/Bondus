@@ -418,6 +418,26 @@ test("payment claims: admin-only inbox, approve and reject", async () => {
   assert.deepEqual(calls[5].body, { note: "screenshot does not match" });
 });
 
+test("plan presets: admin can list, queue and cancel a plan for an email", async () => {
+  const { api, calls } = make(() => json(200, { presets: [], preset: { id: 9, email: "future@example.com" } }));
+  await api.getPlanPresets();
+  await api.createPlanPreset("future@example.com", { plan: "premium", months: 6 });
+  await api.cancelPlanPreset(9);
+
+  assert.equal(calls[0].url, `${BASE}/admin/plan-presets`);
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[1].url, `${BASE}/admin/plan-presets`);
+  assert.equal(calls[1].init.method, "POST");
+  assert.deepEqual(calls[1].body, { email: "future@example.com", plan: "premium", months: 6 });
+  assert.equal(calls[2].url, `${BASE}/admin/plan-presets/9`);
+  assert.equal(calls[2].init.method, "DELETE");
+});
+
+test("plan presets: cancelling one is a 204 with no body", async () => {
+  const { api } = make(() => new Response(null, { status: 204 }));
+  assert.equal(await api.cancelPlanPreset(9), null);
+});
+
 test("plans: an admin can browse every signed-up student, paid or not, a page at a time", async () => {
   const { api, calls } = make(() => json(200, { users: [], hasMore: false }));
   await api.getAdminUsers({ all: true });
