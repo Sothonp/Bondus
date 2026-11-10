@@ -43,6 +43,18 @@ test("App.jsx defines the password handlers and passes them, with serverMode, to
   assert.match(app, /serverMode=\{SERVER_MODE\}/);
 });
 
+test("App.jsx defines the delete-account handler and passes it to the page", () => {
+  assert.match(app, /const handleDeleteAccount = async/);
+  assert.match(app, /onDeleteAccount=\{handleDeleteAccount\}/);
+});
+
+test("ProfileUi.jsx renders a delete-account card that asks onDeleteAccount, gated on oauthLinked for the password field", () => {
+  assert.match(ui, /function DeleteAccountCard\(/);
+  assert.match(ui, /onDeleteAccount\(\{ currentPassword \}\)/);
+  assert.match(ui, /!profile\.oauthLinked/);
+  assert.match(ui, /<DeleteAccountCard /);
+});
+
 test("ProfileUi.jsx merges a refreshed profile into the form instead of replacing it, so unsent edits survive a save", () => {
   assert.match(ui, /mergeProfileForm\(/);
   assert.doesNotMatch(ui, /setForm\(JSON\.parse\(profileKey\)\)/);

@@ -137,6 +137,12 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     resetPassword: ({ login, code, password }) => send("POST", "/reset-password", { login, code, password }, { auth: false }).then(remember),
     // The signed-in student proves their current password; the server signs out every other device and keeps this one.
     changePassword: ({ currentPassword, password }) => send("PUT", "/me/password", { currentPassword, password }),
+    // Permanently deletes the signed-in student's own account. `currentPassword` is required unless the account
+    // is Google/Facebook-linked (profile.oauthLinked), which may have no password its owner could ever type.
+    // Clears the stored token only once the server confirms the account is gone -- a wrong password or a
+    // network error leaves the session as it was, so the form can show the error and let the student try again.
+    deleteAccount: ({ currentPassword } = {}) =>
+      send("DELETE", "/me", { currentPassword, confirm: true }).then((res) => { setToken(null); return res; }),
 
     // progress
     getState: () => get("/me/state"),
