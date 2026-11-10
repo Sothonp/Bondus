@@ -292,6 +292,25 @@ test("changePassword sends PUT /me/password with the signed-in token", async () 
   assert.equal(call.init.headers.Authorization, "Bearer tok");
 });
 
+test("deleteAccount sends DELETE /me with confirm and the current password, then clears the stored token", async () => {
+  const { api, calls } = make((url) => (url.endsWith("/login") ? json(200, { user: { id: 1 }, token: "tok" }) : json(200, { deleted: true })));
+  await api.login({ login: "a@b.co", password: "x" });
+  assert.equal(api.hasToken(), true);
+  const res = await api.deleteAccount({ currentPassword: "old-pass-1" });
+  const call = calls.at(-1);
+  assert.deepEqual(res, { deleted: true });
+  assert.deepEqual([call.init.method, call.url, call.body], ["DELETE", `${BASE}/me`, { currentPassword: "old-pass-1", confirm: true }]);
+  assert.equal(call.init.headers.Authorization, "Bearer tok");
+  assert.equal(api.hasToken(), false);
+});
+
+test("deleteAccount leaves the token alone when the server refuses (wrong password)", async () => {
+  const { api } = make((url) => (url.endsWith("/login") ? json(200, { user: { id: 1 }, token: "tok" }) : json(422, { code: "wrong_password" })));
+  await api.login({ login: "a@b.co", password: "x" });
+  await assert.rejects(() => api.deleteAccount({ currentPassword: "wrong" }), ApiError);
+  assert.equal(api.hasToken(), true);
+});
+
 test("the chapter path is read with GET /chapters and a Master Quiz is posted to /chapter-quizzes", async () => {
   const { api, calls } = make((url) => json(url.endsWith("/chapters") ? 200 : 201, { ok: true }));
   await api.getChapters();

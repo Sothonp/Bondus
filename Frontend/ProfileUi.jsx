@@ -320,9 +320,75 @@ function PasswordCard({ profile, lang, tr, parts, errorText, onChangePassword, o
   );
 }
 
+/* Permanently delete the account. A Google/Facebook-linked account (profile.oauthLinked) may have no password its
+   owner could ever type, so it can confirm with just the warning step; a password account must retype its current
+   password, the same proof PasswordCard asks for. `onDeleteAccount({ currentPassword })` resolves to { ok: true }
+   or { ok: false, code, retryAfter }; on success the caller signs the student out and shows the welcome screen. */
+function DeleteAccountCard({ profile, lang, tr, parts, errorText, onDeleteAccount }) {
+  const { FormField } = parts;
+  const km = lang === "km" ? "eai-km" : "";
+  const [confirming, setConfirming] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [error, setError] = useState(undefined);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState(null);
+
+  const cancel = () => { setConfirming(false); setCurrentPassword(""); setError(undefined); setFailure(null); };
+
+  const confirm = async (event) => {
+    event.preventDefault();
+    setError(undefined); setFailure(null); setBusy(true);
+    const result = await onDeleteAccount({ currentPassword });
+    setBusy(false);
+    if (result.ok) return; // the caller tears down the session and swaps the screen; nothing left to render here.
+    if (result.code === "wrong_password") setError(tr("errWrongPassword"));
+    else setFailure(errorText(result.code, result.retryAfter));
+  };
+
+  return (
+    <section className="eai-card p-6 space-y-5">
+      <h3 className={`eai-display font-bold ${km}`}>{tr("deleteAccountHeading")}</h3>
+      <p className={`text-sm eai-muted ${km}`}>{tr("deleteAccountDesc")}</p>
+      {!confirming ? (
+        <button type="button" onClick={() => setConfirming(true)} className={`eai-btn eai-focus text-sm py-2.5 px-5 ${km}`}
+          style={{ color: "var(--ember)", border: "1px solid var(--ember)" }}>
+          {tr("deleteAccountButton")}
+        </button>
+      ) : (
+        <form className="space-y-5" onSubmit={confirm} noValidate>
+          <div className="p-4 rounded-2xl space-y-1.5" style={{ background: "var(--ember-soft)" }}>
+            <p className={`text-sm font-bold ${km}`} style={{ color: "var(--ember)" }}>{tr("deleteAccountConfirmTitle")}</p>
+            <p className={`text-sm ${km}`} style={{ color: "var(--ember)" }}>{tr("deleteAccountConfirmDesc")}</p>
+          </div>
+          {!profile.oauthLinked && (
+            <div>
+              <FormField label={tr("deleteAccountPasswordLabel")} required error={error}>
+                <input type="password" className={INPUT} autoComplete="current-password" value={currentPassword}
+                  onChange={(e) => { setCurrentPassword(e.target.value); setError(undefined); setFailure(null); }} />
+              </FormField>
+              <p className={`text-xs eai-muted mt-1 ${km}`}>{tr("deleteAccountPasswordHint")}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={busy} className={`eai-btn eai-focus text-sm py-2.5 px-5 ${km}`}
+              style={{ background: "var(--ember)", color: "#fff", opacity: busy ? 0.6 : 1 }}>
+              {busy ? tr("deleteAccountDeleting") : tr("deleteAccountSubmit")}
+            </button>
+            <button type="button" disabled={busy} onClick={cancel} className={`eai-btn eai-focus text-sm py-2.5 px-5 ${km}`}
+              style={{ color: "var(--ink)", border: "1px solid var(--line)" }}>
+              {tr("deleteAccountCancel")}
+            </button>
+          </div>
+          {failure && <p role="alert" className={`text-sm ${km}`} style={{ color: "var(--ember)" }}>{failure}</p>}
+        </form>
+      )}
+    </section>
+  );
+}
+
 /* `onSaveDetails(changes)` resolves to { ok: true } or { ok: false, errors: { field: messageKey }, message?: text }.
    `tr(key)` is the app's translator for the current language; `lists` carries the sign-up option lists. */
-export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, errorText, initials, onUploadPhoto, onRemovePhoto, onSaveDetails, onChangePassword, onRequestResetCode, onConfirmResetCode }) {
+export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, errorText, initials, onUploadPhoto, onRemovePhoto, onSaveDetails, onChangePassword, onRequestResetCode, onConfirmResetCode, onDeleteAccount }) {
   const km = lang === "km" ? "eai-km" : "";
   return (
     <div className="space-y-5 eai-rise" style={{ maxWidth: 760 }}>
@@ -337,6 +403,9 @@ export function ProfilePage({ profile, lang, tr, serverMode, parts, lists, error
       {serverMode && (
         <PasswordCard profile={profile} lang={lang} tr={tr} parts={parts} errorText={errorText}
           onChangePassword={onChangePassword} onRequestResetCode={onRequestResetCode} onConfirmResetCode={onConfirmResetCode} />
+      )}
+      {serverMode && onDeleteAccount && (
+        <DeleteAccountCard profile={profile} lang={lang} tr={tr} parts={parts} errorText={errorText} onDeleteAccount={onDeleteAccount} />
       )}
     </div>
   );

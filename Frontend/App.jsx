@@ -7519,6 +7519,13 @@ const STRINGS = {
     passwordErrTooShort: "Use at least 8 characters.", passwordErrTooLong: "Use at most 128 characters.", passwordErrMismatch: "The two passwords don't match.",
     passwordForgotLink: "Don't know your current password? Email me a reset code", passwordCodeSent: "We sent a code to {email}.",
     passwordCodeLabel: "Code from the email", passwordResetSubmit: "Set password", passwordCancel: "Cancel",
+    // Delete account, at the bottom of the Profile page.
+    deleteAccountHeading: "Delete account", deleteAccountDesc: "Permanently deletes your account and everything in it: your progress, AI question history, payment claims, and profile. This cannot be undone.",
+    deleteAccountButton: "Delete my account", deleteAccountCancel: "Cancel",
+    deleteAccountConfirmTitle: "Are you sure?", deleteAccountConfirmDesc: "This permanently deletes your account. There is no way to get it back.",
+    deleteAccountPasswordLabel: "Current password", deleteAccountPasswordHint: "Enter your password to confirm.",
+    deleteAccountSubmit: "Yes, delete my account", deleteAccountDeleting: "Deleting…",
+    errDeleteAccountWrongPassword: "That isn't your current password.",
     navPractice: "Practice", navUniversities: "Universities", navProgress: "Progress", navExplore: "Explore",
     // Dashboard
     dashGreetingPrefix: "Welcome,",
@@ -7773,6 +7780,13 @@ const STRINGS = {
     passwordErrTooShort: "សូមប្រើយ៉ាងហោចណាស់ ៨តួអក្សរ។", passwordErrTooLong: "សូមប្រើមិនលើស ១២៨តួអក្សរ។", passwordErrMismatch: "ពាក្យសម្ងាត់ទាំងពីរមិនដូចគ្នាទេ។",
     passwordForgotLink: "មិនដឹងពាក្យសម្ងាត់បច្ចុប្បន្នមែនទេ? ផ្ញើកូដកំណត់ឡើងវិញមកអ៊ីមែលរបស់ខ្ញុំ", passwordCodeSent: "យើងបានផ្ញើកូដទៅ {email}។",
     passwordCodeLabel: "កូដពីអ៊ីមែល", passwordResetSubmit: "កំណត់ពាក្យសម្ងាត់", passwordCancel: "បោះបង់",
+    // Delete account, at the bottom of the Profile page.
+    deleteAccountHeading: "លុបគណនី", deleteAccountDesc: "លុបគណនីរបស់អ្នកជាអចិន្ត្រៃយ៍ ព្រមទាំងអ្វីៗគ្រប់យ៉ាងនៅក្នុងនោះ៖ វឌ្ឍនភាពរបស់អ្នក ប្រវត្តិសំណួរ AI ការទាមទារទូទាត់ប្រាក់ និងប្រវត្តិរូប។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។",
+    deleteAccountButton: "លុបគណនីរបស់ខ្ញុំ", deleteAccountCancel: "បោះបង់",
+    deleteAccountConfirmTitle: "តើអ្នកប្រាកដមែនទេ?", deleteAccountConfirmDesc: "សកម្មភាពនេះនឹងលុបគណនីរបស់អ្នកជាអចិន្ត្រៃយ៍។ មិនមានវិធីយកវាមកវិញបានទេ។",
+    deleteAccountPasswordLabel: "ពាក្យសម្ងាត់បច្ចុប្បន្ន", deleteAccountPasswordHint: "សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នកដើម្បីបញ្ជាក់។",
+    deleteAccountSubmit: "បាទ/ចាស លុបគណនីរបស់ខ្ញុំ", deleteAccountDeleting: "កំពុងលុប…",
+    errDeleteAccountWrongPassword: "នេះមិនមែនជាពាក្យសម្ងាត់បច្ចុប្បន្នរបស់អ្នកទេ។",
     navPractice: "លំហាត់អនុវត្ត", navUniversities: "សាកលវិទ្យាល័យ", navProgress: "វឌ្ឍនភាព", navExplore: "ស្វែងរក",
     // Dashboard
     dashGreetingPrefix: "សូមស្វាគមន៍,",
@@ -8684,6 +8698,25 @@ export default function App() {
     try { await api.resetPassword({ login: profile.email, code, password }); return { ok: true }; }
     catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
   };
+  // "Delete my account": permanent, server-side (App Store/Play Store require this). api.deleteAccount() already
+  // clears the stored token on success, so there is no account or session left to log out of. Once the server has
+  // confirmed the account is gone, this device's own copy goes too: the offline profile/progress snapshot and this
+  // student's AI chat history -- its key is captured before resetSession() clears `profile`, since that is where
+  // it comes from. Nothing else in storage is touched (no other student's history, no settings), and a failed
+  // attempt (wrong password, server error) leaves every bit of this alone -- it never looks like a success.
+  const handleDeleteAccount = async ({ currentPassword }) => {
+    const historyUserKey = userKeyOf(profile);
+    try {
+      await api.deleteAccount({ currentPassword });
+    } catch (err) {
+      return { ok: false, code: err?.code, retryAfter: err?.retryAfter };
+    }
+    const storage = safeStorage();
+    try { storage?.removeItem(STORAGE_KEY); } catch { /* storage blocked: nothing to clear */ }
+    clearHistory(storage, historyUserKey);
+    resetSession(); setBootError(false); setBooting(false); setEntry("welcome");
+    return { ok: true };
+  };
 
   // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper
   // (display: contents keeps that wrapper out of the layout).
@@ -8747,7 +8780,8 @@ export default function App() {
       serverMode={SERVER_MODE} errorText={(code, retryAfter) => apiErrorText(lang, code, retryAfter)}
       initials={initials} onUploadPhoto={handleUploadPhoto} onRemovePhoto={handleRemovePhoto}
       onSaveDetails={handleSaveDetails} onChangePassword={handleChangePassword}
-      onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode} />,
+      onRequestResetCode={handleRequestResetCode} onConfirmResetCode={handleConfirmResetCode}
+      onDeleteAccount={handleDeleteAccount} />,
     coach: <Coach p={p} lang={lang} userKey={userKeyOf(profile)} onUpgrade={() => go("super")} />,
     progress: isUniProfile ? <UniversityProgress p={p} lang={lang} leaderboard={leaderboard} /> : <Progress p={p} practice={practice} bonusXp={bonusXp} lang={lang} weeklyStudyHours={weeklyStudyHours} leaderboard={leaderboard} />,
     universityHub: <UniversityHub p={p} go={go} onPracticeCourse={(courseId) => { setUniPracticeTarget(courseId); go("uniPractice"); }} lang={lang} />,
