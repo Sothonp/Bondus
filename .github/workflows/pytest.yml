@@ -12,4 +12,5 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --extra cpu
+      - run: uv run pytest src/tests/test_quota.py
       - run: uv run pytest src/tests/
