@@ -1,0 +1,17 @@
+name: Python tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: uv sync --extra cpu
+      - run: uv run pytest src/tests/test_quota.py
+        continue-on-error: true
+      - run: uv run pytest src/tests/
