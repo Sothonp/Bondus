@@ -281,6 +281,73 @@ def test_setting_auth_verify_url_alone_turns_the_guard_on(store_path):
     assert generator.seen == []
 
 
+# --- a real deployment that forgot to set AUTH_VERIFY_URL ---------------------------------------------------
+
+
+def _unconfigured_settings(store_path, **extra):
+    return Settings(
+        _env_file=None, embedding_backend="hashing", llm_provider="none", vector_store_path=store_path,
+        render=True, **extra,
+    )
+
+
+@pytest.mark.parametrize(("route", "body"), AI_ROUTES)
+def test_on_render_with_no_verify_url_the_ai_routes_refuse_before_any_model_call(route, body, store_path):
+    # Breaks if: a real deployment that forgot AUTH_VERIFY_URL quietly runs the AI routes open to anyone.
+    settings = _unconfigured_settings(store_path)
+    generator = ScriptedGenerator(["ok"])
+    with TestClient(create_app(settings, generator=generator)) as client:
+        response = client.post(route, json=body)
+    assert response.status_code == 503
+    assert response.json()["detail"].startswith("auth_not_configured")
+    assert generator.seen == []
+
+
+def test_on_render_with_no_verify_url_ingest_also_refuses(store_path):
+    # Breaks if: /api/ingest is missed because it does not go through the shared `asked` dependency list.
+    settings = _unconfigured_settings(store_path, allow_writes=True)
+    generator = ScriptedGenerator(["ok"])
+    with TestClient(create_app(settings, generator=generator)) as client:
+        response = client.post(
+            "/api/ingest", files={"file": ("notes.md", b"# Notes\n\nSome text.", "text/markdown")}
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"].startswith("auth_not_configured")
+
+
+def test_on_render_with_no_verify_url_health_reports_it_is_refusing(store_path):
+    # Breaks if: /health cannot tell an operator apart "sign-in is configured" from "sign-in is broken".
+    settings = _unconfigured_settings(store_path)
+    with TestClient(create_app(settings, generator=ScriptedGenerator(["ok"]))) as client:
+        health = client.get("/health").json()
+    assert health["auth_required"] is False
+    assert health["auth_refusing"] is True
+
+
+def test_auth_required_false_still_opts_out_even_on_render(store_path):
+    # Breaks if: the explicit AUTH_REQUIRED=false escape hatch stops working once RENDER=true.
+    settings = _unconfigured_settings(store_path, auth_required=False)
+    generator = ScriptedGenerator(["ok"])
+    with TestClient(create_app(settings, generator=generator)) as client:
+        health = client.get("/health").json()
+        response = client.post("/api/query/stream", json=ASK)
+    assert health["auth_refusing"] is False
+    assert response.status_code == 200
+    assert len(generator.seen) == 1
+
+
+def test_local_development_is_unaffected_by_the_new_refusal(store_path):
+    # Breaks if: adding the Render-only refusal somehow changes the default, laptop/test behaviour.
+    settings = Settings(_env_file=None, embedding_backend="hashing", llm_provider="none", vector_store_path=store_path)
+    generator = ScriptedGenerator(["ok"])
+    with TestClient(create_app(settings, generator=generator)) as client:
+        health = client.get("/health").json()
+        response = client.post("/api/query/stream", json=ASK)
+    assert health["auth_required"] is False
+    assert health["auth_refusing"] is False
+    assert response.status_code == 200
+
+
 def test_a_refusal_is_readable_by_the_website(store_path):
     # Breaks if: the 401/429 body has no CORS header -- the browser hides it and shows "server unreachable".
     client, _ = make_client(FakeLaravel({"good": 1}), store_path)

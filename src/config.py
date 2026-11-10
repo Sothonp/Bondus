@@ -57,8 +57,19 @@ class Settings(BaseSettings):
     # The AI routes spend the shared model quota, so on a public deployment only signed-in students may use
     # them. The coach keeps no accounts: set this to the Laravel API's "who am I" address (for example
     # https://<api>/api/v1/me) and it asks that API whether the Bearer token the website sent is valid.
-    # Empty (local development, tests) leaves the routes open; /health shows `auth_required` either way.
+    # Empty leaves the routes open on a laptop or in a test run (see `render` below); /health shows
+    # `auth_required` either way, and -- when empty on a real deployment -- `auth_refusing` as well.
     auth_verify_url: str = ""
+    # Whether AUTH_VERIFY_URL being empty on a real deployment (see `render` below) is a mistake to refuse
+    # against, rather than a choice to run the AI routes open. False only to run open on purpose with
+    # AUTH_VERIFY_URL unset even there -- for example to switch sign-in off without a redeploy. Does nothing
+    # once AUTH_VERIFY_URL is set: that already turns the guard on, whatever this says.
+    auth_required: bool = True
+    # Set to "true" automatically by Render on every deploy of this service (not by anything else, including
+    # this repo's own CI or a laptop) -- see https://render.com/docs/environment-variables. Used only to tell
+    # a real deployment with no AUTH_VERIFY_URL (a mistake worth refusing against) apart from a laptop or a
+    # test run with none (open by design): see require_signed_in in src/api.py.
+    render: bool = False
     # How long a valid sign-in is remembered, so one chat costs the Laravel API one request a minute at most.
     # It is also how long a student who just logged out can still use the coach.
     auth_cache_seconds: int = Field(60, ge=0, le=600)
