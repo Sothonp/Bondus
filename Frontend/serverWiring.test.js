@@ -53,39 +53,23 @@ test("Google sign-in is wired on both Login and Register, and a brand-new accoun
   assert.match(app, /<Register key=\{resumeReg\?\._key \?\? "register"\}/);
 });
 
-test("accounts are made with Google or Facebook: step 1 is just the two buttons, and Facebook is wired like Google", () => {
-  assert.match(app, /const FACEBOOK_APP_ID = import\.meta\.env\.VITE_FACEBOOK_APP_ID;/);
-  assert.match(app, /function FacebookSignInButton\(/);
-  const handler = between("const handleSocialAuth = async", "// After \"Forgot password\"");
-  assert.match(handler, /handleFacebookAuth = \(accessToken\) => handleSocialAuth\(\(\) => api\.loginWithFacebook\(accessToken\)\)/);
-  assert.match(app, /onFacebookAuth=\{handleFacebookAuth\}/g);
-  assert.equal((app.match(/onFacebookAuth=\{handleFacebookAuth\}/g) || []).length, 2, "Login and Register both get it");
-
-  const login = between("function Login(", "function SendingCard(");
-  assert.match(login, /<FacebookSignInButton onToken=\{handleFacebook\} lang=\{lang\} text="signinWithFacebook" \/>/);
-
+test("accounts are made with Google: step 1 is just the one button, and the typed-in form is gone from sign-up", () => {
   // With the server, the typed-in name/email/password form is gone from sign-up (the backend refuses it too).
   const register = between("function Register(", "function Dashboard(");
   assert.match(register, /const socialOnly = SERVER_MODE;/);
   const step1 = register.slice(register.indexOf("if (step === 1 && socialOnly)"), register.indexOf("// ── University steps 2–4 ──"));
   assert.match(step1, /<GoogleSignInButton onCredential=\{handleGoogle\} lang=\{lang\} text="signup_with" \/>/);
-  assert.match(step1, /<FacebookSignInButton onToken=\{handleFacebook\} lang=\{lang\} text="signupWithFacebook" \/>/);
-  assert.match(step1, /signupUnavailable/, "says so when neither provider is configured");
+  assert.match(step1, /signupUnavailable/, "says so when no provider is configured");
   assert.doesNotMatch(step1.slice(0, step1.indexOf("\n  }\n") + 4), /type="password"|autoComplete="new-password"/);
   // the grade and target the typed form asked for are asked on step 3 instead
   const step3 = register.slice(register.lastIndexOf("{socialOnly && ("));
   assert.match(step3, /gradeLevelLabel[\s\S]*targetGradeLabel/);
 });
 
-test("the Facebook button loads Facebook's own SDK and asks for the name and email only", () => {
-  const button = between("function FacebookSignInButton(", "/* The \"── OR ──\" rule");
-  assert.match(button, /https:\/\/connect\.facebook\.net\/en_US\/sdk\.js/);
-  assert.match(button, /scope: "public_profile,email"/);
-  assert.match(button, /response\?\.authResponse\?\.accessToken/);
-  assert.match(button, /if \(!FACEBOOK_APP_ID\) return null;/);
-  assert.match(button, /disabled=\{!ready\}/);
-  // FB.login has to run straight from the tap: no await in front of it
-  assert.doesNotMatch(button.slice(button.indexOf("const click")), /await /);
+test("Facebook Login has been fully removed from the client", () => {
+  // The bare word "Facebook" still appears once, legitimately, in an unrelated comment about in-app
+  // webviews (Facebook/Instagram/TikTok) not rendering PDFs -- nothing login-specific may remain.
+  assert.doesNotMatch(app, /FACEBOOK_APP_ID|FacebookSignInButton|loginWithFacebook|onFacebookAuth|handleFacebookAuth|facebook-jssdk|connect\.facebook\.net|signupWithFacebook|signinWithFacebook|eai-fb-btn/i);
 });
 
 test("'too many tries' names the real wait (e.g. 48 minutes) instead of always saying 'a minute'", () => {
