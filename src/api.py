@@ -1681,6 +1681,14 @@ RATE_LIMITED = (
     "/ You have asked a lot in a short time. Please try again in {minutes} minute(s)."
 )
 
+# One shared message for every route this server refuses because sign-in should be required here but
+# isn't set up -- never a bare "it's broken", so whoever is on call can grep this one string across the
+# whole API. See auth_unconfigured_unsafe in create_app.
+AUTH_NOT_CONFIGURED = (
+    "auth_not_configured: this server is missing its sign-in configuration, so it cannot safely let "
+    "anyone use the AI coach right now. Please try again later."
+)
+
 
 async def rate_limit(request: Request) -> None:
     """One student (IP address) may ask RATE_LIMIT_QUESTIONS per window."""
@@ -2127,6 +2135,24 @@ def create_app(
             cache_seconds=settings.auth_cache_seconds,
             require_token_shape=settings.check_token_shape,
         )
+    # AUTH_VERIFY_URL empty on a real Render deployment is almost always a mistake -- not a choice --
+    # so the AI routes refuse rather than quietly running open, unless that was explicitly asked for
+    # (AUTH_REQUIRED=false). Render sets RENDER=true on every one of its own deploys; nothing else here
+    # does, so a laptop or a CI test run is never mistaken for a production deployment.
+    auth_unconfigured_unsafe = not settings.auth_verify_url and settings.auth_required and settings.render
+    if verifier is None:
+        if auth_unconfigured_unsafe:
+            logger.error(
+                "AUTH_VERIFY_URL is not set on what looks like a Render deployment (RENDER=true): "
+                "refusing the AI routes with 503 instead of running them open. Set AUTH_VERIFY_URL, or "
+                "set AUTH_REQUIRED=false if running open here is intentional."
+            )
+        else:
+            logger.warning(
+                "AUTH_VERIFY_URL is not set: the AI routes are running open, with no sign-in required. "
+                "This is expected on a laptop or in tests; on a real deployment, set AUTH_VERIFY_URL "
+                "(or leave AUTH_REQUIRED=false if that is intentional)."
+            )
     limiter = SlidingWindowLimiter(settings.user_rate_limit_per_minute)
     lookups = LookupBudget(
         settings.rejected_tokens_per_address_per_minute, settings.rejected_tokens_overall_per_minute
@@ -2144,6 +2170,8 @@ def create_app(
     async def require_signed_in(request: Request) -> None:
         """Refuse the routes that spend model quota unless a signed-in student is asking, and not too often."""
         if verifier is None:
+            if auth_unconfigured_unsafe:
+                raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, AUTH_NOT_CONFIGURED)
             return
         token = bearer_token(request.headers.get("authorization"))
         if token is None:
@@ -2332,13 +2360,21 @@ def create_app(
             max_upload_mb=settings.max_upload_mb,
             writes_enabled=settings.allow_writes,
             auth_required=verifier is not None,
+            auth_refusing=verifier is None and auth_unconfigured_unsafe,
             documents=len(state.store.sources()),
             chunks=len(state.store),
         )
 
     # One limit per question: per signed-in student when sign-in is required (a
-    # school on one Wi-Fi shares an address), per IP address when it is not.
-    asked = [*signed_in, Depends(count_question)] if verifier is not None else [Depends(rate_limit)]
+    # school on one Wi-Fi shares an address), per IP address when it is not. When sign-in should be
+    # required here but isn't configured (auth_unconfigured_unsafe), route through require_signed_in
+    # too, so these routes refuse with 503 instead of falling back to the open, per-IP rate limit.
+    if verifier is not None:
+        asked = [*signed_in, Depends(count_question)]
+    elif auth_unconfigured_unsafe:
+        asked = [*signed_in]
+    else:
+        asked = [Depends(rate_limit)]
 
     @app.post(
         "/api/query", response_model=QueryResponse, responses=ERROR_RESPONSES, tags=["rag"], dependencies=asked,

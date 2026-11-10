@@ -315,6 +315,15 @@ class HealthResponse(BaseModel):
     auth_required: bool = Field(
         False, description="True when the AI routes refuse anyone not signed in (AUTH_VERIFY_URL is set)"
     )
+    auth_refusing: bool = Field(
+        False,
+        description=(
+            "True when AUTH_VERIFY_URL is missing here and that looks like a mistake rather than a "
+            "choice, so the AI routes are refusing everyone with 503 instead of running open. False "
+            "whenever auth_required is true (sign-in is configured and working), and also false when "
+            "sign-in is left open on purpose -- a laptop or test run, or AUTH_REQUIRED=false."
+        ),
+    )
     documents: int
     chunks: int
 
