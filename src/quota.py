@@ -46,6 +46,14 @@ class QuotaBusy(Exception):
         self.retry_after = retry_after
 
 
+class QuotaDenied(Exception):
+    """The API gave an explicit "no" about the token itself, not about the student's plan: a 401 (it no longer identifies
+    anyone -- revoked, or never valid) or a 403 (the account it belonged to was just suspended; the Laravel API's own
+    EnsureNotSuspended middleware deletes the token and answers 403 from this same endpoint). Unlike QuotaUnavailable,
+    this is not "unsure" -- the caller must refuse, never fall back to the outage allowance meant for genuine
+    infrastructure trouble (api.py)."""
+
+
 # Which of the plan's two allowances a "no" is about.
 REASON_QUESTIONS = "questions"
 REASON_UPLOADS = "uploads"
@@ -170,8 +178,11 @@ class LaravelQuota:
             body = {}
         if response.status_code == 200 and body.get("allowed") is True:
             return QuotaVerdict(True, body.get("plan"), body.get("limit"))
-        # Only the API's own "no" stops a question. Any other answer (a 404 before the API has this feature, a 500, a
-        # 401 from a token it forgot) says nothing about the student's plan.
+        # Only the API's own "no" stops a question -- but there are two different kinds of "no". A 404 (before the API
+        # has this feature) or a 500 says nothing about the student's plan, so those fall through to QuotaUnavailable
+        # below, which lets the question through within the outage allowance. A 401 or 403 is different: it is the API's
+        # own judgment of this exact token (revoked, or an account it just suspended), not a shrug, so it must never get
+        # that allowance -- see QuotaDenied.
         if response.status_code == 402 and body.get("code") == "ai_limit_reached":
             return QuotaVerdict(False, body.get("plan"), body.get("limit"), REASON_QUESTIONS)
         if response.status_code == 402 and body.get("code") == "upload_limit_reached":
@@ -182,4 +193,6 @@ class LaravelQuota:
             except (TypeError, ValueError):
                 wait = 30
             raise QuotaBusy(min(max(wait, 1), 300))
+        if response.status_code in (401, 403):
+            raise QuotaDenied(f"quota API refused the token ({response.status_code})")
         raise QuotaUnavailable(f"quota API answered {response.status_code}")

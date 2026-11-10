@@ -281,9 +281,11 @@ export async function refuseUnlessSignedInNetlify(req) {
    where the limit is real (the AI coach server does the same in src/quota.py).
 
    The API's own "no" (402 ai_limit_reached) stops a question, and so does its 429: a student cannot make the API throttle
-   them and so get a free pass. If it cannot be reached, or does not have the feature yet, a question still goes ahead, but only
-   up to a few a day per student on this instance (a brake, not an exact quota: instances do not share memory), so an outage is
-   not an unlimited pass. */
+   them and so get a free pass. A 401 or 403 is also the API's own "no" about this exact token -- revoked, or an account it
+   just suspended (the Laravel API's own EnsureNotSuspended middleware deletes the token and answers 403 from this same
+   endpoint) -- so that is refused too, never treated as a shrug. Only if the API cannot be reached, or does not have the
+   feature yet, does a question still go ahead, but only up to a few a day per student on this instance (a brake, not an
+   exact quota: instances do not share memory), so an outage is not an unlimited pass. */
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /* The id to count a request under: the one the website made, or a fresh one, so leaving it out is not a way round the limit. */
@@ -340,6 +342,13 @@ export function createQuotaCheck({ url, fetchImpl = (...args) => globalThis.fetc
     if (res.status === 429) {
       const wait = Math.min(300, Math.max(1, Number.parseInt(res.headers?.get?.("retry-after") ?? "", 10) || 30));
       return { status: 429, body: { error: "You are asking very fast. Please wait a moment and try again." }, headers: { "Retry-After": String(wait) } };
+    }
+    if (res.status === 401 || res.status === 403) {
+      // The API's own judgment of this token (revoked, or an account it just suspended), not a shrug: this must never
+      // fall back to the outage allowance below, even though the sign-in check above may still have this same token
+      // cached as valid for up to its own cacheMs -- this call is never cached, so it is the one that catches a
+      // revocation the sign-in cache is still blind to.
+      return { status: 401, body: { error: "Your sign-in has expired. Please sign in again.", code: "unauthenticated" }, headers: { "WWW-Authenticate": "Bearer" } };
     }
     if (res.status !== 200) {
       console.error(`Could not count an AI question: the quota API answered ${res.status}`);

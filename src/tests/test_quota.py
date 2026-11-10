@@ -23,7 +23,7 @@ from src.api import create_app
 from src.auth import LaravelTokenVerifier
 from src.ingestion.image_ocr import HybridImageOCR
 from src.config import Settings
-from src.quota import LaravelQuota, QuotaBusy, QuotaUnavailable, QuotaVerdict, question_id
+from src.quota import REASON_QUESTIONS, LaravelQuota, QuotaBusy, QuotaDenied, QuotaUnavailable, QuotaVerdict, question_id
 from src.tests.test_api import ScriptedGenerator
 from src.tests.test_auth import ME_URL, bearer, me
 
@@ -372,10 +372,11 @@ def test_question_id_keeps_a_good_id_and_replaces_anything_else():
 # --- when the API cannot say ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("count_status", [404, 500, 401, 422])
+@pytest.mark.parametrize("count_status", [404, 500, 422])
 def test_when_the_api_cannot_count_a_question_it_goes_ahead(count_status, store_path):
     # Breaks if: the API being down, or not having this feature yet (a 404 before it is deployed), shuts every student
-    # out of the coach. Only the API's own 402 ai_limit_reached stops a question.
+    # out of the coach. Only the API's own 402 ai_limit_reached stops a question -- a 401/403 is tested separately below,
+    # since those are an explicit "no" about the token, not an "unsure".
     client, generator = make_client(FakeLaravel(count_status=count_status), store_path)
     with client:
         response = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
@@ -391,6 +392,57 @@ def test_when_the_api_is_unreachable_the_question_goes_ahead(store_path):
     assert len(generator.seen) == 1
 
 
+@pytest.mark.parametrize("count_status", [401, 403])
+def test_a_revoked_or_suspended_students_question_is_denied_not_let_through(count_status, store_path):
+    # Breaks if: a 401 (the token Laravel no longer recognises) or a 403 (the student's own account just suspended --
+    # EnsureNotSuspended deletes the token and answers 403 from this same endpoint) is treated as "unsure" and the
+    # question goes through within the outage allowance meant for genuine infrastructure trouble.
+    laravel = FakeLaravel(count_status=count_status)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 401
+    assert "sign in again" in response.json()["detail"].lower()
+    assert generator.seen == []
+
+
+def test_a_token_revoked_right_after_its_sign_in_check_was_cached_is_still_denied(store_path):
+    # Breaks if: require_signed_in's own cache (up to auth_cache_seconds) means a token revoked moments ago still answers,
+    # because only the sign-in check (/me) is cached -- LaravelQuota.consume (/ai/consume) is never cached and asks
+    # Laravel fresh every time, so it must be the one that catches a revocation the sign-in cache is still blind to.
+    class Laravel:
+        def __init__(self) -> None:
+            self.revoked = False
+            self.me_calls = 0
+            self.counted: list[str] = []
+
+        def __call__(self, request: httpx.Request) -> httpx.Response:
+            if str(request.url) == ME_URL and request.method == "GET":
+                self.me_calls += 1
+                if self.revoked:
+                    return httpx.Response(401, json={"code": "unauthenticated"})
+                return httpx.Response(200, json=me(1))
+            if str(request.url) == CONSUME_URL and request.method == "POST":
+                self.counted.append(json.loads(request.content)["requestId"])
+                if self.revoked:
+                    return httpx.Response(401, json={"code": "unauthenticated"})
+                return httpx.Response(200, json={"allowed": True, "plan": "free", "limit": 5})
+            return httpx.Response(404, json={"code": "not_found"})
+
+    laravel = Laravel()
+    client, generator = make_client(laravel, store_path)
+    with client:
+        first = client.post("/api/query/stream", json={"prompt": "hi", "request_id": ID}, headers=bearer("good"))
+        laravel.revoked = True  # the student's token is revoked the instant after it was checked and cached
+        second = client.post(
+            "/api/query/stream", json={"prompt": "hi", "request_id": "question-22222222"}, headers=bearer("good")
+        )
+    assert first.status_code == 200
+    assert second.status_code == 401
+    assert laravel.me_calls == 1  # the sign-in check never asked again: its own cache still says "good"
+    assert len(generator.seen) == 1
+
+
 # --- the client on its own --------------------------------------------------------------------------------
 
 
@@ -403,7 +455,7 @@ def test_the_client_reads_the_api_verdicts():
 
     async def run() -> None:
         quota = LaravelQuota(CONSUME_URL, client=httpx.AsyncClient(transport=httpx.MockTransport(api)))
-        assert await quota.consume("good", ID) == QuotaVerdict(False, "free", 5)
+        assert await quota.consume("good", ID) == QuotaVerdict(False, "free", 5, REASON_QUESTIONS)
         other = LaravelQuota(CONSUME_URL, client=httpx.AsyncClient(transport=httpx.MockTransport(odd)))
         with pytest.raises(QuotaUnavailable):
             await other.consume("good", ID)
@@ -489,7 +541,7 @@ def test_the_photos_counted_are_the_ones_that_were_checked(store_path):
     assert laravel.bodies[0]["uploads"] == 3
 
 
-@pytest.mark.parametrize("count_status", [404, 500, 401, 422])
+@pytest.mark.parametrize("count_status", [404, 500, 422])
 def test_when_the_api_cannot_count_photos_they_are_not_let_through(count_status, store_path):
     # Breaks if: a broken or unreachable quota API lets photos past the plan (Free has none) while questions go ahead.
     laravel = FakeLaravel(count_status=count_status)
@@ -497,6 +549,19 @@ def test_when_the_api_cannot_count_photos_they_are_not_let_through(count_status,
     with client:
         response = client.post("/api/query", json={"prompt": "what is this", "images": [PHOTO], "request_id": ID}, headers=bearer("good"))
     assert response.status_code == 503
+    assert generator.seen == []
+
+
+@pytest.mark.parametrize("count_status", [401, 403])
+def test_a_revoked_or_suspended_students_photo_request_is_denied_not_treated_as_an_outage(count_status, store_path):
+    # Breaks if: the API's own "no" about this token (401 revoked, or 403 -- EnsureNotSuspended deletes the token and
+    # answers 403 from this same endpoint) is treated the same as a genuine outage, so it answers 503 (try again) instead
+    # of 401 (sign in again).
+    laravel = FakeLaravel(count_status=count_status)
+    client, generator = make_client(laravel, store_path)
+    with client:
+        response = client.post("/api/query", json={"prompt": "what is this", "images": [PHOTO], "request_id": ID}, headers=bearer("good"))
+    assert response.status_code == 401
     assert generator.seen == []
 
 
@@ -571,6 +636,19 @@ def test_the_client_reports_a_throttled_student_as_busy_not_as_unsure():
         with pytest.raises(QuotaBusy) as busy:
             await quota.consume("good", ID)
         assert busy.value.retry_after == 42
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("status_code", [401, 403])
+def test_the_client_reports_a_refused_token_as_denied_not_as_unsure(status_code):
+    def api(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code, json={"message": "nope"})
+
+    async def run() -> None:
+        quota = LaravelQuota(CONSUME_URL, client=httpx.AsyncClient(transport=httpx.MockTransport(api)))
+        with pytest.raises(QuotaDenied):
+            await quota.consume("good", ID)
 
     asyncio.run(run())
 
