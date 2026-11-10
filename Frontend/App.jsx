@@ -8699,14 +8699,23 @@ export default function App() {
     catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
   };
   // "Delete my account": permanent, server-side (App Store/Play Store require this). api.deleteAccount() already
-  // clears the stored token on success, so there is no account or session left to log out of -- just forget the
-  // local state and land back on the welcome screen, the same place a fresh visitor starts.
+  // clears the stored token on success, so there is no account or session left to log out of. Once the server has
+  // confirmed the account is gone, this device's own copy goes too: the offline profile/progress snapshot and this
+  // student's AI chat history -- its key is captured before resetSession() clears `profile`, since that is where
+  // it comes from. Nothing else in storage is touched (no other student's history, no settings), and a failed
+  // attempt (wrong password, server error) leaves every bit of this alone -- it never looks like a success.
   const handleDeleteAccount = async ({ currentPassword }) => {
+    const historyUserKey = userKeyOf(profile);
     try {
       await api.deleteAccount({ currentPassword });
-      resetSession(); setBootError(false); setBooting(false); setEntry("welcome");
-      return { ok: true };
-    } catch (err) { return { ok: false, code: err?.code, retryAfter: err?.retryAfter }; }
+    } catch (err) {
+      return { ok: false, code: err?.code, retryAfter: err?.retryAfter };
+    }
+    const storage = safeStorage();
+    try { storage?.removeItem(STORAGE_KEY); } catch { /* storage blocked: nothing to clear */ }
+    clearHistory(storage, historyUserKey);
+    resetSession(); setBootError(false); setBooting(false); setEntry("welcome");
+    return { ok: true };
   };
 
   // A short message in the corner. It needs the theme classes for its colours, so it brings its own wrapper

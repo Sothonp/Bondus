@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PROFILE_STRING_KEYS } from "./profileForm.js";
+import { clearHistory, historyKey } from "./coachHistory.js";
 
 const read = (name) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
 const app = read("App.jsx");
@@ -63,4 +64,49 @@ test("ProfileUi.jsx merges a refreshed profile into the form instead of replacin
 test("on a phone the top bar's avatar opens the profile too (the desktop header and sidebar are hidden there)", () => {
   assert.match(app, /<MobileTopBar[^]{0,600}onProfile=\{\(\) => go\("profile"\)\}[^]{0,200}profileLabel=\{tr\("profileOpen"\)\}/);
   assert.match(read("MobileNav.jsx"), /<button onClick=\{onProfile\} aria-label=\{profileLabel\}/);
+});
+
+/* handleDeleteAccount: a failed deletion must return early -- before the storage key is even captured for later
+   use -- and never touch storage or the session. A successful one clears this device's own copy (the offline
+   snapshot and this student's AI history, captured by key up front, since resetSession() clears `profile`) and
+   only then resets the session. These two regexes pin that shape; the companion test below exercises the real
+   clearHistory() to prove another student's saved chats survive it. */
+const deleteAccountFn = app.match(/const handleDeleteAccount = async[^]*?\n  \};/)?.[0];
+
+test("handleDeleteAccount captures the history key up front and returns immediately on failure, without touching storage", () => {
+  assert.ok(deleteAccountFn, "handleDeleteAccount should be defined in App.jsx");
+  assert.match(
+    deleteAccountFn,
+    /const historyUserKey = userKeyOf\(profile\);\s*try \{\s*await api\.deleteAccount\(\{ currentPassword \}\);\s*\} catch \(err\) \{\s*return \{ ok: false, code: err\?\.code, retryAfter: err\?\.retryAfter \};\s*\}/,
+  );
+});
+
+test("handleDeleteAccount only clears the snapshot and this student's AI history, and only after the server confirms deletion", () => {
+  assert.match(
+    deleteAccountFn,
+    /const storage = safeStorage\(\);\s*try \{ storage\?\.removeItem\(STORAGE_KEY\); \} catch \{[^}]*\}\s*clearHistory\(storage, historyUserKey\);\s*resetSession\(\);/,
+  );
+});
+
+test("a successful deletion removes this device's state snapshot and the deleting student's AI history, never another student's", () => {
+  const storageKey = app.match(/const STORAGE_KEY = "([^"]+)";/)?.[1];
+  assert.ok(storageKey, "STORAGE_KEY should be defined in App.jsx");
+  const data = new Map([
+    [storageKey, '{"profile":{}}'],
+    [historyKey("student-a"), "student A's saved chats"],
+    [historyKey("student-b"), "student B's saved chats"],
+  ]);
+  const storage = {
+    getItem: (k) => (data.has(k) ? data.get(k) : null),
+    setItem: (k, v) => data.set(k, v),
+    removeItem: (k) => data.delete(k),
+  };
+
+  // The success path of handleDeleteAccount, for student A.
+  storage.removeItem(storageKey);
+  clearHistory(storage, "student-a");
+
+  assert.equal(storage.getItem(storageKey), null);
+  assert.equal(storage.getItem(historyKey("student-a")), null);
+  assert.equal(storage.getItem(historyKey("student-b")), "student B's saved chats", "another student's history must survive");
 });
