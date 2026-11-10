@@ -52,7 +52,18 @@ from src.auth import (
     bearer_token,
 )
 from src.guard import RequestGuard
-from src.quota import NEW, REASON_UPLOADS, REPEAT, CountedRequests, LaravelQuota, Quota, QuotaBusy, QuotaUnavailable, question_id
+from src.quota import (
+    NEW,
+    REASON_UPLOADS,
+    REPEAT,
+    CountedRequests,
+    LaravelQuota,
+    Quota,
+    QuotaBusy,
+    QuotaDenied,
+    QuotaUnavailable,
+    question_id,
+)
 from schemas import (
     ChatTurn,
     DeleteDocumentResponse,
@@ -2206,6 +2217,17 @@ def create_app(
                 status.HTTP_429_TOO_MANY_REQUESTS,
                 "You are asking very fast. Please wait a moment and try again.",
                 headers={"Retry-After": str(busy.retry_after)},
+            ) from None
+        except QuotaDenied:
+            # The API's own judgment of this token (revoked, or an account it just suspended), not a shrug: this must
+            # never fall back to the outage allowance below, even though require_signed_in's own check of this same
+            # token may still have it cached as valid for up to auth_cache_seconds -- the quota call is never cached,
+            # so it is the one that catches a revocation the sign-in cache is still blind to.
+            logger.warning("The quota API refused this token: treating the question as signed out", exc_info=True)
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "Your sign-in has expired. Please sign in again.",
+                headers={"WWW-Authenticate": "Bearer"},
             ) from None
         except QuotaUnavailable:
             if uploads:
