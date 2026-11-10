@@ -48,7 +48,7 @@ export const LANDING_STRINGS = {
 
     // how it works
     howTitle: "How it works", howSub: "From sign-up to exam-ready in three steps.",
-    howStep1: "Create your free account", howStep1Body: "Sign in with Google or Facebook. It only takes a moment.",
+    howStep1: "Create your free account", howStep1Body: "Sign in with Google. It only takes a moment.",
     howStep2: "Choose your subjects and target university", howStep2Body: "Tell us your track and where you want to study, so your plan fits you.",
     howStep3: "Practice with AI feedback", howStep3Body: "Answer questions, learn from the explanations and watch your exam readiness grow.",
     howStepLabel: "Step {n}",
@@ -64,7 +64,7 @@ export const LANDING_STRINGS = {
     faq4Q: "Can I use BONDUS in Khmer?",
     faq4A: "Yes. Tap the language button at the top of the page, or inside the app, to switch between Khmer and English at any time.",
     faq5Q: "Do I need to install anything?",
-    faq5A: "No. BONDUS runs in your phone's browser, so you can start right away. Create an account with Google or Facebook and you are in.",
+    faq5A: "No. BONDUS runs in your phone's browser, so you can start right away. Create an account with Google and you are in.",
 
     // closing call to action
     ctaTitle: "Ready to study smarter?", ctaBody: "Join BONDUS and spend less time searching and more time learning.",
@@ -113,7 +113,7 @@ export const LANDING_STRINGS = {
     statAiValue: "២៤/៧", statAiLabel: "ជំនួយពី AI",
 
     howTitle: "របៀបប្រើប្រាស់", howSub: "ពីការចុះឈ្មោះ ដល់ត្រៀមខ្លួនប្រឡង ក្នុងបីជំហាន។",
-    howStep1: "បង្កើតគណនីឥតគិតថ្លៃ", howStep1Body: "ចូលជាមួយ Google ឬ Facebook។ ប្រើពេលតែបន្តិចប៉ុណ្ណោះ។",
+    howStep1: "បង្កើតគណនីឥតគិតថ្លៃ", howStep1Body: "ចូលជាមួយ Google។ ប្រើពេលតែបន្តិចប៉ុណ្ណោះ។",
     howStep2: "ជ្រើសរើសមុខវិជ្ជា និងសាកលវិទ្យាល័យគោលដៅ", howStep2Body: "ប្រាប់យើងអំពីផ្នែករបស់អ្នក និងកន្លែងដែលអ្នកចង់រៀន ដើម្បីឱ្យផែនការស័ក្តិសមនឹងអ្នក។",
     howStep3: "ហាត់ជាមួយមតិកែលម្អពី AI", howStep3Body: "ឆ្លើយសំណួរ រៀនពីការពន្យល់ ហើយមើលភាពត្រៀមខ្លួនប្រឡងរបស់អ្នកកើនឡើង។",
     howStepLabel: "ជំហានទី {n}",
@@ -128,7 +128,7 @@ export const LANDING_STRINGS = {
     faq4Q: "តើខ្ញុំអាចប្រើ BONDUS ជាភាសាខ្មែរបានទេ?",
     faq4A: "បាន។ ចុចប៊ូតុងភាសានៅខាងលើទំព័រ ឬក្នុងកម្មវិធី ដើម្បីប្តូររវាងភាសាខ្មែរ និងអង់គ្លេសបានគ្រប់ពេល។",
     faq5Q: "តើខ្ញុំត្រូវដំឡើងអ្វីដែរឬទេ?",
-    faq5A: "ទេ។ BONDUS ដំណើរការក្នុងកម្មវិធីរុករករបស់ទូរស័ព្ទអ្នក ដូច្នេះអ្នកអាចចាប់ផ្តើមភ្លាមៗ។ បង្កើតគណនីជាមួយ Google ឬ Facebook ជាការស្រេច។",
+    faq5A: "ទេ។ BONDUS ដំណើរការក្នុងកម្មវិធីរុករករបស់ទូរស័ព្ទអ្នក ដូច្នេះអ្នកអាចចាប់ផ្តើមភ្លាមៗ។ បង្កើតគណនីជាមួយ Google ជាការស្រេច។",
 
     ctaTitle: "ត្រៀមខ្លួនរៀនឱ្យឆ្លាតជាងមុនហើយឬនៅ?", ctaBody: "ចូលរួមជាមួយ BONDUS ហើយចំណាយពេលរកតិច រៀនបានកាន់តែច្រើន។",
 
