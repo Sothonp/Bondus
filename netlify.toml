@@ -11,6 +11,23 @@
 [functions]
   node_bundler = "esbuild"
 
+# Baseline security headers (OWASP A05 -- security misconfiguration). Mirrors vercel.json; keep the two in sync.
+# style-src needs 'unsafe-inline': Vite's splash plugin writes an inline <style> into index.html, and the app
+# renders plenty of React inline style={{...}} attributes -- both are governed by style-src, and neither is
+# realistic to remove here. script-src has no such exception: every script is either same-origin or one of the
+# two named origins below (Google Sign-In, the Facebook SDK), so it stays strict. connect-src/img-src allow
+# *.onrender.com because both the Laravel API and the AI-coach RAG API are Render web services (see README.md's
+# Deploy section and render.yaml) with URLs that vary by deployment; this does not pin the one exact backend
+# this frontend talks to in production, so tightening it to that literal origin is a good, easy follow-up.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://accounts.google.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://*.onrender.com https://*.googleusercontent.com; connect-src 'self' https://*.onrender.com https://accounts.google.com https://*.facebook.com https://*.facebook.net; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains"
+
 # Keep the frontend's /api/major-guidance path working on Netlify.
 [[redirects]]
   from = "/api/major-guidance"
