@@ -95,16 +95,80 @@ test("the catalog lists each chapter path in the order the app shows, with the i
     Flat: [{ topic: "A", options: ["x", "y"], answer: "x" }],
   };
   const { chapters } = buildCatalog(bank, { "m::c": [{ topic: "T", options: ["x", "y"], answer: "x", chapter: "U" }] });
-  assert.deepEqual(chapters, { Demo: [{ key: "One", ids: ["Demo-2"] }, { key: "Two", ids: ["Demo-1", "Demo-3"] }] });
+  assert.deepEqual(chapters, {
+    Demo: [
+      { key: "One", ids: ["Demo-2"], formulaIds: [] },
+      { key: "Two", ids: ["Demo-1", "Demo-3"], formulaIds: [] },
+    ],
+  });
+});
+
+test("a kind-tagged item lands in formulaIds and NOT in ids -- adding Formula Mastery content must never change a chapter's Master-Quiz pool", () => {
+  const bank = {
+    Demo: [
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0, kind: "recognition" },
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0 }, // untagged formula-quiz item (e.g. formulaDrills.js)
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 1 }, // a practice problem
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0, kind: "tricky" },
+    ],
+  };
+  const { chapters } = buildCatalog(bank, {});
+  assert.deepEqual(chapters.Demo, [
+    { key: "One", ids: ["Demo-2", "Demo-3"], formulaIds: ["Demo-1", "Demo-4"] },
+  ]);
+});
+
+test("a kind-tagged item never joins an existing stage-based set -- it cannot grow a treasure box someone has not claimed yet", () => {
+  const bank = {
+    Demo: [
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0 },
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0 },
+      { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0, kind: "recognition" },
+    ],
+  };
+  const { sets } = buildCatalog(bank, {});
+  assert.deepEqual(sets, { "Demo-1": ["Demo-1", "Demo-2"] }); // Demo-3 (kind-tagged) is in neither this set nor any set of its own
+});
+
+test("adding a Formula Mastery question to an existing chapter leaves that chapter's Master-Quiz ids byte-identical", () => {
+  const before = { Demo: [{ topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 1 }] };
+  const after = { Demo: [...before.Demo, { topic: "A", options: ["x", "y"], answer: "x", chapter: "One", stage: 0, kind: "recognition" }] };
+  const beforeIds = buildCatalog(before, {}).chapters.Demo.find((c) => c.key === "One").ids;
+  const afterIds = buildCatalog(after, {}).chapters.Demo.find((c) => c.key === "One").ids;
+  assert.deepEqual(afterIds, beforeIds, "the chapter's Master-Quiz pool (and its size, which the legacy pass/master check divides by) must not change");
+});
+
+test("the real Mathematics bank: every formulaIds entry is a stage-0 question with a known `kind`", () => {
+  const { chapters } = buildCatalog(RAW_EXERCISES, UNI_QUIZ_BANK);
+  const byId = {};
+  for (const raw of RAW_EXERCISES.Mathematics) byId[raw.chapter] = byId[raw.chapter] || [];
+  const list = RAW_EXERCISES.Mathematics.map((raw, i) => ({ ...raw, id: `Mathematics-${i + 1}` }));
+  const known = new Set(["recognition", "application", "missingVariable", "tricky"]);
+  let sawAny = false;
+  for (const row of chapters.Mathematics) {
+    for (const id of row.formulaIds) {
+      sawAny = true;
+      const ex = list.find((e) => e.id === id);
+      assert.ok(ex, `${id} is in formulaIds but not in the bank`);
+      assert.equal(ex.stage, 0, `${id} is in formulaIds but is not stage 0`);
+      assert.ok(known.has(ex.kind), `${id} has an unrecognised kind: ${ex.kind}`);
+    }
+  }
+  assert.ok(sawAny, "expected at least one Formula Mastery question in the real bank");
 });
 
 test("in the real bank, five subjects have a chapter path and every chapter question is a known exercise", () => {
   const { exercises, chapters } = buildCatalog(RAW_EXERCISES, UNI_QUIZ_BANK);
   assert.deepEqual(Object.keys(chapters).sort(), ["Biology", "Chemistry", "History", "Mathematics", "Physics"]);
   for (const [subject, path] of Object.entries(chapters)) {
-    const all = path.flatMap((c) => c.ids);
+    // ids (the Master Quiz pool) and formulaIds (Formula Mastery) are deliberately disjoint -- together
+    // they must still account for every chaptered question exactly once, with nothing counted twice.
+    const ids = path.flatMap((c) => c.ids);
+    const formulaIds = path.flatMap((c) => c.formulaIds);
+    const all = [...ids, ...formulaIds];
+    assert.equal(new Set(ids).intersection(new Set(formulaIds)).size, 0, `${subject}: an id is in both ids and formulaIds`);
     assert.equal(new Set(all).size, all.length, `${subject}: a question is in two chapters`);
-    assert.equal(all.length, RAW_EXERCISES[subject].length, `${subject}: every question belongs to a chapter`);
+    assert.equal(all.length, RAW_EXERCISES[subject].length, `${subject}: every question belongs to a chapter (ids + formulaIds together)`);
     for (const id of all) assert.ok(exercises[id], `${id} is not in the catalog`);
   }
 });

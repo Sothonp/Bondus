@@ -16,7 +16,12 @@
    FORMULA_DRILLS (mathematics/formulaDrills.js) adds a second, larger round of stage-0 formula
    questions to every chapter — quick, no-paper, tap-the-answer recall of the chapter's formulas, for
    the "Formula drill" review mode (PracticeSubject in Frontend/App.jsx). It is appended at the very
-   end of BANK, same positional-id rule: only ever add new drill questions at the end of that file. */
+   end of BANK, same positional-id rule: only ever add new drill questions at the end of that file.
+
+   FORMULA_MASTERY (mathematics/formulaMastery.js) is also stage 0, but each item additionally carries
+   a `kind` tag (recognition/application/missingVariable/tricky) that FORMULA_DRILLS items do not have.
+   It feeds the separate Formula Mastery curriculum, not the existing Formula drill. Appended after
+   FORMULA_DRILLS, same positional-id rule: only ever add new questions at the end of that file. */
 import { CHAPTER_ORDER, chapterOf } from "./mathematics/chapters.js";
 import { INDUCTION_1_1 } from "./mathematics/induction.js";
 import { SEQUENCES_1_2 } from "./mathematics/sequences.js";
@@ -34,6 +39,7 @@ import { DIFFEQ_7_1 } from "./mathematics/diffEq.js";
 import { PROB_8_1 } from "./mathematics/probability.js";
 import { VECTORS_9_1 } from "./mathematics/vectors.js";
 import { FORMULA_DRILLS } from "./mathematics/formulaDrills.js";
+import { FORMULA_MASTERY } from "./mathematics/formulaMastery.js";
 
 const BANK = [
   ...INDUCTION_1_1, ...SEQUENCES_1_2, ...LIMITS_1_3,
@@ -42,6 +48,7 @@ const BANK = [
   ...COMPLEX_5_1, ...COMPLEX_5_2,
   ...CONICS_6_1, ...DIFFEQ_7_1, ...PROB_8_1, ...VECTORS_9_1,
   ...FORMULA_DRILLS,
+  ...FORMULA_MASTERY,
 ];
 
 export const MATHEMATICS_EXERCISES = BANK.map((e) => ({ ...e, chapterOrder: CHAPTER_ORDER[e.chapter] }));
