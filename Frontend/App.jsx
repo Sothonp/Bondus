@@ -3436,6 +3436,13 @@ function localizeExercise(subject, r, i, lang) {
     // were appended later; stage 0 marks a short formula quiz that PracticeSubject lists first.
     // Neither changes an exercise's id, which stays `${subject}-${position in the bank}`.
     chapterOrder: r.chapterOrder, stage: r.stage,
+    // Formula Mastery's tag (see src/data/mathematics/formulaMastery.js) -- carried through so every
+    // helper that filters a localized list by chapter (chapterProgress.js, formulaDrill.js,
+    // formulaSheet.js, PracticeSubject below) can tell a Formula Mastery question apart from the
+    // pre-existing ones and leave it out. Without this, `.kind` would be undefined on every localized
+    // exercise regardless of the raw bank item, and every `ex.kind == null` check downstream would be
+    // vacuously true for everything.
+    kind: r.kind,
   });
 }
 const gradeAnswer = (ex, val) => val != null && String(val).trim().toLowerCase() === String(ex.answer).trim().toLowerCase();
@@ -3592,8 +3599,11 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBac
   // students warm up on the lesson's formulas before the longer questions. The sort is stable, so
   // each group keeps its authored order.
   const stageOf = (ex) => ex.stage ?? 1;
+  // A Formula Mastery question (ex.kind set) is excluded from the ordinary practice session: it is its
+  // own, separate learning system, reachable only through its own screen -- not mixed into the formula
+  // quiz / practice problems a student works through here.
   const list = hasChapters
-    ? fullList.filter((ex) => ex.chapter === chapter).sort((a, b) => stageOf(a) - stageOf(b))
+    ? fullList.filter((ex) => ex.chapter === chapter && ex.kind == null).sort((a, b) => stageOf(a) - stageOf(b))
     : fullList;
   // Selected-chapter state above is always the stable English key so it survives a language
   // toggle intact (the exercise bank's Khmer name isn't derived until display time) — this helper

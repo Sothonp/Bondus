@@ -22,6 +22,15 @@ test("drillPool is a chapter's stage-0 questions only", () => {
   assert.equal(drillPool(list, "nope").length, 0);
 });
 
+test("drillPool excludes Formula Mastery questions even though they are stage 0 too", () => {
+  // A regression this guards: Formula Mastery content (an explicit `kind` tag) shares both chapter and
+  // stage: 0 with this pre-existing drill's own questions, so a filter that checks only those two fields
+  // would silently pull Formula-Mastery-only questions into the review drill before that feature exists.
+  const withFormulaMastery = [...list, { id: "A-fm-1", chapter: "A", stage: 0, kind: "recognition" }];
+  assert.equal(drillPool(withFormulaMastery, "A").length, 15, "the Formula Mastery item must not be counted");
+  assert.ok(drillPool(withFormulaMastery, "A").every((ex) => ex.kind == null));
+});
+
 test("startDrill draws up to DRILL_SIZE questions, all from that chapter's pool, no repeats", () => {
   const run = startDrill(list, "A", "seed-1");
   assert.equal(run.length, DRILL_SIZE);
