@@ -59,6 +59,7 @@ import { createApi } from "./api.js";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
   answerEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, newAttemptId, apiErrorKey, waitParts, isCodeAlreadySent,
+  formulaMasteryQuizPayload, formulaMasteryFromServer,
 } from "./serverMapping.js";
 import { createEventQueue } from "./eventQueue.js";
 import { createStateSaver } from "./stateSaver.js";
@@ -83,6 +84,8 @@ import FormulaDrill from "./FormulaDrill.jsx";
 import { drillPool } from "./formulaDrill.js";
 import FormulaSheet from "./FormulaSheet.jsx";
 import { chapterFormulas } from "./formulaSheet.js";
+import FormulaMastery from "./FormulaMastery.jsx";
+import { pool as formulaMasteryPool } from "./formulaMasteryFlow.js";
 import PapersLock from "./PapersLock.jsx";
 import { RomdoulCluster, RomdoulBlossom, RomdoulSprig } from "./Romdoul.jsx";
 import { TodaysExercisesCard } from "./TodaysExercisesCard.jsx";
@@ -3463,10 +3466,11 @@ const STATUS = {
 };
 const diffColor = (d) => (d === "Hard" ? "var(--ember)" : d === "Medium" ? "var(--gold)" : "var(--jade)");
 
-function Practice({ p, practice, onAnswer, onOpen, lang = "en", chapterProgress, mastery, onSubmitQuiz }) {
+function Practice({ p, practice, onAnswer, onOpen, lang = "en", chapterProgress, mastery, onSubmitQuiz, formulaMastery, onSubmitFormulaMastery, errorText }) {
   const memory = useMemo(() => practiceMemory(safeStorage(), "bac", p.userId), [p.userId]);
   const [subject, setSubject] = useState(() => { const s = memory.get()?.subject; return fieldSubjects(p.field, p.foreignLanguage).includes(s) && !isPracticeLocked(s) ? s : null; });
-  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onOpen={onOpen} onBack={() => setSubject(null)} lang={lang} chapterProgress={chapterProgress} mastery={mastery} onSubmitQuiz={onSubmitQuiz} seedKey={String(p.userId ?? p.name ?? "")} />;
+  if (subject) return <PracticeSubject p={p} subject={subject} memory={memory} practice={practice} onAnswer={onAnswer} onOpen={onOpen} onBack={() => setSubject(null)} lang={lang} chapterProgress={chapterProgress} mastery={mastery} onSubmitQuiz={onSubmitQuiz}
+    formulaMastery={formulaMastery} onSubmitFormulaMastery={onSubmitFormulaMastery} errorText={errorText} seedKey={String(p.userId ?? p.name ?? "")} />;
 
   return (
     <div className="space-y-5 eai-rise">
@@ -3561,7 +3565,7 @@ function ContinueButton({ list, session, doneN, lang }) {
 /* Chapter subjects also offer each chapter's Master Quiz. `chapterProgress(subject)` is what the server (or this session) knows
    about the quizzes, or null while that is not known; `mastery` is the topic-mastery store (for Test out); `onSubmitQuiz` sends
    a finished quiz to be graded (see submitChapterQuiz in App). */
-function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBack, lang = "en", chapterProgress, mastery, onSubmitQuiz, seedKey = "" }) {
+function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBack, lang = "en", chapterProgress, mastery, onSubmitQuiz, formulaMastery, onSubmitFormulaMastery, errorText, seedKey = "" }) {
   const fullList = getExercises(subject, lang);
   // Subjects whose bank entries carry a chapter (currently History, Biology, Physics, Chemistry, Mathematics) get an extra
   // chapter-picker step before the exercise list; every other subject is unaffected.
@@ -3570,11 +3574,17 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBac
   // (chapterProgress.js). `progress` is null while the quiz results are not known, and then no quiz is offered.
   const progress = hasChapters ? (chapterProgress?.(subject) ?? null) : null;
   const quizAvailable = progress != null;
+  // Formula Mastery's own chapter state (a separate learning system, see FormulaMastery.jsx's header) -- server mode
+  // only, so `formulaMastery` is undefined/returns null in the browser-only prototype and every row below simply
+  // gets `formulaMasteryMastered: false` (the button itself is only ever offered when SERVER_MODE, further down).
+  const fmSubject = formulaMastery?.(subject) ?? null;
   const chapterRows = hasChapters
     ? chapterStates(fullList, practice, progress).map((r) => ({
       ...r, canTestOut: quizAvailable && (r.state === "available" || r.state === "inProgress") && testOutEligible(fullList, r.key, mastery?.[subject]),
       drillCount: drillPool(fullList, r.key).length,
       formulaCount: chapterFormulas(fullList, r.key).length,
+      formulaMasteryCount: formulaMasteryPool(fullList, r.key).length,
+      formulaMasteryMastered: Boolean(formulaMasteryFromServer(fmSubject, r.key)?.mastered),
     }))
     : [];
   const [pickedChapter, setChapter] = useState(() => { const s = memory.get(); return s?.subject === subject ? s.chapter : null; });
@@ -3583,6 +3593,10 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBac
   const [drillChapter, setDrillChapter] = useState(null);
   // The read-only Formula sheet: same rule as the drill above — pure review, open for any chapter, nothing saved.
   const [sheetChapter, setSheetChapter] = useState(null);
+  // Formula Mastery: unlike the drill/sheet pair above it DOES save progress (its own, via onSubmitFormulaMastery),
+  // but opening/closing it is still plain navigation like them -- nothing here is lost by leaving early except the
+  // current pass through its practice stages (see FormulaMastery.jsx's header).
+  const [formulaMasteryChapter, setFormulaMasteryChapter] = useState(null);
   const [quiz, setQuiz] = useState(null); // { chapter, attemptId, alreadyPassed, ids } while a Master Quiz is on screen
   // The chapter on screen. A remembered or tapped chapter that is locked (or no longer exists) is not opened: back to the list.
   const chapter = pickedChapter != null && chapterRows.some((r) => r.key === pickedChapter && r.state !== "locked") ? pickedChapter : null;
@@ -3683,13 +3697,27 @@ function PracticeSubject({ p, subject, memory, practice, onAnswer, onOpen, onBac
     );
   }
 
+  // Formula Mastery DOES save progress (unlike the two pure-review screens above), via the server-mode-only
+  // onSubmitFormulaMastery -- SERVER_MODE itself is what decides whether ChapterList is ever given an
+  // onFormulaMastery to call in the first place (below), so this branch is only ever reached with a server to
+  // save to.
+  if (formulaMasteryChapter) {
+    return (
+      <FormulaMastery chapterName={chapterLabel(formulaMasteryChapter)} list={fullList} chapterKey={formulaMasteryChapter}
+        grade={gradeAnswerAny} lang={lang} mastery={formulaMasteryFromServer(fmSubject, formulaMasteryChapter)}
+        onSubmit={(payload) => onSubmitFormulaMastery({ subject, chapter: formulaMasteryChapter, ...payload })}
+        errorText={errorText} onExit={() => setFormulaMasteryChapter(null)} />
+    );
+  }
+
   if (hasChapters && chapter == null) {
     return (
       <div className="space-y-5 eai-rise">
         <button onClick={onBack} className={`eai-focus flex items-center gap-1 text-sm eai-muted ${lang === "km" ? "eai-km" : ""}`}><ChevronLeft size={16} /> {t(lang, "allSubjects")}</button>
         <h2 className={`eai-display text-2xl font-extrabold flex items-center gap-2 ${lang === "km" ? "eai-km" : ""}`}>{subjectLabel(subject, lang)}<RomdoulSprig size={34} /></h2>
         <div>
-          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} onDrill={setDrillChapter} onFormulaSheet={setSheetChapter} />
+          <ChapterList rows={chapterRows} labelOf={chapterLabel} lang={lang} localize={localizeNum} onOpen={setChapter} onDrill={setDrillChapter} onFormulaSheet={setSheetChapter}
+            onFormulaMastery={SERVER_MODE ? setFormulaMasteryChapter : undefined} />
         </div>
       </div>
     );
@@ -8053,6 +8081,11 @@ export default function App() {
   const [bonusXp, setBonusXp] = useState(saved?.bonusXp ?? 0);
   const [chapterQuiz, setChapterQuiz] = useState(saved?.chapterQuiz ?? {}); // browser-only: Master Quiz results { [subject]: { [chapterKey]: result } } (chapterProgress.js)
   const [serverChapters, setServerChapters] = useState(null); // server mode, GET /chapters: { pass, master, quizSize, subjects } -- null until it has answered
+  // Formula Mastery: a separate learning system from the chapter path above -- its own server table, its own
+  // threshold, never folded into serverChapters. Server mode only (see FormulaMastery.jsx's header): there is
+  // nowhere to save its own progress without a server, so it is simply not offered without one (SERVER_MODE
+  // checks below, where PracticeSubject decides whether to pass onFormulaMastery to ChapterList at all).
+  const [serverFormulaMastery, setServerFormulaMastery] = useState(null); // GET /formula-mastery: { master, quizSize, subjects } -- null until it has answered
   const [rewards, setRewards] = useState(() => (saved?.rewards ? sanitizeRewards(saved.rewards) : emptyRewards())); // treasure-box rewards: { claimedSets, owned, outfit } — see rewards/rewardLogic.js
   const [justRegistered, setJustRegistered] = useState(false); // true right after a fresh account is ready; shows SetupFlow once before the real dashboard, then clears itself
   const [leaderboard, setLeaderboard] = useState(null); // GET /leaderboard: { entries, you } — null until fetched; the card renders nothing until then
@@ -8071,6 +8104,7 @@ export default function App() {
   const saverRef = useRef(null);
   const queueRef = useRef(null);
   const chaptersRun = useRef(0);                      // which GET /chapters is the latest, so a slow old answer cannot overwrite a newer one
+  const formulaMasteryRun = useRef(0);                // same staleness guard as chaptersRun, for GET /formula-mastery
   const go = (t) => setTab(t);
 
   // Returning user (a profile already existed in localStorage) — briefly greet them, then fade out.
@@ -8093,6 +8127,7 @@ export default function App() {
     serverUserRef.current = null; planIdMap.current = new Map(); lastSavedRef.current = ""; prevLevelRef.current = null;
     setSummary(null);
     chaptersRun.current += 1; setServerChapters(null); setChapterQuiz({});
+    formulaMasteryRun.current += 1; setServerFormulaMastery(null);
     setProfile(null); setPendingReg(null); setResumeReg(null); setShowDiagnostic(false); setRetaking(false);
     setTopicMastery({}); setUniTopicMastery({}); setPractice({}); setUniPractice({}); setPlan([]); setBonusXp(0); setRewards(emptyRewards()); setLeaderboard(null); setTab("dashboard");
   };
@@ -8419,6 +8454,31 @@ export default function App() {
       return { ok: false, code: err?.code, retryAfter: err?.retryAfter };
     }
   };
+
+  // ── Formula Mastery's own chapter state (FormulaMastery.jsx, formulaMasteryFlow.js) -- server mode only: there is
+  // nowhere to save it without a server, so PracticeSubject never even offers it when !SERVER_MODE. Otherwise the
+  // same fetch-after-sign-in, never-blocks, stale-response-guarded pattern as loadChapters/chapterProgressFor. ──
+  const loadFormulaMastery = () => {
+    if (!SERVER_MODE) return;
+    const run = ++formulaMasteryRun.current;
+    api.getFormulaMastery().then((res) => { if (run === formulaMasteryRun.current) setServerFormulaMastery(res); }).catch(() => {});
+  };
+  const formulaMasteryFor = (subject) => (SERVER_MODE ? serverFormulaMastery?.subjects?.[subject] ?? null : null);
+  // A finished Formula Mastery check. Always server-graded (see this file's header for why there is no offline
+  // fallback here, unlike submitChapterQuiz above). Resolves to { ok: true, result } or { ok: false, code, retryAfter }.
+  const submitFormulaMasteryQuiz = async ({ subject, chapter, attemptId, answers, timeSec }) => {
+    if (!SERVER_MODE) return { ok: false, code: "api_disabled" };
+    try {
+      const res = await api.submitFormulaMasteryQuiz(formulaMasteryQuizPayload({ subject, chapter, attemptId, answers, timeSec }));
+      setServerFormulaMastery((cur) => (cur ? { ...cur, subjects: { ...cur.subjects, [subject]: res.subject } } : cur));
+      if (!serverFormulaMastery) loadFormulaMastery();
+      applySummary(res.summary);
+      return { ok: true, result: res.result };
+    } catch (err) {
+      if (err?.code === "chapter_locked") loadFormulaMastery(); // our picture of the path was out of date: take the server's
+      return { ok: false, code: err?.code, retryAfter: err?.retryAfter };
+    }
+  };
   // Are a subject's full past papers locked until its chapters are passed? Unknown progress never locks (see above).
   // The owner opened the papers to everyone (Nov 2026): while LOCK_PAPERS is false nothing is locked. Set it back to true to
   // restore the chapter lock; the lock UI and its rules below are unchanged.
@@ -8452,6 +8512,7 @@ export default function App() {
     setTab(me.user.educationLevel === "university" ? "universityHub" : "dashboard");
     queueRef.current.flush(); // anything left unsent from last time
     loadChapters();
+    loadFormulaMastery();
     return me.user;
   };
   // Restore the saved login when the page opens (or retry after the server could not be reached).
@@ -8490,6 +8551,7 @@ export default function App() {
       const [sm, pl] = await Promise.all([api.getSummary(), planBusy.current === 0 ? api.getPlan(dateKey()) : Promise.resolve(null)]);
       applySummary(sm, { announce: false });
       loadChapters();
+      loadFormulaMastery();
       if (pl) { const day = pl.date ?? dateKey(); setPlan((arr) => [...arr.filter((x) => x.date !== day), ...(pl.tasks ?? []).map(taskFromServer)]); }
     } catch { /* offline: keep what is on screen */ }
   };
@@ -8686,7 +8748,8 @@ export default function App() {
     dashboard: <Dashboard p={p} go={go} practice={practice} mastery={topicMastery} chapterProgress={chapterProgressFor} bonusXp={bonusXp} lang={lang} />,
     browse: <Browse p={p} lang={lang} exam={exam} tr={tr} paperGate={paperGate} onGoPractice={() => go("practice")} />,
     schoolReport: <SchoolReportPage report={exam.report()} lang={lang} tr={tr} onLoadSample={exam.loadSample} onClearSample={exam.clearSample} />,
-    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onOpen={handleOpen} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz} />,
+    practice: <Practice p={p} practice={practice} onAnswer={handleAnswer} onOpen={handleOpen} lang={lang} chapterProgress={chapterProgressFor} mastery={topicMastery} onSubmitQuiz={submitChapterQuiz}
+      formulaMastery={formulaMasteryFor} onSubmitFormulaMastery={submitFormulaMasteryQuiz} errorText={(code, retryAfter) => apiErrorText(lang, code, retryAfter)} />,
     exercises: <Exercises api={api} lang={lang} tr={tr} />,
     adminStats: isAdmin(profile) ? <AdminStats api={api} lang={lang} tr={tr} /> : null,
     adminExercises: isAdmin(profile) ? <AdminExercises api={api} lang={lang} tr={tr} /> : null,

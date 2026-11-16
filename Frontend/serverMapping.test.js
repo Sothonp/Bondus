@@ -4,7 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   userToProfile, registrationToPayload, registrationToPatch, registrationErrorStep, taskFromServer, stateToSave,
-  newAttemptId, answerEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
+  newAttemptId, answerEvent, boxEvent, diagnosticEvent, warmupEvent, chapterQuizPayload, progressFromServer,
+  formulaMasteryQuizPayload, formulaMasteryFromServer, apiErrorKey, API_ERROR_KEYS, waitParts, isCodeAlreadySent,
 } from "./serverMapping.js";
 
 const form = {
@@ -204,4 +205,26 @@ test("the server's chapters become the progress the chapter list is drawn from",
   });
   assert.deepEqual(progressFromServer(undefined), {});
   assert.deepEqual(progressFromServer({}), {});
+});
+
+test("a Formula Mastery check becomes the same shape of request body the server grades: answers only, never a verdict", () => {
+  const body = formulaMasteryQuizPayload({
+    subject: "Mathematics", chapter: "Mathematics Foundations", attemptId: "att-1", timeSec: 42.3,
+    answers: [{ key: "Mathematics-21", answer: "x = 2" }, { key: "Mathematics-22", answer: null }],
+  });
+  assert.deepEqual(body, {
+    subject: "Mathematics", chapter: "Mathematics Foundations", attemptId: "att-1", timeSec: 42.3,
+    answers: [{ key: "Mathematics-21", answer: "x = 2" }, { key: "Mathematics-22", answer: null }],
+  });
+  assert.equal(JSON.stringify(body).includes("correct"), false);
+});
+
+test("the server's Formula Mastery chapters give one chapter's total/best/mastered/attempts, or null when it has none", () => {
+  const subject = {
+    master: 80, quizSize: 10,
+    chapters: [{ key: "Mathematics Foundations", total: 12, best: 90, mastered: true, attempts: 2 }],
+  };
+  assert.deepEqual(formulaMasteryFromServer(subject, "Mathematics Foundations"), { total: 12, best: 90, mastered: true, attempts: 2 });
+  assert.equal(formulaMasteryFromServer(subject, "No Such Chapter"), null, "a chapter with no Formula Mastery content yet is simply not in the server's list");
+  assert.equal(formulaMasteryFromServer(undefined, "Mathematics Foundations"), null);
 });

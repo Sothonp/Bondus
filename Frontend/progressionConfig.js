@@ -13,3 +13,11 @@ export const QUIZ_SIZE = 10;
 /* "Test out" (taking the quiz before 70% is solved) is offered when the topics the student has been scored on cover at
    least this share (percent) of the chapter's topics and average the Mastered score or better. */
 export const TEST_OUT_COVERAGE_PERCENT = 50;
+
+/* Formula Mastery: a separate learning system from the chapter path above (its own threshold, its own
+   table on the server — see bondus-backend's config/bondus.php `formula_mastery` block, which these two
+   numbers must be kept in step with). A mastery check is this many different questions of the chapter's
+   formula drills (formulaMasteryFlow.js), all of them when it has fewer, and this share (percent) of
+   them must be right to master it. */
+export const FORMULA_MASTERY_PERCENT = 80;
+export const FORMULA_MASTERY_QUIZ_SIZE = 10;

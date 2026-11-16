@@ -14,10 +14,51 @@
    set already follows -- reused directly below rather than re-implemented, since a kind-filtered list
    (every item sharing stage: 0) is itself already a single practiceFlow "set". */
 import { nextInSet, firstOpen } from "./practiceFlow.js";
+import { seedFrom, seededRandom } from "./warmup.js";
+import { FORMULA_MASTERY_QUIZ_SIZE } from "./progressionConfig.js";
 
 export const STAGES = ["intro", "recognition", "application", "missingVariable", "tricky", "masteryCheck"];
 
 const KINDS = ["recognition", "application", "missingVariable", "tricky"];
+
+/* Every Formula Mastery question for one chapter, drawn straight from the subject's full localized list (the same
+   `list` PracticeSubject already has) -- the `kind` tag (see formulaMastery.js's header) is what separates these
+   from that chapter's ordinary formula-quiz/practice-problem exercises, the same convention drillPool
+   (formulaDrill.js) and chapterFormulas (formulaSheet.js) already follow for their own pools. Callers (the chapter
+   list's button count, and FormulaMastery.jsx's own byKind grouping) both start from this one function so "what
+   counts as this chapter's Formula Mastery content" is never answered two different ways. */
+export const pool = (list, chapterKey) => list.filter((ex) => ex.chapter === chapterKey && ex.kind != null);
+
+/* The questions for one chapter's mastery check: `size` different Formula Mastery questions (drawn from every
+   kind the chapter has, not just one), spread across its topics the same way pickQuizQuestions (chapterProgress.js)
+   spreads the Master Quiz's own draw -- one from each topic's queue in turn -- so a check does not happen to lean
+   entirely on a single formula. Fewer than `size` only when the chapter's own pool is smaller, in which case every
+   question in the pool is picked (this is also exactly what the backend expects: FormulaMasteryController::quiz()
+   requires `min(quizSize, count(formulaIds))` answers, all drawn from `formulaIds` with no duplicates -- when the
+   pool is that small, "all of them" is the only set of that size there is). A new seed gives a new draw, so a
+   retake is not the same questions. Returns exercises from `list`. */
+export function pickMasteryCheck(list, chapterKey, seed, size = FORMULA_MASTERY_QUIZ_SIZE) {
+  const items = pool(list, chapterKey);
+  const count = Math.min(size, items.length);
+  const random = seededRandom(seedFrom(`${seed}|${chapterKey}|masteryCheck`));
+  const shuffled = (arr) => arr.map((item) => ({ item, r: random() })).sort((a, b) => a.r - b.r).map((o) => o.item);
+  const byTopic = new Map();
+  for (const ex of shuffled(items)) {
+    const topic = ex.topic ?? "";
+    if (!byTopic.has(topic)) byTopic.set(topic, []);
+    byTopic.get(topic).push(ex);
+  }
+  const queues = shuffled([...byTopic.values()]);
+  const picked = [];
+  while (picked.length < count && queues.some((q) => q.length)) {
+    for (const queue of queues) {
+      if (picked.length >= count) break;
+      const next = queue.shift();
+      if (next) picked.push(next);
+    }
+  }
+  return picked;
+}
 
 /* Every Formula Mastery question for one chapter (FORMULA_MASTERY filtered to that chapter already),
    grouped by kind, each group kept in bank order. A kind the chapter has no questions for is left out

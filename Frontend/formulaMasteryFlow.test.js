@@ -3,10 +3,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  STAGES, byKind, nextStage, kindComplete, readyForMasteryCheck,
+  STAGES, pool, pickMasteryCheck, byKind, nextStage, kindComplete, readyForMasteryCheck,
   nextInKind, firstOpenInKind, introFor, remediationFor, remediationKinds,
 } from "./formulaMasteryFlow.js";
 import { nextInSet, firstOpen } from "./practiceFlow.js";
+import { FORMULA_MASTERY_QUIZ_SIZE } from "./progressionConfig.js";
+
+const ids = (list) => list.map((e) => e.id);
+// A chapter's Formula Mastery pool: `n` kind-tagged questions spread round-robin across `topics`, every kind
+// "recognition" (pickMasteryCheck doesn't care which kind, only that `.kind` is set and `.chapter` matches).
+const fmChapterOf = (n, topics) => Array.from({ length: n }, (_, i) => ({ id: `FM-${i + 1}`, chapter: "FM", kind: "recognition", topic: topics[i % topics.length] }));
 
 /* A minimal Formula Mastery question, just the fields this module touches. */
 const q = (kind, n, extra = {}) => ({
@@ -21,6 +27,66 @@ const FULL = [
   q("missingVariable", 1),
   q("tricky", 1), q("tricky", 2),
 ];
+
+test("pool pulls out one chapter's kind-tagged questions and leaves everything else (other chapters, non-kind exercises) out", () => {
+  const list = [
+    ...FULL.map((e) => ({ ...e, chapter: "Quadratics" })),
+    { id: "plain-1", chapter: "Quadratics", stage: 0 }, // a pre-existing formula-quiz item, no `kind` at all
+    { id: "plain-2", chapter: "Quadratics", stage: 1 },
+    { id: "other-chapter-1", chapter: "Angles", kind: "recognition" },
+  ];
+  const got = pool(list, "Quadratics");
+  assert.deepEqual(got.map((e) => e.id), FULL.map((e) => e.id));
+});
+
+test("pool of a chapter with no Formula Mastery content is empty", () => {
+  assert.deepEqual(pool([{ id: "plain-1", chapter: "Quadratics", stage: 0 }], "Quadratics"), []);
+});
+
+test("the default mastery-check draw is FORMULA_MASTERY_QUIZ_SIZE different questions, all from this chapter's pool", () => {
+  const bank = fmChapterOf(30, ["t1", "t2", "t3"]);
+  const picked = pickMasteryCheck(bank, "FM", "seed-1");
+  assert.equal(picked.length, FORMULA_MASTERY_QUIZ_SIZE);
+  assert.equal(new Set(ids(picked)).size, FORMULA_MASTERY_QUIZ_SIZE);
+  assert.ok(picked.every((q) => q.chapter === "FM"));
+});
+
+test("a chapter with fewer questions than the check size gives every one of them (what the backend expects when count(formulaIds) <= quizSize), and an empty one gives none", () => {
+  const picked = pickMasteryCheck(fmChapterOf(4, ["t"]), "FM", "s");
+  assert.equal(picked.length, 4);
+  assert.deepEqual(ids(picked).sort(), ["FM-1", "FM-2", "FM-3", "FM-4"]);
+  assert.deepEqual(pickMasteryCheck(fmChapterOf(4, ["t"]), "NOPE", "s"), []);
+});
+
+test("the mastery-check draw excludes ordinary (non-kind-tagged) exercises, even from the same chapter", () => {
+  // The mirror image of chapterProgress.test.js's "the quiz draw excludes Formula Mastery questions": here it
+  // is the chapter's pre-existing formula-quiz/practice-problem exercises (no `kind`) that must never be drawn
+  // into a mastery check, since the backend validates submitted answers strictly against chapter.formulaIds,
+  // which only ever lists kind-tagged ids (ExerciseCatalog.php).
+  const bank = [...fmChapterOf(8, ["t1", "t2"]), ...Array.from({ length: 20 }, (_, i) => ({ id: `FM-plain-${i + 1}`, chapter: "FM", topic: "t1" }))];
+  for (let seed = 0; seed < 20; seed++) {
+    const picked = pickMasteryCheck(bank, "FM", `seed-${seed}`);
+    assert.ok(picked.every((q) => q.kind != null), `seed-${seed} drew an ordinary exercise into the mastery check`);
+  }
+  assert.equal(pickMasteryCheck(bank, "FM", "seed-0").length, 8, "only the 8 kind-tagged questions are there to draw from");
+});
+
+test("the same seed gives the same mastery check and a new seed gives a different one", () => {
+  const bank = fmChapterOf(40, ["t1", "t2", "t3", "t4"]);
+  assert.deepEqual(ids(pickMasteryCheck(bank, "FM", "a")), ids(pickMasteryCheck(bank, "FM", "a")));
+  assert.notDeepEqual(ids(pickMasteryCheck(bank, "FM", "a")), ids(pickMasteryCheck(bank, "FM", "b")));
+});
+
+test("a mastery check is spread across the chapter's topics, not ten from one", () => {
+  const bank = [...fmChapterOf(30, ["t1"]), ...fmChapterOf(30, ["t2"]).map((q) => ({ ...q, id: `${q.id}-b` })), ...fmChapterOf(30, ["t3"]).map((q) => ({ ...q, id: `${q.id}-c` }))];
+  const topics = pickMasteryCheck(bank, "FM", "x").map((q) => q.topic);
+  for (const t of ["t1", "t2", "t3"]) assert.ok(topics.filter((x) => x === t).length >= 3, `${t} appears at least three times in ten`);
+});
+
+test("pickMasteryCheck respects an explicit size override", () => {
+  const picked = pickMasteryCheck(fmChapterOf(30, ["t1", "t2"]), "FM", "s", 5);
+  assert.equal(picked.length, 5);
+});
 
 test("byKind groups a chapter's questions by kind, in bank order, leaving out kinds with nothing", () => {
   const groups = byKind(FULL);

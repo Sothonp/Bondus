@@ -146,6 +146,11 @@ export function createApi({ baseUrl = "", fetchImpl, storage = browserStorage() 
     getChapters: () => get("/chapters"),
     submitChapterQuiz: (quiz) => send("POST", "/chapter-quizzes", quiz),
 
+    // Formula Mastery: a separate learning system from the chapter path above (its own threshold, its own
+    // table on the server) — every chapter's state for this student, and a mastery check to be graded.
+    getFormulaMastery: () => get("/formula-mastery"),
+    submitFormulaMasteryQuiz: (quiz) => send("POST", "/formula-mastery-quizzes", quiz),
+
     // the daily limit on AI questions (Free 5, VIP Bondus 60, Super Bondus 150): where the student stands, and counting one
     // question under an id made for it. Out of questions answers 402 `ai_limit_reached` with the usage in the error's body.
     getAiUsage: () => get("/ai/usage"),
