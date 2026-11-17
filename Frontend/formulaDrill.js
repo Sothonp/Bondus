@@ -13,8 +13,11 @@ const MAX_REPEATS = 2;
 const REQUEUE_GAP = 3;
 
 /* The chapter's formula-quiz pool: every stage-0 question of that chapter, in `list` (a subject's
-   full localized exercise list, exactly as PracticeSubject already has it). */
-export const drillPool = (list, chapterKey) => list.filter((ex) => ex.chapter === chapterKey && (ex.stage ?? 1) === 0);
+   full localized exercise list, exactly as PracticeSubject already has it). A Formula Mastery question
+   (ex.kind set -- see src/data/mathematics/formulaMastery.js) is excluded: it is stage 0 too, but belongs
+   to its own, separate learning system, reachable only through its own screen, not this pre-existing
+   review drill. */
+export const drillPool = (list, chapterKey) => list.filter((ex) => ex.chapter === chapterKey && (ex.stage ?? 1) === 0 && ex.kind == null);
 
 /* A fresh run: up to `size` questions from the pool, shuffled by `seed` (a new seed, e.g. Date.now(),
    gives a new draw, so reopening the drill is not the same order or the same subset every time). A

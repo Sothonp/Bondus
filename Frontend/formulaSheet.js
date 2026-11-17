@@ -14,7 +14,9 @@ export function chapterFormulas(list, chapterKey) {
   const seen = new Set();
   const out = [];
   for (const ex of list) {
-    if (ex.chapter !== chapterKey || !ex.formula || seen.has(ex.formula)) continue;
+    // A Formula Mastery question (ex.kind set) is excluded: its formula belongs to that separate system's
+    // own intro screen (src/data/mathematics/formulaIntros.js), not this pre-existing review sheet.
+    if (ex.chapter !== chapterKey || ex.kind != null || !ex.formula || seen.has(ex.formula)) continue;
     seen.add(ex.formula);
     out.push({ formula: ex.formula, formulaKm: ex.formulaKm || ex.formula, topic: ex.topic, topicKm: ex.topicKm || ex.topic });
   }

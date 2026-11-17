@@ -18,6 +18,14 @@ test("chapterFormulas keeps only that chapter's questions that carry a formula",
   assert.deepEqual(chapterFormulas(list, "nope"), []);
 });
 
+test("chapterFormulas excludes Formula Mastery questions, even a formula no other question in the chapter has", () => {
+  // A regression this guards: this sheet is built purely from `formula`/chapter, so a Formula Mastery
+  // question (an explicit `kind` tag) would otherwise show up here before that feature has its own
+  // dedicated intro screen for its formulas.
+  const list = [q("A", "F1", "F1km"), { chapter: "A", formula: "FM1", formulaKm: "FM1km", topic: "T", topicKm: "ប", kind: "recognition" }];
+  assert.deepEqual(chapterFormulas(list, "A").map((f) => f.formula), ["F1"]);
+});
+
 test("the same formula repeated across several questions appears once, in its first order of appearance", () => {
   const list = [q("A", "F1", "F1km"), q("A", "F2", "F2km"), q("A", "F1", "F1km"), q("A", "F3", "F3km"), q("A", "F2", "F2km")];
   assert.deepEqual(chapterFormulas(list, "A").map((f) => f.formula), ["F1", "F2", "F3"]);

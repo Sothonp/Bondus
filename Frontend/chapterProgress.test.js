@@ -170,6 +170,16 @@ test("a quiz is ten questions, or the whole chapter when it has fewer, and 70% o
 const topical = [...make("A", 3, { topic: "Limits" }), ...make("A", 3, { topic: "Series" }).map((e) => ({ ...e, id: `A-s${e.id}` })), ...make("B", 2, { topic: "Other" })];
 const score = (n) => ({ score: n });
 
+test("chapterStates' total excludes Formula Mastery questions, even though they share a chapter with ordinary ones", () => {
+  // A regression this guards: a Formula Mastery question (an explicit `kind` tag) must never change a
+  // chapter's `total` (and so its percent, toQuiz, and the progress == null passed/mastered fallback) —
+  // the same invariant bondus-backend's own `ids` keeps (exerciseCatalog.js's chapter ids vs formulaIds).
+  const withFormulaMastery = [...list, ...make("A", 5, { kind: "recognition" })];
+  const row = chapterStates(withFormulaMastery, {}, {})[0];
+  assert.equal(row.total, 10, "the 5 Formula Mastery questions appended to chapter A must not be counted");
+  assert.equal(chapterStates(list, {}, {})[0].total, row.total, "identical to a bank with no Formula Mastery content at all");
+});
+
 test("test out needs topics scored at 85 or better that cover at least half of the chapter's topics", () => {
   assert.equal(testOutEligible(topical, "A", { Limits: score(90), Series: score(85) }), true, "both topics, average 87.5");
   assert.equal(testOutEligible(topical, "A", { Limits: score(90) }), true, "one of two topics is exactly half");
@@ -185,6 +195,19 @@ test("test out coverage is counted in topics, not in questions", () => {
   const three = [...make("A", 1, { topic: "T1" }), ...make("A", 1, { topic: "T2" }).map((e) => ({ ...e, id: "A-2" })), ...make("A", 1, { topic: "T3" }).map((e) => ({ ...e, id: "A-3" }))];
   assert.equal(testOutEligible(three, "A", { T1: score(95) }), false, "one of three is a third, not half");
   assert.equal(testOutEligible(three, "A", { T1: score(95), T2: score(90) }), true, "two of three");
+});
+
+test("testOutEligible's topic list excludes Formula Mastery questions", () => {
+  // A Formula Mastery question's topic must not count toward test-out coverage. Two Formula-Mastery-only
+  // topics are used (not one) so the denominator shift actually crosses the 50% coverage line if they
+  // were wrongly counted: scored on its one real topic, the chapter is 1-of-1 (eligible) once Formula
+  // Mastery is excluded, but would only be 1-of-3 (not eligible) if it were not.
+  const withFormulaMastery = [
+    ...make("A", 3, { topic: "Limits" }),
+    ...make("A", 1, { topic: "OnlyFM1", kind: "recognition" }).map((e) => ({ ...e, id: `A-fm1-${e.id}` })),
+    ...make("A", 1, { topic: "OnlyFM2", kind: "recognition" }).map((e) => ({ ...e, id: `A-fm2-${e.id}` })),
+  ];
+  assert.equal(testOutEligible(withFormulaMastery, "A", { Limits: score(90) }), true, "Limits alone is the chapter's only real topic");
 });
 
 /* ── The quiz draw ──────────────────────────────────────────────────────────────────────────────────────────── */
@@ -203,6 +226,19 @@ test("a chapter with fewer than ten questions gives all of them, and an empty on
   assert.equal(pickQuizQuestions(chapterOf(4, ["t"]), "Q", "s").length, 4);
   assert.deepEqual(ids(pickQuizQuestions(chapterOf(4, ["t"]), "Q", "s")).sort(), ["Q-1", "Q-2", "Q-3", "Q-4"]);
   assert.deepEqual(pickQuizQuestions(chapterOf(4, ["t"]), "NOPE", "s"), []);
+});
+
+test("the quiz draw excludes Formula Mastery questions, even from the same chapter", () => {
+  // A regression this guards: ChapterController::quiz() (bondus-backend) validates a submitted quiz's
+  // answers strictly against the chapter's own `ids`, which already excludes Formula Mastery questions
+  // (exerciseCatalog.js) — so if this draw ever included one, a real quiz attempt would fail that
+  // validation the moment it happened to be picked.
+  const bank = [...chapterOf(8, ["t1", "t2"]), ...chapterOf(20, ["t1"]).map((e, i) => ({ ...e, id: `Q-fm-${i + 1}`, kind: "recognition" }))];
+  for (let seed = 0; seed < 20; seed++) {
+    const picked = pickQuizQuestions(bank, "Q", `seed-${seed}`);
+    assert.ok(picked.every((q) => q.kind == null), `seed-${seed} drew a Formula Mastery question into the Master Quiz`);
+  }
+  assert.equal(pickQuizQuestions(bank, "Q", "seed-0").length, 8, "only the 8 real questions are there to draw from");
 });
 
 test("the same seed gives the same quiz and a new seed gives a different one", () => {

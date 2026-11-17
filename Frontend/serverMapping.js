@@ -118,6 +118,23 @@ export function progressFromServer(subject) {
   }]));
 }
 
+/* A finished Formula Mastery check -> the POST /formula-mastery-quizzes body. Same shape and same retry-by-attemptId
+   rule as chapterQuizPayload above -- a separate learning system, not a separate contract. */
+export function formulaMasteryQuizPayload({ subject, chapter, attemptId, answers, timeSec }) {
+  return compact({
+    subject: String(subject), chapter: String(chapter), attemptId: String(attemptId),
+    answers: answers.map((a) => ({ key: String(a.key), answer: a.answer == null ? null : String(a.answer) })),
+    timeSec: seconds(timeSec),
+  });
+}
+
+/* One chapter row of GET /formula-mastery (also returned by POST /formula-mastery-quizzes) -> { total, best, mastered,
+   attempts }, or null when that chapter has no Formula Mastery content yet (and so is not in the server's list at all). */
+export function formulaMasteryFromServer(subject, chapterKey) {
+  const row = (subject?.chapters ?? []).find((c) => c.key === chapterKey);
+  return row ? { total: Number(row.total) || 0, best: Number.isFinite(row.best) ? row.best : null, mastered: Boolean(row.mastered), attempts: Number(row.attempts) || 0 } : null;
+}
+
 /* Finishing the diagnostic counts as studying that day (it starts the streak) but earns no XP. */
 export const diagnosticEvent = (attemptId = newAttemptId()) => ({ type: "diagnostic", key: "diagnostic", attemptId });
 

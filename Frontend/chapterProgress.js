@@ -76,7 +76,12 @@ export function chapterStatesFromCounts(inputs) {
    Rows are chapterStatesFromCounts() rows plus `best` (best quiz score in percent, or null if the quiz was never taken). */
 export function chapterStates(list, practice = {}, progress = null) {
   const inputs = chapterKeys(list).map((key) => {
-    const ids = list.filter((ex) => ex.chapter === key).map((ex) => ex.id);
+    // Formula Mastery questions (an explicit `kind` tag — see src/data/mathematics/formulaMastery.js)
+    // are excluded here for the same reason bondus-backend's own `ids` excludes them (exerciseCatalog.js):
+    // `total`/`solved`/`answered` below must stay exactly what they were before Formula Mastery content
+    // existed, or this chapter's progress percent, quiz-readiness, and the progress == null interim
+    // passed/mastered fallback would all shift the moment that content was added.
+    const ids = list.filter((ex) => ex.chapter === key && ex.kind == null).map((ex) => ex.id);
     const solved = ids.filter((id) => isSolved(practice?.[id])).length;
     const answered = ids.filter((id) => isAnswered(practice?.[id])).length;
     const known = progress?.[key];
@@ -105,7 +110,9 @@ export const quizNeeded = (total) => toReach(0, quizLength(total), PASS_PERCENT)
    (topicMastery[subject]) cover at least half of the chapter's topics and average the Mastered score or better.
    `mastery`: { [topic]: { score } } for the subject. A chapter with no topics, or none scored, is never eligible. */
 export function testOutEligible(list, chapterKey, mastery = {}) {
-  const topics = [...new Set(list.filter((ex) => ex.chapter === chapterKey).map((ex) => ex.topic).filter(Boolean))];
+  // Same reasoning as chapterStates above: a Formula Mastery question (ex.kind set) is excluded so test-out
+  // coverage is decided by the chapter's pre-existing topics only, not inflated by the new pilot content.
+  const topics = [...new Set(list.filter((ex) => ex.chapter === chapterKey && ex.kind == null).map((ex) => ex.topic).filter(Boolean))];
   const scores = topics.map((topic) => mastery?.[topic]?.score).filter((score) => Number.isFinite(score));
   if (topics.length === 0 || scores.length === 0) return false;
   const sum = scores.reduce((a, b) => a + b, 0);
@@ -116,7 +123,11 @@ export function testOutEligible(list, chapterKey, mastery = {}) {
    each topic in turn, topics and questions in a random order), the same for the same `seed`. A new seed gives a new draw,
    so a retake is not the same ten questions. Returns exercises from `list`. */
 export function pickQuizQuestions(list, chapterKey, seed, size = QUIZ_SIZE) {
-  const pool = list.filter((ex) => ex.chapter === chapterKey);
+  // A Formula Mastery question (ex.kind set) is never part of the Master Quiz's own draw -- the backend's
+  // ChapterController::quiz() validates submitted answers strictly against the chapter's `ids`, which
+  // already excludes them (exerciseCatalog.js), so including one here would make a real quiz attempt fail
+  // validation server-side the moment it was drawn.
+  const pool = list.filter((ex) => ex.chapter === chapterKey && ex.kind == null);
   const count = Math.min(size, pool.length);
   const random = seededRandom(seedFrom(`${seed}|${chapterKey}`));
   const shuffled = (items) => items.map((item) => ({ item, r: random() })).sort((a, b) => a.r - b.r).map((o) => o.item);

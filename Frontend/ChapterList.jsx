@@ -18,6 +18,7 @@ import { chapterText, fillChapter } from "./chapterStrings.js";
 import { RomdoulVine, RomdoulBlossom } from "./Romdoul.jsx";
 import { DrillButton } from "./FormulaDrill.jsx";
 import { SheetButton } from "./FormulaSheet.jsx";
+import { FormulaMasteryButton } from "./FormulaMastery.jsx";
 
 const LOOK = {
   locked: { icon: Lock, color: "var(--muted)", soft: "var(--bg-soft)", label: "stateLocked" },
@@ -37,8 +38,13 @@ const LOOK = {
    onDrill    optional: (chapterKey) start that chapter's quick Formula drill — offered even on a locked chapter, since it
               is pure review and touches no progress. Omitted entirely when a row carries no `drillCount`.
    onFormulaSheet optional: (chapterKey) open that chapter's read-only Formula sheet — same locked-chapter and
-              no-progress-touched guarantees as onDrill. Omitted entirely when a row carries no `formulaCount`. */
-export default function ChapterList({ rows, labelOf, lang = "en", localize = (n) => String(n), onOpen, onDrill, onFormulaSheet }) {
+              no-progress-touched guarantees as onDrill. Omitted entirely when a row carries no `formulaCount`.
+   onFormulaMastery optional: (chapterKey) open that chapter's Formula Mastery screen — a separate learning system from
+              the chapter path this list otherwise shows (its own staged practice and its own mastery check), offered
+              even on a locked chapter like the two reviews above, but unlike them it DOES save progress (its own,
+              not the chapter's). Omitted entirely when a row carries no `formulaMasteryCount`, or when the caller
+              has no Formula Mastery server connection to save to. */
+export default function ChapterList({ rows, labelOf, lang = "en", localize = (n) => String(n), onOpen, onDrill, onFormulaSheet, onFormulaMastery }) {
   const km = lang === "km" ? "eai-km" : "";
   const w = (key, vars) => fillChapter(chapterText(lang, key), vars);
   const num = (n) => localize(n, lang);
@@ -131,10 +137,11 @@ export default function ChapterList({ rows, labelOf, lang = "en", localize = (n)
                     </div>
                   )}
                 </button>
-                {((onDrill && row.drillCount > 0) || (onFormulaSheet && row.formulaCount > 0)) && (
+                {((onDrill && row.drillCount > 0) || (onFormulaSheet && row.formulaCount > 0) || (onFormulaMastery && row.formulaMasteryCount > 0)) && (
                   <div className="mt-2.5 flex flex-wrap gap-2">
                     {onDrill && row.drillCount > 0 && <DrillButton count={row.drillCount} lang={lang} onStart={() => onDrill(row.key)} />}
                     {onFormulaSheet && row.formulaCount > 0 && <SheetButton count={row.formulaCount} lang={lang} onStart={() => onFormulaSheet(row.key)} />}
+                    {onFormulaMastery && row.formulaMasteryCount > 0 && <FormulaMasteryButton count={row.formulaMasteryCount} mastered={row.formulaMasteryMastered} lang={lang} onStart={() => onFormulaMastery(row.key)} />}
                   </div>
                 )}
               </div>

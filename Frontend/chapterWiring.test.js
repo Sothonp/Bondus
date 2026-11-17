@@ -24,7 +24,7 @@ test("Practice shows the chapter path and decides the open chapter from the prac
   assert.match(app, /import \{ chapterStates, [^}]*\} from "\.\/chapterProgress\.js";/);
   assert.match(subject, /const progress = hasChapters \? \(chapterProgress\?\.\(subject\) \?\? null\) : null;/);
   assert.match(subject, /chapterStates\(fullList, practice, progress\)/);
-  assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} onDrill=\{setDrillChapter\} onFormulaSheet=\{setSheetChapter\} \/>/);
+  assert.match(subject, /<ChapterList rows=\{chapterRows\} labelOf=\{chapterLabel\} lang=\{lang\} localize=\{localizeNum\} onOpen=\{setChapter\} onDrill=\{setDrillChapter\} onFormulaSheet=\{setSheetChapter\}\s*\n\s*onFormulaMastery=\{SERVER_MODE \? setFormulaMasteryChapter : undefined\} \/>/);
 });
 
 test("the chapter list also offers a read-only formula sheet per chapter, with the same no-progress-touched guarantee as the drill", () => {
